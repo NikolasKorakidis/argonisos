@@ -68,3 +68,11 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
 - Conversations use one continuous shot: it glides in from the gameplay camera to a close side-on two-shot and slowly pulls back while they talk. No cuts between lines.
 - Bare hands (and the spear) no longer break trees or rocks: wood and stone come from branches and pebbles on the ground (doubled across the island), food from berry bushes; fists are for beasts. The axe still fells trees and splits rocks.
 - Quest tracker moved to the top left: full card when a quest starts or an objective ticks, then it settles to just the title and objectives. **L** opens the quest journal: the active quest in green, the main quest (Mend Your Boat), and the completed list. Upcoming quests stay hidden.
+
+## v9: nights, fire, Nestor's house, smithy
+- Cards queue properly: a new card waits until the one on screen is closed, each card stays up at least 0.7 s, and held keys can't skip them (the tutorial used to be overwritten by the next quest card).
+- Days last 15 minutes and daylight is stretched (sunrise ~05:00, sunset ~20:00).
+- Night sky: twinkling starfield, the Milky Way with dust lanes, a moon with maria and halo, moonlight (soft blue, from the moon), clouds that darken at night and warm at dusk, and on some nights aurora curtains over the north. Water darkens to moonlit blue.
+- Dusk warning: the first evening a card explains fire; later evenings a reminder if you're far from one. Beasts will not enter a campfire's light (9 m): they prowl the edge and can't hurt you inside. The campfire is brighter, with layered flames, embers and a warm light pool.
+- Nestor's house is a proper farmhouse: upper room with balcony, tiled porch on columns, walled courtyard with a vine pergola, jars, garden, windows that glow at night, and a smithy wing (forge with glowing coals, anvil, tool rack, workbench). The axe and spear can only be made at the workbench (E); rope and campfires anywhere with C.
+- Light pool raised to 5 lights.
