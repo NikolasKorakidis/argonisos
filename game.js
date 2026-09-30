@@ -1,6 +1,7 @@
 // Argonisos — Island Prologue (three.js playtest prototype)
 // Single-module game: world gen, characters, survival, combat, crafting, quests, sailing ending.
 import * as THREE from 'three';
+import { FBXLoader } from './jsm/loaders/FBXLoader.js';
 
 // ============================================================
 // Utilities
@@ -335,6 +336,27 @@ function makeTools() {
 const player = makeHumanoid({ tunic: 0xf1ead9, belt: 0x7a4f2c, hair: 0x3a2412 });
 player.position.copy(START); scene.add(player);
 const tools = makeTools(); player.userData.arms[1].add(tools.axe, tools.spear);
+// Hero model (static FBX, no rig): replaces the procedural body once loaded and gets procedural animation.
+const hero = { wrap: new THREE.Group(), hand: new THREE.Group(), model: null };
+player.add(hero.wrap); hero.wrap.add(hero.hand);
+hero.hand.position.set(-0.8, 1.3, 0.02);
+new FBXLoader().load('models/hero.fbx', (obj) => {
+  const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3());
+  const s = 1.95 / size.y; obj.scale.setScalar(s);
+  const b2 = new THREE.Box3().setFromObject(obj), c = b2.getCenter(new THREE.Vector3());
+  obj.position.set(-c.x, -b2.min.y, -c.z);
+  obj.traverse((m) => {
+    if (!m.isMesh) return;
+    m.castShadow = true; m.receiveShadow = true;
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    m.material = mats.map((o) => new THREE.MeshStandardMaterial({ map: o.map || null, normalMap: o.normalMap || null, color: o.map ? 0xffffff : o.color, roughness: 0.75, metalness: 0 }));
+    if (m.material.length === 1) m.material = m.material[0];
+    for (const mt of [].concat(m.material)) if (mt.map) mt.map.colorSpace = THREE.SRGBColorSpace;
+  });
+  hero.wrap.add(obj); hero.model = obj;
+  player.userData.body.visible = false;
+  for (const t of [tools.axe, tools.spear]) { hero.hand.add(t); t.position.set(0, -0.35, 0.15); }
+}, undefined, (e) => console.warn('Hero model failed to load, keeping placeholder', e));
 const P = { vel: new THREE.Vector3(), yaw: Math.PI, onGround: true, swing: 0, swingHit: false, hurtT: 0, animT: 0, dead: false };
 
 // NPC Nestor the hermit (the Elder from the cast sheet)
@@ -879,6 +901,15 @@ function updatePlayer(dt) {
   if (P.swing > 0) { P.swing -= dt * 3.2; if (!P.swingHit && P.swing < 0.55) { P.swingHit = true; doHit(); } }
   P.animT += dt * (speed > 0 ? speed / 4.6 : 0.3);
   animateHumanoid(player, speed, P.animT, Math.max(P.swing, 0));
+  if (hero.model) {
+    const k = Math.min(speed / 5, 1), ph = P.animT * 10;
+    hero.wrap.position.y = Math.abs(Math.sin(ph)) * 0.07 * k;
+    hero.wrap.rotation.x = k * 0.12;
+    hero.wrap.rotation.z = Math.sin(ph) * 0.05 * k;
+    const sw = Math.max(P.swing, 0);
+    hero.wrap.rotation.y = sw > 0 ? Math.sin(sw * Math.PI) * -0.5 : 0;
+    hero.hand.rotation.x = sw > 0 ? -2.4 + (1 - sw) * 3.2 : Math.sin(ph) * 0.3 * k;
+  }
   tools.axe.visible = S.slot === 1; tools.spear.visible = S.slot === 2;
   if (P.hurtT > 0) P.hurtT -= dt;
 }
