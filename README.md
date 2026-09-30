@@ -92,3 +92,8 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
 - Olive terrace walls are real dry-stone walls: rough base blocks, a smaller top course, capstones, a few mossy stones, gently curving with the ground; they stop cleanly at trees, paths and the sacred circle, and olive trees are planted between the wall lines, not on them.
 - Fallen branches lie under trees (around the crown), not in open fields.
 - The minimap shows everything nearby you can gather (berries, branches, stones, reeds, the sacred branch) and fires.
+
+## v12: saving
+- Autosave after every completed quest and after sleeping; **Save Game** in the pause menu (Esc) for a manual save. **Continue** on the title screen resumes (shows day and current quest).
+- Saved: quest progress and flags, inventory, tools, stats, day/time, position, your campfire, which pickups/trees/rocks are gone, which creatures are dead, and the explored map. Stored in browser storage on this device.
+- Minimap resource icons now only show within 30 m.

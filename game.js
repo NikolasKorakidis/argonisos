@@ -2670,7 +2670,7 @@ function checkQuest() {
   if (S.explore) return;
   const q = Q[S.questIdx]; if (!q) return;
   if (q.obj().every(([, d]) => d)) {
-    toast(`Quest complete: ${q.title}`, true); snd.questDone();
+    toast(`Quest complete: ${q.title}`, true); snd.questDone(); setTimeout(() => saveGame(false), 2500);
     S.questIdx++; const n = Q[S.questIdx]; if (n?.start) n.start();
     if (n) setTimeout(() => questCard(n), 900);
     if (S.questIdx === 9) setTimeout(() => say([['Nestor', 'You lived through the night. Good. Now listen: Zeus left a sail in the Cave of Echoes, up on the flank of the mountain, in a bronze-bound chest.'], ['Nestor', 'Chosen ones who failed guard it now. They do not sleep. Take your spear, and a full belly.']]), 1500);
@@ -2936,7 +2936,7 @@ function sleep(hours) {
     const food0 = S.food, en0 = S.energy;
     S.food = Math.max(0, S.food - hours * 3.5); S.energy = Math.min(100, S.energy + hours * 13); S.hp = Math.min(100, S.hp + hours * 6); S.sta = 40 + S.energy * 0.6;
     if (!isNight()) creatures.forEach((c) => { if (c.type === 'wolf' && !c.dead) { scene.remove(c.obj); c.gone = true; } });
-    setTimeout(() => { fade.style.opacity = 0; S.sleeping = false; toast(`Slept ${hours} h · Energy +${Math.round(S.energy - en0)} · Hunger −${Math.round(food0 - S.food)}`, true); canvas.requestPointerLock(); }, 900);
+    setTimeout(() => { fade.style.opacity = 0; S.sleeping = false; toast(`Slept ${hours} h · Energy +${Math.round(S.energy - en0)} · Hunger −${Math.round(food0 - S.food)}`, true); saveGame(false); canvas.requestPointerLock(); }, 900);
   }, 1500);
 }
 function cook() {
@@ -3419,7 +3419,7 @@ function drawMapMarkers(ctx, tf, target, big) {
     const pp = player.position, ic = { bush: '🫐', branch: '🪵', pebble: '🪨', reeds: '🌾', olivebranch: '🌿', chest: '🧰' };
     ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (const pk of pickups) { if (!pk.alive || (pk.kind === 'bush' && pk.regrow > 0) || !ic[pk.kind]) continue;
-      if (Math.abs(pk.pos.x - pp.x) > 60 || Math.abs(pk.pos.z - pp.z) > 60) continue;
+      if (Math.hypot(pk.pos.x - pp.x, pk.pos.z - pp.z) > 30) continue;
       const [x, y] = tf(pk.pos); ctx.globalAlpha = pk.kind === 'bush' ? 0.95 : 0.85; ctx.fillText(ic[pk.kind], x, y); }
     ctx.globalAlpha = 1;
     for (const f of FIRES) { const [x, y] = tf(f.pos); ctx.fillText('🔥', x, y); }
@@ -3613,6 +3613,46 @@ function loop() {
   if (GFX.post) composer.render(); else renderer.render(scene, camera);
 }
 let cullFrame = 0, shadowTick = 0;
+// ---- Save / load (browser storage). The world is generated from a fixed seed, so pickups, trees, rocks and
+//      creatures are saved by index: what you picked up, felled or killed stays that way.
+const SAVE_KEY = 'argonisos.save.v1', INIT_CREATURES = creatures.length;
+const SAVE_FIELDS = ['questIdx', 'inv', 'tools', 'slot', 'day', 'time', 'hp', 'food', 'sta', 'energy', 'talkedNestor', 'oliveBranch', 'offered', 'reported', 'raftBuilt', 'kills', 'cooked', 'nights', 'nightsAtStart', 'warnedOnce', 'warnDay'];
+function saveGame(manual) {
+  if (!S.running || S.explore || S.sailing) { if (manual) toast('Nothing to save here.'); return; }
+  try {
+    const d = { v: 1, at: Date.now(), S: {}, pos: player.position.toArray(), yaw: P.yaw,
+      pick: pickups.map((p) => (p.alive ? 1 : 0)).join(''), bush: pickups.map((p, i) => (p.kind === 'bush' && p.regrow > 0 ? i : -1)).filter((i) => i >= 0),
+      res: resources.map((r) => (r.alive ? 1 : 0)).join(''), dead: creatures.slice(0, INIT_CREATURES).map((c) => (c.dead ? 1 : 0)).join(''),
+      fire: S.campfire ? S.campfire.pos.toArray() : null, fog: mmFog.toDataURL('image/png') };
+    for (const k of SAVE_FIELDS) d.S[k] = S[k];
+    localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+    toast(manual ? 'Game saved.' : 'Autosaved', !!manual); updateContinueBtn();
+  } catch (e) { if (manual) toast('Could not save (browser storage is blocked).'); }
+}
+function readSave() { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch { return null; } }
+function loadGame(d) {
+  for (const k of SAVE_FIELDS) if (d.S[k] !== undefined) S[k] = typeof d.S[k] === 'object' && d.S[k] ? JSON.parse(JSON.stringify(d.S[k])) : d.S[k];
+  pickups.forEach((p, i) => { if (d.pick[i] === '0' && p.alive) { p.alive = false; scene.remove(p.obj); } });
+  for (const i of d.bush || []) { const p = pickups[i]; if (p) { p.regrow = 60; p.obj.userData.berries.visible = false; } }
+  resources.forEach((r, i) => { if (d.res[i] === '0' && r.alive) { r.alive = false; updateProp(r.item, true); } });
+  creatures.slice(0, INIT_CREATURES).forEach((c, i) => { if (d.dead[i] === '1' && !c.dead) { c.dead = true; c.gone = true; scene.remove(c.obj); } });
+  if (d.fire) { const fp = new THREE.Vector3().fromArray(d.fire); const save = player.position.clone(), sy = P.yaw; player.position.copy(fp).add(new THREE.Vector3(0, 0, -2)); P.yaw = 0; placeCampfire(); player.position.copy(save); P.yaw = sy; }
+  if (S.raftBuilt) { wreckGroup.visible = false; raftParts.forEach((p) => (p.visible = true)); }
+  if (d.fog) { const im = new Image(); im.onload = () => { const c = mmFog.getContext('2d'); c.clearRect(0, 0, MAPN, MAPN); c.drawImage(im, 0, 0); }; im.src = d.fog; }
+  player.position.fromArray(d.pos); P.yaw = d.yaw || 0; player.rotation.y = P.yaw; camYaw = P.yaw + Math.PI; camTgtInit = false;
+  S.wasNight = isNight(); S.region = null; questSig = '';
+}
+function updateContinueBtn() { const d = readSave(), b = $('continueBtn'); if (!b) return; b.style.display = d && !S.running ? '' : 'none';
+  if (d) b.innerHTML = `Continue <small style="display:block;font-size:12px;opacity:.75">Day ${d.S.day} · ${Q[d.S.questIdx]?.title || 'Trial complete'}</small>`; }
+$('continueBtn').onclick = () => {
+  const d = readSave(); if (!d) return; initAudio();
+  loadGame(d);
+  $('title').classList.add('fading'); setTimeout(() => { $('title').classList.add('hidden'); $('title').classList.remove('fading'); }, 1600);
+  S.running = true; S.started = performance.now(); setPause(false); $('hud').classList.remove('hidden'); updateContinueBtn(); $('startBtn').textContent = 'Continue';
+  canvas.requestPointerLock(); toast(`Welcome back. Day ${S.day}.`, true);
+};
+$('saveBtn').onclick = () => { saveGame(true); };
+updateContinueBtn();
 // ---- Light pool: three.js shades every pixel for every light in the scene, so ~16 torches and braziers were costing
 //      everywhere. Instead each source becomes an 'emitter' and 4 real point lights hop to the nearest ones.
 //      The light count never changes, so no shader recompiles either.
@@ -3744,6 +3784,7 @@ function endIntro() {
 $('cineSkip').onclick = () => endIntro();
 $('startBtn').onclick = () => {
   const first = !S.running;
+  if (first && readSave() && !confirm('Start a new game? Your saved game will be replaced at the next save.')) return;
   if (first) {
     initAudio(); $('title').classList.add('fading'); setTimeout(() => { $('title').classList.add('hidden'); $('title').classList.remove('fading'); }, 1600);
     S.running = true; S.started = performance.now(); setPause(false); playIntro(); return;
