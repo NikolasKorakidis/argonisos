@@ -11,7 +11,7 @@ python3 -m http.server 8000   # then open http://localhost:8000
 three.js r160 is vendored (`three.module.js`), so it runs offline.
 
 ## Loop
-Talk to Nestor → gather wood/stone/fiber → craft axe + spear → campfire → hunt rabbits & boar, cook meat → survive a night (wolves) → clear 3 skeletons at the hilltop ruins, loot the sailcloth → build the raft at the south dock → sail to Greece.
+Story cards → meet Nestor (tutorial cards) → craft a stone axe → gather berries + sacred olive branch → offering at the Temple of Athena → report to Nestor → craft spear → campfire → hunt rabbits & boar, cook meat → survive a night (wolves) → clear 3 skeletons at the hilltop ruins, loot the sailcloth → build the raft at the south dock → sail to Pedias.
 
 ## Controls
 WASD move · Shift sprint · Mouse look (click to lock) · LMB swing · E interact · F eat · 1–3 tools · C craft · R rest at fire · Space jump · Esc pause

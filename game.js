@@ -30,7 +30,7 @@ function vnoise(x, z) {
 }
 function fbm(x, z) { let a = 0.5, f = 1, s = 0; for (let i = 0; i < 4; i++) { s += a * vnoise(x * f, z * f); f *= 2; a *= 0.5; } return s; }
 
-// ---- World layout (metres). +z is south, towards Greece. ----
+// ---- World layout (metres). +z is south, towards Pedias. ----
 const ISLAND_R = 290;
 const RUINS = new THREE.Vector3(40, 0, 150);        // old hill clearing (now just a trail junction)
 const MOUNT = new THREE.Vector3(60, 0, -150);       // Mount Olympos
@@ -1505,8 +1505,13 @@ function normalizeHandle(model, L) {
 const groundAxe = new THREE.Group();
 {
   const p = START.clone().add(new THREE.Vector3(1.4, 0, -1.8)); p.y = heightAt(p.x, p.z) + 0.08;
-  addPickup('axeitem', p, () => groundAxe);
 }
+// Olive branch for Athena's offering, on the Olive Terraces
+const oliveBranch = () => { const g = new THREE.Group(); const st = mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.9, 5), trunkMat, 0, 0.06, 0, g); st.rotation.z = Math.PI / 2;
+  const lm = flat(0x7d9a4a), om = flat(0x3d4a26); for (let i = 0; i < 12; i++) { const l = mesh(new THREE.SphereGeometry(0.07, 5, 3), lm, rr(-0.4, 0.4), rr(0.08, 0.16), rr(-0.08, 0.08), g); l.scale.set(1, 0.3, 2.4); l.rotation.y = rr(-1, 1); }
+  for (let i = 0; i < 5; i++) mesh(new THREE.SphereGeometry(0.04, 6, 4), om, rr(-0.3, 0.3), 0.12, rr(-0.06, 0.06), g);
+  const glow = new THREE.PointLight(0xffd88a, 1.2, 4); glow.position.y = 0.6; g.add(glow); return g; };
+{ const p = OLIVE.clone().add(new THREE.Vector3(-6, 0, -8)); p.y = heightAt(p.x, p.z) + 0.1; addPickup('olivebranch', p, oliveBranch); }
 loadModelBuffer('axe').then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
   fixMaterials(obj);
   const held = normalizeHandle(obj, 0.85);
@@ -1806,32 +1811,38 @@ function nextLine() {
   if (!dialogQueue.length) { $('dialog').classList.add('hidden'); const d = dialogDone; dialogDone = null; if (d) d(); return; }
   const [who, txt] = dialogQueue.shift(); $('dialog').querySelector('.who').textContent = who; $('dialog').querySelector('.txt').textContent = txt;
 }
-const inDialog = () => !$('dialog').classList.contains('hidden');
+const inDialog = () => !$('dialog').classList.contains('hidden') || !$('card').classList.contains('hidden');
 $('dialog').addEventListener('click', nextLine);
 
 // ============================================================
 // Quests
 // ============================================================
 const Q = [
-  { title: 'Washed Ashore', desc: 'You wake on a strange beach. Smoke rises from a hut nearby. Someone lives here.',
-    obj: () => [['Talk to the hermit near the hut', S.talkedNestor]], target: () => nestor.position },
-  { title: 'Hands of a Survivor', desc: 'Nestor says you need tools before anything else. Pick up branches and pebbles, harvest bushes and reeds, or punch trees and rocks.',
-    obj: () => [[`Wood ${Math.min(S.inv.wood, 6)}/6`, S.inv.wood >= 6 || S.tools.axe], [`Stone ${Math.min(S.inv.stone, 4)}/4`, S.inv.stone >= 4 || S.tools.axe], [`Fiber ${Math.min(S.inv.fiber, 3)}/3`, S.inv.fiber >= 3 || S.tools.axe]], target: () => null },
-  { title: 'Tools of the Wreck', desc: 'Open crafting with C. The axe works wood and stone fast. The spear keeps beasts at a distance.',
-    obj: () => [['Craft a Stone Axe', S.tools.axe], ['Craft a Spear', S.tools.spear]], target: () => null },
-  { title: 'Fire Before Dark', desc: 'Nights here are long and the wolves come out. Build a campfire. Resting at it with R makes time pass faster.',
+  { title: 'The Chosen One', desc: 'Zeus has brought you to Nisos, the first island of Argonisos. An old man waits by the hut near the shore: Nestor, the guide Zeus set here for the chosen.',
+    obj: () => [['Meet Nestor by his hut', S.talkedNestor]], target: () => nestor.position },
+  { title: 'The First Tool', desc: 'Nestor wants to see you make something with your own hands. Pick up branches and pebbles, pull fiber from bushes and reeds, then craft a Stone Axe with C.',
+    obj: () => [[`Wood ${Math.min(S.inv.wood, 3)}/3`, S.inv.wood >= 3 || S.tools.axe], [`Stone ${Math.min(S.inv.stone, 2)}/2`, S.inv.stone >= 2 || S.tools.axe], [`Fiber ${Math.min(S.inv.fiber, 1)}/1`, S.inv.fiber >= 1 || S.tools.axe], ['Craft a Stone Axe (C)', S.tools.axe]], target: () => null },
+  { title: 'A Gift for Athena', desc: 'Every chosen one must honour Athena before the trial begins. Gather berries from the bushes and take a sacred branch from the Olive Terraces.',
+    obj: () => [[`Berries ${Math.min(S.inv.berries, 3)}/3`, S.inv.berries >= 3], ['Sacred olive branch', !!S.oliveBranch]], target: () => (S.oliveBranch ? null : OLIVE) },
+  { title: 'The Temple of Athena', desc: 'Carry the offering east to the Temple of Athena and place it before her statue in the cella.',
+    obj: () => [['Place the offering at the statue (E)', !!S.offered]], target: () => new THREE.Vector3(TEMPLE.x, 0, TEMPLE.z - 8) },
+  { title: 'Return to Nestor', desc: 'The goddess answered. Go back to Nestor and tell him what you saw.',
+    obj: () => [['Report to Nestor', !!S.reported]], target: () => nestor.position },
+  { title: 'Arms of the Chosen', desc: 'An axe works wood. A spear keeps beasts at a distance. Craft one at the crafting menu (C).',
+    obj: () => [['Craft a Spear', S.tools.spear]], target: () => null },
+  { title: 'Fire Before Dark', desc: 'Nights on Nisos are long and the wolves come out. Build a campfire. Resting at it with R makes time pass faster.',
     obj: () => [['Build a Campfire (C)', !!S.campfire]], target: () => null },
   { title: 'The Hunt', desc: 'Berries alone will not keep you alive. Hunt rabbits and a wild boar, then cook the meat at your fire with E.',
     obj: () => [[`Rabbits ${Math.min(S.kills.rabbit, 2)}/2`, S.kills.rabbit >= 2], [`Boar ${Math.min(S.kills.boar, 1)}/1`, S.kills.boar >= 1], [`Cook meat ${Math.min(S.cooked, 3)}/3`, S.cooked >= 3]],
     target: () => nearestCreature('boar') },
   { title: 'The Long Night', desc: 'Survive until dawn. Stay near the fire, keep your spear ready and eat when you are hungry.',
     obj: () => [[`Survive a night (${S.nights - S.nightsAtStart}/1)`, S.nights - S.nightsAtStart >= 1]], target: () => S.campfire?.pos, start: () => { S.nightsAtStart = S.nights; } },
-  { title: 'The Cave of Echoes', desc: 'Nestor remembers a sail stored in the cave on the mountain\'s flank, before the dead started walking. Clear the skeletons and open the chest.',
+  { title: 'The Cave of Echoes', desc: 'Zeus left a sail in the cave on the mountain\'s flank for the chosen. Chosen who failed now guard it. Clear the skeletons and open the chest.',
     obj: () => { const k = skeletons.filter((s) => s.dead).length; return [[`Skeletons ${k}/3`, k >= 3], ['Loot the old chest', !chest.alive]]; }, target: () => chestPos },
-  { title: 'The Raft', desc: 'Lash logs together at the old dock on the south beach. You need rope, the sail, and food for the crossing.',
+  { title: 'The Raft', desc: 'Lash logs together at the old dock on the south beach. You need rope, the sail, and food for the crossing to Pedias.',
     obj: () => [[`Wood ${Math.min(S.inv.wood, 12)}/12`, S.inv.wood >= 12 || S.raftBuilt], [`Rope ${Math.min(S.inv.rope, 4)}/4`, S.inv.rope >= 4 || S.raftBuilt], [`Sailcloth ${S.inv.sail}/1`, S.inv.sail >= 1 || S.raftBuilt], [`Cooked meat ${Math.min(S.inv.meat, 3)}/3`, S.inv.meat >= 3 || S.raftBuilt], ['Build the raft at the dock (E)', S.raftBuilt]],
     target: () => RAFT_SITE },
-  { title: 'To Greece!', desc: 'Say goodbye to Nestor if you like, then board the raft and sail south toward the mountains on the horizon.',
+  { title: 'To Pedias', desc: 'Your trial on Nisos is done. Say goodbye to Nestor, then board the raft and sail south to the fertile fields of Pedias, the first of the nine biomes.',
     obj: () => [['Set sail from the dock (E)', S.sailing]], target: () => RAFT_SITE },
 ];
 function nearestCreature(type) {
@@ -1849,8 +1860,8 @@ function checkQuest() {
   if (q.obj().every(([, d]) => d)) {
     toast(`Quest complete: ${q.title}`, true); sfx(523, 0.12, 'triangle', 0.08); setTimeout(() => sfx(784, 0.25, 'triangle', 0.08), 120);
     S.questIdx++; const n = Q[S.questIdx]; if (n?.start) n.start();
-    if (n) setTimeout(() => toast(`New quest: <b>${n.title}</b>`), 900);
-    if (S.questIdx === 6) setTimeout(() => say([['Nestor', 'You lived through the night. Good. Now listen: I once saw a sail in the Cave of Echoes, up on the flank of the mountain, in a bronze-bound chest.'], ['Nestor', 'Three dead soldiers guard it. They do not sleep. Take your spear, and a full belly.']]), 1500);
+    if (n) setTimeout(() => questCard(n), 900);
+    if (S.questIdx === 9) setTimeout(() => say([['Nestor', 'You lived through the night. Good. Now listen: Zeus left a sail in the Cave of Echoes, up on the flank of the mountain, in a bronze-bound chest.'], ['Nestor', 'Chosen ones who failed guard it now. They do not sleep. Take your spear, and a full belly.']]), 1500);
   }
 }
 
@@ -1858,22 +1869,68 @@ function checkQuest() {
 function talkNestor() {
   const i = S.questIdx;
   if (i === 0) return say([
-    ['Nestor', 'By Poseidon... another one the sea spat out. Easy, friend, you are safe. Mostly.'],
-    ['Nestor', 'I am Nestor. The storms put me on this rock twelve summers ago, and I never left.'],
-    ['Nestor', 'You want to reach Greece? You can see it from the south beach on a clear day. But the sea does not give free passage.'],
-    ['Nestor', 'First you need tools. Pick up branches and stones, pull fiber from the bushes and reeds. Hit trees and rocks if you must.'],
-  ], () => { S.talkedNestor = true; });
+    ['Nestor', 'So. Zeus chose you. Let me look at you... Thin arms, but steady eyes. It will do.'],
+    ['Nestor', 'I am Nestor. Once a king of Pylos, now a teacher. The Father of the Gods set me on Nisos to prepare the chosen ones.'],
+    ['Nestor', 'Hera killed Hercules. Zeus built Argonisos so that someone worthy can inherit his strength. Nine lands, nine Guardians, and Olympos at the end.'],
+    ['Nestor', 'But nobody walks into Pedias with empty hands. Your first task: make me a Stone Axe. Listen closely, I will only say this once.'],
+  ], () => { S.talkedNestor = true; showCards(TUTORIAL); });
+  if (i === 4) return say([
+    ['Nestor', 'A column of gold over the temple. I saw it from here. So did half of Olympos, I think.'],
+    ['Nestor', 'Athena does not answer everyone. Good. Very good.'],
+    ['Nestor', 'Now the real work. The nights here are long and the beasts are real. You will need a spear, a fire and a full belly.'],
+  ], () => { S.reported = true; });
   const lines = {
-    1: 'Wood, stone, fiber. Every good tool starts with those three.',
-    2: 'Press C and use what you gathered. An axe first. Then a spear, trust me.',
-    3: 'The sun falls fast here. When it is gone the wolves come out of the pines. Build a fire.',
-    4: 'Rabbits run and boars fight back. Keep the spear pointed at the tusks. Cook the meat, raw meat will make you sick.',
-    5: 'Stay close to the fire tonight. The wolves are cowards, but hungry ones.',
-    6: 'The cave is north, where the trail climbs the mountain. Bring a torch in your heart. Or do not come back at all, ha.',
-    7: 'The old dock is on the south beach. Twelve logs, four ropes, the sail, and food for three days at sea.',
-    8: 'Fair winds, friend. When you find Ithaca... tell them old Nestor is still waiting.',
+    1: 'Three wood, two stone, one fiber. Press C and make the axe. Then show me.',
+    2: 'Berries grow on the bushes all over the island. The sacred olive grows on the terraces to the south-east. Take only one branch.',
+    3: 'The temple is east, past the lake. Place the offering at Athena\'s feet. Kneel if you want to, she likes that.',
+    5: 'An axe first, now a spear. Press C. Trust me on the spear.',
+    6: 'The sun falls fast here. When it is gone the wolves come out of the pines. Build a fire.',
+    7: 'Rabbits run and boars fight back. Keep the spear pointed at the tusks. Cook the meat, raw meat will make you sick.',
+    8: 'Stay close to the fire tonight. The wolves are cowards, but hungry ones.',
+    9: 'The cave is north, where the trail climbs the mountain. Bring courage. Or do not come back at all, ha.',
+    10: 'The old dock is on the south beach. Twelve logs, four ropes, the sail, and food for the crossing.',
+    11: 'Pedias waits across the water. When you face its Guardian, remember what old Nestor taught you.',
   };
-  say([['Nestor', lines[i] || 'The sea is calm today.']]);
+  say([['Nestor', lines[i] || 'The gods are watching. Do not bore them.']]);
+}
+
+// ============================================================
+// Story & tutorial cards: full-screen panels that pause the game
+// ============================================================
+const STORY = [
+  { kicker: 'Argonisos', title: 'Hercules Is Dead', body: 'After centuries of hatred, Hera has finally slain Hercules. His strength, the greatest ever given to a mortal, has no heir.', img: 'concept/world-characters.webp' },
+  { kicker: 'The grief of Zeus', title: 'A World Made for a Trial', body: 'Mourning his son, Zeus shapes a demi-plane between the earth and the sky: <b>Argonisos</b>. Here mortals must prove themselves worthy to inherit the power of Hercules.', img: 'concept/nature.webp' },
+  { kicker: 'The path', title: 'Nine Lands, Nine Guardians', body: 'Argonisos holds nine biomes, each ruled by a Guardian Boss. Conquer all nine and you ascend to <b>Olympos</b> to claim the power of a demigod.', img: 'concept/buildings.webp' },
+  { kicker: 'You', title: 'One of the Chosen', body: 'You did not wash up here by accident. Zeus chose you. Your trial begins on <b>Nisos</b>, a small island at the edge of Argonisos. Pass it, and the fertile fields of Pedias open to you.<br><br>Zeus left a guide on Nisos: <b>Nestor</b>. Find him.', img: 'concept/animals.webp', btn: 'Begin the trial' },
+];
+const TUTORIAL = [
+  { kicker: 'Nestor teaches · 1/5', title: 'Gather', body: 'Walk up to branches, pebbles, bushes and reeds and press <b>E</b> to pick them up. Bushes give berries and grow back.', keys: [['E', 'Interact / pick up'], ['WASD', 'Move'], ['Shift', 'Sprint'], ['Space', 'Jump']] },
+  { kicker: 'Nestor teaches · 2/5', title: 'Strike', body: 'Hit trees and rocks with <b>Left Click</b> to break off wood and stone. Bare hands work, but slowly. An axe is four times faster.', keys: [['LMB', 'Swing / attack'], ['1–4', 'Hands · Axe · Spear · Bow']] },
+  { kicker: 'Nestor teaches · 3/5', title: 'Craft', body: 'Press <b>C</b> to open crafting. A Stone Axe needs 3 wood, 2 stone and 1 fiber. Your bag is on <b>Tab</b>.', keys: [['C', 'Crafting'], ['Tab', 'Inventory']] },
+  { kicker: 'Nestor teaches · 4/5', title: 'Stay Alive', body: 'Watch the three bars: <b>health</b>, <b>stamina</b> and <b>hunger</b>. Sprinting and fighting burn stamina. Press <b>F</b> to eat when hunger drops, or your health follows.', keys: [['F', 'Eat'], ['R', 'Rest at a fire']] },
+  { kicker: 'Nestor teaches · 5/5', title: 'Find Your Way', body: 'Follow the gold <b>◆</b> marker on the compass to your current objective. <b>M</b> opens the map. Climbing the watchtower in the north-west reveals the whole island.', keys: [['M', 'Map'], ['◆', 'Objective marker']] },
+];
+let cardQueue = [], cardDone = null;
+function showCards(list, done) {
+  if (S.explore) { if (done) done(); return; }
+  cardQueue = list.slice(); cardDone = done || null; document.exitPointerLock(); $('card').classList.remove('hidden'); nextCard();
+}
+function nextCard() {
+  if (!cardQueue.length) { $('card').classList.add('hidden'); const d = cardDone; cardDone = null; if (S.running && !S.sailing) canvas.requestPointerLock(); if (d) d(); return; }
+  const c = cardQueue.shift(), el = $('card');
+  el.querySelector('.ck').textContent = c.kicker || ''; el.querySelector('h2').textContent = c.title; el.querySelector('.cb').innerHTML = c.body;
+  el.querySelector('.ckeys').innerHTML = (c.keys || []).map(([k, t]) => `<span><span class="kbd">${k}</span>${t}</span>`).join('');
+  el.querySelector('.cimg').style.backgroundImage = c.img ? `url(${c.img})` : ''; el.classList.toggle('noimg', !c.img);
+  el.querySelector('.cnext').textContent = cardQueue.length ? 'Continue' : (c.btn || 'Got it');
+  el.querySelector('.cskip').style.visibility = cardQueue.length ? 'visible' : 'hidden';
+  el.querySelector('.cin').classList.remove('anim'); void el.offsetWidth; el.querySelector('.cin').classList.add('anim');
+}
+const inCard = () => !$('card').classList.contains('hidden');
+$('card').querySelector('.cnext').onclick = nextCard;
+$('card').querySelector('.cskip').onclick = () => { cardQueue = []; nextCard(); };
+function questCard(q) {
+  showCards([{ kicker: `New quest · ${S.questIdx + 1} / ${Q.length}`, title: q.title, body: q.desc, keys: q.obj().map(([t]) => ['○', t]) }]);
+  sfx(392, 0.25, 'triangle', 0.06);
 }
 
 // ============================================================
@@ -1896,6 +1953,7 @@ document.addEventListener('mousedown', (e) => { if (locked && e.button === 0) st
 addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (!S.running) return;
+  if (inCard()) { if (e.code === 'KeyE' || e.code === 'Space' || e.code === 'Enter') nextCard(); return; }
   if (inDialog()) { if (e.code === 'KeyE' || e.code === 'Space' || e.code === 'Enter') nextLine(); return; }
   if (S.sailing) return;
   if (e.code === 'KeyC') toggleCraft();
@@ -1945,14 +2003,18 @@ $('resume').onclick = () => { setPause(false); canvas.requestPointerLock(); };
 $('toTitle').onclick = () => { $('title').classList.remove('hidden'); $('pause').classList.add('hidden'); $('startBtn').textContent = 'Continue'; document.querySelector('.tabs button[data-tab="t-how"]').click(); };
 function debugSkipQuest() {
   const i = S.questIdx;
+  if (inCard()) { cardQueue = []; nextCard(); }
   if (i === 0) S.talkedNestor = true;
-  if (i === 1) Object.assign(S.inv, { wood: S.inv.wood + 6, stone: S.inv.stone + 4, fiber: S.inv.fiber + 3 });
-  if (i === 2) Object.assign(S.tools, { axe: true, spear: true });
-  if (i === 3) placeCampfire();
-  if (i === 4) { S.kills.rabbit = Math.max(2, S.kills.rabbit); S.kills.boar = Math.max(1, S.kills.boar); S.cooked = Math.max(3, S.cooked); S.inv.meat += 3; }
-  if (i === 5) S.nights++;
-  if (i === 6) { skeletons.forEach((s) => { if (!s.dead) killCreature(s); }); openChest(); }
-  if (i === 7) { Object.assign(S.inv, { wood: S.inv.wood + 12, rope: S.inv.rope + 4, meat: S.inv.meat + 3 }); player.position.set(RAFT_SITE.x - 2, 0.5, RAFT_SITE.z - 3); }
+  if (i === 1) S.tools.axe = true;
+  if (i === 2) { S.inv.berries += 3; S.oliveBranch = true; }
+  if (i === 3) S.offered = true;
+  if (i === 4) S.reported = true;
+  if (i === 5) S.tools.spear = true;
+  if (i === 6) placeCampfire();
+  if (i === 7) { S.kills.rabbit = Math.max(2, S.kills.rabbit); S.kills.boar = Math.max(1, S.kills.boar); S.cooked = Math.max(3, S.cooked); S.inv.meat += 3; }
+  if (i === 8) S.nights++;
+  if (i === 9) { skeletons.forEach((s) => { if (!s.dead) killCreature(s); }); openChest(); }
+  if (i === 10) { Object.assign(S.inv, { wood: S.inv.wood + 12, rope: S.inv.rope + 4, meat: S.inv.meat + 3 }); player.position.set(RAFT_SITE.x - 2, 0.5, RAFT_SITE.z - 3); }
   toast('Playtest: quest step skipped');
 }
 
@@ -1965,7 +2027,7 @@ function getInteractable() {
   consider(pp.distanceTo(nestor.position), { label: 'Talk to Nestor', act: talkNestor });
   for (const pk of pickups) {
     if (!pk.alive || (pk.kind === 'bush' && pk.regrow > 0)) continue;
-    const labels = { bowitem: 'Pick up the bow and arrows', axeitem: 'Pick up the axe', branch: 'Pick up branch', pebble: 'Pick up pebbles', bush: 'Harvest bush', reeds: 'Cut reeds', chest: 'Open the old chest' };
+    const labels = { bowitem: 'Pick up the bow and arrows', axeitem: 'Pick up the axe', olivebranch: 'Take the sacred olive branch', branch: 'Pick up branch', pebble: 'Pick up pebbles', bush: 'Harvest bush', reeds: 'Cut reeds', chest: 'Open the old chest' };
     consider(pp.distanceTo(pk.pos), { label: labels[pk.kind], act: () => harvest(pk) });
   }
   if (S.campfire && pp.distanceTo(S.campfire.pos) < 3) {
@@ -1976,12 +2038,27 @@ function getInteractable() {
   if (dT < 5.5 && pp.y < TOWER_TOP.y - 2) consider(Math.max(0, dT - 3.5), { label: 'Climb the watchtower', act: climbTower });
   if (dT < 2.6 && pp.y > TOWER_TOP.y - 1) consider(0.5, { label: 'Climb down', act: () => { player.position.set(TOWER.x + 4.5, heightAt(TOWER.x + 4.5, TOWER.z) + 0.5, TOWER.z); } });
   if (CAVE_ALTAR && pp.distanceTo(CAVE_ALTAR) < 3.4) consider(1, { label: 'Examine the altar', act: () => say([['You', 'An old altar, cold as snow. There is a hollow in the stone, as if something is meant to rest here.'], ['You', 'Not yet. But I will be back.']]) });
+  if (S.questIdx === 3 && Math.hypot(pp.x - TEMPLE.x, pp.z - (TEMPLE.z - 8)) < 4.2) consider(0.8, { label: 'Place the offering before Athena', act: makeOffering });
   const rd = Math.hypot(pp.x - RAFT_SITE.x, pp.z - RAFT_SITE.z);
   if (rd < 4.5) {
-    if (!S.raftBuilt) consider(Math.max(0, rd - 2.5), { label: S.questIdx >= 7 ? 'Build the raft' : 'Old dock: a raft could launch here', act: buildRaft });
-    else consider(Math.max(0, rd - 2.5), { label: 'Set sail for Greece', act: setSail });
+    if (!S.raftBuilt) consider(Math.max(0, rd - 2.5), { label: S.questIdx >= 10 ? 'Build the raft' : 'Old dock: a raft could launch here', act: buildRaft });
+    else consider(Math.max(0, rd - 2.5), { label: 'Set sail for Pedias', act: setSail });
   }
   return best;
+}
+// Offering at the statue: berries + olive branch, answered by a column of golden light
+function makeOffering() {
+  S.inv.berries = Math.max(0, S.inv.berries - 3); S.offered = true; document.exitPointerLock();
+  const base = new THREE.Vector3(TEMPLE.x, TEMPLE_Y + 1.3, TEMPLE.z - 8);
+  const beamMat = new THREE.MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.4, 40, 24, 1, true), beamMat); beam.position.copy(base).setY(base.y + 20); scene.add(beam);
+  const light = new THREE.PointLight(0xffcf70, 0, 30); light.position.copy(base).setY(base.y + 4); scene.add(light);
+  const t0 = performance.now();
+  const tick = () => { const k = (performance.now() - t0) / 1000, a = k < 1 ? k : k < 4 ? 1 : Math.max(0, 1 - (k - 4) / 2);
+    beamMat.opacity = a * 0.35; light.intensity = a * 60; beam.rotation.y = k * 0.4; beam.scale.x = beam.scale.z = 1 + Math.sin(k * 3) * 0.05;
+    if (k < 6) requestAnimationFrame(tick); else { scene.remove(beam); scene.remove(light); } };
+  tick(); sfx(523, 0.5, 'triangle', 0.08); setTimeout(() => sfx(659, 0.5, 'triangle', 0.08), 250); setTimeout(() => sfx(784, 0.9, 'triangle', 0.08), 500);
+  setTimeout(() => showCards([{ kicker: 'The goddess answers', title: 'Athena\'s Blessing', body: 'The branch turns to gold in your hands, then to light. Somewhere above the clouds, grey eyes open and look at you for the first time.<br><br>Athena has seen you. Return to Nestor and tell him.', keys: [] }]), 1800);
 }
 function climbTower() {
   player.position.set(TOWER_TOP.x, TOWER_TOP.y + 0.2, TOWER_TOP.z); P.vel.y = 0;
@@ -1996,6 +2073,7 @@ function harvest(pk) {
   }
   if (pk.kind === 'bowitem') { S.tools.bow = true; S.slot = 3; give('arrows', 12); toast('Picked up a <b>Bow</b> and 12 arrows. Press 4 to aim, click to shoot.'); }
   if (pk.kind === 'axeitem') { S.tools.axe = true; S.slot = 1; P.equip = { kind: 'equip', t: 0 }; toast('Picked up the <b>Axe</b>. Press 2 to put it away or take it out.'); sfx(440, 0.2, 'triangle', 0.08, 200); }
+  if (pk.kind === 'olivebranch') { S.oliveBranch = true; toast('Took the <b>Sacred Olive Branch</b>. Athena\'s tree, Athena\'s gift.', true); sfx(660, 0.4, 'triangle', 0.07, 200); }
   if (pk.kind === 'branch') give('wood', 1, pk.pos);
   if (pk.kind === 'pebble') give('stone', 1, pk.pos);
   if (pk.kind === 'reeds') give('fiber', 2, pk.pos);
@@ -2011,7 +2089,7 @@ function cook() {
   floatText(`+${n} 🍖`, S.campfire.pos.clone().setY(S.campfire.pos.y + 1.5), '#ffcf7a'); sfx(180, 0.3, 'sawtooth', 0.03, -60);
 }
 function buildRaft() {
-  if (S.questIdx < 7) { say([['You', 'Old planks and rotten rope. With enough wood, rope and a sail, a raft could launch from here.']]); return; }
+  if (S.questIdx < 10) { say([['You', 'Old planks and rotten rope. With enough wood, rope and a sail, a raft could launch from here.']]); return; }
   const need = { wood: 12, rope: 4, sail: 1, meat: 3 };
   if (!canAfford(need)) { toast('Missing materials. Check the quest list.'); return; }
   for (const [k, v] of Object.entries(need)) S.inv[k] -= v;
@@ -2457,9 +2535,9 @@ function drawBigMap() {
 // Sailing ending
 // ============================================================
 function setSail() {
-  if (S.questIdx < 8) return;
+  if (S.questIdx < 11) return;
   S.sailing = true; document.exitPointerLock(); $('prompt').classList.add('hidden'); checkQuest();
-  say([['Nestor', '(from the shore) Fair winds! Watch the sky, and pray to Poseidon!'], ['You', 'Greece... here I come.']], () => {
+  say([['Nestor', '(from the shore) Fair winds! May the Guardian of Pedias fear you!'], ['You', 'One island down. Eight lands to go.']], () => {
     const start = performance.now();
     player.position.set(0, 0.5, 0.8); player.rotation.set(0, 0, 0); raftGroup.add(player); P.yaw = 0;
     const tick = () => {
@@ -2468,7 +2546,7 @@ function setSail() {
       if (k > 9) { $('fade').style.opacity = 1; }
       if (k > 11.5) {
         $('ending').classList.remove('hidden');
-        $('endStats').innerHTML = `Survived <b>${S.day}</b> days · Rabbits ${S.kills.rabbit} · Boars ${S.kills.boar} · Wolves ${S.kills.wolf} · Skeletons ${S.kills.skeleton} · Deaths ${S.deaths}<br>Time played: ${Math.round((performance.now() - S.started) / 60000)} min<br><br>Next in the Unity build: landfall in the Pedias biome, the first village, and character creation.`;
+        $('endStats').innerHTML = `Survived <b>${S.day}</b> days · Rabbits ${S.kills.rabbit} · Boars ${S.kills.boar} · Wolves ${S.kills.wolf} · Skeletons ${S.kills.skeleton} · Deaths ${S.deaths}<br>Time played: ${Math.round((performance.now() - S.started) / 60000)} min<br><br>Next in the Unity build: landfall in Pedias, the first biome, and its Guardian.`;
         return;
       }
       requestAnimationFrame(tick);
@@ -2625,9 +2703,8 @@ $('startBtn').onclick = () => {
   if (first) {
     S.started = performance.now();
     camYaw = P.yaw + Math.PI; camera.position.copy(player.position).add(new THREE.Vector3(0, 4, -7));
-    setTimeout(() => say([['You', '...Salt. Sand. I\'m alive? The ship is gone.'], ['You', 'There is smoke over there, from a chimney. Someone lives on this island.']]), 600);
-    toast('Follow the gold ◆ marker', false);
+    setTimeout(() => showCards(STORY, () => questCard(Q[0])), 300);
   }
 };
 renderer.info.autoReset = false;
-window.ARG = { nestor, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.info.reset(); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
+window.ARG = { nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.info.reset(); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting

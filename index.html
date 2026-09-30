@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Argonisos Island Prologue</title>
+<title>Argonisos: Nisos</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Alegreya+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   /* Look: dark carved wood + bronze trim (survival-RPG menus), Cinzel headers, Alegreya Sans body */
@@ -122,6 +122,22 @@
   #pause .stack { display:flex; flex-direction:column; gap:8px; padding:16px 22px 4px; }
   #pause .stack .btn { width:100%; }
   #pause p { font-size:12px; color:var(--dim); text-align:center; margin:10px 16px 0; }
+  #card { position:fixed; inset:0; z-index:40; display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse at center, rgba(10,8,5,.55), rgba(5,4,2,.9)); }
+  #card.hidden { display:none; }
+  #card .cin { display:flex; width:min(94vw,860px); min-height:340px; padding:0; overflow:hidden; }
+  #card .cin.anim { animation:cardIn .45s ease-out; }
+  @keyframes cardIn { from { opacity:0; transform:translateY(18px) scale(.98); } to { opacity:1; transform:none; } }
+  #card .cimg { flex:0 0 42%; background:#1a140c center/cover no-repeat; box-shadow:inset -40px 0 50px -20px rgba(0,0,0,.8); }
+  #card.noimg .cimg { display:none; }
+  #card .ctext { flex:1; padding:30px 34px; display:flex; flex-direction:column; gap:12px; }
+  #card .ck { font-family:Cinzel,serif; letter-spacing:.25em; font-size:12px; color:var(--gold); text-transform:uppercase; }
+  #card h2 { font-family:Cinzel,serif; font-size:30px; margin:0; color:#f3e3bf; }
+  #card .cb { font-size:18px; line-height:1.55; color:#e6dac2; }
+  #card .ckeys { display:flex; flex-wrap:wrap; gap:8px 16px; font-size:14px; color:#cdbf9f; }
+  #card .ckeys .kbd { margin-right:6px; }
+  #card .cbtns { margin-top:auto; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  #card .cskip { background:none; border:0; color:#9a8b6c; cursor:pointer; font:inherit; }
+  @media (max-width:640px) { #card .cin { flex-direction:column; } #card .cimg { flex-basis:140px; } #card h2 { font-size:24px; } }
   #dialog { position:fixed; left:50%; bottom:110px; transform:translateX(-50%); width:min(92vw,640px); padding:16px 20px; z-index:15; }
   #dialog .who { color:var(--gold); font-family:Cinzel,serif; font-size:17px; margin-bottom:6px; }
   #dialog .txt { font-size:17px; line-height:1.5; min-height:48px; }
@@ -211,6 +227,7 @@
   </div>
 </div>
 
+<div id="card" class="hidden"><div class="cin pnl"><div class="cimg"></div><div class="ctext"><div class="ck"></div><h2></h2><div class="cb"></div><div class="ckeys"></div><div class="cbtns"><button class="cskip">Skip</button><button class="btn primary cnext">Continue</button></div></div></div></div>
 <div id="dialog" class="pnl hidden"><div class="who"></div><div class="txt"></div><div class="next">E / Click to continue</div></div>
 
 <div id="pause" class="pnl modal hidden">
@@ -229,7 +246,7 @@
     <div class="logo">
       <svg viewBox="0 0 120 46" aria-hidden="true"><path d="M4 44 L38 10 L52 24 L66 4 L116 44 Z" fill="none" stroke="#efe0bf" stroke-width="3" stroke-linejoin="round"/><path d="M58 16 L66 4 L74 16" fill="#efe0bf"/></svg>
       <h1>ARGONISOS</h1>
-      <div class="sub">PROLOGUE</div>
+      <div class="sub">THE TRIAL OF NISOS</div>
     </div>
     <div class="tabs">
       <button id="startBtn">New Game</button>
@@ -245,8 +262,8 @@
   <div id="menuPage" class="pnl hidden">
   <div class="tabpage hidden" id="t-play">
     <h3>The Story So Far</h3>
-    <p>A storm split your ship on the rocks. You wake on an Aegean island with nothing but a torn tunic. An old hermit, Nestor, has lived here for years. He knows the island: the dark woods, the marsh, the cold mountain and the cave in its side, and the dead who guard the hill.</p>
-    <p>Survive. Gather. Hunt. Explore. Build a raft and sail south to Greece, where your real journey begins.</p>
+    <p>Hera has slain Hercules. Mourning his son, Zeus built Argonisos, a demi-plane where mortals prove themselves worthy of Hercules' strength: nine biomes, nine Guardian Bosses, and Olympos at the end. You are one of the chosen. Your trial starts on <b>Nisos</b>, where Nestor, the guide Zeus set there, knows the island: the dark woods, the marsh, the cold mountain and the cave in its side, and the dead who guard the hill.</p>
+    <p>Survive. Gather. Hunt. Explore. Honour Athena, then build a raft and sail south to the fertile fields of Pedias, the first biome.</p>
     <div class="grid2">
       <div><h3>Regions</h3>Nestor's Cove · Hill of the Fallen · Hylaea Woods · Stymphalian Marsh · Mount Olympos · Cave of Echoes · Lake Kastalia · Temple of Athena · Olive Terraces · Watchtower of Aeolus</div>
       <div><h3>Length</h3>~30–60 minutes. One in-game day = 5 real minutes. Wolves come at night.</div>
@@ -326,7 +343,7 @@
 <div id="lightbox" class="hidden"><img alt=""></div>
 <div id="ending" class="hidden">
   <h1>Chapter I Begins</h1>
-  <p class="cinzel" style="color:var(--dim);letter-spacing:.2em">THE SEA TO GREECE IS OPEN</p>
+  <p class="cinzel" style="color:var(--dim);letter-spacing:.2em">THE WAY TO PEDIAS IS OPEN</p>
   <p id="endStats" style="max-width:520px;line-height:1.6"></p>
   <button class="btn primary" onclick="location.reload()">Play Again</button>
 </div>
