@@ -855,13 +855,13 @@ function reeds() {
   mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.25, 5), flat(0x6b4a2e), 0, 1.3, 0, g);
   return g;
 }
-for (let i = 0; i < 220; i++) { const p = landSpot(1.2, 30, AVOID); if (p) addPickup('branch', p, branch); }
-for (let i = 0; i < 180; i++) { const p = landSpot(0.4, 40, AVOID); if (p) addPickup('pebble', p, pebble); }
+for (let i = 0; i < 420; i++) { const p = landSpot(1.2, 30, AVOID); if (p) addPickup('branch', p, branch); }
+for (let i = 0; i < 360; i++) { const p = landSpot(0.4, 40, AVOID); if (p) addPickup('pebble', p, pebble); }
 for (let i = 0; i < 170; i++) { const p = landSpot(1.5, 25, AVOID); if (p) addPickup('bush', p, bush); }
 for (let i = 0; i < 70; i++) { const p = landSpot(0.15, 1.2, AVOID); if (p) addPickup('reeds', p, reeds); }
 for (let i = 0; i < 90; i++) { const a = rand() * 6.28, d = rr(0, 85), p = new THREE.Vector3(SWAMP.x + Math.cos(a) * d, 0, SWAMP.z + Math.sin(a) * d); p.y = heightAt(p.x, p.z); if (p.y > -0.5) addPickup('reeds', p, reeds); }
 // A few starter materials right at the wake-up spot, so the first minute teaches pickup
-for (let i = 0; i < 3; i++) { const p = START.clone().add(new THREE.Vector3(rr(-4, 4), 0, rr(-5, -2))); p.y = heightAt(p.x, p.z); addPickup(i < 2 ? 'branch' : 'pebble', p, i < 2 ? branch : pebble); }
+for (let i = 0; i < 9; i++) { const p = START.clone().add(new THREE.Vector3(rr(-9, 9), 0, rr(-14, -2))); p.y = heightAt(p.x, p.z); addPickup(i % 3 < 2 ? 'branch' : 'pebble', p, i % 3 < 2 ? branch : pebble); }
 
 // --- Grass & flowers: instanced, swaying in the wind ---
 const windUniform = windUniformEarly;
@@ -2374,13 +2374,13 @@ function say(lines, done) {
 function nextLine() {
   if (!dialogQueue.length) { $('dialog').classList.add('hidden'); if (talkCam.on && !talkCam.fixed) stopTalkCam(); const d = dialogDone; dialogDone = null; if (d) d(); return; }
   const [who, txt] = dialogQueue.shift(); $('dialog').querySelector('.who').textContent = who; $('dialog').querySelector('.txt').textContent = txt;
-  talkCam.who = who === 'You' ? 'you' : 'npc'; talkCam.lineT = 0; talkCam.cut = true; snd.page();
+  talkCam.who = who === 'You' ? 'you' : 'npc'; talkCam.lineT = 0; snd.page();
 }
 // ---- Conversation camera: letterbox, over-the-shoulder shots that cut between speakers and drift slowly (a gentle
 //      handheld dolly), so quest scenes play like cutscenes. Also used for fixed shots (the offering to Athena).
 const talkCam = { on: false, t: 0, lineT: 0, who: 'npc', npc: null, look: new THREE.Vector3(), fixed: null };
 function startTalkCam(npc, fixed = null) {
-  Object.assign(talkCam, { on: true, t: 0, lineT: 0, npc, fixed }); talkCam.look.copy(fixed ? fixed.look : npc.position).setY(fixed ? fixed.look.y : npc.position.y + 1.6);
+  Object.assign(talkCam, { on: true, t: 0, lineT: 0, npc, fixed, shot: null }); talkCam.look.copy(fixed ? fixed.look : npc.position).setY(fixed ? fixed.look.y : npc.position.y + 1.6);
   $('cine').classList.remove('hidden'); $('cineText').classList.remove('show'); requestAnimationFrame(() => $('cine').classList.add('on'));
   $('hud').classList.add('hidden');
 }
@@ -2396,14 +2396,20 @@ function updateTalkCam(dt) {
     if (u >= 1 && F.done) { const d = F.done; F.done = null; stopTalkCam(); d(); }
     return;
   }
-  const P0 = player.position, N = talkCam.npc.position, ax = new THREE.Vector3(N.x - P0.x, 0, N.z - P0.z); ax.normalize(); const side = new THREE.Vector3(-ax.z, 0, ax.x);
+  // One set shot for the whole conversation: side-on to both speakers, glides in from the gameplay camera,
+  // then very slowly pulls back while they talk. No cuts between lines.
+  const P0 = player.position, N = talkCam.npc.position, ax = new THREE.Vector3(N.x - P0.x, 0, N.z - P0.z); ax.normalize();
   P.yaw = Math.atan2(ax.x, ax.z); player.rotation.y = P.yaw; talkCam.npc.rotation.y = Math.atan2(-ax.x, -ax.z);
-  const drift = Math.sin(talkCam.t * 0.33) * 0.3, push = Math.min(1, talkCam.lineT / 7) * 0.45, bob = Math.sin(talkCam.t * 0.9) * 0.04;
-  let want, look;
-  if (talkCam.who !== 'you') { want = P0.clone().addScaledVector(ax, -1.25 + push).addScaledVector(side, 0.95 + drift); want.y = P0.y + 1.9 + bob; look = N.clone().setY(N.y + 1.55); }
-  else { want = N.clone().addScaledVector(ax, 1.25 - push).addScaledVector(side, -0.95 - drift); want.y = N.y + 1.85 + bob; look = P0.clone().setY(P0.y + 1.5); }
+  if (!talkCam.shot) {
+    const mid = P0.clone().lerp(N, 0.5), side = new THREE.Vector3(-ax.z, 0, ax.x); if (side.dot(camera.position.clone().sub(mid)) < 0) side.negate();
+    talkCam.shot = { mid, side, from: camera.position.clone(), fromLook: talkCam.look.clone() };
+  }
+  const sh = talkCam.shot, pull = Math.min(1, talkCam.t / 24), e = pull * (2 - pull);                 // ease-out over ~24 s
+  const want = sh.mid.clone().addScaledVector(sh.side, 2.6 + e * 2.6).addScaledVector(ax, -0.4 - e * 0.6); want.y = sh.mid.y + 1.25 + e * 0.8;
   want.y = Math.max(want.y, heightAt(want.x, want.z) + 0.8);
-  const cut = talkCam.cut; talkCam.cut = false; camera.position.lerp(want, cut ? 1 : k); talkCam.look.lerp(look, cut ? 1 : k); camera.lookAt(talkCam.look);   // hard cut on a new line, then drift
+  const look = sh.mid.clone().setY(sh.mid.y + 0.55);   // aim low so the speakers sit above the dialogue box
+  const gl = Math.min(1, talkCam.t / 1.4), gk = gl * gl * (3 - 2 * gl);                                  // glide in from where the camera was
+  camera.position.copy(sh.from).lerp(want, gk); talkCam.look.copy(sh.fromLook).lerp(look, gk); camera.lookAt(talkCam.look);
 }
 const inDialog = () => !$('dialog').classList.contains('hidden') || !$('card').classList.contains('hidden');
 $('dialog').addEventListener('click', nextLine);
@@ -2444,12 +2450,27 @@ function nearestCreature(type) {
   for (const c of creatures) if (!c.dead && c.type === type) { const d = c.obj.position.distanceTo(player.position); if (d < bd) { bd = d; best = c.obj.position; } }
   return best;
 }
+// Quest tracker (top left): full card when something changes, then it settles to just the title and objectives.
+// L opens the journal: the active quest (green), the main quest, and what you've finished. No quest picking.
+let questSig = '', questShownT = 0;
 function renderQuest() {
-  const q = Q[S.questIdx]; $('quest').classList.toggle('hidden', !q); if (!q) return;
+  const q = Q[S.questIdx]; $('quest').classList.toggle('hidden', !q || !!S.explore); if (!q) return;
   const li = (list) => list.map(([t, d]) => `<li class="${d ? 'done' : ''}">${d ? '✔' : '○'} ${t}</li>`).join('');
-  let html = `<div class="step">Quest ${S.questIdx + 1} / ${Q.length}</div><h3 class="cinzel">${q.title}</h3><p>${q.desc}</p><ul>${li(q.obj())}</ul>`;
-  if (S.questIdx >= 1 && S.questIdx < 10 && !S.raftBuilt) html += `<div class="step" style="margin-top:10px">Main quest</div><h3 class="cinzel" style="font-size:15px">Mend Your Boat</h3><ul>${li(Q[10].obj())}</ul>`;
+  const obj = q.obj(), sig = S.questIdx + '|' + obj.map((o) => o[1] ? 1 : 0).join('');
+  if (sig !== questSig) { questSig = sig; questShownT = performance.now(); $('quest').classList.remove('compact'); }
+  else if (performance.now() - questShownT > 9000) $('quest').classList.add('compact');
+  let html = `<div class="step">Quest ${S.questIdx + 1} / ${Q.length}</div><h3 class="cinzel">${q.title}</h3><p>${q.desc}</p><ul>${li(obj)}</ul>`;
+  if (S.questIdx >= 1 && S.questIdx < 10 && !S.raftBuilt) html += `<div class="step" style="margin-top:10px">Main quest</div><h3 class="cinzel qmain" style="font-size:14px;margin-top:6px">Mend Your Boat</h3>`;
+  html += '<div class="qhint">L · Quest journal</div>';
   $('quest').innerHTML = html;
+}
+function renderJournal() {
+  const li = (list) => list.map(([t, d]) => `<li class="${d ? 'done' : ''}">${d ? '✔' : '○'} ${t}</li>`).join('');
+  const q = Q[S.questIdx]; let h = '<h4>Active</h4>';
+  h += q ? `<div class="jq active"><h3>${q.title}</h3><p>${q.desc}</p><ul>${li(q.obj())}</ul></div>` : '<p class="jdone">Your trial on Nisos is complete.</p>';
+  if (S.questIdx < 10 && S.questIdx >= 1) h += `<h4>Main quest</h4><div class="jq"><h3>Mend Your Boat</h3><p>${Q[10].desc}</p><ul>${li(Q[10].obj())}</ul></div>`;
+  if (S.questIdx > 0) h += '<h4>Completed</h4>' + Q.slice(0, S.questIdx).map((x) => `<div class="jdone">${x.title}</div>`).join('');
+  $('journalBody').innerHTML = h;
 }
 function checkQuest() {
   if (S.explore) return;
@@ -2503,7 +2524,7 @@ const STORY = [
 ];
 const TUTORIAL = [
   { kicker: 'Nestor teaches · 1/5', title: 'Gather', body: 'Walk up to branches, pebbles, bushes and reeds and press <b>E</b> to pick them up. Bushes give berries and grow back.', keys: [['E', 'Interact / pick up'], ['WASD', 'Move'], ['Shift', 'Sprint'], ['Space', 'Jump']] },
-  { kicker: 'Nestor teaches · 2/5', title: 'Strike', body: 'Hit trees and rocks with <b>Left Click</b> to break off wood and stone. Bare hands work, but slowly. An axe is four times faster.', keys: [['LMB', 'Swing / attack'], ['1–3', 'Hands · Axe · Spear']] },
+  { kicker: 'Nestor teaches · 2/5', title: 'Fight', body: 'Your fists are for beasts, not trees: <b>Left Click</b> to strike. Wood and stone come from branches and pebbles on the ground; once you have an axe you can fell trees and split rocks.', keys: [['LMB', 'Swing / attack'], ['1–3', 'Hands · Axe · Spear']] },
   { kicker: 'Nestor teaches · 3/5', title: 'Craft', body: 'Press <b>C</b> to open crafting. A Stone Axe needs 3 wood, 2 stone and 1 fiber. Your bag is on <b>Tab</b>.', keys: [['C', 'Crafting'], ['Tab', 'Inventory']] },
   { kicker: 'Nestor teaches · 4/5', title: 'Stay Alive', body: 'Watch the three bars: <b>health</b>, <b>stamina</b> and <b>hunger</b>. Sprinting and fighting burn stamina. Press <b>F</b> to eat when hunger drops, or your health follows.', keys: [['F', 'Eat'], ['R', 'Rest at a fire']] },
   { kicker: 'Nestor teaches · 5/5', title: 'Find Your Way', body: 'Follow the gold <b>◆</b> marker on the compass to your current objective. <b>M</b> opens the map. Climbing the watchtower in the north-west reveals the whole island.', keys: [['M', 'Map'], ['◆', 'Objective marker']] },
@@ -2557,6 +2578,7 @@ addEventListener('keydown', (e) => {
   if (S.sailing) return;
   if (e.code === 'KeyC') toggleCraft();
   if (e.code === 'KeyM') openMenu('mapPanel');
+  if (e.code === 'KeyL') openMenu('journalPanel');
   if (e.code === 'Tab' || e.code === 'KeyI') { e.preventDefault(); openMenu('invPanel'); }
   if (menuOpen()) return;
   if (e.code === 'KeyE') interact();
@@ -2577,13 +2599,13 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyN') debugSkipQuest();
 });
 addEventListener('keyup', (e) => (keys[e.code] = false));
-const MENUS = ['craft', 'invPanel', 'mapPanel', 'explorePanel'];
+const MENUS = ['craft', 'invPanel', 'mapPanel', 'explorePanel', 'journalPanel'];
 const menuOpen = () => MENUS.some((m) => !$(m).classList.contains('hidden'));
 function openMenu(id) {                      // one panel at a time; frees the mouse while open
   const el = $(id), opening = el.classList.contains('hidden');
   MENUS.forEach((m) => $(m).classList.add('hidden'));
   snd.ui();
-  if (opening) { el.classList.remove('hidden'); document.exitPointerLock(); if (id === 'craft') renderCraft(); if (id === 'invPanel') renderInv(); if (id === 'mapPanel') drawBigMap(); }
+  if (opening) { el.classList.remove('hidden'); document.exitPointerLock(); if (id === 'craft') renderCraft(); if (id === 'invPanel') renderInv(); if (id === 'mapPanel') drawBigMap(); if (id === 'journalPanel') renderJournal(); }
   else canvas.requestPointerLock();
 }
 document.querySelectorAll('[data-close]').forEach((b) => b.onclick = () => openMenu(b.dataset.close));
@@ -2769,6 +2791,10 @@ function doHit() {
     if (c.hp <= 0) killCreature(c);
   }
   if (hitAny) return;
+  if (SLOTS[S.slot].k !== 'axe') {   // bare hands and the spear are for fighting; gather wood and stone from the ground
+    if (resources.some((r) => r.alive && inFront(r.pos, tool.reach + r.r)) && !(P.hintT > 0)) { toast('You can\'t break that by hand. Pick up branches and stones from the ground, or use an axe.'); P.hintT = 6; setTimeout(() => (P.hintT = 0), 6000); }
+    return;
+  }
   for (const r of resources) {
     if (!r.alive || !inFront(r.pos, tool.reach + r.r)) continue;
     const pow = r.type === 'tree' ? tool.wood : tool.stone;
@@ -2780,7 +2806,7 @@ function doHit() {
       r.alive = false;
       if (r.type === 'tree') { r.fall = 0.001; give('wood', 4, r.pos.clone().setY(r.pos.y + 2)); }
       else { updateProp(r.item, true); give('stone', 3, r.pos.clone().setY(r.pos.y + 1.5)); }
-    } else if (SLOTS[S.slot].k === 'hands' && r.hp % 4 === 0 && r.type === 'tree') floatText('Tip: an axe is 4× faster', r.pos.clone().setY(r.pos.y + 2.5), '#cfd8e8');
+    }
     return;
   }
 }
@@ -3452,4 +3478,4 @@ $('startBtn').onclick = () => {
   S.running = true; setPause(false); canvas.requestPointerLock();
 };
 renderer.info.autoReset = false;
-window.ARG = { THREE, pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, START, WRECK, DOCK, SEA_OUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
+window.ARG = { talkT: (v) => { talkCam.t = v; }, THREE, pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, START, WRECK, DOCK, SEA_OUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting

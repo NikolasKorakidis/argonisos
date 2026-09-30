@@ -42,7 +42,21 @@
   #minimap { width:160px; height:160px; display:block; margin:0 auto; border:1px solid #0c0a08; }
   #mmLabel { position:absolute; right:22px; top:22px; background:rgba(20,17,13,.75); padding:1px 7px; border-radius:2px; font-family:Cinzel,serif; font-size:12px; color:var(--text); text-shadow:0 1px 3px #000; }
   #clock { position:absolute; right:14px; top:196px; width:176px; text-align:center; font-size:13px; padding:5px 0; background:rgba(20,17,13,.78); border:1px solid #4a3c2a; border-radius:3px; }
-  #quest { position:absolute; right:14px; top:232px; width:260px; padding:10px 14px 12px; background:rgba(20,17,13,.8); border:1px solid #4a3c2a; border-radius:4px; }
+  #quest { position:absolute; left:14px; top:96px; width:270px; padding:10px 14px 12px; background:rgba(20,17,13,.8); border:1px solid #4a3c2a; border-left:3px solid #6fbf5a; border-radius:4px; transition:background .8s, padding .5s, border-color .8s; }
+  #quest p, #quest .step, #quest .qmain { transition:opacity .6s; }
+  #quest.compact { background:rgba(20,17,13,.35); border-color:transparent; border-left-color:#6fbf5a; }
+  #quest.compact p, #quest.compact .step { display:none; }
+  #quest .qhint { font-size:11px; color:var(--dim); margin-top:6px; } #quest.compact .qhint { display:none; }
+  #journalPanel { width:min(94vw,560px); }
+  #journalBody h4 { font-family:Cinzel,serif; letter-spacing:.14em; font-size:11px; color:var(--dim); margin:16px 0 6px; text-transform:uppercase; }
+  .jq { padding:12px 14px; border:1px solid #4a3c2a; border-radius:4px; background:rgba(0,0,0,.25); margin-bottom:8px; }
+  .jq.active { border-color:#4f8a3c; border-left:4px solid #6fbf5a; background:rgba(60,110,40,.14); }
+  .jq.active h3 { color:#9fe07f; } .jq h3 { margin:0 0 4px; font-family:Cinzel,serif; font-size:17px; color:var(--gold); }
+  .jq p { margin:4px 0 8px; color:#d8ccb2; line-height:1.4; font-size:14px; }
+  .jq ul { list-style:none; margin:0; padding:0; font-size:14px; } .jq li { margin:3px 0; } .jq li.done { color:#9fc48a; text-decoration:line-through; opacity:.8; }
+  .jq.active li:not(.done) { color:#c9f0b4; }
+  .jdone { color:#8a7f6a; font-size:14px; margin:2px 0; } .jdone::before { content:'✔ '; color:#6fbf5a; }
+
   #quest h3 { margin:0 0 2px; font-family:Cinzel,serif; font-size:15px; color:var(--gold); }
   #quest p { margin:4px 0 8px; font-size:13px; color:var(--dim); line-height:1.35; }
   #quest ul { list-style:none; margin:0; padding:0; font-size:14px; }
@@ -201,9 +215,14 @@
     <div class="bar"><span>⚡</span><i id="staB"></i><u id="staN"></u></div>
     <div class="bar"><span>🍖</span><i id="foodB"></i><u id="foodN"></u></div>
   </div>
-  <div id="hints"><span>Attack</span><span class="kbd">LMB</span><span>Interact</span><span class="kbd">E</span><span>Jump</span><span class="kbd">SPACE</span><span>Inventory</span><span class="kbd">TAB</span><span>Craft</span><span class="kbd">C</span><span>Map</span><span class="kbd">M</span></div>
+  <div id="hints"><span>Attack</span><span class="kbd">LMB</span><span>Interact</span><span class="kbd">E</span><span>Jump</span><span class="kbd">SPACE</span><span>Inventory</span><span class="kbd">TAB</span><span>Craft</span><span class="kbd">C</span><span>Map</span><span class="kbd">M</span><span>Journal</span><span class="kbd">L</span></div>
   <div id="inv"></div>
   <div id="vignette"></div>
+</div>
+
+<div id="journalPanel" class="pnl modal hidden">
+  <h2>Quest Journal</h2><button class="xbtn" data-close="journalPanel" aria-label="Close">✕</button>
+  <div id="journalBody"></div>
 </div>
 
 <div id="invPanel" class="pnl modal hidden">
