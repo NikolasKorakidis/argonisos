@@ -646,39 +646,51 @@ function autoRig(obj) {
 // ---- Mixamo run clip retargeted onto the auto-rig ----
 // The clip plays on its own (invisible) Mixamo skeleton; each frame we take every mapped bone's rotation
 // relative to its T-pose rest (in model space) and apply that delta to our bone, which is also in T-pose at rest.
-const RUN = { ready: false, mixer: null, root: null, src: {}, rest: {} };
 const RUN_MAP = { hips: 'Hips', spine: 'Spine1', head: 'Head', armL: 'LeftArm', foreL: 'LeftForeArm', armR: 'RightArm', foreR: 'RightForeArm',
   thighL: 'LeftUpLeg', shinL: 'LeftLeg', thighR: 'RightUpLeg', shinR: 'RightLeg' };
-const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _rootInv = new THREE.Quaternion();
-function modelQuat(obj, out) { obj.getWorldQuaternion(out); return out.premultiply(_rootInv); }
-loadModelBuffer('run').then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
-  const clip = obj.animations[0]; if (!clip) throw new Error('no animation in run.fbx');
-  // strip root motion so the run stays in place (we move the player ourselves)
-  clip.tracks = clip.tracks.filter((t) => !/Hips\.position/.test(t.name) || true).map((t) => {
-    if (/Hips\.position/.test(t.name)) { const v = t.values; const x0 = v[0], z0 = v[2]; for (let i = 0; i < v.length; i += 3) { v[i] = x0; v[i + 2] = z0; } }
-    return t;
-  });
-  obj.updateMatrixWorld(true); obj.getWorldQuaternion(_rootInv).invert();
-  obj.traverse((o) => { for (const [mine, mx] of Object.entries(RUN_MAP)) if (o.name === 'mixamorig' + mx || o.name === 'mixamorig:' + mx || o.name.endsWith(':' + mx) || o.name === mx) RUN.src[mine] = o; });
-  for (const [k, o] of Object.entries(RUN.src)) RUN.rest[k] = modelQuat(o, new THREE.Quaternion()).invert();
-  RUN.mixer = new THREE.AnimationMixer(obj); RUN.mixer.clipAction(clip).play(); RUN.root = obj;
-  RUN.ready = Object.keys(RUN.src).length >= 9;
-  if (!RUN.ready) console.warn('run.fbx: bones not matched', Object.keys(RUN.src));
-}).catch((e) => console.warn('Run animation failed to load, keeping procedural run', e));
+const _q = new THREE.Quaternion();
+function modelQuat(clipObj, obj, out) { obj.getWorldQuaternion(out); return out.premultiply(clipObj.rootInv); }
+// Load a Mixamo clip (animation-only FBX) onto its own hidden skeleton, ready to retarget
+function loadClip(name) {
+  const C = { ready: false, mixer: null, root: null, src: {}, rest: {}, rootInv: new THREE.Quaternion() };
+  loadModelBuffer(name).then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
+    const clip = obj.animations[0]; if (!clip) throw new Error(`no animation in ${name}.fbx`);
+    for (const t of clip.tracks) if (/Hips\.position/.test(t.name)) {          // keep it in place: we move the player ourselves
+      const v = t.values, x0 = v[0], z0 = v[2]; for (let i = 0; i < v.length; i += 3) { v[i] = x0; v[i + 2] = z0; }
+    }
+    obj.updateMatrixWorld(true); obj.getWorldQuaternion(C.rootInv).invert();
+    obj.traverse((o) => { for (const [mine, mx] of Object.entries(RUN_MAP)) if (o.name === 'mixamorig' + mx || o.name.endsWith(':' + mx) || o.name === mx) C.src[mine] = o; });
+    for (const [k, o] of Object.entries(C.src)) C.rest[k] = modelQuat(C, o, new THREE.Quaternion()).invert();
+    C.mixer = new THREE.AnimationMixer(obj); C.action = C.mixer.clipAction(clip); C.action.play(); C.dur = clip.duration; C.root = obj;
+    C.ready = Object.keys(C.src).length >= 9;
+    if (!C.ready) console.warn(`${name}.fbx: bones not matched`, Object.keys(C.src));
+  }).catch((e) => console.warn(`${name} animation failed to load`, e));
+  return C;
+}
+const RUN = loadClip('run');        // Slow Run: normal movement
+const SPRINT = loadClip('sprint');  // Running: hold Shift
+const JUMP = loadClip('jump'), ATTACK = loadClip('attack'), PUNCH = loadClip('punch'), EQUIP = loadClip('equip'), DISARM = loadClip('disarm');   // one-shots, scrubbed by game time
+const LOWER = ['hips', 'thighL', 'shinL', 'thighR', 'shinR'];
+// Pose a one-shot clip at a normalised time t (0..1) and blend it in; `skip` lists bones to leave alone
+function applyClipAt(C, t, w, skip = []) {
+  if (!C.ready || w <= 0.001) return;
+  C.action.time = clamp(t, 0, 0.999) * C.dur; C.mixer.update(0);
+  applyRun(C, 0, 0, w, false, skip);
+}
 
 // Blend the retargeted run into the current (procedural) pose by weight w; skip the right arm while attacking
-function applyRun(dt, speed, w, attacking) {
-  RUN.mixer.update(dt * clamp(speed / 3.6, 0.6, 2.2));
-  RUN.root.updateMatrixWorld(true);
+function applyRun(C, dt, rate, w, attacking, skipList = []) {
+  C.mixer.update(dt * rate);
+  C.root.updateMatrixWorld(true);
   const B = hero.rig.bones, order = ['hips', 'spine', 'head', 'armL', 'foreL', 'armR', 'foreR', 'thighL', 'shinL', 'thighR', 'shinR'];
   const parentOf = { hips: null, spine: 'hips', head: 'spine', armL: 'spine', foreL: 'armL', armR: 'spine', foreR: 'armR', thighL: 'hips', shinL: 'thighL', thighR: 'hips', shinR: 'thighR' };
   const world = {};                                        // resulting model-space rotations of our bones
   for (const k of order) {
     const par = parentOf[k] ? world[parentOf[k]] : new THREE.Quaternion();
-    const src = RUN.src[k];
-    const skip = attacking && (k === 'armR' || k === 'foreR' || k === 'spine');
+    const src = C.src[k];
+    const skip = skipList.includes(k) || (attacking && (k === 'armR' || k === 'foreR' || k === 'spine' || k === 'armL' || k === 'foreL' || k === 'head'));
     if (src && !skip) {
-      const want = modelQuat(src, _q).multiply(RUN.rest[k]);             // delta from T-pose, model space
+      const want = modelQuat(C, src, _q).multiply(C.rest[k]);             // delta from T-pose, model space
       const local = par.clone().invert().multiply(want);
       B[k].quaternion.slerp(local, w);
     }
@@ -1067,7 +1079,11 @@ addEventListener('keydown', (e) => {
   if (!$('craft').classList.contains('hidden')) return;
   if (e.code === 'KeyE') interact();
   if (e.code === 'KeyF') eat();
-  if (e.code.startsWith('Digit')) { const n = +e.code.slice(5) - 1; if (n >= 0 && n < 3 && (n === 0 || S.tools[SLOTS[n].k])) S.slot = S.slot === n ? 0 : n; }
+  if (e.code.startsWith('Digit')) { const n = +e.code.slice(5) - 1; if (n >= 0 && n < 3 && (n === 0 || S.tools[SLOTS[n].k])) {
+    const prev = S.slot; S.slot = S.slot === n ? 0 : n;
+    if (prev !== 1 && S.slot === 1) P.equip = { kind: 'equip', t: 0 };        // draw the axe
+    else if (prev === 1 && S.slot !== 1) P.equip = { kind: 'disarm', t: 0 };  // put it away
+  } }
   if (e.code === 'KeyT') { S.timeScale = S.timeScale === 1 ? 10 : 1; toast(`Playtest: time ×${S.timeScale}`); }
   if (e.code === 'KeyG') { for (const k of ['wood', 'stone', 'fiber', 'rawmeat', 'rope']) S.inv[k] += 10; toast('Playtest: +10 materials'); }
   if (e.code === 'KeyN') debugSkipQuest();
@@ -1124,7 +1140,7 @@ function harvest(pk) {
     if (skeletons.some((s) => !s.dead)) { toast('The dead still guard the chest.'); return; }
     return openChest();
   }
-  if (pk.kind === 'axeitem') { S.tools.axe = true; S.slot = 1; toast('Picked up the <b>Axe</b>. Press 2 to put it away or take it out.'); sfx(440, 0.2, 'triangle', 0.08, 200); }
+  if (pk.kind === 'axeitem') { S.tools.axe = true; S.slot = 1; P.equip = { kind: 'equip', t: 0 }; toast('Picked up the <b>Axe</b>. Press 2 to put it away or take it out.'); sfx(440, 0.2, 'triangle', 0.08, 200); }
   if (pk.kind === 'branch') give('wood', 1, pk.pos);
   if (pk.kind === 'pebble') give('stone', 1, pk.pos);
   if (pk.kind === 'reeds') give('fiber', 2, pk.pos);
@@ -1297,13 +1313,14 @@ function updatePlayer(dt) {
   const ground = heightAt(player.position.x, player.position.z);
   const swimming = ground < -0.6;
   let speed = 0;
+  P.sprinting = false;
   if (input.lengthSq() > 0 && locked) {
     input.normalize();
     const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);             // camera forward on XZ
     // right vector = (-fz, fx); world dir = forward*z + right*x
     const dir = new THREE.Vector3().set(fx * input.z + -fz * input.x, 0, fz * input.z + fx * input.x).normalize();
-    const sprint = keys.ShiftLeft && S.sta > 1 && !swimming;
-    speed = swimming ? 2.4 : sprint ? 8 : 4.6;
+    const sprint = (keys.ShiftLeft || keys.ShiftRight) && S.sta > 1 && !swimming;
+    P.sprinting = sprint; speed = swimming ? 2.4 : sprint ? 8 : 4.6;
     if (sprint) S.sta -= 18 * dt;
     player.position.x += dir.x * speed * dt; player.position.z += dir.z * speed * dt;
     const ty = Math.atan2(dir.x, dir.z);
@@ -1326,14 +1343,34 @@ function updatePlayer(dt) {
   const fl = onRuins ? Math.max(floor, 11.3) : floor;
   if (player.position.y <= fl) { player.position.y = fl; P.vel.y = 0; P.onGround = true; }
   // Swing
-  if (P.swing > 0) { P.swing -= dt * 3.2; if (!P.swingHit && P.swing < 0.55) { P.swingHit = true; doHit(); } }
+  if (P.swing > 0) { P.swing -= dt * (S.slot === 0 ? (PUNCH.ready ? 2.2 : 3.2) : (ATTACK.ready ? 1.35 : 3.2)); if (!P.swingHit && P.swing < 0.55) { P.swingHit = true; doHit(); } }
   P.animT += dt * (speed > 0 ? speed / 4.6 : 0.3);
   animateHumanoid(player, speed, P.animT, Math.max(P.swing, 0));
   if (hero.rig) {
     poseHero(speed, P.animT * 10, Math.max(P.swing, 0), performance.now() / 1000);
-    if (RUN.ready) applyRun(dt, speed, clamp(speed / 3, 0, 1), P.swing > 0);
+    const moveW = clamp(speed / 3, 0, 1);
+    P.sprintW = lerp(P.sprintW || 0, P.sprinting && SPRINT.ready ? 1 : 0, Math.min(1, dt * 6));   // smooth crossfade
+    if (RUN.ready) applyRun(RUN, dt, clamp(speed / 3.6, 0.6, 1.4), moveW * (1 - P.sprintW), P.swing > 0);
+    if (SPRINT.ready && P.sprintW > 0.01) applyRun(SPRINT, dt, clamp(speed / 7, 0.8, 1.3), moveW * P.sprintW, P.swing > 0);
+    // Jump: skip the wind-up crouch, map the airborne time onto the rising/falling part of the clip
+    if (!P.onGround) P.jumpT = (P.jumpT || 0) + dt; else if (P.jumpT) { P.landT = 0.25; P.jumpT = 0; }
+    if (P.landT > 0) P.landT -= dt;
+    if (P.jumpT > 0) applyClipAt(JUMP, 0.28 + P.jumpT / 0.7 * 0.5, 1, P.swing > 0 ? ['armR', 'foreR', 'spine'] : []);
+    else if (P.landT > 0) applyClipAt(JUMP, 0.8 + (0.25 - P.landT) * 0.6, P.landT / 0.25);
+    // Draw / put away the axe (upper body only so you can keep moving)
+    if (P.equip) {
+      P.equip.t += dt / 0.9;
+      const C = P.equip.kind === 'equip' ? EQUIP : DISARM, w = Math.min(1, Math.sin(Math.min(P.equip.t, 1) * Math.PI) * 2.5);
+      applyClipAt(C, P.equip.t, w, speed > 0.5 ? LOWER : []);
+      if (P.equip.t >= 1) P.equip = null;
+    }
+    // Axe strike: full body when standing, upper body while running
+    const AC = S.slot === 0 ? PUNCH : ATTACK;   // fists punch, tools strike
+    if (P.swing > 0 && AC.ready) applyClipAt(AC, 1 - P.swing, Math.min(1, P.swing * 6, (1 - P.swing) * 8 + 0.2), speed > 0.5 || !P.onGround ? LOWER : []);
   }
-  tools.axe.visible = S.slot === 1; tools.spear.visible = S.slot === 2;
+  let axeVis = S.slot === 1;
+  if (P.equip && (P.equip.kind === 'equip' ? EQUIP : DISARM).ready) axeVis = P.equip.kind === 'equip' ? P.equip.t > 0.5 : P.equip.t < 0.6;
+  tools.axe.visible = axeVis; tools.spear.visible = S.slot === 2;
   if (P.hurtT > 0) P.hurtT -= dt;
 }
 function updateCamera(dt) {
@@ -1572,4 +1609,4 @@ $('startBtn').onclick = () => {
     toast('Follow the gold ◆ marker', false);
   }
 };
-window.ARG = { S, player, hero, poseHero, P, tools, camera, RUN, applyRun, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: () => { updateCamera(1); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
+window.ARG = { S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: () => { updateCamera(1); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
