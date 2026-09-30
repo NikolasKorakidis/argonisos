@@ -122,6 +122,21 @@
   #pause .stack { display:flex; flex-direction:column; gap:8px; padding:16px 22px 4px; }
   #pause .stack .btn { width:100%; }
   #pause p { font-size:12px; color:var(--dim); text-align:center; margin:10px 16px 0; }
+  .vol { display:grid; grid-template-columns:auto 1fr; gap:6px 12px; align-items:center; font-size:14px; color:var(--dim); margin-top:4px; }
+  .vol input { accent-color:#c9a13a; width:100%; }
+  #cine { position:fixed; inset:0; z-index:38; pointer-events:none; }
+  #cine.hidden { display:none; }
+  #cine .bar { position:absolute; left:0; right:0; height:0; background:#000; transition:height 1.4s ease; }
+  #cine .bar.top { top:0; } #cine .bar.bot { bottom:0; }
+  #cine.on .bar { height:11vh; }
+  #cineText { position:absolute; left:50%; bottom:15vh; transform:translateX(-50%); width:min(90vw,900px); text-align:center; font-family:Cinzel,serif; font-size:clamp(18px,2.6vw,30px); color:#f3e3bf; letter-spacing:.04em; text-shadow:0 2px 12px #000, 0 0 30px rgba(0,0,0,.7); opacity:0; transition:opacity 1.2s ease; line-height:1.4; }
+  #cineText.show { opacity:1; }
+  #cineText small { display:block; font-size:.62em; letter-spacing:.3em; color:#e8c27a; margin-bottom:10px; text-transform:uppercase; }
+  #cineSkip { position:absolute; right:24px; bottom:calc(11vh + 14px); pointer-events:auto; background:rgba(0,0,0,.35); border:1px solid rgba(201,161,58,.5); color:#cdbf9f; font:14px 'Alegreya Sans',sans-serif; padding:6px 14px; cursor:pointer; opacity:0; transition:opacity 1s; }
+  #cine.on #cineSkip { opacity:1; }
+  #flash { position:fixed; inset:0; background:#fff8e0; opacity:0; pointer-events:none; z-index:39; transition:opacity .15s; }
+  #title { transition:opacity 1.6s ease; }
+  #title.fading { opacity:0; pointer-events:none; }
   #card { position:fixed; inset:0; z-index:40; display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse at center, rgba(10,8,5,.55), rgba(5,4,2,.9)); }
   #card.hidden { display:none; }
   #card .cin { display:flex; width:min(94vw,860px); min-height:340px; padding:0; overflow:hidden; }
@@ -227,6 +242,8 @@
   </div>
 </div>
 
+<div id="cine" class="hidden"><div class="bar top"></div><div class="bar bot"></div><div id="cineText"></div><button id="cineSkip">Skip ▸▸</button></div>
+<div id="flash"></div>
 <div id="card" class="hidden"><div class="cin pnl"><div class="cimg"></div><div class="ctext"><div class="ck"></div><h2></h2><div class="cb"></div><div class="ckeys"></div><div class="cbtns"><button class="cskip">Skip</button><button class="btn primary cnext">Continue</button></div></div></div></div>
 <div id="dialog" class="pnl hidden"><div class="who"></div><div class="txt"></div><div class="next">E / Click to continue</div></div>
 
@@ -236,6 +253,7 @@
     <button class="btn primary" id="resume">Resume</button>
     <button class="btn" id="gfxBtn">Graphics: Performance</button>
     <button class="btn" id="toTitle">Controls &amp; Guide</button>
+    <div class="vol"><label>Master</label><input type="range" id="volMaster" min="0" max="100"><label>Music</label><input type="range" id="volMusic" min="0" max="100"><label>Effects</label><input type="range" id="volSfx" min="0" max="100"></div>
     <button class="btn" onclick="location.reload()">Exit to Main Menu</button>
   </div>
   <p>Playtest keys: <span class="kbd">T</span> time ×10 · <span class="kbd">G</span> +10 materials · <span class="kbd">N</span> skip quest</p>

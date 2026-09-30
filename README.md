@@ -39,3 +39,13 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
 - Trees: 7 species × 3 variants, merged + instanced per 100 m chunk (thousands of trees, few draw calls), wind sway in the shader
 - Graphics preset defaults to **Performance**; High adds reflective sea, bloom, full grass density, sharper shadows
 - Layout constants (`MOUNT`, `CAVE`, `TEMPLE`, …) and `FLORA` densities at the top of `game.js` control the whole map
+
+## v5: sound, intro cinematic, quest markers
+- **Audio** (`audio.js`): fully procedural WebAudio. Footsteps per surface (grass, dirt, stone, sand, water, cave), swings, wood/stone/flesh hits, bow, pickups, crafting, UI; ambience (wind by altitude, surf by the shore, waterfall, birds by day, crickets and wolf howls at night, cave drips with reverb, fire crackle); a generative lyre + drone score in D Dorian that changes with mood (title, explore, night, cave, cinematic). Volume sliders in the pause menu.
+- **Intro cinematic**: the menu fades, letterbox bars come in, the camera flies over the mountain, the temple and the olive terraces while the story is narrated, then lands at the cove where Zeus delivers you in a column of light. Skip with the button, Space, Enter or Esc.
+- **Quest markers** (WoW convention): gold `!` = someone has a task for you, gold `?` = hand in / deliver here. Shown in the world and on the minimap and map.
+- **The Ascent**: a paved switchback road cut into Mount Olympos from the cave trail to the summit arena: retaining wall, rope posts, steps on the steep parts, torches, a marble gate at its foot.
+- **Paths**: every trail is now a smoothed, textured ribbon (dirt with cart ruts; paved Sacred Way to the temple).
+- **Cave mouth**: natural rock arch, dark depth veils that fade as you enter, entrance torches.
+- **Temple of Athena**: Doric peristyle with entasis columns and echinus capitals, painted triglyph/metope frieze, sculpted pediments, tiled roof with antefixes, pronaos with bronze doors, coffered ceiling, polished floor, two-tier inner colonnade, reflecting pool, offering table, owls on plinths, and a chryselephantine Athena Parthenos with Nike, shield, serpent and spear.
+- **Performance**: pickups merged per material, cave interior merged and distance-culled, creatures culled tighter (and hidden on the title), Low refreshes shadows every other frame.
