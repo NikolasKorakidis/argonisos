@@ -1149,6 +1149,9 @@ const RAFT_SITE_EARLY = DOCK.clone().add(new THREE.Vector3(3.6, 0, 1));
   sign(CAVE_APPROACH.x - 4, CAVE_APPROACH.z - 2, [['Cave of Echoes', CAVE_MOUTH.x, CAVE_MOUTH.z], ['Summit', SUMMIT.x, SUMMIT.z]]);
 }
 
+const groundBow = new THREE.Group();
+{ const p = HUT.clone().add(new THREE.Vector3(5.5, 0, 6)); p.y = heightAt(p.x, p.z) + 0.1; addPickup('bowitem', p, () => groundBow);
+  loadTexturedFBX('bow', 1.35, (obj) => { obj.rotation.z = Math.PI / 2; obj.position.set(0.6, 0.12, 0); groundBow.add(obj); }); }
 // --- Nestor's hut (small house from the buildings sheet): stone plinth, plaster + timber frame, tiled roof, porch
 {
   const g = new THREE.Group(), M = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 });
@@ -1327,7 +1330,7 @@ const hero = { wrap: new THREE.Group(), model: null, rig: null };
 player.add(hero.wrap);
 // ---- Auto-rig: the FBX is a static T-pose mesh, so build a skeleton and skin weights in code ----
 // Model space: feet at y=0, height 1.95, facing +z. Right side of the character is -x.
-function autoRig(obj) {
+function autoRig(obj, wrap = hero.wrap) {
   obj.updateMatrixWorld(true);
   const meshes = []; obj.traverse((m) => { if (m.isMesh) meshes.push(m); });
   // Gather vertices in model space to find landmarks
@@ -1374,7 +1377,7 @@ function autoRig(obj) {
     if (y > neckY - 0.04) return [B.head, B.spine, sm(neckY - 0.04, neckY + 0.04, y)];
     return [B.spine, B.hips, sm(hipY, ay - 0.3, y)];
   }
-  const root = new THREE.Group(); root.add(B.hips); hero.wrap.add(root);
+  const root = new THREE.Group(); root.add(B.hips); wrap.add(root);
   const skinned = [];
   meshes.forEach((m, k) => {
     const g = geos[k], a = g.attributes.position, si = [], sw = [];
@@ -1382,9 +1385,9 @@ function autoRig(obj) {
     g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
     g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
     const sk = new THREE.SkinnedMesh(g, m.material); sk.castShadow = sk.receiveShadow = true; sk.frustumCulled = false;
-    hero.wrap.add(sk); skinned.push(sk);
+    wrap.add(sk); skinned.push(sk);
   });
-  hero.wrap.updateMatrixWorld(true);
+  wrap.updateMatrixWorld(true);
   const skeleton = new THREE.Skeleton(list);
   skinned.forEach((sk) => sk.bind(skeleton));
   return { bones: B, handOffset: new THREE.Vector3(-(X - ex) + 0.06, 0, 0) };
@@ -1464,6 +1467,12 @@ function poseHero(speed, ph, sw, t) {
   B.shinL.rotation.x = Math.max(0, s) * 0.9 * run; B.shinR.rotation.x = Math.max(0, -s) * 0.9 * run;
   B.hips.position.y = B.hips.userData.wp.y + Math.abs(Math.cos(ph)) * 0.05 * run - (1 - Math.abs(Math.cos(ph))) * 0.02 * run;
   B.head.rotation.set(-0.04 * run, -s * 0.06 * run, 0);
+  if (S.slot === 3 && S.tools.bow && sw <= 0) {          // archer stance: bow arm out front, draw hand at the cheek
+    const pull = P.drawT > 0 ? P.drawT / 0.35 : 1;
+    B.armL.rotation.set(-1.45, 0, -0.15); B.foreL.rotation.set(0, 0, 0);
+    B.armR.rotation.set(-1.35, 0, 0.4 * pull + 0.1); B.foreR.rotation.set(0, 1.2 * pull + 0.4, 0);
+    B.spine.rotation.set(0.05, -0.35, 0);
+  }
 }
 
 // Axe model: lies on the ground in front of the start. Pick it up with E, toggle it with 2.
@@ -1507,6 +1516,29 @@ loadModelBuffer('axe').then((buf) => new FBXLoader().parse(buf, '')).then((obj) 
   ground.position.x = 0.4; groundAxe.add(ground);
 }).catch((e) => { console.warn('Axe model failed to load, using placeholder', e); const g = tools.axe.clone(); g.visible = true; g.rotation.set(0, 0, Math.PI / 2); groundAxe.add(g); });
 
+// Load a textured FBX (geometry from the FBX, colour from a compact JPG), normalised to a given height
+var texLoader;   // hoisted: created on first use (props load from anywhere in world setup)
+function loadTexturedFBX(name, height, cb) {
+  const tex = (texLoader ||= new THREE.TextureLoader()).load(`models/${name}.jpg`); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 });
+  loadModelBuffer(name).then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
+    obj.traverse((m) => { if (m.isMesh) { m.material = mat; m.castShadow = true; m.receiveShadow = true; } });
+    if (height) {
+      const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3()); obj.scale.multiplyScalar(height / size.y);
+      const b2 = new THREE.Box3().setFromObject(obj), c = b2.getCenter(new THREE.Vector3()); obj.position.set(-c.x, -b2.min.y, -c.z);
+    }
+    cb(obj);
+  }).catch((e) => console.warn(`${name} failed to load`, e));
+}
+// Arms-down idle for any auto-rigged NPC (breathing, slight sway, head turns)
+function poseIdleRig(rig, t, look = 0) {
+  const B = rig.bones, br = Math.sin(t * 1.6) * 0.025;
+  B.armL.rotation.set(0.05, 0, -1.28 + br); B.armR.rotation.set(0.05, 0, 1.28 - br);
+  B.foreL.rotation.set(0, -0.3, 0); B.foreR.rotation.set(0, 0.3, 0);
+  B.spine.rotation.set(0.04 + br, Math.sin(t * 0.4) * 0.04, 0); B.head.rotation.set(-0.05, look + Math.sin(t * 0.7) * 0.1, 0);
+  B.thighL.rotation.x = B.thighR.rotation.x = 0; B.shinL.rotation.x = B.shinR.rotation.x = 0;
+}
+
 // Try the raw .fbx first (local server); fall back to the base64 module (artifact hosting can't serve .fbx).
 async function loadModelBuffer(name) {
   try { const r = await fetch(`models/${name}.fbx`); if (r.ok) return await r.arrayBuffer(); } catch { /* fall through */ }
@@ -1529,6 +1561,7 @@ loadModelBuffer('hero').then((buf) => new FBXLoader().parse(buf, '')).then((obj)
   hero.rig = autoRig(obj); hero.model = obj;
   player.userData.body.visible = false;
   const rf = hero.rig.bones.foreR;   // tools go in the right fist (end of the right forearm)
+  hero.rig.bones.foreL.add(bowHeld); bowHeld.position.copy(hero.rig.handOffset).multiply(new THREE.Vector3(-1, 1, 1)); bowHeld.rotation.set(0, 0, 1.25, 'ZYX');
   for (const t of [tools.axe, tools.spear]) { rf.add(t); t.position.copy(hero.rig.handOffset); t.rotation.set(0.7, 0, -1.25, 'ZYX'); }   // undo the arm's T-pose drop so the tool points forward-up
 }).catch((e) => console.warn('Hero model failed to load, keeping placeholder', e));
 const P = { vel: new THREE.Vector3(), yaw: Math.PI, onGround: true, swing: 0, swingHit: false, hurtT: 0, animT: 0, dead: false };
@@ -1536,6 +1569,12 @@ const P = { vel: new THREE.Vector3(), yaw: Math.PI, onGround: true, swing: 0, sw
 // NPC Nestor the hermit (the Elder from the cast sheet)
 const nestor = makeHumanoid({ tunic: 0xe9e0cc, belt: 0x6b4a2e, hair: 0xe8e4dc, beard: 0xefebe4, cape: 0x8a3b2b, headScale: 1.05 });
 const staff = mesh(new THREE.CylinderGeometry(0.04, 0.05, 2.1, 6), trunkMat, 0, -0.1, 0.1, nestor.userData.arms[0]);
+// Nestor: the user's elder model replaces the placeholder once loaded (auto-rigged for an idle pose)
+const nestorWrap = new THREE.Group(); nestor.add(nestorWrap);
+loadTexturedFBX('elder', 1.85, (obj) => {
+  obj.updateMatrixWorld(true);
+  nestor.userData.rig = autoRig(obj, nestorWrap); nestor.userData.body.visible = false;
+});
 staff.rotation.x = 0.1;
 const NESTOR_POS = HUT.clone().add(new THREE.Vector3(3, 0, 5)); NESTOR_POS.y = heightAt(NESTOR_POS.x, NESTOR_POS.z);
 nestor.position.copy(NESTOR_POS); scene.add(nestor);
@@ -1571,9 +1610,34 @@ function makeQuad(color, len, height, { tusks = false, tail = 0x000000, snout = 
   g.userData.legs = legs; g.userData.head = head; return g;
 }
 function makeSkeleton() {
-  const bone = smooth(0xe9e0c9, 0.7);
-  const ch = makeHumanoid({ tunic: 0x6b5238, belt: 0x3a2a1a, skin: bone, bald: true });
-  const { torso, head } = ch.userData; torso.scale.set(0.6, 1, 0.5);
+  const bone = new THREE.MeshStandardMaterial({ color: 0xd9c6a2, roughness: 0.75, flatShading: true }), dark = new THREE.MeshBasicMaterial({ color: 0x1a0f08 });
+  const ch = makeHumanoid({ tunic: 0x6b4a2e, belt: 0x5a3a22, skin: bone, bald: true });
+  const { torso, head, body, arms, legs } = ch.userData; torso.visible = false;
+  body.children.forEach((c) => { if (c.geometry?.type === 'CylinderGeometry' && c.position.y < 1) c.visible = false; });   // hide the old skirt
+  // spine + ribcage + sternum + pelvis
+  for (let i = 0; i < 9; i++) mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.07, 6), bone, 0, 0.95 + i * 0.085, -0.05, body);
+  for (let i = 0; i < 5; i++) { const r = mesh(new THREE.TorusGeometry(0.2 - i * 0.012, 0.025, 4, 12, Math.PI * 1.6), bone, 0, 1.52 - i * 0.09, 0, body); r.rotation.set(Math.PI / 2 + 0.25, 0, Math.PI * 0.7); r.scale.set(1, 0.75, 1); }
+  mesh(new THREE.BoxGeometry(0.06, 0.32, 0.04), bone, 0, 1.38, 0.15, body);
+  for (const sx of [-1, 1]) { const c = mesh(new THREE.CapsuleGeometry(0.035, 0.26, 2, 5), bone, sx * 0.17, 1.62, 0.02, body); c.rotation.z = Math.PI / 2; }   // collarbones
+  mesh(new THREE.TorusGeometry(0.15, 0.05, 4, 8), bone, 0, 0.9, 0, body).rotation.x = Math.PI / 2;
+  // belt with studs + gold boss, tattered skirt
+  mesh(new THREE.TorusGeometry(0.2, 0.035, 4, 16), new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.8 }), 0, 0.93, 0, body).rotation.x = Math.PI / 2;
+  mesh(new THREE.DodecahedronGeometry(0.055, 0), new THREE.MeshStandardMaterial({ color: 0xc9a13a, metalness: 0.7, roughness: 0.35 }), 0, 0.93, 0.2, body);
+  const skirtG = new THREE.CylinderGeometry(0.21, 0.3, 0.42, 14, 1, true), sa = skirtG.attributes.position;
+  for (let i = 0; i < sa.count; i++) if (sa.getY(i) < 0) sa.setY(i, sa.getY(i) - (i % 2 ? 0.14 : 0) - hash(i, 3) * 0.08);   // jagged hem
+  skirtG.computeVertexNormals(); mesh(skirtG, new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.9, side: THREE.DoubleSide, flatShading: true }), 0, 0.73, 0, body);
+  // thin limbs with knobbly joints
+  for (const L of [...arms, ...legs]) L.children.forEach((c) => { if (c.geometry?.type === 'CapsuleGeometry') c.scale.set(0.5, 1, 0.5); });
+  for (const L of legs) mesh(new THREE.SphereGeometry(0.075, 6, 5), bone, 0, -0.36, 0.01, L);
+  // skull: sockets, nasal hole, jaw with teeth
+  head.children.forEach((c) => { if (c.geometry?.type === 'TorusGeometry' || (c.geometry?.type === 'BoxGeometry' && c.position.y > 0.1) || (c.geometry?.type === 'SphereGeometry' && Math.abs(c.position.x) > 0.25)) c.visible = false; });
+  head.scale.set(0.78, 0.86, 0.82);
+  head.children.forEach((c) => { if (c.geometry?.type === 'SphereGeometry' && Math.abs(c.position.x) < 0.01 && c.position.z > 0.25) c.visible = false;               // no nose ball
+    if (c.material === dark || c.material?.isMeshBasicMaterial) { c.scale.set(1.1, 0.8, 0.6); c.rotation.z = c.position.x > 0 ? -0.35 : 0.35; } });                  // angled, menacing sockets
+  for (const L of legs) L.children.forEach((c) => { if (c.geometry?.type === 'CapsuleGeometry' && c.position.y < -0.6) { c.material = bone; c.scale.set(0.6, 1, 0.8); } });   // bony feet
+  mesh(new THREE.ConeGeometry(0.035, 0.07, 3), dark, 0, -0.03, 0.29, head).rotation.x = Math.PI;
+  mesh(new THREE.BoxGeometry(0.2, 0.08, 0.16), bone, 0, -0.2, 0.12, head);
+  mesh(new THREE.BoxGeometry(0.17, 0.03, 0.02), new THREE.MeshStandardMaterial({ color: 0xf0e6d0 }), 0, -0.15, 0.2, head);
   // Hollow eyes: dark spheres over the eye whites
   head.children.filter((c) => c.geometry?.type === 'SphereGeometry' && c.position.z > 0.2 && Math.abs(c.position.x) > 0.05).forEach((e) => { e.material = new THREE.MeshBasicMaterial({ color: 0x100806 }); e.children.forEach((k) => (k.visible = false)); });
   const sword = new THREE.Group(); mesh(new THREE.BoxGeometry(0.06, 0.9, 0.12), smooth(0x9aa3a8, 0.3), 0, 0.5, 0, sword);
@@ -1611,13 +1675,13 @@ for (let i = 0; i < 3; i++) { const a = i * 2.1 + 0.4; const p = new THREE.Vecto
 const DAY_LEN = 300;  // seconds per in-game day
 const S = {
   hp: 100, food: 100, sta: 100, time: 0.3, day: 1, nights: 0, wasNight: false,
-  inv: { wood: 0, stone: 0, fiber: 0, berries: 0, rawmeat: 0, meat: 0, hide: 0, rope: 0, sail: 0 },
-  tools: { axe: false, spear: false }, slot: 0,
+  inv: { wood: 0, stone: 0, fiber: 0, berries: 0, rawmeat: 0, meat: 0, hide: 0, rope: 0, sail: 0, arrows: 0 },
+  tools: { axe: false, spear: false, bow: false }, slot: 0,
   kills: { rabbit: 0, boar: 0, wolf: 0, skeleton: 0 }, cooked: 0, campfire: null, raftBuilt: false,
   timeScale: 1, running: false, paused: true, talkedNestor: false, sailing: false, questIdx: 0, deaths: 0, nightsAtStart: 0, started: 0,
 };
-const ICONS = { wood: '🪵', stone: '🪨', fiber: '🌾', berries: '🫐', rawmeat: '🥩', meat: '🍖', hide: '🟫', rope: '🧶', sail: '⛵' };
-const NAMES = { wood: 'Wood', stone: 'Stone', fiber: 'Fiber', berries: 'Berries', rawmeat: 'Raw Meat', meat: 'Cooked Meat', hide: 'Hide', rope: 'Rope', sail: 'Sailcloth' };
+const ICONS = { wood: '🪵', stone: '🪨', fiber: '🌾', berries: '🫐', rawmeat: '🥩', meat: '🍖', hide: '🟫', rope: '🧶', sail: '⛵', arrows: '➶' };
+const NAMES = { wood: 'Wood', stone: 'Stone', fiber: 'Fiber', berries: 'Berries', rawmeat: 'Raw Meat', meat: 'Cooked Meat', hide: 'Hide', rope: 'Rope', sail: 'Sailcloth', arrows: 'Arrows' };
 const isNight = () => S.time < 0.23 || S.time > 0.8;
 
 // ============================================================
@@ -1666,7 +1730,7 @@ function burst(pos, color, n = 8) {
 }
 
 // Hotbar
-const SLOTS = [{ k: 'hands', ic: '✊', n: 'Hands' }, { k: 'axe', ic: '🪓', n: 'Axe' }, { k: 'spear', ic: '🔱', n: 'Spear' }];
+const SLOTS = [{ k: 'hands', ic: '✊', n: 'Hands' }, { k: 'axe', ic: '🪓', n: 'Axe' }, { k: 'spear', ic: '🔱', n: 'Spear' }, { k: 'bow', ic: '🏹', n: 'Bow' }];
 function renderHUD() {
   $('hpB').style.width = S.hp + '%'; $('foodB').style.width = S.food + '%'; $('staB').style.width = S.sta + '%';
   $('hpN').textContent = Math.ceil(S.hp); $('staN').textContent = Math.ceil(S.sta); $('foodN').textContent = Math.ceil(S.food);
@@ -1699,6 +1763,7 @@ const RECIPES = [
   { id: 'rope', ic: '🧶', name: 'Rope', desc: 'Twisted fiber. Holds a raft together.', cost: { fiber: 3 }, make: () => give('rope', 1) },
   { id: 'axe', ic: '🪓', name: 'Stone Axe', desc: 'Fells trees and breaks rocks 4× faster.', cost: { wood: 3, stone: 2, fiber: 1 }, once: () => S.tools.axe, make: () => { S.tools.axe = true; S.slot = 1; } },
   { id: 'spear', ic: '🔱', name: 'Spear', desc: 'Long reach, heavy damage. For hunting and fights.', cost: { wood: 4, stone: 1, fiber: 2 }, once: () => S.tools.spear, make: () => { S.tools.spear = true; S.slot = 2; } },
+  { id: 'arrows', ic: '➶', name: 'Arrows ×5', desc: 'Stone-tipped, fletched with fiber. Shoot with the bow (4).', cost: { wood: 1, stone: 1, fiber: 1 }, make: () => give('arrows', 5) },
   { id: 'fire', ic: '🔥', name: 'Campfire', desc: 'Light, warmth, cooking. Wolves keep their distance. Placed in front of you.', cost: { wood: 5, stone: 3 }, make: placeCampfire },
 ];
 const canAfford = (cost) => Object.entries(cost).every(([k, v]) => S.inv[k] >= v);
@@ -1839,7 +1904,7 @@ addEventListener('keydown', (e) => {
   if (menuOpen()) return;
   if (e.code === 'KeyE') interact();
   if (e.code === 'KeyF') eat();
-  if (e.code.startsWith('Digit')) { const n = +e.code.slice(5) - 1; if (n >= 0 && n < 3 && (n === 0 || S.tools[SLOTS[n].k])) {
+  if (e.code.startsWith('Digit')) { const n = +e.code.slice(5) - 1; if (n >= 0 && n < SLOTS.length && (n === 0 || S.tools[SLOTS[n].k])) {
     const prev = S.slot; S.slot = S.slot === n ? 0 : n;
     if (prev !== 1 && S.slot === 1) P.equip = { kind: 'equip', t: 0 };        // draw the axe
     else if (prev === 1 && S.slot !== 1) P.equip = { kind: 'disarm', t: 0 };  // put it away
@@ -1851,7 +1916,7 @@ addEventListener('keydown', (e) => {
     if (e.code === 'KeyH') $('hud').classList.toggle('hidden');
   }
   if (e.code === 'KeyT') { S.timeScale = S.timeScale === 1 ? 10 : 1; toast(`Playtest: time ×${S.timeScale}`); }
-  if (e.code === 'KeyG') { for (const k of ['wood', 'stone', 'fiber', 'rawmeat', 'rope']) S.inv[k] += 10; toast('Playtest: +10 materials'); }
+  if (e.code === 'KeyG') { for (const k of ['wood', 'stone', 'fiber', 'rawmeat', 'rope', 'arrows']) S.inv[k] += 10; toast('Playtest: +10 materials'); }
   if (e.code === 'KeyN') debugSkipQuest();
 });
 addEventListener('keyup', (e) => (keys[e.code] = false));
@@ -1900,7 +1965,7 @@ function getInteractable() {
   consider(pp.distanceTo(nestor.position), { label: 'Talk to Nestor', act: talkNestor });
   for (const pk of pickups) {
     if (!pk.alive || (pk.kind === 'bush' && pk.regrow > 0)) continue;
-    const labels = { axeitem: 'Pick up the axe', branch: 'Pick up branch', pebble: 'Pick up pebbles', bush: 'Harvest bush', reeds: 'Cut reeds', chest: 'Open the old chest' };
+    const labels = { bowitem: 'Pick up the bow and arrows', axeitem: 'Pick up the axe', branch: 'Pick up branch', pebble: 'Pick up pebbles', bush: 'Harvest bush', reeds: 'Cut reeds', chest: 'Open the old chest' };
     consider(pp.distanceTo(pk.pos), { label: labels[pk.kind], act: () => harvest(pk) });
   }
   if (S.campfire && pp.distanceTo(S.campfire.pos) < 3) {
@@ -1929,6 +1994,7 @@ function harvest(pk) {
     if (skeletons.some((s) => !s.dead)) { toast('The dead still guard the chest.'); return; }
     return openChest();
   }
+  if (pk.kind === 'bowitem') { S.tools.bow = true; S.slot = 3; give('arrows', 12); toast('Picked up a <b>Bow</b> and 12 arrows. Press 4 to aim, click to shoot.'); }
   if (pk.kind === 'axeitem') { S.tools.axe = true; S.slot = 1; P.equip = { kind: 'equip', t: 0 }; toast('Picked up the <b>Axe</b>. Press 2 to put it away or take it out.'); sfx(440, 0.2, 'triangle', 0.08, 200); }
   if (pk.kind === 'branch') give('wood', 1, pk.pos);
   if (pk.kind === 'pebble') give('stone', 1, pk.pos);
@@ -1965,7 +2031,34 @@ function eat() {
 // Combat & gathering (left click)
 // ============================================================
 const TOOL_STATS = { hands: { dmg: 5, wood: 1, stone: 1, reach: 2.3 }, axe: { dmg: 11, wood: 4, stone: 4, reach: 2.6 }, spear: { dmg: 24, wood: 1, stone: 1, reach: 3.4 } };
+// ---- Bow & arrows: models from the user's asset pack
+const bowHeld = new THREE.Group(), arrowProto = { obj: null }, arrows = [];
+loadTexturedFBX('bow', 1.35, (obj) => { bowHeld.add(obj); obj.position.y -= 0.675; });
+loadTexturedFBX('arrow', 0.9, (obj) => { obj.position.y -= 0.45; const g = new THREE.Group(); g.add(obj); g.rotation.x = Math.PI / 2; const w = new THREE.Group(); w.add(g); arrowProto.obj = w; });
+function shootArrow() {
+  if (S.inv.arrows <= 0) { toast('No arrows. Craft some (C)'); return; }
+  S.inv.arrows--; P.drawT = 0.35; sfx(700, 0.12, 'triangle', 0.06, -500);
+  const dir = new THREE.Vector3(-Math.sin(camYaw) * Math.cos(camPitch - 0.18), -Math.sin(camPitch - 0.18), -Math.cos(camYaw) * Math.cos(camPitch - 0.18)).normalize();
+  const o = arrowProto.obj ? arrowProto.obj.clone() : mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.9, 4), trunkMat, 0, 0, 0);
+  o.position.copy(player.position).add(new THREE.Vector3(0, 1.5, 0)).addScaledVector(dir, 0.8); scene.add(o);
+  arrows.push({ o, v: dir.multiplyScalar(48), t: 0, stuck: false });
+}
+function updateArrows(dt) {
+  for (let i = arrows.length - 1; i >= 0; i--) {
+    const a = arrows[i]; a.t += dt;
+    if (!a.stuck) {
+      a.v.y -= 9.8 * dt * 0.6; const step = a.v.clone().multiplyScalar(dt); a.o.position.add(step);
+      a.o.lookAt(a.o.position.clone().add(a.v));
+      for (const c of creatures) { if (c.dead || !c.obj.visible) continue; const cp = c.obj.position; if (Math.abs(cp.x - a.o.position.x) + Math.abs(cp.z - a.o.position.z) < 2 && a.o.position.y < cp.y + 2 && a.o.position.y > cp.y - 0.2) {
+        const dmg = Math.round(28 * rr(0.9, 1.15)); c.hp -= dmg; c.flash = 0.15; c.state = c.def.flee ? 'flee' : 'chase'; floatText(dmg, cp.clone().setY(cp.y + 1.6), '#ffdf8a'); sfx(90, 0.1, 'square', 0.07, -30);
+        if (c.hp <= 0) killCreature(c); a.stuck = true; a.t = 9; break; } }
+      if (!a.stuck && a.o.position.y < heightAt(a.o.position.x, a.o.position.z)) { a.stuck = true; a.t = Math.max(a.t, 0); }
+    }
+    if (a.t > 12) { scene.remove(a.o); arrows.splice(i, 1); }
+  }
+}
 function startSwing() {
+  if (S.slot === 3 && S.tools.bow) { if (!(P.drawT > 0)) shootArrow(); return; }
   if (P.swing > 0 || P.dead || S.paused) return;
   if (S.sta < 6) { toast('Too tired'); return; }
   S.sta -= 8; P.swing = 1; P.swingHit = false; sfx(120, 0.07, 'sawtooth', 0.03, -40);
@@ -2177,7 +2270,8 @@ function updatePlayer(dt) {
   }
   let axeVis = S.slot === 1;
   if (P.equip && (P.equip.kind === 'equip' ? EQUIP : DISARM).ready) axeVis = P.equip.kind === 'equip' ? P.equip.t > 0.5 : P.equip.t < 0.6;
-  tools.axe.visible = axeVis; tools.spear.visible = S.slot === 2;
+  tools.axe.visible = axeVis; tools.spear.visible = S.slot === 2; bowHeld.visible = S.slot === 3 && S.tools.bow;
+  if (P.drawT > 0) P.drawT -= dt; updateArrows(dt);
   if (P.hurtT > 0) P.hurtT -= dt;
 }
 function updateCamera(dt) {
@@ -2299,7 +2393,7 @@ function updateWorld(dt, t) {
   clouds.forEach((c) => { c.position.x += dt * 1.5; if (c.position.x > 1400) c.position.x = -1400; });
   const nd = nestor.position.distanceTo(player.position);
   nestor.rotation.y = nd < 8 ? Math.atan2(player.position.x - nestor.position.x, player.position.z - nestor.position.z) : nestor.rotation.y;
-  animateHumanoid(nestor, 0, t);
+  if (nestor.userData.rig) poseIdleRig(nestor.userData.rig, t); else animateHumanoid(nestor, 0, t);
   if (S.raftBuilt && !S.sailing) raftGroup.position.y = 0.05 + Math.sin(t * 1.5) * 0.08;
 }
 
@@ -2517,7 +2611,7 @@ function syncExplore() {
   $('exMap').onclick = () => { revealMap(0, 0, 700); toast('Whole map revealed'); };
 }
 $('exploreBtn').onclick = () => {
-  S.explore = true; Object.assign(S.tools, { axe: true, spear: true });
+  S.explore = true; Object.assign(S.tools, { axe: true, spear: true, bow: true }); S.inv.arrows = 99;
   $('quest').classList.add('hidden'); $('hints').innerHTML = '<span>Fly / walk</span><span class="kbd">V</span><span>Travel &amp; time</span><span class="kbd">O</span><span>Time of day</span><span class="kbd">[ ]</span><span>Hide HUD</span><span class="kbd">H</span><span>Map</span><span class="kbd">M</span><span>Fast</span><span class="kbd">SHIFT</span>';
   $('title').classList.add('hidden'); $('hud').classList.remove('hidden');
   S.running = true; S.started = performance.now(); setPause(false); canvas.requestPointerLock();
@@ -2536,4 +2630,4 @@ $('startBtn').onclick = () => {
   }
 };
 renderer.info.autoReset = false;
-window.ARG = { census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.info.reset(); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
+window.ARG = { nestor, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.info.reset(); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
