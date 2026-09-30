@@ -76,3 +76,12 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
 - Dusk warning: the first evening a card explains fire; later evenings a reminder if you're far from one. Beasts will not enter a campfire's light (9 m): they prowl the edge and can't hurt you inside. The campfire is brighter, with layered flames, embers and a warm light pool.
 - Nestor's house is a proper farmhouse: upper room with balcony, tiled porch on columns, walled courtyard with a vine pergola, jars, garden, windows that glow at night, and a smithy wing (forge with glowing coals, anvil, tool rack, workbench). The axe and spear can only be made at the workbench (E); rope and campfires anywhere with C.
 - Light pool raised to 5 lights.
+
+## v10: movement, sleep, Sacred Olive
+- Movement has momentum (accelerate / ease to a stop, little air control), the body leans into speed and banks into turns, and the camera follows a smoothed target.
+- Jump is one per press (Space no longer auto-repeats), a bit higher, and low obstacles (rocks, dry-stone and courtyard walls, stone circles) can be jumped over. Tree trunks and rocks have tighter per-species hitboxes.
+- The axe (and spear) are slung on your back when not in hand.
+- The quest olive branch comes from the **Sacred Olive**: a colossal ancient tree in a clearing at the heart of the terraces, ringed by standing stones, with an altar, oil lamps, votive jars and golden motes.
+- **Sleep**: press E at any fire, or at **Nestor's hearth** (a permanent fire pit in his courtyard), and pick 1–8 hours or until dawn. Restores energy and health, costs hunger. New **energy** bar: it drains while awake and caps stamina.
+- **Safe zones**: beasts can't enter firelight or Nestor's house and courtyard; they prowl the edge.
+- Nothing interrupts a conversation anymore: cards (quest, night warning) wait until the dialogue ends, and dialogue waits for an open card.

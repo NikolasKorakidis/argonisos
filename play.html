@@ -214,10 +214,17 @@
     <div class="bar"><span>❤</span><i id="hpB"></i><u id="hpN"></u></div>
     <div class="bar"><span>⚡</span><i id="staB"></i><u id="staN"></u></div>
     <div class="bar"><span>🍖</span><i id="foodB"></i><u id="foodN"></u></div>
+    <div class="bar"><span>🌙</span><i id="enB" style="background:linear-gradient(90deg,#4a5a9a,#8a9ae0)"></i><u id="enN"></u></div>
   </div>
   <div id="hints"><span>Attack</span><span class="kbd">LMB</span><span>Interact</span><span class="kbd">E</span><span>Jump</span><span class="kbd">SPACE</span><span>Inventory</span><span class="kbd">TAB</span><span>Craft</span><span class="kbd">C</span><span>Map</span><span class="kbd">M</span><span>Journal</span><span class="kbd">L</span></div>
   <div id="inv"></div>
   <div id="vignette"></div>
+</div>
+
+<div id="sleepPanel" class="pnl modal hidden" style="width:min(94vw,440px)">
+  <h2>Sleep</h2><button class="xbtn" data-close="sleepPanel" aria-label="Close">✕</button>
+  <p style="color:#d8ccb2;line-height:1.45">How long will you sleep? Sleep restores <b>energy</b> and health, but you wake up hungrier.</p>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px"><button class="btn" data-h="1">1 hour</button><button class="btn" data-h="2">2 hours</button><button class="btn" data-h="4">4 hours</button><button class="btn" data-h="6">6 hours</button><button class="btn" data-h="8">8 hours</button><button class="btn primary" data-h="dawn">Until dawn</button></div>
 </div>
 
 <div id="journalPanel" class="pnl modal hidden">

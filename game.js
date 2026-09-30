@@ -502,7 +502,7 @@ function landSpot(minH, maxH, avoid = []) {
   return null;
 }
 
-const AVOID = [{ x: HUT.x, z: HUT.z, r: 16 }, { x: SUMMIT.x, z: SUMMIT.z, r: ARENA_R + 8 }, { x: DOCK.x, z: DOCK.z, r: 12 }, { x: START.x, z: START.z, r: 5 }, { x: WRECK.x, z: WRECK.z, r: 8 },
+const AVOID = [{ x: HUT.x, z: HUT.z, r: 16 }, { x: OLIVE.x, z: OLIVE.z, r: 19 }, { x: SUMMIT.x, z: SUMMIT.z, r: ARENA_R + 8 }, { x: DOCK.x, z: DOCK.z, r: 12 }, { x: START.x, z: START.z, r: 5 }, { x: WRECK.x, z: WRECK.z, r: 8 },
   { x: CAVE.x, z: CAVE.z, r: CH_R + 8 }, { x: CAVE_MOUTH.x, z: CAVE_MOUTH.z, r: 12 }, { x: CAVE_APPROACH.x, z: CAVE_APPROACH.z, r: 8 }, { x: TEMPLE.x, z: TEMPLE.z, r: 30 }, { x: LAKE.x, z: LAKE.z, r: 26 }, { x: TOWER.x, z: TOWER.z, r: 10 }];
 
 const windUniformEarly = { value: 0 };
@@ -829,7 +829,8 @@ const FLORA = {
 function pickSpecies(mix) { let t = rand() * mix.reduce((a, m) => a + m[1], 0); for (const [s2, w] of mix) if ((t -= w) <= 0) return s2; return mix[0][0]; }
 function addTree(species, pos, scale) {
   const it = placeProp(species, Math.floor(rand() * 3), pos, rr(0, 6.28), scale);
-  const res = { type: 'tree', item: it, hp: 8, max: 8, alive: true, pos, r: 0.55 * scale + 0.1, fall: 0 };
+  const TR = { oak: 0.55, autumn: 0.55, olive: 0.42, pine: 0.38, birch: 0.24, cypress: 0.3, dead: 0.38 }[species] || 0.45;
+  const res = { type: 'tree', item: it, hp: 8, max: 8, alive: true, pos, r: TR * scale + 0.15, fall: 0 };
   resources.push(res); colliders.push({ x: pos.x, z: pos.z, r: res.r, ref: res }); return res;
 }
 for (let z = -ISLAND_R; z < ISLAND_R; z += 4) for (let x = -ISLAND_R; x < ISLAND_R; x += 4) {
@@ -845,14 +846,14 @@ for (let z = -ISLAND_R; z < ISLAND_R; z += 4) for (let x = -ISLAND_R; x < ISLAND
 // Olive terraces: planted rows
 for (let i = -5; i <= 5; i++) for (let j = -4; j <= 4; j++) {
   const px = OLIVE.x + i * 7 + j * 1.5 + rr(-0.8, 0.8), pz = OLIVE.z + j * 8 + rr(-0.8, 0.8), h = heightAt(px, pz);
-  if (h > 1.5 && Math.hypot(i * 7, j * 8) < 42 && pathDist(px, pz) > 3) addTree('olive', new THREE.Vector3(px, h - 0.1, pz), rr(0.9, 1.2));
+  if (h > 1.5 && Math.hypot(i * 7, j * 8) < 42 && Math.hypot(i * 7, j * 8) > 19 && pathDist(px, pz) > 3) addTree('olive', new THREE.Vector3(px, h - 0.1, pz), rr(0.9, 1.2));
 }
 // --- Rocks: choppable stone + big non-choppable boulders on the mountain and cliffs
 function addRock(pos, scale, choppable) {
   if (pathDist(pos.x, pos.z) < 2.4 + scale * 1.2) return;    // keep trails clear
   const it = placeProp('rock', Math.floor(rand() * 3), pos, rr(0, 6.28), scale);
-  if (choppable) { const res = { type: 'rock', item: it, hp: 8, max: 8, alive: true, pos, r: scale * 1.1 }; resources.push(res); colliders.push({ x: pos.x, z: pos.z, r: res.r, ref: res }); }
-  else colliders.push({ x: pos.x, z: pos.z, r: scale * 1.1 });
+  if (choppable) { const res = { type: 'rock', item: it, hp: 8, max: 8, alive: true, pos, r: scale * 1.0 }; resources.push(res); colliders.push({ x: pos.x, z: pos.z, r: res.r, ref: res, h: scale * 0.75 }); }
+  else colliders.push({ x: pos.x, z: pos.z, r: scale * 1.0, h: scale * 0.7 });
 }
 for (let i = 0; i < 170; i++) { const p = landSpot(0.8, 40, AVOID); if (p) addRock(p, rr(0.8, 1.4), true); }
 for (let i = 0; i < 220; i++) {
@@ -1040,7 +1041,7 @@ const marble = new THREE.MeshStandardMaterial({ color: 0xeee6d4, roughness: 0.55
 const marbleDark = new THREE.MeshStandardMaterial({ color: 0xd4cab4, roughness: 0.7 });
 const terracotta = new THREE.MeshStandardMaterial({ color: 0xb8583a, roughness: 0.8 });
 const rockDark = new THREE.MeshStandardMaterial({ color: 0x5f5850, roughness: 0.95, flatShading: true });
-function wallColliders(x0, z0, x1, z1, r = 0.7) { const n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / (r * 1.4)); for (let i = 0; i <= n; i++) colliders.push({ x: lerp(x0, x1, i / n), z: lerp(z0, z1, i / n), r }); }
+function wallColliders(x0, z0, x1, z1, r = 0.7, h = 99) { const n = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / (r * 1.4)); for (let i = 0; i <= n; i++) colliders.push({ x: lerp(x0, x1, i / n), z: lerp(z0, z1, i / n), r, h }); }
 
 // ---- Temple of Athena: a Doric peristyle (6×11), painted frieze with triglyphs and metopes, sculpted pediments,
 //      tiled roof with antefixes, a pronaos with bronze doors, and inside a two-tier colonnade around a reflecting pool
@@ -1455,8 +1456,8 @@ const fireflies = (() => {
   const stone = new THREE.MeshStandardMaterial({ color: 0xb5ab98, roughness: 1, flatShading: true }), og = new THREE.Group();
   for (let k = -2; k <= 2; k++) {                      // terrace walls
     const z0 = OLIVE.z + k * 16, len = 80 - Math.abs(k) * 12;
-    for (let x = -len / 2; x < len / 2; x += 1.6) { const px = OLIVE.x + x, h = heightAt(px, z0); if (pathDist(px, z0) < 2.5) continue; mesh(new THREE.BoxGeometry(1.7, rr(0.6, 0.9), 0.9), stone, px, h + 0.3, z0 + rr(-0.1, 0.1), og).rotation.y = rr(-0.08, 0.08); }
-    wallColliders(OLIVE.x - len / 2, z0, OLIVE.x + len / 2, z0, 0.5);
+    for (let x = -len / 2; x < len / 2; x += 1.6) { const px = OLIVE.x + x, h = heightAt(px, z0); if (pathDist(px, z0) < 2.5 || Math.hypot(px - OLIVE.x, z0 - OLIVE.z) < 19) continue; mesh(new THREE.BoxGeometry(1.7, rr(0.6, 0.9), 0.9), stone, px, h + 0.3, z0 + rr(-0.1, 0.1), og).rotation.y = rr(-0.08, 0.08); }
+    if (k === 0) { wallColliders(OLIVE.x - len / 2, z0, OLIVE.x - 19, z0, 0.5, 0.95); wallColliders(OLIVE.x + 19, z0, OLIVE.x + len / 2, z0, 0.5, 0.95); } else wallColliders(OLIVE.x - len / 2, z0, OLIVE.x + len / 2, z0, 0.5, 0.95);
   }
   const vine = new THREE.MeshStandardMaterial({ color: 0x4f7a2e, roughness: 0.9 }), grape = new THREE.MeshStandardMaterial({ color: 0x5a2d6a, roughness: 0.4 });
   for (let r = 0; r < 6; r++) {                        // vineyard east of the olives
@@ -1680,7 +1681,7 @@ const forgeGlow = new THREE.MeshStandardMaterial({ color: 0xff6a20, emissive: 0x
   // courtyard wall with a gate gap on the path side
   const wallSeg = (x0, z0, x1, z1) => { const L = Math.hypot(x1 - x0, z1 - z0), n = Math.round(L / 0.9);
     for (let k = 0; k < n; k++) { const t2 = (k + 0.5) / n; const b = mesh(new THREE.BoxGeometry(0.95, rr(0.9, 1.15), 0.6), k % 3 ? stoneM : stoneD, lerp(x0, x1, t2), 0.5, lerp(z0, z1, t2), g); b.rotation.y = Math.atan2(x1 - x0, z1 - z0) + Math.PI / 2; }
-    const a = hutW(x0, z0), b2 = hutW(x1, z1); wallColliders(a.x, a.z, b2.x, b2.z, 0.5); };
+    const a = hutW(x0, z0), b2 = hutW(x1, z1); wallColliders(a.x, a.z, b2.x, b2.z, 0.5, 1.05); };
   wallSeg(9, 7, 9, 10); wallSeg(9, 10, 5.5, 10); wallSeg(-1, 10, -9.5, 10); wallSeg(-9.5, 10, -9.5, 4.5);
   // vine pergola in the courtyard
   for (const [x, z] of [[5.6, 4.5], [8.4, 4.5], [5.6, 8.6], [8.4, 8.6]]) mesh(new THREE.CylinderGeometry(0.1, 0.12, 2.8, 6), timber, x, 1.4, z, g);
@@ -1965,8 +1966,11 @@ function makeTools() {
 // Player
 // ============================================================
 const player = makeHumanoid({ tunic: 0xf1ead9, belt: 0x7a4f2c, hair: 0x3a2412 });
-player.position.copy(START); scene.add(player);
+player.position.copy(START); player.rotation.order = "YXZ"; scene.add(player);
 const tools = makeTools(); player.userData.arms[1].add(tools.axe, tools.spear);
+const backAxe = new THREE.Group(), backSpear = new THREE.Group();
+backAxe.position.set(0.02, 0.28, -0.2); backAxe.rotation.set(0.1, 0, 2.45); backAxe.visible = false;
+backSpear.position.set(-0.04, 0.2, -0.24); backSpear.rotation.set(0.05, 0, -0.5); backSpear.visible = false;
 // Hero model (static FBX, no rig): replaces the procedural body once loaded and gets procedural animation.
 const hero = { wrap: new THREE.Group(), model: null, rig: null };
 player.add(hero.wrap);
@@ -2153,12 +2157,39 @@ const oliveBranch = () => { const g = new THREE.Group(); const st = mesh(new THR
   const lm = flat(0x7d9a4a), om = flat(0x3d4a26); for (let i = 0; i < 12; i++) { const l = mesh(new THREE.SphereGeometry(0.07, 5, 3), lm, rr(-0.4, 0.4), rr(0.08, 0.16), rr(-0.08, 0.08), g); l.scale.set(1, 0.3, 2.4); l.rotation.y = rr(-1, 1); }
   for (let i = 0; i < 5; i++) mesh(new THREE.SphereGeometry(0.04, 6, 4), om, rr(-0.3, 0.3), 0.12, rr(-0.06, 0.06), g);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffe0a0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(1.6); glow.position.y = 0.3; g.add(glow); return g; };
-{ const p = OLIVE.clone().add(new THREE.Vector3(-6, 0, -8)); p.y = heightAt(p.x, p.z) + 0.1; addPickup('olivebranch', p, oliveBranch); }
+// The Sacred Olive: an ancient, colossal olive at the heart of the terraces, ringed with stones, lamps and offerings.
+// The quest branch is cut from it.
+const SACRED_OLIVE = OLIVE.clone(); SACRED_OLIVE.y = heightAt(OLIVE.x, OLIVE.z);
+const sacredMotes = [];
+{
+  const g = new THREE.Group(); g.position.copy(SACRED_OLIVE); scene.add(g);
+  const P = [], cs = CARD_PARTS.length;
+  growTree(P, { bark: 0x7d6f5e, leaf: 0xc4d19c, trunkH: 3.0, trunkR: 0.95, trunkSteps: 5, depth: 3, taper: 0.58, gnarl: 0.5, rise: 0.02, lean: 0.12, roots: 8, knot: 1.3,
+    kids: (d) => (d === 3 ? 5 : 2), spread: (d) => (d === 3 ? 1.15 : d === 2 ? 0.8 : 0.6), lenF: 0.8, rF: 0.6, midKids: true, clusterR: 1.2, flat: 0.6, cards: 16, card0: 0.85, card1: 1.3, core: 0.42 });
+  const cards = CARD_PARTS.splice(cs);
+  const tree = new THREE.Mesh(mergeParts(P), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 })); tree.castShadow = tree.receiveShadow = true;
+  const leaves = new THREE.Mesh(mergeCards(cards), new THREE.MeshStandardMaterial({ map: leafTex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8, emissive: 0x6a5a18, emissiveIntensity: 0.35 })); leaves.castShadow = true;
+  const T = new THREE.Group(); T.scale.setScalar(3.4); T.add(tree, leaves); g.add(T);
+  // a ring of standing stones with a gap facing the path, a low altar with oil lamps, votive jars
+  const st = new THREE.MeshStandardMaterial({ color: 0xcfc6b2, roughness: 0.9, flatShading: true }), lampM = new THREE.MeshStandardMaterial({ color: 0xffd28a, emissive: 0xffa040, emissiveIntensity: 1.6 });
+  for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; if (Math.abs(Math.sin(a) - 1) < 0.25) continue; const b = mesh(new THREE.BoxGeometry(0.8, rr(1.1, 1.8), 0.7), st, Math.cos(a) * 15, 0.5, Math.sin(a) * 15, g); b.rotation.y = -a; }
+  mesh(new THREE.BoxGeometry(2.2, 0.8, 1), st, 0, 0.4, 7.5, g); mesh(new THREE.BoxGeometry(2.5, 0.12, 1.25), st, 0, 0.86, 7.5, g);
+  for (const x of [-0.8, 0, 0.8]) { mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.12, 8), st, x, 0.98, 7.5, g); const fl = mesh(new THREE.SphereGeometry(0.06, 6, 4), lampM, x, 1.1, 7.5, g); fl.userData.keep = true; }
+  for (let i = 0; i < 6; i++) { const a = rr(0, 6.28), r = rr(3.2, 4.5); mesh(new THREE.LatheGeometry([[0.001, 0], [0.14, 0.03], [0.22, 0.25], [0.12, 0.45], [0.09, 0.52]].map(([x, y]) => new THREE.Vector2(x, y)), 10), flat(0xb2663a), Math.cos(a) * r, 0, Math.sin(a) * r, g); }
+  const L = new THREE.PointLight(0xffd890, 18, 14, 1.6); L.position.set(0, 1.6, 7.5); g.add(L);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xfff0b0, transparent: true, opacity: 0.25, depthWrite: false, blending: THREE.AdditiveBlending })); halo.scale.setScalar(36); halo.position.y = 12; g.add(halo);
+  // golden motes drifting in the crown
+  const N = 70, mg = new THREE.BufferGeometry(), ma = new Float32Array(N * 3); for (let i = 0; i < N; i++) sacredMotes.push([rand() * 6.28, rr(3, 12), rr(5, 16), rand()]);
+  mg.setAttribute('position', new THREE.BufferAttribute(ma, 3)); const motes = new THREE.Points(mg, new THREE.PointsMaterial({ color: 0xffe08a, size: 0.14, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); motes.frustumCulled = false; g.add(motes); sacredMotes.pts = motes;
+  colliders.push({ x: OLIVE.x, z: OLIVE.z, r: 3.4 });
+  for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; if (Math.abs(Math.sin(a) - 1) < 0.25) continue; colliders.push({ x: OLIVE.x + Math.cos(a) * 15, z: OLIVE.z + Math.sin(a) * 15, r: 0.55, h: 1.0 }); }
+  const bp = OLIVE.clone().add(new THREE.Vector3(2.2, 0, 4.4)); bp.y = heightAt(bp.x, bp.z) + 0.1; addPickup('olivebranch', bp, oliveBranch);
+}
 loadModelBuffer('axe').then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
   fixMaterials(obj);
   const held = normalizeHandle(obj, 0.85);
   held.position.y = -0.18;                                    // grip a little above the handle end
-  tools.axe.clear(); tools.axe.add(held);
+  tools.axe.clear(); tools.axe.add(held); backAxe.clear(); const onBack = held.clone(); onBack.position.set(0, -0.3, 0); backAxe.add(onBack);
   const ground = held.clone(); ground.position.set(0, 0, 0); ground.rotation.set(0, 0.6, Math.PI / 2);
   ground.position.x = 0.4; groundAxe.add(ground);
 }).catch((e) => { console.warn('Axe model failed to load, using placeholder', e); const g = tools.axe.clone(); g.visible = true; g.rotation.set(0, 0, Math.PI / 2); groundAxe.add(g); });
@@ -2210,6 +2241,7 @@ loadModelBuffer('hero').then((buf) => new FBXLoader().parse(buf, '')).then((obj)
   const rf = hero.rig.bones.foreR;   // tools go in the right fist (end of the right forearm)
   hero.rig.bones.foreL.add(bowHeld); bowHeld.position.copy(hero.rig.handOffset).multiply(new THREE.Vector3(-1, 1, 1)); bowHeld.rotation.set(0, 0, 1.25, 'ZYX');
   for (const t of [tools.axe, tools.spear]) { rf.add(t); t.position.copy(hero.rig.handOffset); t.rotation.set(0.7, 0, -1.25, 'ZYX'); }   // undo the arm's T-pose drop so the tool points forward-up
+  hero.rig.bones.spine.add(backAxe, backSpear);                  // stowed: axe slung diagonally across the back, spear behind it
 }).catch((e) => console.warn('Hero model failed to load, keeping placeholder', e));
 const P = { vel: new THREE.Vector3(), yaw: Math.PI, onGround: true, swing: 0, swingHit: false, hurtT: 0, animT: 0, dead: false };
 
@@ -2323,7 +2355,7 @@ const DAY_LEN = 900;  // seconds per in-game day (15 min: ~10 of daylight)
 const S = {
   hp: 100, food: 100, sta: 100, time: 0.3, day: 1, nights: 0, wasNight: false,
   inv: { wood: 0, stone: 0, fiber: 0, berries: 0, rawmeat: 0, meat: 0, hide: 0, rope: 0, sail: 0, arrows: 0 },
-  tools: { axe: false, spear: false, bow: false }, slot: 0,
+  tools: { axe: false, spear: false, bow: false }, slot: 0, energy: 100,
   kills: { rabbit: 0, boar: 0, wolf: 0, skeleton: 0 }, cooked: 0, campfire: null, raftBuilt: false,
   timeScale: 1, running: false, paused: true, talkedNestor: false, sailing: false, questIdx: 0, deaths: 0, nightsAtStart: 0, started: 0,
 };
@@ -2382,7 +2414,7 @@ function burst(pos, color, n = 8) {
 const SLOTS = [{ k: 'hands', ic: '✊', n: 'Hands' }, { k: 'axe', ic: '🪓', n: 'Axe' }, { k: 'spear', ic: '🔱', n: 'Spear' }];
 function renderHUD() {
   $('hpB').style.width = S.hp + '%'; $('foodB').style.width = S.food + '%'; $('staB').style.width = S.sta + '%';
-  $('hpN').textContent = Math.ceil(S.hp); $('staN').textContent = Math.ceil(S.sta); $('foodN').textContent = Math.ceil(S.food);
+  $('enB').style.width = S.energy + '%'; $('enN').textContent = Math.ceil(S.energy); $('hpN').textContent = Math.ceil(S.hp); $('staN').textContent = Math.ceil(S.sta); $('foodN').textContent = Math.ceil(S.food);
   $('hotbar').innerHTML = SLOTS.map((s, i) => {
     const locked = s.k !== 'hands' && !S.tools[s.k];
     return `<div class="slot ${S.slot === i ? 'sel' : ''} ${locked ? 'locked' : ''}"><b>${i + 1}</b>${s.ic}<small>${s.n}</small></div>`;
@@ -2432,28 +2464,39 @@ $('rdetail').addEventListener('click', (e) => {
   r.make(); toast(`Crafted <b>${r.name}</b>`); snd.craft(); renderCraft();
 });
 const FIRE_SAFE_R = 9;   // beasts will not step into the firelight
-function placeCampfire() {
+const FIRES = [];
+function makeFire(p, perm = false) {
   const f = new THREE.Group();
   for (let i = 0; i < 9; i++) { const a = (i / 9) * 6.28; mesh(new THREE.DodecahedronGeometry(0.24, 0), rockMat, Math.cos(a) * 0.7, 0.1, Math.sin(a) * 0.7, f); }
   for (let i = 0; i < 5; i++) { const l = mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.0, 5), trunkMat, 0, 0.28, 0, f); l.rotation.set(0.95, (i / 5) * 6.28, 0); }
   mesh(new THREE.CircleGeometry(0.55, 12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff5a10 }), 0, 0.06, 0, f);               // glowing embers bed
   const flames = [], add = (c, o) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false });
-  [[0.42, 1.3, 0xff5a10, 0.7], [0.32, 1.05, 0xff9a2a, 0.8], [0.2, 0.75, 0xffe08a, 0.9]].forEach(([r, h, c, o], i) => { const fl = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), add(c, o)); fl.position.y = 0.2 + h / 2; f.add(fl); flames.push(fl); });
+  [[0.42, 1.3, 0xff5a10, 0.7], [0.32, 1.05, 0xff9a2a, 0.8], [0.2, 0.75, 0xffe08a, 0.9]].forEach(([r, h, c, o]) => { const fl = new THREE.Mesh(new THREE.ConeGeometry(r, h, 7), add(c, o)); fl.position.y = 0.2 + h / 2; f.add(fl); flames.push(fl); });
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xff8a30, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(5); glow.position.y = 0.9; f.add(glow);
-  // warm pool of light on the ground marking the safe circle
   const pool = new THREE.Mesh(new THREE.CircleGeometry(FIRE_SAFE_R, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: glowTex(), color: 0xff8a3a, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }));
   pool.position.y = 0.08; f.add(pool);
-  // embers drifting up
-  const N = 40, eg = new THREE.BufferGeometry(), ea = new Float32Array(N * 3), seeds = [];
-  for (let i = 0; i < N; i++) { seeds.push([rand() * 6.28, rand(), rr(0.4, 1)]); }
-  eg.setAttribute('position', new THREE.BufferAttribute(ea, 3));
-  const embers = new THREE.Points(eg, new THREE.PointsMaterial({ color: 0xffb050, size: 0.09, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); f.add(embers);
+  const N = 40, eg = new THREE.BufferGeometry(), seeds = []; for (let i = 0; i < N; i++) seeds.push([rand() * 6.28, rand(), rr(0.4, 1)]);
+  eg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3));
+  const embers = new THREE.Points(eg, new THREE.PointsMaterial({ color: 0xffb050, size: 0.09, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); embers.frustumCulled = false; f.add(embers);
   const light = new THREE.PointLight(0xff9a40, 90, 26, 1.3);
-  const p = player.position.clone().add(new THREE.Vector3(Math.sin(P.yaw), 0, Math.cos(P.yaw)).multiplyScalar(2));
-  p.y = heightAt(p.x, p.z); f.position.copy(p); scene.add(f);
-  if (S.campfire) { scene.remove(S.campfire.obj); removeEmitter(S.campfire.light); }  // one fire at a time keeps it simple
-  S.campfire = { obj: f, flames, light, pos: p, glow, embers, seeds }; addEmitter(light, p.clone().setY(p.y + 1.3));
+  f.position.copy(p); scene.add(f);
+  const fire = { obj: f, flames, light, pos: p.clone(), glow, embers, seeds, perm }; FIRES.push(fire); addEmitter(light, p.clone().setY(p.y + 1.3));
+  colliders.push({ x: p.x, z: p.z, r: 0.75, h: 0.6 });
+  return fire;
+}
+function placeCampfire() {
+  const p = player.position.clone().add(new THREE.Vector3(Math.sin(P.yaw), 0, Math.cos(P.yaw)).multiplyScalar(2)); p.y = heightAt(p.x, p.z);
+  if (S.campfire) { scene.remove(S.campfire.obj); removeEmitter(S.campfire.light); FIRES.splice(FIRES.indexOf(S.campfire), 1); }  // one campfire of your own at a time
+  S.campfire = makeFire(p);
   toast('Campfire lit. Beasts will not enter the firelight.', true);
+}
+const nearestFire = (p, r) => { let best = null, bd = r; for (const f of FIRES) { const d = Math.hypot(p.x - f.pos.x, p.z - f.pos.z); if (d < bd) { bd = d; best = f; } } return best; };
+// Safe places: any fire's light, and Nestor's house and courtyard (nothing hunts on his doorstep)
+const HUT_SAFE = { pos: hutW(0, 3.5), r: 24 };
+function zoneOf(p) {
+  for (const f of FIRES) if (Math.hypot(p.x - f.pos.x, p.z - f.pos.z) < FIRE_SAFE_R) return { pos: f.pos, r: FIRE_SAFE_R };
+  if (HUT_SAFE.pos && Math.hypot(p.x - HUT_SAFE.pos.x, p.z - HUT_SAFE.pos.z) < HUT_SAFE.r) return HUT_SAFE;
+  return null;
 }
 
 // ============================================================
@@ -2461,12 +2504,13 @@ function placeCampfire() {
 // ============================================================
 let dialogQueue = [], dialogDone = null, lineShownAt = 0;
 function say(lines, done) {
+  if (inCard()) { setTimeout(() => say(lines, done), 500); return; }             // let the open card be read first
   dialogQueue = lines.slice(); dialogDone = done || null; $('dialog').classList.remove('hidden');
   if (lines.some(([w]) => w === 'Nestor') && !S.explore && player.position.distanceTo(nestor.position) < 10) startTalkCam(nestor);
   nextLine();
 }
 function nextLine() {
-  if (!dialogQueue.length) { $('dialog').classList.add('hidden'); if (talkCam.on && !talkCam.fixed) stopTalkCam(); const d = dialogDone; dialogDone = null; if (d) d(); return; }
+  if (!dialogQueue.length) { $('dialog').classList.add('hidden'); if (talkCam.on && !talkCam.fixed) stopTalkCam(); const d = dialogDone; dialogDone = null; if (d) d(); setTimeout(flushPendingCards, 500); return; }
   const [who, txt] = dialogQueue.shift(); $('dialog').querySelector('.who').textContent = who; $('dialog').querySelector('.txt').textContent = txt;
   talkCam.who = who === 'You' ? 'you' : 'npc'; talkCam.lineT = 0; lineShownAt = performance.now(); snd.page();
 }
@@ -2481,6 +2525,7 @@ function startTalkCam(npc, fixed = null) {
 function stopTalkCam() {
   talkCam.on = false; talkCam.fixed = null; $('cine').classList.remove('on'); setTimeout(() => { if (!talkCam.on && !S.cine) $('cine').classList.add('hidden'); }, 1400);
   $('hud').classList.remove('hidden'); camYaw = P.yaw + Math.PI;
+  setTimeout(flushPendingCards, 600);
 }
 function updateTalkCam(dt) {
   talkCam.t += dt; talkCam.lineT += dt; const k = Math.min(1, dt * 2.2);
@@ -2516,8 +2561,8 @@ const Q = [
     obj: () => [['Meet Nestor by his hut', S.talkedNestor]], target: () => nestor.position },
   { title: 'The First Tool', desc: 'Nestor wants to see you make something with your own hands. Pick up branches and pebbles from the ground and pull fiber from bushes and reeds, then craft a Stone Axe at the workbench in Nestor\'s smithy.',
     obj: () => [[`Wood ${Math.min(S.inv.wood, 3)}/3`, S.inv.wood >= 3 || S.tools.axe], [`Stone ${Math.min(S.inv.stone, 2)}/2`, S.inv.stone >= 2 || S.tools.axe], [`Fiber ${Math.min(S.inv.fiber, 1)}/1`, S.inv.fiber >= 1 || S.tools.axe], ['Craft a Stone Axe at the workbench', S.tools.axe]], target: () => (S.inv.wood >= 3 && S.inv.stone >= 2 && S.inv.fiber >= 1 ? BENCH : null) },
-  { title: 'A Gift for Athena', desc: 'Every chosen one must honour Athena before the trial begins. Gather berries from the bushes and take a sacred branch from the Olive Terraces.',
-    obj: () => [[`Berries ${Math.min(S.inv.berries, 3)}/3`, S.inv.berries >= 3], ['Sacred olive branch', !!S.oliveBranch]], target: () => (S.oliveBranch ? null : OLIVE) },
+  { title: 'A Gift for Athena', desc: 'Every chosen one must honour Athena before the trial begins. Gather berries from the bushes, then cut a branch from the Sacred Olive, the ancient tree at the heart of the Olive Terraces.',
+    obj: () => [[`Berries ${Math.min(S.inv.berries, 3)}/3`, S.inv.berries >= 3], ['A branch of the Sacred Olive', !!S.oliveBranch]], target: () => (S.oliveBranch ? null : OLIVE) },
   { title: 'The Temple of Athena', desc: 'Carry the offering east to the Temple of Athena and place it before her statue in the cella.',
     obj: () => [['Place the offering at the statue (E)', !!S.offered]], target: () => ATHENA_OFFER },
   { title: 'Return to Nestor', desc: 'The goddess answered. Go back to Nestor and tell him what you saw.',
@@ -2594,7 +2639,7 @@ function talkNestor() {
   ], () => { S.reported = true; });
   const lines = {
     1: 'Three wood, two stone, one fiber, all from the ground. Then make the axe at my workbench in the smithy, round the west side.',
-    2: 'Berries grow on the bushes all over the island. The sacred olive grows on the terraces to the south-east. Take only one branch.',
+    2: 'Berries grow on the bushes all over the island. The Sacred Olive stands at the heart of the terraces to the south-east, older than anyone remembers. Cut one branch, no more.',
     3: 'The temple is east, past the lake. Place the offering at Athena\'s feet. Kneel if you want to, she likes that.',
     5: 'An axe first, now a spear. Use the workbench in the smithy. Trust me on the spear.',
     6: 'The sun falls fast here. When it is gone the wolves come out of the pines. Build a fire.',
@@ -2620,14 +2665,18 @@ const TUTORIAL = [
   { kicker: 'Nestor teaches · 1/5', title: 'Gather', body: 'Walk up to branches, pebbles, bushes and reeds and press <b>E</b> to pick them up. Bushes give berries and grow back.', keys: [['E', 'Interact / pick up'], ['WASD', 'Move'], ['Shift', 'Sprint'], ['Space', 'Jump']] },
   { kicker: 'Nestor teaches · 2/5', title: 'Fight', body: 'Your fists are for beasts, not trees: <b>Left Click</b> to strike. Wood and stone come from branches and pebbles on the ground; once you have an axe you can fell trees and split rocks.', keys: [['LMB', 'Swing / attack'], ['1–3', 'Hands · Axe · Spear']] },
   { kicker: 'Nestor teaches · 3/5', title: 'Craft', body: 'Tools are made at the <b>workbench</b> in my smithy, beside the house: walk up and press <b>E</b>. A Stone Axe needs 3 wood, 2 stone and 1 fiber. Simple things like rope and a campfire you can make anywhere with <b>C</b>. Your bag is on <b>Tab</b>.', keys: [['C', 'Crafting'], ['Tab', 'Inventory']] },
-  { kicker: 'Nestor teaches · 4/5', title: 'Stay Alive', body: 'Watch the three bars: <b>health</b>, <b>stamina</b> and <b>hunger</b>. Sprinting and fighting burn stamina. Press <b>F</b> to eat when hunger drops, or your health follows.', keys: [['F', 'Eat'], ['R', 'Rest at a fire']] },
+  { kicker: 'Nestor teaches · 4/5', title: 'Stay Alive', body: 'Watch your bars: <b>health</b>, <b>stamina</b>, <b>hunger</b> and <b>energy</b>. Press <b>F</b> to eat. Energy drains through the day; when you tire, <b>sleep</b> by a fire or at my hearth (walk up and press <b>E</b>), and choose how long. You wake rested, but hungrier. Nothing hunts near my house.', keys: [['F', 'Eat'], ['E', 'Sleep at a fire'], ['R', 'Rest at a fire']] },
   { kicker: 'Nestor teaches · 5/5', title: 'Find Your Way', body: 'Follow the gold <b>◆</b> marker on the compass to your current objective. <b>M</b> opens the map. Climbing the watchtower in the north-west reveals the whole island.', keys: [['M', 'Map'], ['◆', 'Objective marker']] },
 ];
 let cardQueue = [], cardDone = null, curCard = null;
 // Cards queue up: a new batch waits until the one on screen has been read and closed (never replaces it)
 let cardShownAt = 0;
+const pendingCards = [];
+const convoBusy = () => !$('dialog').classList.contains('hidden') || talkCam.on || S.sleeping;
+function flushPendingCards() { if (convoBusy()) return; const pc = pendingCards.splice(0); pc.forEach(([l, d]) => showCards(l, d)); }
 function showCards(list, done) {
   if (S.explore) { if (done) done(); return; }
+  if (convoBusy()) { pendingCards.push([list, done]); return; }              // never cut into a conversation: wait for it to end
   const batch = list.map((c) => ({ ...c })); if (batch.length) batch[batch.length - 1].__done = done || null;
   const wasOpen = inCard(); cardQueue.push(...batch);
   if (!wasOpen) { document.exitPointerLock(); $('card').classList.remove('hidden'); nextCard(); }
@@ -2649,7 +2698,7 @@ const inCard = () => !$('card').classList.contains('hidden');
 $('card').querySelector('.cnext').onclick = () => nextCard();
 $('card').querySelector('.cskip').onclick = () => { const ds = cardQueue.filter((c) => c.__done).map((c) => c.__done); cardQueue = []; nextCard(); ds.forEach((d) => d()); };
 function questCard(q) {
-  showCards([{ kicker: `New quest · ${S.questIdx + 1} / ${Q.length}`, title: q.title, body: q.desc, keys: q.obj().map(([t]) => ['○', t]) }]);
+  showCards([{ kicker: `New quest · ${Q.indexOf(q) + 1} / ${Q.length}`, title: q.title, body: q.desc, keys: q.obj().map(([t]) => ['○', t]) }]);
   snd.questNew();
 }
 
@@ -2671,6 +2720,7 @@ document.addEventListener('mousemove', (e) => {
 });
 document.addEventListener('mousedown', (e) => { if (locked && e.button === 0) startSwing(); });
 addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && !e.repeat) P.jumpBuf = 0.15;
   keys[e.code] = true;
   if (!S.running) return;
   if (S.cine) { if (e.code === 'Escape' || e.code === 'Space' || e.code === 'Enter') endIntro(); return; }
@@ -2700,7 +2750,8 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyN') debugSkipQuest();
 });
 addEventListener('keyup', (e) => (keys[e.code] = false));
-const MENUS = ['craft', 'invPanel', 'mapPanel', 'explorePanel', 'journalPanel'];
+const MENUS = ['craft', 'invPanel', 'mapPanel', 'explorePanel', 'journalPanel', 'sleepPanel'];
+document.querySelectorAll('#sleepPanel [data-h]').forEach((b) => (b.onclick = () => sleep(b.dataset.h === 'dawn' ? 'dawn' : +b.dataset.h)));
 const menuOpen = () => MENUS.some((m) => !$(m).classList.contains('hidden'));
 function openMenu(id) {                      // one panel at a time; frees the mouse while open
   const el = $(id), opening = el.classList.contains('hidden');
@@ -2751,11 +2802,13 @@ function getInteractable() {
   consider(Math.hypot(pp.x - BENCH.x, pp.z - BENCH.z) + 0.3, { label: 'Use the workbench', act: () => openMenu('craft') });
   for (const pk of pickups) {
     if (!pk.alive || (pk.kind === 'bush' && pk.regrow > 0)) continue;
-    const labels = { bowitem: 'Pick up the bow and arrows', axeitem: 'Pick up the axe', olivebranch: 'Take the sacred olive branch', branch: 'Pick up branch', pebble: 'Pick up pebbles', bush: 'Harvest bush', reeds: 'Cut reeds', chest: 'Open the old chest' };
+    const labels = { bowitem: 'Pick up the bow and arrows', axeitem: 'Pick up the axe', olivebranch: 'Cut a branch from the Sacred Olive', branch: 'Pick up branch', pebble: 'Pick up pebbles', bush: 'Harvest bush', reeds: 'Cut reeds', chest: 'Open the old chest' };
     consider(pp.distanceTo(pk.pos), { label: labels[pk.kind], act: () => harvest(pk) });
   }
-  if (S.campfire && pp.distanceTo(S.campfire.pos) < 3) {
-    const d = pp.distanceTo(S.campfire.pos) - 0.5;
+  const nf = nearestFire(pp, 3.5);
+  if (nf) consider(Math.hypot(pp.x - nf.pos.x, pp.z - nf.pos.z) - 0.3, { label: nf.perm ? 'Sleep by Nestor\'s hearth' : 'Sleep by the fire', act: () => openMenu('sleepPanel') });
+  if (nf && S.inv.rawmeat > 0) {
+    const d = Math.hypot(pp.x - nf.pos.x, pp.z - nf.pos.z) - 0.6;
     if (S.inv.rawmeat > 0) consider(d, { label: `Cook ${S.inv.rawmeat} raw meat`, act: cook });
   }
   const dT = Math.hypot(pp.x - TOWER.x, pp.z - TOWER.z);
@@ -2818,9 +2871,22 @@ function openChest() {
   if (!chest.alive) return; chest.alive = false; chestLid.rotation.x = -1.2; chestLid.position.z = -0.35;
   give('sail', 1, chestPos); give('hide', 2); toast('Found <b>Sailcloth</b> with a faded red cross'); snd.chest();
 }
+function sleep(hours) {
+  openMenu('sleepPanel');
+  if (!zoneOf(player.position) || creatures.some((c) => c.state === 'chase' && !c.dead && c.obj.position.distanceTo(player.position) < 15)) { toast('You can\'t sleep with danger this close.'); return; }
+  if (hours === 'dawn') { const tgt = 0.21; hours = Math.max(1, Math.round((((tgt - S.time) % 1) + 1) % 1 * 24)); }
+  S.sleeping = true; document.exitPointerLock(); const fade = $('fade'); fade.style.transition = 'opacity 1.4s'; fade.style.opacity = 1;
+  setTimeout(() => {
+    S.time += hours / 24; while (S.time >= 1) { S.time -= 1; S.day++; }
+    const food0 = S.food, en0 = S.energy;
+    S.food = Math.max(0, S.food - hours * 3.5); S.energy = Math.min(100, S.energy + hours * 13); S.hp = Math.min(100, S.hp + hours * 6); S.sta = 40 + S.energy * 0.6;
+    if (!isNight()) creatures.forEach((c) => { if (c.type === 'wolf' && !c.dead) { scene.remove(c.obj); c.gone = true; } });
+    setTimeout(() => { fade.style.opacity = 0; S.sleeping = false; toast(`Slept ${hours} h · Energy +${Math.round(S.energy - en0)} · Hunger −${Math.round(food0 - S.food)}`, true); canvas.requestPointerLock(); }, 900);
+  }, 1500);
+}
 function cook() {
   const n = S.inv.rawmeat; S.inv.rawmeat = 0; S.inv.meat += n; S.cooked += n;
-  floatText(`+${n} 🍖`, S.campfire.pos.clone().setY(S.campfire.pos.y + 1.5), '#ffcf7a'); snd.sizzle();
+  const nf = nearestFire(player.position, 4) || { pos: player.position }; floatText(`+${n} 🍖`, nf.pos.clone().setY(nf.pos.y + 1.5), '#ffcf7a'); snd.sizzle();
 }
 function buildRaft() {
   if (S.questIdx < 1) { say([['You', 'My boat... Poseidon made kindling of it. I will need wood, rope, a new sail and food before she swims again.']]); return; }
@@ -2947,8 +3013,7 @@ function updateCreature(c, dt) {
   }
   const d = c.def, pp = player.position; const dist = o.position.distanceTo(pp);
   c.t -= dt; c.atkCd -= dt;
-  const fireNear = S.campfire && S.campfire.pos.distanceTo(o.position) < FIRE_SAFE_R + 2;
-  const playerSafe = S.campfire && S.campfire.pos.distanceTo(pp) < FIRE_SAFE_R;
+  const zone = zoneOf(pp), playerSafe = !!zone;
   if (d.hostile && S.explore) { if (c.state === 'chase') c.state = 'wander'; }
   else if (d.hostile) {
     const aggro = d.aggro || 40;
@@ -2969,8 +3034,8 @@ function updateCreature(c, dt) {
     if (c.type === 'wolf') { c.fleeT = (c.fleeT || 0) + dt; if (c.fleeT > 6) { scene.remove(o); c.gone = true; return; } }
   } else if (c.state === 'prowl') {
     if (!playerSafe) c.state = 'chase';
-    const fp = S.campfire.pos, an = Math.atan2(o.position.z - fp.z, o.position.x - fp.x) + dt * 0.25;
-    goal.set(fp.x + Math.cos(an) * (FIRE_SAFE_R + 3), 0, fp.z + Math.sin(an) * (FIRE_SAFE_R + 3)); speed = d.speed * 0.35;
+    else { const fp = zone.pos, an = Math.atan2(o.position.z - fp.z, o.position.x - fp.x) + dt * 0.25;
+      goal.set(fp.x + Math.cos(an) * (zone.r + 3), 0, fp.z + Math.sin(an) * (zone.r + 3)); speed = d.speed * 0.35; }
   } else if (c.state === 'return') { goal.copy(c.home); speed = d.speed; if (o.position.distanceTo(c.home) < 1) c.state = 'wander'; }
   else if (c.state === 'chase') {
     goal.copy(pp); speed = d.speed;
@@ -2985,7 +3050,7 @@ function updateCreature(c, dt) {
       dir.normalize();
       const nx = o.position.x + dir.x * speed * dt, nz = o.position.z + dir.z * speed * dt;
       if (heightAt(nx, nz) > 0.3 || c.type === 'skeleton') { o.position.x = nx; o.position.z = nz; }
-      if (S.campfire && d.hostile && c.type !== 'skeleton') { const fp = S.campfire.pos, fx = o.position.x - fp.x, fz = o.position.z - fp.z, fd = Math.hypot(fx, fz); if (fd < FIRE_SAFE_R + 1) { o.position.x = fp.x + fx / (fd || 1) * (FIRE_SAFE_R + 1); o.position.z = fp.z + fz / (fd || 1) * (FIRE_SAFE_R + 1); } }
+      if (d.hostile && c.type !== 'skeleton') { const zc = zoneOf(o.position); if (zc) { const fp = zc.pos, fx = o.position.x - fp.x, fz = o.position.z - fp.z, fd = Math.hypot(fx, fz) || 1; o.position.x = fp.x + fx / fd * (zc.r + 1); o.position.z = fp.z + fz / fd * (zc.r + 1); } }
       else c.t = 0;
       const targetYaw = Math.atan2(dir.x, dir.z);
       o.rotation.y += Math.atan2(Math.sin(targetYaw - o.rotation.y), Math.cos(targetYaw - o.rotation.y)) * Math.min(1, dt * 8);
@@ -3011,9 +3076,10 @@ function updateCreature(c, dt) {
 // Camera + player update
 // ============================================================
 let camYaw = Math.PI, camPitch = 0.35;
-function collide(pos, r) {
+function collide(pos, r, lift = 0) {
   for (const c of colliders) {
     if (c.ref && !c.ref.alive) continue;
+    if (c.h !== undefined && lift > c.h) continue;                 // high enough in a jump to clear it
     const dx = pos.x - c.x, dz = pos.z - c.z, d = Math.hypot(dx, dz), m = c.r + r;
     if (d < m && d > 0.0001) { pos.x = c.x + (dx / d) * m; pos.z = c.z + (dz / d) * m; }
   }
@@ -3028,7 +3094,7 @@ function surfaceAt(p, ground, swimming) {
 }
 function updatePlayer(dt) {
   if (P.dead) { player.rotation.z = lerp(player.rotation.z, Math.PI / 2, dt * 4); return; }
-  player.rotation.z = 0;
+  player.rotation.z = P.bank || 0; player.rotation.x = P.lean || 0;
   const input = new THREE.Vector3((keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), 0, (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0));
   const ground = heightAt(player.position.x, player.position.z);
   const swimming = ground < -0.6;
@@ -3045,29 +3111,38 @@ function updatePlayer(dt) {
     animateHumanoid(player, 0, P.animT); if (hero.rig) poseHero(0, 0, 0, performance.now() / 1000);
     return;
   }
+  // Movement with momentum: accelerate into a run, ease to a stop, keep your speed through a jump (little air control)
+  if (!P.hv) P.hv = new THREE.Vector3();
+  const wantV = new THREE.Vector3();
   if (input.lengthSq() > 0 && locked) {
     input.normalize();
     const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);             // camera forward on XZ
-    // right vector = (-fz, fx); world dir = forward*z + right*x
     const dir = new THREE.Vector3().set(fx * input.z + -fz * input.x, 0, fz * input.z + fx * input.x).normalize();
-    const sprint = (keys.ShiftLeft || keys.ShiftRight) && S.sta > 1 && !swimming;
-    P.sprinting = sprint; speed = swimming ? 2.4 : sprint ? 8 : 4.6;
-    if (sprint) S.sta -= 18 * dt;
-    player.position.x += dir.x * speed * dt; player.position.z += dir.z * speed * dt;
-    const ty = Math.atan2(dir.x, dir.z);
-    P.yaw += Math.atan2(Math.sin(ty - P.yaw), Math.cos(ty - P.yaw)) * Math.min(1, dt * 12);
-  } else if (locked && P.swing > 0) {
+    const sprint = (keys.ShiftLeft || keys.ShiftRight) && S.sta > 1 && !swimming && S.energy > 5;
+    P.sprinting = sprint; wantV.copy(dir).multiplyScalar((swimming ? 2.4 : sprint ? 8 : 4.6) * (S.energy < 20 ? 0.8 : 1));
+    if (sprint && P.hv.length() > 3) S.sta -= 18 * dt;
+  }
+  const acc = !P.onGround ? 2.5 : wantV.lengthSq() > 0 ? 11 : 14;
+  P.hv.x += (wantV.x - P.hv.x) * Math.min(1, acc * dt); P.hv.z += (wantV.z - P.hv.z) * Math.min(1, acc * dt);
+  speed = Math.hypot(P.hv.x, P.hv.z); if (speed < 0.05) { speed = 0; P.hv.set(0, 0, 0); }
+  player.position.x += P.hv.x * dt; player.position.z += P.hv.z * dt;
+  if (speed > 0.3 && wantV.lengthSq() > 0) { const ty = Math.atan2(wantV.x, wantV.z); P.yaw += Math.atan2(Math.sin(ty - P.yaw), Math.cos(ty - P.yaw)) * Math.min(1, dt * (P.onGround ? 10 : 4)); }
+  else if (locked && P.swing > 0) {
     P.yaw = Math.atan2(-Math.sin(camYaw), -Math.cos(camYaw));        // face where the camera looks when attacking
   }
-  if (!(keys.ShiftLeft && speed > 0)) S.sta = clamp(S.sta + (swimming ? 4 : 16) * dt, 0, 100);
+  const staMax = 40 + S.energy * 0.6;   // tired = less stamina
+  if (!(P.sprinting && speed > 3)) S.sta = clamp(S.sta + (swimming ? 4 : 16) * dt, 0, staMax); else S.sta = Math.min(S.sta, staMax);
   if (swimming) { S.sta = Math.max(0, S.sta - 6 * dt); if (S.sta <= 0) { S.hp -= 5 * dt; if (S.hp <= 0) die(); } }
   // Keep the island a closed arena: the sea gets rough past the reef
   const r = Math.hypot(player.position.x, player.position.z);
   if (r > ISLAND_R + 18) { player.position.multiplyScalar((ISLAND_R + 18) / r); if (!P.warned) { toast('The currents are too strong to swim. Build a raft.'); P.warned = true; setTimeout(() => (P.warned = false), 5000); } }
-  collide(player.position, 0.4); caveCollide(player.position);
+  const lift = player.position.y - heightAt(player.position.x, player.position.z); collide(player.position, 0.4, lift); caveCollide(player.position);
+  const yawRate = (P.yaw - (P.lastYaw ?? P.yaw)) / Math.max(dt, 1e-3); P.lastYaw = P.yaw;
+  P.lean = lerp(P.lean || 0, P.onGround ? clamp(speed / 8, 0, 1) * 0.09 : 0, Math.min(1, dt * 6)); P.bank = lerp(P.bank || 0, clamp(-yawRate * 0.03 * clamp(speed / 5, 0, 1), -0.12, 0.12), Math.min(1, dt * 6));
   player.rotation.y = P.yaw;
   // Jump / gravity
-  if (keys.Space && P.onGround && S.sta > 10 && !swimming) { P.vel.y = 6.5; P.onGround = false; S.sta -= 10; snd.jump(); }
+  if (P.jumpBuf > 0) P.jumpBuf -= dt;
+  if (P.jumpBuf > 0 && P.onGround && S.sta > 10 && !swimming) { P.jumpBuf = 0; P.vel.y = 7.4; P.onGround = false; S.sta -= 10; snd.jump(); }
   const wasAir = !P.onGround && P.vel.y < -4;
   P.vel.y -= 20 * dt; player.position.y += P.vel.y * dt;
   const floor = Math.max(heightAt(player.position.x, player.position.z), swimming ? -1.2 : -99);
@@ -3102,12 +3177,18 @@ function updatePlayer(dt) {
   }
   let axeVis = S.slot === 1;
   if (P.equip && (P.equip.kind === 'equip' ? EQUIP : DISARM).ready) axeVis = P.equip.kind === 'equip' ? P.equip.t > 0.5 : P.equip.t < 0.6;
-  tools.axe.visible = axeVis; tools.spear.visible = S.slot === 2; bowHeld.visible = S.slot === 3 && S.tools.bow;
+  tools.axe.visible = axeVis; tools.spear.visible = S.slot === 2;
+  backAxe.visible = S.tools.axe && !axeVis; backSpear.visible = S.tools.spear && S.slot !== 2;
+  if (backSpear.visible && !backSpear.children.length) { const sp = tools.spear.clone(); sp.visible = true; sp.position.set(0, -0.6, 0); sp.rotation.set(0, 0, 0); backSpear.add(sp); } bowHeld.visible = S.slot === 3 && S.tools.bow;
   if (P.drawT > 0) P.drawT -= dt; updateArrows(dt);
   if (P.hurtT > 0) P.hurtT -= dt;
 }
+const camTgt = new THREE.Vector3(); let camTgtInit = false;
 function updateCamera(dt) {
-  const target = player.position.clone().add(new THREE.Vector3(0, 1.7, 0));
+  const raw = player.position.clone().add(new THREE.Vector3(0, 1.7, 0));
+  if (!camTgtInit || camTgt.distanceTo(raw) > 6) { camTgt.copy(raw); camTgtInit = true; }
+  camTgt.x += (raw.x - camTgt.x) * Math.min(1, dt * 16); camTgt.z += (raw.z - camTgt.z) * Math.min(1, dt * 16); camTgt.y += (raw.y - camTgt.y) * Math.min(1, dt * 7);
+  const target = camTgt.clone();
   const underground = inCaveInterior(player.position.x, player.position.z) && player.position.y < CAVE_Y + 4;
   const dist = underground ? 4.2 : 7, pitch = underground ? Math.min(camPitch, 0.45) : camPitch;
   const off = new THREE.Vector3(Math.sin(camYaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(camYaw) * Math.cos(pitch)).multiplyScalar(dist);
@@ -3128,8 +3209,8 @@ function updateWorld(dt, t) {
   const night = isNight();
   if (S.wasNight && !night) { S.nights++; toast(`Dawn of day ${S.day}`, true); creatures.filter((c) => c.type === 'wolf').forEach((c) => (c.state = 'flee')); }
   if (!S.wasNight && night) toast('Night falls. Wolves are hunting. Stay in the firelight.', true);
-  if (S.running && !S.explore && S.time > 0.78 && S.time < 0.845 && S.warnDay !== S.day) {
-    S.warnDay = S.day; const safe = S.campfire && S.campfire.pos.distanceTo(player.position) < 60;
+  if (S.running && !S.explore && S.time > 0.78 && S.time < 0.845 && S.warnDay !== S.day && !convoBusy() && !inCard()) {
+    S.warnDay = S.day; const safe = !!nearestFire(player.position, 60) || !!zoneOf(player.position);
     if (!S.warnedOnce) { S.warnedOnce = true; showCards([{ kicker: 'The sun is going down', title: 'Night Is Coming', body: 'When night falls the wolves come out of the pines to hunt.<br><br>Build a <b>campfire</b> (press <b>C</b>: 5 wood, 3 stone). Beasts will not step into its light: stay inside the circle and you are safe. Rest by it with <b>R</b> to let the night pass faster.', keys: [['C', 'Craft a campfire'], ['R', 'Rest by the fire']] }]); }
     else if (!safe) toast('The sun is setting. Get to a fire before dark.', true);
   }
@@ -3184,6 +3265,7 @@ function updateWorld(dt, t) {
   if (snow.material.opacity > 0.01) { const sa3 = snow.geometry.attributes.position; for (let i = 0; i < sa3.count; i++) { let y = sa3.getY(i) - dt * 2.2 * S.timeScale; if (y < 0) y += 25; sa3.setY(i, y); sa3.setX(i, sa3.getX(i) + Math.sin(t + i) * 0.01); } sa3.needsUpdate = true; }
   fireflies.material.opacity = lerp(fireflies.material.opacity, night ? 0.9 * (0.6 + Math.sin(t * 3) * 0.4) : 0, dt * 2);
   crystals.forEach((c, i) => { c.rotation.y += dt * 0.2; if (c.material.emissiveIntensity !== undefined) c.material.emissiveIntensity = 1.3 + Math.sin(t * 2 + i) * 0.4; });
+  if (sacredMotes.pts && Math.abs(OLIVE.x - player.position.x) + Math.abs(OLIVE.z - player.position.z) < 120) { const a = sacredMotes.pts.geometry.attributes.position; sacredMotes.forEach(([an, r, y, ph], i) => { const k = t * 0.08 + ph * 6.28; a.setXYZ(i, Math.cos(an + k) * r, y + Math.sin(k * 2) * 0.6, Math.sin(an + k) * r); }); a.needsUpdate = true; }
   fallFx.forEach((m) => { const k = (t * 0.25 + m.userData.ph) % 1; m.position.copy(m.userData.base).setY(m.userData.base.y + 0.5 + k * 5); m.scale.setScalar(3 + k * 6); m.material.opacity = 0.3 * Math.sin(k * Math.PI); });
   braziers.forEach((f, i) => { f.scale.y = 1 + Math.sin(t * 13 + i) * 0.2; f.scale.x = f.scale.z = 1 + Math.sin(t * 9 + i * 2) * 0.08; if (f.userData.glow) f.userData.glow.material.opacity = 0.55 + Math.sin(t * 17 + i) * 0.12; });
   fallU.t.value = t;
@@ -3230,13 +3312,16 @@ function updateWorld(dt, t) {
     else if (r.shake > 0 && r.alive) { r.shake -= dt; r.item.tilt = Math.sin(t * 60) * r.shake * 0.05; updateProp(r.item); if (r.shake <= 0) { r.item.tilt = 0; updateProp(r.item); } }
   }
   // Campfire flicker + rest
-  if (S.campfire) {
-    const C = S.campfire, fl = Math.sin(t * 17) * 0.5 + Math.sin(t * 23.3) * 0.3 + Math.sin(t * 7.1) * 0.2;
-    C.flames.forEach((f, i) => { f.scale.y = 1 + Math.sin(t * 13 + i * 2) * 0.22; f.scale.x = f.scale.z = 1 + Math.sin(t * 9 + i) * 0.08; f.rotation.y = t * (i + 1); });
-    C.light.intensity = (night ? 120 : 60) + fl * 18; if (C.glow) C.glow.material.opacity = 0.7 + fl * 0.15;
-    if (C.embers) { const a = C.embers.geometry.attributes.position; C.seeds.forEach(([an, ph, sp], i) => { const k = (t * 0.35 * sp + ph) % 1; a.setXYZ(i, Math.cos(an + k * 3) * (0.2 + k * 0.6), 0.5 + k * 4.5, Math.sin(an + k * 3) * (0.2 + k * 0.6)); }); a.needsUpdate = true; }
-  }
-  P.resting = !!(keys.KeyR && S.campfire && player.position.distanceTo(S.campfire.pos) < 4 && !creatures.some((c) => c.state === 'chase' && !c.dead));
+  FIRES.forEach((C, fi) => {
+    const fl = Math.sin(t * 17 + fi) * 0.5 + Math.sin(t * 23.3 + fi * 2) * 0.3 + Math.sin(t * 7.1) * 0.2;
+    C.flames.forEach((f, i) => { f.scale.y = 1 + Math.sin(t * 13 + i * 2 + fi) * 0.22; f.scale.x = f.scale.z = 1 + Math.sin(t * 9 + i) * 0.08; f.rotation.y = t * (i + 1); });
+    C.light.intensity = (night ? 120 : 60) + fl * 18; C.glow.material.opacity = 0.7 + fl * 0.15;
+    if (Math.abs(C.pos.x - player.position.x) + Math.abs(C.pos.z - player.position.z) < 80) { const a = C.embers.geometry.attributes.position; C.seeds.forEach(([an, ph, sp], i) => { const k = (t * 0.35 * sp + ph) % 1; a.setXYZ(i, Math.cos(an + k * 3) * (0.2 + k * 0.6), 0.5 + k * 4.5, Math.sin(an + k * 3) * (0.2 + k * 0.6)); }); a.needsUpdate = true; }
+  });
+  // energy: drains while awake (~4.5 per in-game hour), recovers resting by a fire
+  if (!S.explore) { S.energy = clamp(S.energy - dt * S.timeScale * (24 / DAY_LEN) * (P.resting ? -18 : 4.5), 0, 100);
+    if (S.energy < 25 && !S.tiredWarned) { S.tiredWarned = true; toast('You are exhausted. Sleep by a fire, or at Nestor\'s hearth.', true); } if (S.energy > 50) S.tiredWarned = false; }
+  P.resting = !!(keys.KeyR && nearestFire(player.position, 4) && !creatures.some((c) => c.state === 'chase' && !c.dead));
   // Water, smoke, clouds, NPC
   smoke.forEach((s) => { s.userData.t = (s.userData.t + dt * 0.15) % 1; const k = s.userData.t; s.position.set(CHIMNEY.x + k * 2, CHIMNEY.y + k * 6, CHIMNEY.z); s.scale.setScalar(0.5 + k * 1.8); s.material.opacity = 0.5 * (1 - k); });
   _cc.setRGB(1.5, 1.5, 1.55).lerp(_cd.setRGB(1.6, 0.95, 0.75), dusk * 0.6).lerp(_cd.setRGB(0.1, 0.12, 0.2), nightK);   // clouds: white by day, peach at dusk, dark moonlit at night
@@ -3438,7 +3523,7 @@ function loop() {
       $('prompt').classList.toggle('hidden', !it && !P.resting);
       if (P.resting) $('prompt').innerHTML = 'Resting by the fire… time flows faster';
       else if (it) $('prompt').innerHTML = `<kbd>E</kbd> ${it.label}`;
-      else if (S.campfire && player.position.distanceTo(S.campfire.pos) < 4) { $('prompt').classList.remove('hidden'); $('prompt').innerHTML = '<kbd>R</kbd> Hold to rest by the fire'; }
+      else if (nearestFire(player.position, 4)) { $('prompt').classList.remove('hidden'); $('prompt').innerHTML = '<kbd>R</kbd> Hold to rest by the fire'; }
     }
     checkQuest();
     const q = Q[S.questIdx], target = q && q.target();
@@ -3477,6 +3562,10 @@ function removeEmitter(src) { const i = EMITTERS.findIndex((e) => e.src === src)
   divineLight.visible = false;
   for (let i = 0; i < 5; i++) { const L = new THREE.PointLight(0xffffff, 0, 10, 1.5); LIGHT_POOL.push(L); scene.add(L); }
 }
+// Nestor's hearth: a stone fire pit in his courtyard with log benches. Always burning; you can sleep here.
+const HEARTH = hutW(-2.4, 8.2); HEARTH.y = heightAt(HEARTH.x, HEARTH.z);
+{ const hf = makeFire(HEARTH, true); hf.name = "Nestor's hearth";
+  for (const a of [0.5, 2.3, 4.1]) { const lg = mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.8, 7), trunkMat, HEARTH.x + Math.cos(a) * 2.3, HEARTH.y + 0.22, HEARTH.z + Math.sin(a) * 2.3); lg.rotation.set(0, -a, Math.PI / 2); } }
 const _lp = [];
 function updateLightPool() {
   const c = S.running && !S.cine ? player.position : camera.position; _lp.length = 0;
@@ -3495,7 +3584,7 @@ renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
 function ambientSound(dt) {
   const p = S.running ? player.position : camera.position, h = S.time * 24, g = heightAt(p.x, p.z);
   const day = clamp(Math.min(h - 5.5, 19.5 - h) / 1.2, 0, 1), r = Math.hypot(p.x, p.z * 1.05) / ISLAND_R;
-  let fire = 0; for (const f of [S.campfire?.pos, ...braziers.map((b) => b.getWorldPosition(_v3))].filter(Boolean)) fire = Math.max(fire, 1 - p.distanceTo(f) / 14);
+  let fire = 0; for (const f of [...FIRES.map((x) => x.pos), ...braziers.map((b) => b.getWorldPosition(_v3))]) fire = Math.max(fire, 1 - p.distanceTo(f) / 14);
   updateAmbience({ day, alt: clamp((p.y - 25) / 70, 0, 1), shore: clamp((r - 0.7) / 0.22, 0, 1) * (S.running ? 1 : 0.5), water: clamp(1 - Math.hypot(p.x - LAKE.x, p.z - LAKE.z) / 55, 0, 1),
     fire, cave: S.running && inCaveInterior(p.x, p.z) && p.y < CAVE_Y + 5, forest: regionAt(p.x, p.z, g).key === 'forest' ? 1 : 0.35, title: !S.running, cine: !!S.cine,
     wolves: creatures.some((c) => c.type === 'wolf' && !c.dead && Math.abs(c.obj.position.x - p.x) + Math.abs(c.obj.position.z - p.z) < 120) }, dt);
@@ -3599,4 +3688,4 @@ $('startBtn').onclick = () => {
   S.running = true; setPause(false); canvas.requestPointerLock();
 };
 renderer.info.autoReset = false;
-window.ARG = { moonDir, sky: skyDome, fire: () => placeCampfire(), setTime: (v) => { S.time = v; }, talkT: (v) => { talkCam.t = v; }, THREE, pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); updateLightPool(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, BENCH, START, WRECK, DOCK, SEA_OUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
+window.ARG = { sleep: (h) => sleep(h), backAxe, BENCH_: null, OLIVE, HEARTH, moonDir, sky: skyDome, fire: () => placeCampfire(), setTime: (v) => { S.time = v; }, talkT: (v) => { talkCam.t = v; }, THREE, pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); updateLightPool(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, BENCH, START, WRECK, DOCK, SEA_OUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
