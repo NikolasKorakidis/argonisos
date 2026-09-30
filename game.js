@@ -425,13 +425,54 @@ function poseHero(speed, ph, sw, t) {
   B.head.rotation.set(-0.04 * run, -s * 0.06 * run, 0);
 }
 
+// Axe model: lies on the ground in front of the start. Pick it up with E, toggle it with 2.
+function fixMaterials(obj) {
+  obj.traverse((m) => {
+    if (!m.isMesh) return;
+    m.castShadow = true; m.receiveShadow = true;
+    const mats = [].concat(m.material).map((o) => new THREE.MeshStandardMaterial({ map: o.map || null, normalMap: o.normalMap || null, color: o.map ? 0xffffff : o.color, roughness: 0.7, metalness: 0 }));
+    mats.forEach((mt) => { if (mt.map) mt.map.colorSpace = THREE.SRGBColorSpace; });
+    m.material = mats.length === 1 ? mats[0] : mats;
+  });
+}
+// Re-orient a prop so its longest axis is +y, the heavy end (head) on top, grip end at y=0, length L
+function normalizeHandle(model, L) {
+  const wrap = new THREE.Group(), obj = new THREE.Group(); obj.add(model); wrap.add(obj);  // keep the FBX's own axis fix untouched
+  obj.updateMatrixWorld(true);
+  let size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
+  if (size.x >= size.y && size.x >= size.z) obj.rotation.z = Math.PI / 2; else if (size.z >= size.y) obj.rotation.x = Math.PI / 2;
+  obj.updateMatrixWorld(true); size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
+  obj.scale.multiplyScalar(L / size.y); obj.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(obj), mid = (box.min.y + box.max.y) / 2;
+  // Head = the end with the wider spread of vertices
+  let top = 0, bot = 0; const v = new THREE.Vector3();
+  obj.traverse((m) => { if (!m.isMesh) return; const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i += 3) { v.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld); const w = Math.hypot(v.x, v.z); if (v.y > mid) top = Math.max(top, w); else bot = Math.max(bot, w); } });
+  if (bot > top) { obj.rotation.x += Math.PI; obj.updateMatrixWorld(true); }
+  const b2 = new THREE.Box3().setFromObject(obj), c = b2.getCenter(new THREE.Vector3());
+  obj.position.x -= c.x; obj.position.z -= c.z; obj.position.y -= b2.min.y;
+  return wrap;
+}
+const groundAxe = new THREE.Group();
+{
+  const p = START.clone().add(new THREE.Vector3(1.4, 0, -1.8)); p.y = heightAt(p.x, p.z) + 0.08;
+  addPickup('axeitem', p, () => groundAxe);
+}
+loadModelBuffer('axe').then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
+  fixMaterials(obj);
+  const held = normalizeHandle(obj, 0.85);
+  held.position.y = -0.18;                                    // grip a little above the handle end
+  tools.axe.clear(); tools.axe.add(held);
+  const ground = held.clone(); ground.position.set(0, 0, 0); ground.rotation.set(0, 0.6, Math.PI / 2);
+  ground.position.x = 0.4; groundAxe.add(ground);
+}).catch((e) => { console.warn('Axe model failed to load, using placeholder', e); const g = tools.axe.clone(); g.visible = true; g.rotation.set(0, 0, Math.PI / 2); groundAxe.add(g); });
+
 // Try the raw .fbx first (local server); fall back to the base64 module (artifact hosting can't serve .fbx).
-async function loadHeroBuffer() {
-  try { const r = await fetch('models/hero.fbx'); if (r.ok) return await r.arrayBuffer(); } catch { /* fall through */ }
-  const b64 = (await import('./models/hero.fbx.js')).default;
+async function loadModelBuffer(name) {
+  try { const r = await fetch(`models/${name}.fbx`); if (r.ok) return await r.arrayBuffer(); } catch { /* fall through */ }
+  const b64 = (await import(`./models/${name}.fbx.js`)).default;
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer;
 }
-loadHeroBuffer().then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
+loadModelBuffer('hero').then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
   const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3());
   const s = 1.95 / size.y; obj.scale.setScalar(s);
   const b2 = new THREE.Box3().setFromObject(obj), c = b2.getCenter(new THREE.Vector3());
@@ -447,7 +488,7 @@ loadHeroBuffer().then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
   hero.rig = autoRig(obj); hero.model = obj;
   player.userData.body.visible = false;
   const rf = hero.rig.bones.foreR;   // tools go in the right fist (end of the right forearm)
-  for (const t of [tools.axe, tools.spear]) { rf.add(t); t.position.copy(hero.rig.handOffset); t.rotation.set(Math.PI / 2 - 0.8, 0, 0); }
+  for (const t of [tools.axe, tools.spear]) { rf.add(t); t.position.copy(hero.rig.handOffset); t.rotation.set(0.7, 0, -1.25, 'ZYX'); }   // undo the arm's T-pose drop so the tool points forward-up
 }).catch((e) => console.warn('Hero model failed to load, keeping placeholder', e));
 const P = { vel: new THREE.Vector3(), yaw: Math.PI, onGround: true, swing: 0, swingHit: false, hurtT: 0, animT: 0, dead: false };
 
@@ -732,7 +773,7 @@ addEventListener('keydown', (e) => {
   if (!$('craft').classList.contains('hidden')) return;
   if (e.code === 'KeyE') interact();
   if (e.code === 'KeyF') eat();
-  if (e.code.startsWith('Digit')) { const n = +e.code.slice(5) - 1; if (n >= 0 && n < 3 && (n === 0 || S.tools[SLOTS[n].k])) S.slot = n; }
+  if (e.code.startsWith('Digit')) { const n = +e.code.slice(5) - 1; if (n >= 0 && n < 3 && (n === 0 || S.tools[SLOTS[n].k])) S.slot = S.slot === n ? 0 : n; }
   if (e.code === 'KeyT') { S.timeScale = S.timeScale === 1 ? 10 : 1; toast(`Playtest: time ×${S.timeScale}`); }
   if (e.code === 'KeyG') { for (const k of ['wood', 'stone', 'fiber', 'rawmeat', 'rope']) S.inv[k] += 10; toast('Playtest: +10 materials'); }
   if (e.code === 'KeyN') debugSkipQuest();
@@ -769,7 +810,7 @@ function getInteractable() {
   consider(pp.distanceTo(nestor.position), { label: 'Talk to Nestor', act: talkNestor });
   for (const pk of pickups) {
     if (!pk.alive || (pk.kind === 'bush' && pk.regrow > 0)) continue;
-    const labels = { branch: 'Pick up branch', pebble: 'Pick up pebbles', bush: 'Harvest bush', reeds: 'Cut reeds', chest: 'Open the old chest' };
+    const labels = { axeitem: 'Pick up the axe', branch: 'Pick up branch', pebble: 'Pick up pebbles', bush: 'Harvest bush', reeds: 'Cut reeds', chest: 'Open the old chest' };
     consider(pp.distanceTo(pk.pos), { label: labels[pk.kind], act: () => harvest(pk) });
   }
   if (S.campfire && pp.distanceTo(S.campfire.pos) < 3) {
@@ -789,6 +830,7 @@ function harvest(pk) {
     if (skeletons.some((s) => !s.dead)) { toast('The dead still guard the chest.'); return; }
     return openChest();
   }
+  if (pk.kind === 'axeitem') { S.tools.axe = true; S.slot = 1; toast('Picked up the <b>Axe</b>. Press 2 to put it away or take it out.'); sfx(440, 0.2, 'triangle', 0.08, 200); }
   if (pk.kind === 'branch') give('wood', 1, pk.pos);
   if (pk.kind === 'pebble') give('stone', 1, pk.pos);
   if (pk.kind === 'reeds') give('fiber', 2, pk.pos);
@@ -1199,4 +1241,4 @@ $('startBtn').onclick = () => {
     toast('Follow the gold ◆ marker', false);
   }
 };
-window.ARG = { S, player, hero, poseHero, P };  // console access for playtesting
+window.ARG = { S, player, hero, poseHero, P, tools, camera };  // console access for playtesting
