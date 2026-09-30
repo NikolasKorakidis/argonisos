@@ -2,7 +2,6 @@
 // Single-module game: world gen, characters, survival, combat, crafting, quests, sailing ending.
 import * as THREE from 'three';
 import { FBXLoader } from './jsm/loaders/FBXLoader.js';
-import { Water } from './jsm/objects/Water.js';
 import { Sky } from './jsm/objects/Sky.js';
 import { EffectComposer } from './jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from './jsm/postprocessing/RenderPass.js';
@@ -55,7 +54,7 @@ function baseHeight(x, z) {
   const dw = Math.hypot(x - TOWER.x, z - TOWER.z); h += 24 * Math.exp(-(dw * dw) / (2 * 42 * 42));   // cliff headland
   const dp = Math.hypot(x - TEMPLE.x, z - TEMPLE.z); h += 12 * Math.exp(-(dp * dp) / (2 * 45 * 45)); // temple hill
   const ds = Math.hypot(x - SWAMP.x, z - SWAMP.z), sw = clamp(1 - (ds - 55) / 40, 0, 1);        // swamp basin
-  h = lerp(h, 0.35 + (fbm(x * 0.08, z * 0.08) - 0.5) * 1.3, sw * sw * (3 - 2 * sw));
+  h = lerp(h, Math.max(0.02, 0.24 + (fbm(x * 0.08, z * 0.08) - 0.5) * 1.3), sw * sw * (3 - 2 * sw));   // never below sea level, or the ocean shows through
   h -= Math.max(0, d - 0.9) * 140;                                          // coastline
   return h;
 }
@@ -69,18 +68,30 @@ const flatten = (h, x, z, c, r0, r1, target) => { const t = clamp((Math.hypot(x 
 const RUINS_Y = baseHeight(RUINS.x, RUINS.z) + 3, CAVE_Y = baseHeight(CAVE_MOUTH.x, CAVE_MOUTH.z) - 2.5, TEMPLE_Y = baseHeight(TEMPLE.x, TEMPLE.z) + 1.5, LAKE_Y = baseHeight(LAKE.x, LAKE.z) - 1;
 const SUMMIT = MOUNT.clone(), SUMMIT_Y = baseHeight(MOUNT.x, MOUNT.z) - 14; const ARENA_R = 38; SUMMIT.y = SUMMIT_Y;   // boss arena on the peak
 RUINS.y = RUINS_Y; CAVE.y = CAVE_Y; TEMPLE.y = TEMPLE_Y; LAKE.y = LAKE_Y;
+let CHAN = null;   // sea channel into Nestor's cove, set once the cove is found
+let CAUSEWAY = null;   // the marsh trail, raised a little above the water
 function heightAt(x, z) {
   let h = baseHeight(x, z);
   h = flatten(h, x, z, RUINS, 10, 22, RUINS_Y);
-  h = flatten(h, x, z, SUMMIT, ARENA_R, ARENA_R + 16, SUMMIT_Y);
+  h = flatten(h, x, z, SUMMIT, ARENA_R, ARENA_R + 28, SUMMIT_Y);
   // Cave: the mountain is kept tall over the chamber, then the footprint is carved down to the cave floor
   const cd = caveDist(x, z);
   if (cd.over < 10) h = Math.max(h, lerp(CAVE_Y + 13, h, clamp(cd.over / 10, 0, 1)));
   if (cd.foot < 6) { const t = clamp(cd.foot / 6, 0, 1); h = Math.min(h, lerp(CAVE_Y, h, t * t * (3 - 2 * t))); }
   h = flatten(h, x, z, TEMPLE, 26, 40, TEMPLE_Y);
-  const dl = Math.hypot(x - LAKE.x, z - LAKE.z);                             // lake bowl
+  const dl = Math.hypot(x - LAKE.x, z - LAKE.z) * (0.85 + fbm(x * 0.045 + 3, z * 0.045 - 7) * 0.4);   // lake bowl, irregular shore
   h = flatten(h, x, z, LAKE, 22, 40, LAKE_Y + 0.6);
-  if (dl < 24) h = Math.min(h, LAKE_Y - 2.2 * (1 - dl / 24) + 0.2);
+  if (dl > 20 && dl < 36) h = Math.max(h, LAKE_Y + 0.55 - Math.max(0, dl - 31) * 0.25);   // a natural rim so the lake never spills downhill
+  if (dl < 24) h = Math.min(h, LAKE_Y - 2.4 * (1 - dl / 24) + 0.2);
+  if (CAUSEWAY && Math.hypot(x - SWAMP.x, z - SWAMP.z) < 120) {
+    let d = 99; for (let i = 0; i < CAUSEWAY.length - 1; i++) { const [ax, az] = CAUSEWAY[i], [bx, bz] = CAUSEWAY[i + 1]; if (Math.abs(x - ax) > 30 && Math.abs(x - bx) > 30) continue; const dx = bx - ax, dz = bz - az, q = clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz), 0, 1); d = Math.min(d, Math.hypot(x - ax - dx * q, z - az - dz * q)); }
+    if (d < 5) { const k = clamp((d - 1.9) / 3, 0, 1); h = Math.max(h, lerp(0.85, h, k * k * (3 - 2 * k))); }
+  }
+  if (CHAN) {                                                                  // cove + channel out to the open sea
+    const w = (fbm(x * 0.07, z * 0.07) - 0.5) * 5, dc = segDist(x, z, CHAN.a, CHAN.b) + w, db = Math.hypot(x - CHAN.a.x, z - CHAN.a.z) + w;
+    const k1 = clamp((dc - 4.5) / 9, 0, 1), k2 = clamp((db - 7) / 9, 0, 1);
+    h = Math.min(h, lerp(-2.2, h, k1 * k1 * (3 - 2 * k1)), lerp(-1.6, h, k2 * k2 * (3 - 2 * k2)));
+  }
   return h;
 }
 const REGIONS = [
@@ -219,7 +230,14 @@ function mesh(geo, mat, x = 0, y = 0, z = 0, parent) {
 // Find beach on the south side (facing Greece) for the dock
 const DOCK = new THREE.Vector3();
 for (let r = 150; r < 400; r += 0.5) { if (heightAt(0, r) < 0.2) { DOCK.set(0, 0, r); break; } }
-const START = new THREE.Vector3(6, 0, DOCK.z - 14); START.y = heightAt(START.x, START.z);
+// Open the cove to the sea: a channel runs from the pond south to deep water
+{ let sea = null; for (let r = DOCK.z + 6; r < 460; r += 1) if (baseHeight(0, r) < -3) { sea = new THREE.Vector3(0, 0, r + 12); break; }
+  CHAN = { a: DOCK.clone().add(new THREE.Vector3(0, 0, 7)), b: sea || new THREE.Vector3(0, 0, DOCK.z + 80) }; }
+const SEA_OUT = CHAN.b.clone();
+// The wreck: your boat, broken on the cove's west shore. You wake up beside it.
+const WRECK = DOCK.clone().add(new THREE.Vector3(-7, 0, 2));
+for (let dx = -2; dx > -22; dx -= 0.5) { const h = heightAt(DOCK.x + dx, DOCK.z + 2); if (h > -0.35 && h < 0.25) { WRECK.set(DOCK.x + dx, 0, DOCK.z + 2); break; } }
+const START = WRECK.clone().add(new THREE.Vector3(3.8, 0, -3.2)); START.y = heightAt(START.x, START.z);
 const HUT = new THREE.Vector3(-12, 0, DOCK.z - 26); HUT.y = heightAt(HUT.x, HUT.z);
 // Dirt paths: dock → start → Nestor's hut → winding up to the ruins
 // A trail network like a real island: every landmark is reachable on foot
@@ -249,6 +267,7 @@ for (let k = 0; k < PATHS.length; k++) {
   const c = new THREE.CatmullRomCurve3(PATHS[k].map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
   const n = Math.max(2, Math.ceil(c.getLength() / 3)); PATHS[k] = c.getSpacedPoints(n).map((v) => [v.x, v.z]);
 }
+CAUSEWAY = PATHS[6];   // the marsh trail
 function pathDist(x, z) {
   let best = 1e9;
   for (const P of PATHS) for (let i = 0; i < P.length - 1; i++) {
@@ -310,7 +329,7 @@ pathDist = (x, z) => sampleGrid(PGRID, x, z);
     let c;
     if (h < 0) c = cDeep; else if (h < 1.1 && R.key !== 'swamp') c = cSand;
     else { c = cGrass.clone().lerp(cGrass2, fbm(x * 0.08, z * 0.08)); c.lerp(cDry, clamp((fbm(x * 0.03 + 9, z * 0.03 - 4) - 0.5) * 2.5, 0, 0.6)); }
-    if (R.key === 'swamp') c = cMud.clone().lerp(cMoss, fbm(x * 0.1, z * 0.1));
+    if (R.key === 'swamp' || (Math.hypot(x - SWAMP.x, z - SWAMP.z) < 110 && h < 1.4)) c = cMud.clone().lerp(cMoss, fbm(x * 0.1, z * 0.1));
     if (R.key === 'forest') c.lerp(cForest, 0.6);
     if (R.key === 'olive') c.lerp(cOlive, 0.35 + fbm(x * 0.2, z * 0.2) * 0.3);
     if (h >= 1.1) { const pd = pathDist(x, z);
@@ -329,50 +348,68 @@ pathDist = (x, z) => sampleGrid(PGRID, x, z);
   const t = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: false, roughness: 0.95, map: groundDetail, envMapIntensity: 0.4 }));
   t.receiveShadow = true; scene.add(t);
 }
-// Reflective sea (planar mirror + animated ripple normals). Low-quality mode swaps in a plain plane.
-const water = new Water(new THREE.PlaneGeometry(6000, 6000), {
-  textureWidth: 1024, textureHeight: 1024, waterNormals, sunDirection: new THREE.Vector3(0, 1, 0),
-  sunColor: 0xfff1d6, waterColor: 0x14708f, distortionScale: 2.2, fog: true,
-});
-water.rotation.x = -Math.PI / 2; water.position.y = -0.15; water.material.uniforms.size.value = 3; scene.add(water);
 // One cheap water shader for sea, lake and marsh: depth colour from the baked heightmap, two scrolling ripple
 // layers, fresnel sky reflection, sun glints and animated shoreline foam. Far cheaper than a mirror pass.
 const WATER_U = { uTime: { value: 0 }, uH: { value: null }, uNorm: { value: waterNormals }, uSky: { value: new THREE.Color(0x3a78c8) },
   uHor: { value: new THREE.Color(0xb8dcf0) }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(0xfff1d6) } };
-function makeWaterMat({ level, shallow, deep, foam = 1, depthScale = 6, clarity = 1 }) {
+function makeWaterMat({ level, shallow, deep, foam = 1, depthScale = 6, clarity = 1, weed = 0, ripple = 1 }) {
   const u = Object.assign(THREE.UniformsUtils.clone(THREE.UniformsLib.fog), WATER_U,
-    { uLevel: { value: level }, uShallow: { value: new THREE.Color(shallow) }, uDeep: { value: new THREE.Color(deep) }, uFoam: { value: foam }, uDS: { value: depthScale }, uClar: { value: clarity } });
+    { uLevel: { value: level }, uShallow: { value: new THREE.Color(shallow) }, uDeep: { value: new THREE.Color(deep) }, uFoam: { value: foam }, uDS: { value: depthScale }, uClar: { value: clarity },
+      uWeed: { value: weed }, uRip: { value: ripple } });
   return new THREE.ShaderMaterial({
     uniforms: u, transparent: true, fog: true, depthWrite: false,
     vertexShader: `varying vec3 vW; #include <fog_pars_vertex>
       void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition; #include <fog_vertex> }`.replace(/#include <(\w+)>/g, '\n#include <$1>\n'),
-    fragmentShader: `uniform float uTime, uLevel, uFoam, uDS, uClar; uniform sampler2D uH, uNorm; uniform vec3 uShallow, uDeep, uSky, uHor, uSunDir, uSunCol; varying vec3 vW;
+    fragmentShader: `uniform float uTime, uLevel, uFoam, uDS, uClar, uWeed, uRip; uniform sampler2D uH, uNorm; uniform vec3 uShallow, uDeep, uSky, uHor, uSunDir, uSunCol; varying vec3 vW;
       #include <fog_pars_fragment>
       vec3 nrm(vec2 uv){ vec3 t = texture2D(uNorm, uv).rgb * 2.0 - 1.0; return vec3(t.r, t.b, t.g); }
+      float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
       void main(){
+        float t = uTime;
         vec2 huv = (vW.xz + 320.0) / 640.0;
         float ground = (huv.x > 0.0 && huv.x < 1.0 && huv.y > 0.0 && huv.y < 1.0) ? texture2D(uH, huv).r : -40.0;
         float depth = max(uLevel - ground, 0.0);
-        vec3 n1 = nrm(vW.xz * 0.03 + vec2(uTime * 0.018, uTime * 0.011)), n2 = nrm(vW.xz * 0.085 - vec2(uTime * 0.026, -uTime * 0.017));
-        vec3 n = normalize(vec3(n1.x + n2.x, 2.6, n1.z + n2.z));
-        vec3 V = normalize(cameraPosition - vW);
-        float fres = pow(1.0 - max(dot(n, V), 0.0), 4.0);
-        vec3 body = mix(uShallow, uDeep, smoothstep(0.15, uDS, depth));
-        vec3 refl = mix(uHor, uSky, clamp(reflect(-V, n).y * 1.6, 0.0, 1.0));
-        vec3 col = mix(body, refl, 0.12 + fres * 0.62);
-        vec3 Hh = normalize(normalize(uSunDir) + V);
-        col += uSunCol * (pow(max(dot(n, Hh), 0.0), 220.0) * 2.2 + pow(max(dot(n, Hh), 0.0), 18.0) * 0.06);
-        float edge = 1.0 - smoothstep(0.0, 0.75, depth);
-        float wave = 0.5 + 0.5 * sin(uTime * 1.3 - depth * 7.0 + (n1.x + n2.z) * 5.0);
-        col = mix(col, vec3(0.95, 0.98, 1.0), clamp(edge * (0.35 + wave * 0.65) * uFoam, 0.0, 0.85));
-        gl_FragColor = vec4(col, mix(0.45, 0.96, smoothstep(0.0, 1.4 / uClar, depth)));
+        vec3 V = normalize(cameraPosition - vW); float dist = length(cameraPosition - vW);
+        // three ripple scales; far away the small ones fade so the surface doesn't sparkle into noise
+        float nk = mix(1.0, 0.3, smoothstep(40.0, 280.0, dist));
+        vec3 n1 = nrm(vW.xz * 0.035 * uRip + vec2(t * 0.02, t * 0.013)), n2 = nrm(vW.xz * 0.11 * uRip - vec2(t * 0.03, -t * 0.021)), n3 = nrm(vW.xz * 0.008 + vec2(-t * 0.004, t * 0.006));
+        vec3 n = normalize(vec3((n1.x + n2.x * 0.7 * nk + n3.x * 1.3) * nk, 3.2, (n1.z + n2.z * 0.7 * nk + n3.z * 1.3) * nk));
+        float F = 0.02 + 0.98 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
+        // body colour: light absorbed with depth (Beer-Lambert)
+        float ab = 1.0 - exp(-depth / uDS * 2.4);
+        vec3 body = mix(uShallow, uDeep, ab);
+        // caustics dancing on the shallow bottom
+        vec2 cp = vW.xz * 0.42 + n.xz * 0.8;
+        float c1 = abs(sin(cp.x * 1.7 + t * 1.1 + sin(cp.y * 1.3 - t * 0.7) * 1.6)), c2 = abs(sin(cp.y * 1.9 - t * 0.9 + sin(cp.x * 1.1 + t * 0.6) * 1.5));
+        body += pow(1.0 - min(c1, c2), 7.0) * (1.0 - ab) * smoothstep(0.05, 0.7, depth) * 0.45 * min(uClar, 1.5) * (1.0 - uWeed * 0.8);
+        // reflection: sky gradient with drifting cloud shapes, and the sun
+        vec3 R = reflect(-V, n);
+        vec3 refl = mix(uHor, uSky, clamp(R.y * 1.5, 0.0, 1.0));
+        float cl = vn(R.xz / (R.y + 0.3) * 1.6 + vec2(t * 0.015, 0.0)) * 0.65 + vn(R.xz / (R.y + 0.3) * 4.0) * 0.35;
+        refl = mix(refl, vec3(1.0), smoothstep(0.55, 0.8, cl) * 0.35 * clamp(R.y * 3.0, 0.0, 1.0));
+        vec3 col = mix(body, refl, clamp(F * 0.85 + 0.04, 0.0, 1.0));
+        vec3 Hh = normalize(normalize(uSunDir) + V); float sp = max(dot(n, Hh), 0.0);
+        col += uSunCol * (pow(sp, 320.0) * 3.2 + pow(sp, 45.0) * 0.1) * (1.0 - uWeed * 0.6);
+        // shoreline: a solid wet line plus foam lapping in and out, broken up by noise
+        float edge = 1.0 - smoothstep(0.0, 1.0, depth);
+        float nz = texture2D(uNorm, vW.xz * 0.07 + vec2(t * 0.01, -t * 0.007)).r;
+        float lap = smoothstep(0.6, 0.95, sin(depth * 8.0 - t * 1.5 + nz * 5.0) * 0.5 + 0.5);
+        float foam = clamp(pow(edge, 3.0) * 1.3 + lap * edge * 0.9, 0.0, 1.0) * smoothstep(0.3, 0.62, nz + edge * 0.45) * uFoam;
+        col = mix(col, vec3(0.96, 0.98, 1.0), foam * 0.85);
+        // marsh: floating duckweed rafts
+        float wk = 0.0;
+        if (uWeed > 0.0) { float w = vn(vW.xz * 0.11) * 0.6 + vn(vW.xz * 0.45) * 0.4; wk = smoothstep(0.52, 0.6, w) * uWeed;
+          col = mix(col, vec3(0.2, 0.31, 0.09) * (0.75 + 0.5 * vn(vW.xz * 3.0)), wk); }
+        float alpha = mix(0.4, 0.97, smoothstep(0.0, 1.6 / uClar, depth));
+        alpha = max(alpha, max(foam, wk)) * smoothstep(0.0, 0.05, depth + foam * 0.05);
+        gl_FragColor = vec4(col, alpha);
         #include <fog_fragment>
       }`,
   });
 }
-const waterLow = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000, 1, 1).rotateX(-Math.PI / 2), makeWaterMat({ level: -0.15, shallow: 0x3fc4c0, deep: 0x0e4f78, foam: 1, depthScale: 9 }));
+const waterLow = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000, 1, 1).rotateX(-Math.PI / 2), makeWaterMat({ level: -0.15, shallow: 0x4ad3c8, deep: 0x0a3b66, foam: 1, depthScale: 7 }));
 waterLow.position.y = -0.15; waterLow.renderOrder = 1; scene.add(waterLow);
-water.visible = false;   // the mirror water is retired: the stylised shader looks better and costs a fraction
 
 // Greece on the horizon: rugged low-poly ranges with snow caps, visible from the first minute
 {
@@ -427,7 +464,7 @@ function landSpot(minH, maxH, avoid = []) {
   return null;
 }
 
-const AVOID = [{ x: HUT.x, z: HUT.z, r: 12 }, { x: SUMMIT.x, z: SUMMIT.z, r: ARENA_R + 8 }, { x: DOCK.x, z: DOCK.z, r: 12 }, { x: START.x, z: START.z, r: 5 },
+const AVOID = [{ x: HUT.x, z: HUT.z, r: 12 }, { x: SUMMIT.x, z: SUMMIT.z, r: ARENA_R + 8 }, { x: DOCK.x, z: DOCK.z, r: 12 }, { x: START.x, z: START.z, r: 5 }, { x: WRECK.x, z: WRECK.z, r: 8 },
   { x: CAVE.x, z: CAVE.z, r: CH_R + 8 }, { x: CAVE_MOUTH.x, z: CAVE_MOUTH.z, r: 12 }, { x: CAVE_APPROACH.x, z: CAVE_APPROACH.z, r: 8 }, { x: TEMPLE.x, z: TEMPLE.z, r: 30 }, { x: LAKE.x, z: LAKE.z, r: 26 }, { x: TOWER.x, z: TOWER.z, r: 10 }];
 
 const windUniformEarly = { value: 0 };
@@ -445,6 +482,7 @@ const leafTex = (() => {
   }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 })();
+const _sv1 = new THREE.Vector3(), _sv2 = new THREE.Vector3(), _sv3 = new THREE.Vector3(), _sv4 = new THREE.Vector3(), _sv5 = new THREE.Vector3();
 let CARD_PARTS = [];   // collected while building a tree's high-detail version
 function leafCards(centre, rx, ry, n, color, size0 = 1.5, size1 = 2.2, nc = centre) {
   if (PROP_LO) return;
@@ -519,7 +557,7 @@ function growTree(P, o) {
     for (let i = 0; i < n; i++) {
       d.x += rr(-o.gnarl, o.gnarl); d.z += rr(-o.gnarl, o.gnarl); d.y += o.rise; d.normalize();
       const q = p.clone().addScaledVector(d, len / n), r2 = lerp(r0, rEnd, (i + 1) / n);
-      P.push([segGeo(p, q, r, r2, sidesOf(r)), bark]);
+      if (!PROP_LO || depth >= o.depth - 1) P.push([segGeo(p, q, r, r2, sidesOf(r)), bark]);   // far LOD: trunk + main limbs only
       if (!PROP_LO && r2 > 0.16) P.push([new THREE.IcosahedronGeometry(r2 * (o.knot || 1.08), 0).translate(q.x, q.y, q.z), bark]);   // joint knot hides the seams
       p = q; r = r2;
     }
@@ -533,15 +571,18 @@ function growTree(P, o) {
     if (o.midKids && depth >= 1) { const mp = a.clone().lerp(p, rr(0.45, 0.7)), az = rand() * 6.28;   // a side limb from mid-branch
       grow(mp, new THREE.Vector3(Math.cos(az), 0.6, Math.sin(az)).normalize(), len * o.lenF * 0.8, Math.max(0.03, r0 * o.rF * 0.8), depth - 1); }
   };
-  grow(new THREE.Vector3(0, -0.25, 0), new THREE.Vector3(rr(-0.08, 0.08), 1, rr(-0.08, 0.08)).normalize(), o.trunkH, o.trunkR, o.depth);
+  const ln = o.lean || 0, la = rand() * 6.28;
+  grow(new THREE.Vector3(0, -0.25, 0), new THREE.Vector3(Math.cos(la) * ln + rr(-0.08, 0.08), 1, Math.sin(la) * ln + rr(-0.08, 0.08)).normalize(), o.trunkH, o.trunkR, o.depth);
   // roots flaring into the ground
   for (let i = 0; i < (o.roots || 0); i++) { const a = i / o.roots * 6.28 + rr(-0.3, 0.3); P.push([limb(o.trunkR * 0.55, 0.05, o.trunkR * 2.4, Math.cos(a) * o.trunkR * 0.5, -0.15, Math.sin(a) * o.trunkR * 0.5, Math.sin(a) * 1.25, -Math.cos(a) * 1.25, 5), bark]); }
   // foliage at every tip, normals from the whole crown so it shades as one soft mass
   const cc = new THREE.Vector3(); tips.forEach((t) => cc.add(t.p)); cc.multiplyScalar(1 / Math.max(1, tips.length)); cc.y -= o.clusterR * 0.6;
-  for (const t of tips) {
+  if (o.noLeaf) return tips;
+  for (let ti = 0; ti < tips.length; ti++) {
+    const t = tips[ti]; if (PROP_LO && ti % 3) continue;           // far LOD: one fat blob stands in for three clusters
     const c = t.p.clone().addScaledVector(t.d, o.clusterR * 0.35);
     const core = PROP_LO ? o.leaf : new THREE.Color(o.leaf).multiplyScalar(0.58).getHex();
-    P.push([blob(o.clusterR * (PROP_LO ? 1.05 : o.core || 0.62), c.x, c.y, c.z, cc, 1, 0), core]);
+    P.push([blob(o.clusterR * (PROP_LO ? 1.7 : o.core || 0.62), c.x, c.y, c.z, cc, 1, 0), core]);
     if (!PROP_LO && o.extraBlob) P.push([blob(o.clusterR * 0.45, c.x + rr(-0.5, 0.5), c.y + o.clusterR * 0.4, c.z + rr(-0.5, 0.5), cc, 1), core]);
     leafCards(c, o.clusterR, o.clusterR * o.flat, o.cards, o.leaf, o.card0, o.card1, cc);
   }
@@ -549,10 +590,14 @@ function growTree(P, o) {
 }
 const TREE_BUILDERS = {
   oak(v) {
-    const P = [], leaf = [0x4f7f2e, 0x5d8a34, 0x6b9338, 0x46752b][v % 4];
-    growTree(P, { bark: 0x6b4a30, leaf, trunkH: rr(3, 3.8), trunkR: rr(0.5, 0.62), trunkSteps: 3, depth: 2, taper: 0.62, gnarl: 0.16, rise: 0.12, roots: 5,
-      kids: (d) => (d === 2 ? 3 + (v % 2) : 2), spread: (d) => (d === 2 ? 0.85 : 0.6), lenF: 0.72, rF: 0.62, midKids: true,
-      clusterR: 1.5, flat: 0.78, cards: 12, card0: 1.25, card1: 1.85 });
+    // three personalities: a broad old spreader, a tall upright one, and a wind-bent twisted one
+    const P = [], leaf = [0x4f7f2e, 0x5d8a34, 0x46752b][v % 3];
+    const T = [
+      { trunkH: rr(2.6, 3.1), trunkR: rr(0.6, 0.72), gnarl: 0.22, rise: 0.02, lean: 0.05, spread: (d) => (d === 2 ? 1.1 : 0.7), kids: (d) => (d === 2 ? 4 : 2), lenF: 0.8, clusterR: 1.6 },
+      { trunkH: rr(4, 4.8), trunkR: rr(0.45, 0.55), gnarl: 0.12, rise: 0.3, lean: 0.02, spread: (d) => (d === 2 ? 0.6 : 0.55), kids: (d) => (d === 2 ? 3 : 2), lenF: 0.62, clusterR: 1.35 },
+      { trunkH: rr(3, 3.6), trunkR: rr(0.5, 0.6), gnarl: 0.38, rise: 0.06, lean: 0.35, spread: (d) => (d === 2 ? 0.95 : 0.7), kids: (d) => (d === 2 ? 3 : 2), lenF: 0.75, clusterR: 1.45 },
+    ][v % 3];
+    growTree(P, { bark: 0x6b4a30, leaf, trunkSteps: 4, depth: 2, taper: 0.6, roots: 5, knot: 1.15, rF: 0.62, midKids: true, flat: 0.75, cards: 12, card0: 1.25, card1: 1.85, ...T });
     return P;
   },
   autumn(v) {
@@ -562,6 +607,14 @@ const TREE_BUILDERS = {
     return P;
   },
   pine(v) {
+    // Mediterranean stone pine: a tall, gently curving bare trunk and a flat umbrella crown. v2 is a mountain fir.
+    if (v % 3 === 2) return TREE_BUILDERS.fir(v);
+    const P = [], leaf = [0x2f5a34, 0x365f38][v % 2];
+    growTree(P, { bark: 0x7a5236, leaf, trunkH: rr(6.5, 8), trunkR: rr(0.34, 0.42), trunkSteps: 5, depth: 2, taper: 0.55, gnarl: 0.14, rise: 0.12, lean: 0.18, roots: 3,
+      kids: (d) => (d === 2 ? 4 : 2), spread: (d) => (d === 2 ? 1.25 : 0.9), lenF: 0.48, rF: 0.55, clusterR: 1.9, flat: 0.34, cards: 14, card0: 1.2, card1: 1.9 });
+    return P;
+  },
+  fir(v) {
     const P = [], H = rr(7, 9.5);
     P.push([limb(0.42, 0.18, H, 0, -0.2, 0, 0, 0, 7), 0x5e3f28]);
     const tiers = 6 + (v % 2);
@@ -582,14 +635,17 @@ const TREE_BUILDERS = {
   },
   birch(v) {
     const P = [], leaf = [0x9fb23e, 0xb7bf45, 0x86a83a][v % 3];
-    growTree(P, { bark: 0xe9e4d8, leaf, trunkH: rr(4.6, 5.8), trunkR: 0.24, trunkSteps: 4, depth: 2, taper: 0.55, gnarl: 0.05, rise: 0.35, roots: 0,
+    growTree(P, { bark: 0xe9e4d8, leaf, trunkH: rr(4.6, 5.8), trunkR: 0.24, trunkSteps: 4, depth: 2, taper: 0.55, gnarl: [0.05, 0.14, 0.09][v % 3], rise: 0.35, roots: 0, lean: [0.02, 0.22, 0.1][v % 3],
       kids: (d) => (d === 2 ? 3 : 2), spread: (d) => (d === 2 ? 0.55 : 0.5), lenF: 0.5, rF: 0.55, clusterR: 0.95, flat: 1.2, cards: 9, card0: 0.9, card1: 1.4 });
     if (!PROP_LO) for (let i = 0; i < 6; i++) { const y = rr(0.4, 3.6), r = lerp(0.24, 0.16, y / 5) + 0.012; P.push([limb(r, r, rr(0.04, 0.08), 0, y, 0, 0, 0, 8), 0x55504a]); }   // bark marks
     return P;
   },
   cypress(v) {
-    const P = [[limb(0.3, 0.2, 2, 0, -0.2, 0, 0, 0, 6), 0x5e3f28]], c = new THREE.Vector3(0, 5, 0);
-    for (let i = 0; i < 9; i++) P.push([blob(rr(0.75, 1.05), rr(-0.35, 0.35), 1.8 + i * 0.75, rr(-0.35, 0.35), c, 3), v % 2 ? 0x345c2c : 0x3d6630]);
+    const P = [[limb(0.3, 0.14, 6.5, 0, -0.2, 0, rr(-0.04, 0.04), rr(-0.04, 0.04), 6), 0x5e3f28]], c = new THREE.Vector3(0, 4.5, 0), col = [0x345c2c, 0x3d6630, 0x2e5528][v % 3];
+    const H = [7.5, 9, 6.5][v % 3], tw = rr(-0.6, 0.6);
+    for (let i = 0; i < 11; i++) { const y = 1.4 + i * (H - 1.4) / 11, w = Math.sin(Math.PI * Math.pow((i + 0.5) / 11, 0.8)) * 1.05 + 0.2, a = i * tw;
+      P.push([blob(w * 0.8, Math.cos(a) * 0.15, y, Math.sin(a) * 0.15, c, 3, 0), new THREE.Color(col).multiplyScalar(PROP_LO ? 1 : 0.7).getHex()]);
+      leafCards(new THREE.Vector3(Math.cos(a) * 0.15, y, Math.sin(a) * 0.15), w, 0.55, 7, col, 0.7, 1.1, c.clone().setY(y)); }
     return P;
   },
   olive(v) {
@@ -607,9 +663,10 @@ const TREE_BUILDERS = {
     return P;
   },
   dead(v) {
-    const P = [[limb(0.4, 0.14, rr(4, 6), 0, -0.3, 0, rr(-0.15, 0.15), rr(-0.15, 0.15), 6), 0x4a4136]];
-    for (let i = 0; i < 5; i++) { const a = rand() * 6.28; P.push([limb(0.12, 0.03, rr(1.2, 2.4), 0, rr(1.8, 4.2), 0, Math.cos(a) * rr(0.7, 1.2), Math.sin(a) * rr(0.7, 1.2), 4), 0x4a4136]); }
-    if (v % 2) for (let i = 0; i < 4; i++) P.push([limb(0.05, 0.02, rr(0.8, 1.6), rr(-0.9, 0.9), rr(2, 3.4), rr(-0.9, 0.9), Math.PI, 0, 3), 0x6a7a40]);   // hanging moss
+    const P = [];
+    growTree(P, { bark: 0x4a4136, leaf: 0, trunkH: rr(3.4, 4.6), trunkR: rr(0.34, 0.42), trunkSteps: 4, depth: 2, taper: 0.4, gnarl: 0.45, rise: 0.08, lean: 0.25, roots: 4, knot: 1.2,
+      kids: (d) => (d === 2 ? 3 : 2), spread: (d) => 0.9, lenF: 0.7, rF: 0.55, noLeaf: true, clusterR: 1 });
+    if (v % 2) for (let i = 0; i < 5; i++) P.push([limb(0.04, 0.02, rr(0.8, 1.6), rr(-1.2, 1.2), rr(2.2, 3.6), rr(-1.2, 1.2), Math.PI, 0, 3), 0x6a7a40]);   // hanging moss
     return P;
   },
   rock(v) {
@@ -720,13 +777,13 @@ function bakeGroup(g) {
 
 // Scatter by region: density per square metre + species mix, like a hand-dressed open world
 const FLORA = {
-  meadow: { d: 0.004, mix: [['oak', 5], ['autumn', 1], ['birch', 2], ['cypress', 2]] },
-  ruins: { d: 0.002, mix: [['cypress', 3], ['olive', 1]] },
+  meadow: { d: 0.004, mix: [['oak', 4], ['olive', 3], ['autumn', 1], ['birch', 1], ['cypress', 2], ['pine', 1]] },
+  ruins: { d: 0.002, mix: [['cypress', 2], ['olive', 3]] },
   forest: { d: 0.034, mix: [['oak', 5], ['pine', 5], ['birch', 2], ['autumn', 1]] },
   mountain: { d: 0.01, mix: [['pine', 8], ['birch', 1]] },
   swamp: { d: 0.006, mix: [['dead', 6], ['birch', 1]] },
   olive: { d: 0.003, mix: [['olive', 3], ['cypress', 1]] },
-  temple: { d: 0.002, mix: [['cypress', 3], ['olive', 1]] },
+  temple: { d: 0.002, mix: [['cypress', 3], ['olive', 3], ['pine', 1]] },
   lake: { d: 0.006, mix: [['birch', 3], ['pine', 2]] },
   tower: { d: 0.005, mix: [['pine', 3], ['cypress', 1]] },
   cave: { d: 0, mix: [] },
@@ -1152,6 +1209,18 @@ let _glowTex; function glowTex() { if (_glowTex) return _glowTex; const c = docu
   // Chamber ceiling: an irregular rock vault resting on the carved walls
   const vault = lumpy(new THREE.SphereGeometry(CH_R + 1.2, 40, 16, 0, Math.PI * 2, 0, Math.PI / 2), 0.4, 3); vault.scale(1, 0.62, 1);
   const vm = new THREE.Mesh(vault, rockIn); vm.position.set(CAVE.x, CAVE_Y - 0.5, CAVE.z); vm.castShadow = vm.receiveShadow = true; vm.userData.keep = true; g.add(vm);
+  // Mountain cap: the heightfield has to be carved down to the cave floor, which left an open pit on the flank.
+  // This skin restores the mountain surface over the chamber and tunnel (the vault and tube stay inside it).
+  { const cx0 = Math.min(CAVE.x, CAVE_MOUTH.x) - CH_R - 10, cx1 = Math.max(CAVE.x, CAVE_MOUTH.x) + CH_R + 10, cz0 = Math.min(CAVE.z, CAVE_MOUTH.z) - CH_R - 10, cz1 = Math.max(CAVE.z, CAVE_MOUTH.z) + CH_R + 10, N = 48;
+    const geo = new THREE.PlaneGeometry(cx1 - cx0, cz1 - cz0, N, N); geo.rotateX(-Math.PI / 2); geo.translate((cx0 + cx1) / 2, 0, (cz0 + cz1) / 2);
+    const a = geo.attributes.position, col = [], rockC = new THREE.Color(0x8a8178), mossC = new THREE.Color(0x6d665f);
+    const orig = (x, z) => { let h = baseHeight(x, z); h = flatten(h, x, z, SUMMIT, ARENA_R, ARENA_R + 28, SUMMIT_Y); return Math.max(h, CAVE_Y + 13); };
+    for (let i = 0; i < a.count; i++) { const x = a.getX(i), z = a.getZ(i), ch = Math.hypot(x - CAVE.x, z - CAVE.z) - CH_R, tn = segDist(x, z, CAVE_MOUTH, CAVE) - TUN_W,
+        along = (x - CAVE_MOUTH.x) * CAVE_DIR.x + (z - CAVE_MOUTH.z) * CAVE_DIR.z, inside = Math.min(ch, tn) < 7 && along > 2.5;
+      const w = clamp((7 - Math.min(ch, tn)) / 5, 0, 1) * clamp((along - 2.5) / 4, 0, 1), y = lerp(heightAt(x, z) - 1.5, orig(x, z), w);
+      a.setY(i, y); const c = rockC.clone().lerp(mossC, fbm(x * 0.2, z * 0.2) * 0.7).multiplyScalar(0.85 + hash(x, z) * 0.15); col.push(c.r, c.g, c.b); }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals();
+    const cap = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true })); cap.receiveShadow = cap.castShadow = true; cap.userData.keep = true; g.add(cap); }
   // Tunnel: an arched rock tube from the mouth to the chamber
   const tube = lumpy(new THREE.CylinderGeometry(TUN_W + 0.9, TUN_W + 0.9, TUN_LEN + 4, 18, 8, true, -Math.PI / 2, Math.PI), 0.35, 7);
   tube.rotateZ(Math.PI / 2); tube.rotateX(-Math.PI / 2); tube.rotateY(-Math.atan2(CAVE_DIR.z, CAVE_DIR.x));
@@ -1267,28 +1336,67 @@ const TOWER_TOP = new THREE.Vector3(TOWER.x, heightAt(TOWER.x, TOWER.z) + 13.4, 
 }
 
 // ---- Lake Kastalia with a waterfall off the mountain
-const lakeWater = new THREE.Mesh(new THREE.CircleGeometry(30, 48).rotateX(-Math.PI / 2), makeWaterMat({ level: LAKE_Y + 0.25, shallow: 0x6fd6c8, deep: 0x1a6f8a, foam: 0.8, depthScale: 3 }));
+const lakeWater = new THREE.Mesh(new THREE.CircleGeometry(30, 48).rotateX(-Math.PI / 2), makeWaterMat({ level: LAKE_Y + 0.25, shallow: 0x7fe0cf, deep: 0x13607e, foam: 0.55, depthScale: 2.6, clarity: 1.3, ripple: 1.6 }));
 lakeWater.position.set(LAKE.x, LAKE_Y + 0.25, LAKE.z); scene.add(lakeWater);
-const fallU = { t: { value: 0 } };
+const fallU = { t: { value: 0 } }, fallFx = [];
 {
-  const dir = new THREE.Vector3(MOUNT.x - LAKE.x, 0, MOUNT.z - LAKE.z).normalize(), fp = LAKE.clone().addScaledVector(dir, 25);
-  const topY = Math.max(heightAt(fp.x, fp.z) + 6, LAKE_Y + 14), hgt = topY - LAKE_Y;
-  const wf = new THREE.Mesh(new THREE.PlaneGeometry(5, hgt, 1, 8), new THREE.ShaderMaterial({
-    uniforms: fallU, transparent: true, side: THREE.DoubleSide,
+  // Waterfall: a stream spills over a lip of stacked rock, curves out and falls into a foaming plunge pool with mist
+  const dir = new THREE.Vector3(MOUNT.x - LAKE.x, 0, MOUNT.z - LAKE.z).normalize(), side = new THREE.Vector3(-dir.z, 0, dir.x), fp = LAKE.clone().addScaledVector(dir, 24);
+  const topY = Math.max(heightAt(fp.x, fp.z) + 7, LAKE_Y + 15), hgt = topY - LAKE_Y, W = 5.5;
+  const g = new THREE.Group(), rock = new THREE.MeshStandardMaterial({ color: 0x6e675e, roughness: 1, flatShading: true }), rock2 = new THREE.MeshStandardMaterial({ color: 0x5a544c, roughness: 1, flatShading: true });
+  const lump = (r, seedOff) => { const q = new THREE.IcosahedronGeometry(r, 1), a = q.attributes.position, v = new THREE.Vector3();
+    for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i); const f = 1 + (fbm(v.x * 0.6 + seedOff, v.y * 0.6 + v.z * 0.4) - 0.5) * 0.55; a.setXYZ(i, v.x * f, v.y * f * 0.8, v.z * f); } q.computeVertexNormals(); return q; };
+  // cliff: two flanking rock columns and a back wall, built from stacked boulders
+  for (let k = 0; k < 26; k++) {
+    const sg = k % 3 === 0 ? 0 : k % 3 === 1 ? -1 : 1, y = LAKE_Y + rr(0, hgt + 1), r = rr(2.2, 3.6);
+    const p = fp.clone().addScaledVector(side, sg ? sg * rr(W / 2 + 1.6, W / 2 + 4) : rr(-W / 2, W / 2)).addScaledVector(dir, sg ? rr(-1, 2.5) : rr(2.4, 4));
+    const m = mesh(lump(r, k * 3.1), k % 2 ? rock : rock2, p.x, y, p.z, g); m.rotation.set(rand(), rand() * 6, rand());
+  }
+  const lip = mesh(lump(2.2, 99), rock2, 0, 0, 0, g); lip.position.copy(fp).addScaledVector(dir, 1.8); lip.position.y = topY - 1.4; lip.scale.set(2, 0.7, 1.2); lip.rotation.y = Math.atan2(dir.x, dir.z);
+  for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2, p = fp.clone().addScaledVector(dir, -3).add(new THREE.Vector3(Math.cos(a) * 6.5, 0, Math.sin(a) * 6.5));   // plunge-pool boulders
+    if (Math.cos(a) * dir.x + Math.sin(a) * dir.z < -0.3) continue; mesh(lump(rr(0.7, 1.4), k + 40), rock, p.x, LAKE_Y + 0.2, p.z, g); }
+  bakeGroup(g); scene.add(g);
+  // the falling sheet: leaves the lip horizontally then drops (a parabola), ragged edges, streaks, white at the bottom
+  const geo = new THREE.PlaneGeometry(W, hgt, 8, 24), a = geo.attributes.position;
+  for (let i = 0; i < a.count; i++) { const y01 = (a.getY(i) + hgt / 2) / hgt; a.setZ(i, Math.pow(y01, 3) * 1.6 + Math.sin(a.getX(i) * 1.7) * 0.15); a.setX(i, a.getX(i) * (0.85 + (1 - y01) * 0.25)); }
+  geo.computeVertexNormals();
+  const wf = new THREE.Mesh(geo, new THREE.ShaderMaterial({
+    uniforms: fallU, transparent: true, side: THREE.DoubleSide, depthWrite: false,
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `uniform float t; varying vec2 vUv; float h(float n){ return fract(sin(n) * 43758.5); }
-      void main(){ float x = floor(vUv.x * 18.0); float s = fract(vUv.y * 3.0 + t * (1.2 + h(x) * 0.8) + h(x) * 7.0);
-        float streak = smoothstep(0.0, 0.3, s) * (1.0 - smoothstep(0.6, 1.0, s));
-        vec3 c = mix(vec3(0.55, 0.8, 0.9), vec3(1.0), streak * 0.8); float edge = smoothstep(0.0, 0.12, vUv.x) * smoothstep(1.0, 0.88, vUv.x);
-        gl_FragColor = vec4(c, (0.55 + streak * 0.4) * edge); }`,
+      float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); float a = h(i.x + i.y * 57.0), b = h(i.x + 1.0 + i.y * 57.0), c = h(i.x + (i.y + 1.0) * 57.0), d = h(i.x + 1.0 + (i.y + 1.0) * 57.0); return mix(mix(a, b, f.x), mix(c, d, f.x), f.y); }
+      void main(){
+        vec2 p = vec2(vUv.x * 9.0, vUv.y * 2.5 + t * 1.6);
+        float n = vn(p * vec2(1.0, 3.0)) * 0.6 + vn(p * vec2(2.3, 7.0) + 3.0) * 0.4;
+        float streak = smoothstep(0.45, 0.8, n);
+        float bottom = 1.0 - smoothstep(0.0, 0.3, vUv.y);
+        vec3 c = mix(vec3(0.42, 0.72, 0.84), vec3(1.0), clamp(streak * 0.85 + bottom * 0.8 + (1.0 - vUv.y) * 0.2, 0.0, 1.0));
+        float edge = smoothstep(0.0, 0.1 + n * 0.1, vUv.x) * smoothstep(1.0, 0.9 - n * 0.1, vUv.x);
+        gl_FragColor = vec4(c, clamp((0.55 + streak * 0.4 + bottom * 0.3) * edge, 0.0, 0.95)); }`,
   }));
-  wf.position.set(fp.x, LAKE_Y + hgt / 2, fp.z); wf.lookAt(LAKE.x, LAKE_Y + hgt / 2, LAKE.z); scene.add(wf);
-  const foam = new THREE.Mesh(new THREE.CircleGeometry(4, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 }));
-  foam.position.set(fp.x - dir.x * 2, LAKE_Y + 0.3, fp.z - dir.z * 2); scene.add(foam);
+  wf.position.copy(fp).addScaledVector(dir, 1.2); wf.position.y = LAKE_Y + hgt / 2; wf.lookAt(wf.position.clone().sub(dir)); wf.renderOrder = 2; scene.add(wf);
+  // plunge-pool foam: churning noise ring
+  const foam = new THREE.Mesh(new THREE.CircleGeometry(5.5, 32).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({ uniforms: fallU, transparent: true, depthWrite: false,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform float t; varying vec2 vUv; float h(vec2 p){ return fract(sin(dot(p, vec2(12.9, 78.2))) * 43758.5); }
+      float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+      void main(){ vec2 d = vUv - 0.5; float r = length(d) * 2.0, a = atan(d.y, d.x);
+        float n = vn(vec2(a * 3.0, r * 6.0 - t * 1.4)) * 0.6 + vn(vec2(a * 7.0, r * 11.0 - t * 2.2)) * 0.4;
+        float m = smoothstep(0.35, 0.7, n + (1.0 - r) * 0.45) * (1.0 - smoothstep(0.75, 1.0, r));
+        gl_FragColor = vec4(vec3(0.97, 0.99, 1.0), m * 0.85); }` }));
+  foam.position.copy(fp).addScaledVector(dir, -1.5); foam.position.y = LAKE_Y + 0.3; foam.renderOrder = 3; scene.add(foam);
+  // mist: soft additive puffs drifting up from the pool
+  for (let k = 0; k < 7; k++) { const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xe8f4ff, transparent: true, opacity: 0.35, depthWrite: false }));
+    m.userData.base = fp.clone().addScaledVector(dir, -1.5).addScaledVector(side, rr(-3, 3)); m.userData.ph = rand() * 6; scene.add(m); fallFx.push(m); }
+  // lily pads and reeds along the far shore
+  const pad = new THREE.CircleGeometry(0.45, 10, 0.3, 5.9).rotateX(-Math.PI / 2), pads = new THREE.InstancedMesh(pad, new THREE.MeshStandardMaterial({ color: 0x4f7a30, roughness: 0.7 }), 60), mm = new THREE.Matrix4();
+  let n = 0; for (let i = 0; i < 600 && n < 60; i++) { const an = rand() * 6.28, d = rr(12, 24), x = LAKE.x + Math.cos(an) * d, z = LAKE.z + Math.sin(an) * d, hh = heightAt(x, z);
+    if (hh < LAKE_Y && hh > LAKE_Y - 1.2 && Math.hypot(x - fp.x, z - fp.z) > 9) { mm.compose(new THREE.Vector3(x, LAKE_Y + 0.27, z), new THREE.Quaternion().setFromAxisAngle(UPV, rand() * 6), new THREE.Vector3(1, 1, 1).multiplyScalar(rr(0.7, 1.3))); pads.setMatrixAt(n++, mm); } }
+  pads.count = n; scene.add(pads);
 }
 
 // ---- Stymphalian Marsh: murky water, lily pads, fireflies at night
-const swampWater = new THREE.Mesh(new THREE.CircleGeometry(98, 64).rotateX(-Math.PI / 2), makeWaterMat({ level: 0.5, shallow: 0x6a7438, deep: 0x2b3a22, foam: 0.25, depthScale: 1.2, clarity: 2.5 }));
+const swampWater = new THREE.Mesh(new THREE.CircleGeometry(98, 64).rotateX(-Math.PI / 2), makeWaterMat({ level: 0.5, shallow: 0x5d6a34, deep: 0x22301c, foam: 0.15, depthScale: 1.1, clarity: 2.6, weed: 1, ripple: 0.7 }));
 swampWater.position.set(SWAMP.x, 0.5, SWAMP.z); scene.add(swampWater);
 {
   const pad = new THREE.CircleGeometry(0.5, 10, 0.3, 5.9).rotateX(-Math.PI / 2), pads = new THREE.InstancedMesh(pad, new THREE.MeshStandardMaterial({ color: 0x4f7a30, roughness: 0.7 }), 400), m = new THREE.Matrix4();
@@ -1659,21 +1767,59 @@ const dockGroup = new THREE.Group();
   for (const x of [-1.4, 1.4]) for (let i = 0; i < 3; i++) mesh(new THREE.CylinderGeometry(0.15, 0.15, 2.4, 6), wood, x, 0, -3.8 + i * 2.6, dockGroup);
   dockGroup.position.set(DOCK.x, 0, DOCK.z); bakeGroup(dockGroup); scene.add(dockGroup);
 }
-const RAFT_SITE = DOCK.clone().add(new THREE.Vector3(3.6, 0, 1));
-const raftGroup = new THREE.Group(); raftGroup.position.set(RAFT_SITE.x, 0.05, RAFT_SITE.z); scene.add(raftGroup);
+// --- Your boat: wrecked on the cove shore at the start, mended later (main quest) and sailed out through the channel ---
+const RAFT_SITE = WRECK.clone();
+const boatYaw = Math.atan2(SEA_OUT.x - WRECK.x, SEA_OUT.z - WRECK.z);            // bow toward the open sea
+function boatHull(g, broken) {
+  const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a32, roughness: 0.85, side: THREE.DoubleSide, flatShading: true }), dark = flat(0x5a3a22), paint = flat(0x2f4f86), white = flat(0xefe6d2), black = flat(0x151515);
+  // planked hull: a half-ellipsoid shell with plank bands in alternating tones; the wreck is missing a chunk of its side
+  const hull = new THREE.SphereGeometry(1, 28, 10, broken ? 0.9 : 0, broken ? Math.PI * 2 - 1.5 : Math.PI * 2, Math.PI / 2, Math.PI / 2);
+  { const a = hull.attributes.position, c = []; for (let i = 0; i < a.count; i++) { const band = Math.floor(-a.getY(i) * 6) % 2, col = new THREE.Color(band ? 0x7a4e2c : 0x93623a); c.push(col.r, col.g, col.b); } hull.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); }
+  const hm = new THREE.Mesh(hull, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide, flatShading: true })); hm.scale.set(1.15, 0.8, 2.9); hm.userData.keep = true; hm.castShadow = true; g.add(hm);
+  const gun = mesh(new THREE.TorusGeometry(1, 0.07, 5, 40, broken ? Math.PI * 1.4 : Math.PI * 2), dark, 0, 0, 0, g); gun.rotation.x = Math.PI / 2; gun.scale.set(1.15, 2.9, 1);
+  mesh(new THREE.TorusGeometry(1.01, 0.05, 4, 40, broken ? Math.PI * 1.3 : Math.PI * 2), paint, 0, -0.14, 0, g).rotation.x = Math.PI / 2;   // painted strake
+  g.children[g.children.length - 1].scale.set(1.13, 2.87, 1);
+  for (let i = -2; i <= 2; i++) { if (broken && i === 1) continue; const rib = mesh(new THREE.TorusGeometry(1, 0.05, 4, 12, Math.PI), dark, 0, 0, i * 0.95, g); rib.rotation.z = Math.PI; rib.scale.set(1.1 * Math.sqrt(1 - (i * 0.95 / 2.9) ** 2), 0.76 * Math.sqrt(1 - (i * 0.95 / 2.9) ** 2), 1); }
+  for (let i = -1; i <= 1; i++) mesh(new THREE.BoxGeometry(2.1 * Math.sqrt(1 - (i * 1.2 / 2.9) ** 2), 0.08, 0.35), wood, 0, -0.12, i * 1.2, g);   // thwarts
+  // stem post curling up at the bow, stern post, and the painted eyes (oculi) that let a Greek ship see its way
+  const stem = new THREE.CatmullRomCurve3([new THREE.Vector3(0, -0.6, 2.7), new THREE.Vector3(0, 0.1, 3.05), new THREE.Vector3(0, 0.8, 3.1), new THREE.Vector3(0, 1.2, 2.85)]);
+  mesh(new THREE.TubeGeometry(stem, 12, 0.09, 6), dark, 0, 0, 0, g);
+  const stern = new THREE.CatmullRomCurve3([new THREE.Vector3(0, -0.6, -2.7), new THREE.Vector3(0, 0.2, -3.0), new THREE.Vector3(0, 0.9, -2.8), new THREE.Vector3(0, 1.3, -2.4)]);
+  if (!broken) mesh(new THREE.TubeGeometry(stern, 12, 0.08, 6), dark, 0, 0, 0, g);
+  for (const sx of [-1, 1]) { if (broken && sx > 0) continue; const e = mesh(new THREE.CircleGeometry(0.16, 14), white, sx * 0.62, -0.12, 2.45, g); e.rotation.y = sx * 1.25; const pu = mesh(new THREE.CircleGeometry(0.08, 10), black, sx * 0.63, -0.12, 2.46, g); pu.rotation.y = sx * 1.25; pu.position.x += sx * 0.005; }
+  return wood;
+}
+// the wreck
+const wreckGroup = new THREE.Group();
+{
+  const g = wreckGroup; boatHull(g, true);
+  const wood = flat(0x8a5a32), cloth = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.95, side: THREE.DoubleSide, flatShading: true });
+  mesh(new THREE.CylinderGeometry(0.11, 0.13, 1.4, 6), wood, 0, 0.3, 0.6, g).rotation.z = 0.2;                                   // snapped mast stump
+  const mast = mesh(new THREE.CylinderGeometry(0.1, 0.12, 4.2, 6), wood, 0, 0, 0, g); mast.position.set(2.6, -0.2, 0.5); mast.rotation.set(0.1, 0.3, Math.PI / 2 - 0.08);
+  // torn sail draped over the sand
+  const sg = new THREE.PlaneGeometry(3, 2.4, 10, 8); { const a = sg.attributes.position; for (let i = 0; i < a.count; i++) { const x = a.getX(i), y = a.getY(i); a.setZ(i, Math.sin(x * 2.2) * 0.12 + Math.cos(y * 3 + x) * 0.08 + (x > 1.2 && y > 0.6 ? -0.4 : 0)); } sg.computeVertexNormals(); }
+  const sail = mesh(sg, cloth, 2.9, -0.45, -1.2, g); sail.rotation.set(-Math.PI / 2 + 0.08, 0, 0.4); sail.userData.keep = true;
+  for (let i = 0; i < 7; i++) { const pl = mesh(new THREE.BoxGeometry(rr(1.2, 2.2), 0.07, 0.28), wood, rr(-3.5, 3.5), -0.5, rr(-3, 3.5), g); pl.rotation.set(rr(-0.2, 0.2), rand() * 3, rr(-0.15, 0.15)); }
+  for (let i = 0; i < 3; i++) { const am = new THREE.Group(); am.position.set(rr(-3, -1.8), -0.45, rr(-2.5, 1.5)); am.rotation.set(Math.PI / 2 - 0.2, rand() * 3, 0); g.add(am);    // amphorae
+    mesh(new THREE.LatheGeometry([[0.001, 0], [0.16, 0.05], [0.28, 0.35], [0.26, 0.7], [0.1, 0.95], [0.08, 1.15], [0.11, 1.2]].map(([r, y]) => new THREE.Vector2(r, y)), 12), flat(0xb2663a), 0, 0, 0, am); }
+  mesh(new THREE.TorusGeometry(0.35, 0.08, 6, 14), flat(0xb89a64), -1.6, -0.5, 2.2, g).rotation.x = Math.PI / 2;                   // rope coil
+  g.position.copy(WRECK); g.position.y = Math.max(heightAt(WRECK.x, WRECK.z), -0.4) + 0.8; g.rotation.set(0.06, boatYaw + 0.5, 0.3);
+  bakeGroup(g); scene.add(g); colliders.push({ x: WRECK.x, z: WRECK.z, r: 2.4 });
+}
+// the mended boat (hidden until you repair it); sailing moves this group
+const raftGroup = new THREE.Group(); raftGroup.position.set(RAFT_SITE.x, -0.05, RAFT_SITE.z); raftGroup.rotation.y = boatYaw; scene.add(raftGroup);
 const raftParts = [];
 {
-  const wood = flat(0x9b6e3f);
-  for (let i = 0; i < 7; i++) { const l = mesh(new THREE.CylinderGeometry(0.28, 0.28, 5, 7), wood, -1.8 + i * 0.6, 0.15, 0, raftGroup); l.rotation.x = Math.PI / 2; raftParts.push(l); }
-  for (const z of [-1.8, 1.8]) { const b = mesh(new THREE.BoxGeometry(4.4, 0.12, 0.25), flat(0xcdb68a), 0, 0.45, z, raftGroup); raftParts.push(b); }
-  const mast = mesh(new THREE.CylinderGeometry(0.12, 0.14, 5, 6), wood, 0, 2.8, -0.5, raftGroup); raftParts.push(mast);
-  const sail = mesh(new THREE.PlaneGeometry(3, 3.2, 3, 3), new THREE.MeshStandardMaterial({ color: 0xf1e8d4, side: THREE.DoubleSide, flatShading: true }), 0, 3.3, -0.35, raftGroup); raftParts.push(sail);
-  const cross = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshStandardMaterial({ color: 0xb0392e, side: THREE.DoubleSide })); cross.position.set(0, 3.3, -0.33); raftGroup.add(cross); raftParts.push(cross);
+  const hullG = new THREE.Group(); raftGroup.add(hullG); const wood = boatHull(hullG, false); raftParts.push(hullG);
+  const mast = mesh(new THREE.CylinderGeometry(0.1, 0.13, 5.2, 7), flat(0x6a4a2e), 0, 2.4, 0.5, raftGroup); raftParts.push(mast);
+  const yard = mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.6, 6), flat(0x6a4a2e), 0, 4.6, 0.62, raftGroup); yard.rotation.z = Math.PI / 2; raftParts.push(yard);
+  const sg = new THREE.PlaneGeometry(3.4, 2.9, 6, 6); { const a = sg.attributes.position; for (let i = 0; i < a.count; i++) a.setZ(i, (1 - (a.getX(i) / 1.7) ** 2) * 0.35); sg.computeVertexNormals(); }
+  const sail = mesh(sg, new THREE.MeshStandardMaterial({ color: 0xf1e8d4, side: THREE.DoubleSide, flatShading: true }), 0, 3.15, 0.75, raftGroup); raftParts.push(sail);
+  for (const y of [2.1, 3.1, 4.1]) { const st = mesh(new THREE.PlaneGeometry(3.42, 0.22), new THREE.MeshStandardMaterial({ color: 0xa3392c, side: THREE.DoubleSide }), 0, y, 0.77 + (1 - 0) * 0.02, raftGroup); raftParts.push(st); }
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) { const o = mesh(new THREE.CylinderGeometry(0.04, 0.04, 3.2, 5), flat(0x9b6e3f), sx * 1.6, 0.05, -1 + i * 0.9, raftGroup); o.rotation.z = sx * 1.2; raftParts.push(o); }
   raftParts.forEach((p) => (p.visible = false));
 }
-// Ghost outline so players see where the raft goes
-const raftGhost = mesh(new THREE.BoxGeometry(4.4, 0.3, 5), new THREE.MeshBasicMaterial({ color: 0xe8c27a, wireframe: true, transparent: true, opacity: 0.5 }), RAFT_SITE.x, 0.3, RAFT_SITE.z);
-raftGhost.castShadow = false; scene.add(raftGhost);
+const raftGhost = { visible: false };
 
 // ============================================================
 // Characters — rounded Pixar-like proportions
@@ -1927,7 +2073,7 @@ const groundAxe = new THREE.Group();
 const oliveBranch = () => { const g = new THREE.Group(); const st = mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.9, 5), trunkMat, 0, 0.06, 0, g); st.rotation.z = Math.PI / 2;
   const lm = flat(0x7d9a4a), om = flat(0x3d4a26); for (let i = 0; i < 12; i++) { const l = mesh(new THREE.SphereGeometry(0.07, 5, 3), lm, rr(-0.4, 0.4), rr(0.08, 0.16), rr(-0.08, 0.08), g); l.scale.set(1, 0.3, 2.4); l.rotation.y = rr(-1, 1); }
   for (let i = 0; i < 5; i++) mesh(new THREE.SphereGeometry(0.04, 6, 4), om, rr(-0.3, 0.3), 0.12, rr(-0.06, 0.06), g);
-  const glow = new THREE.PointLight(0xffd88a, 1.2, 4); glow.position.y = 0.6; g.add(glow); return g; };
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xffe0a0, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(1.6); glow.position.y = 0.3; g.add(glow); return g; };
 { const p = OLIVE.clone().add(new THREE.Vector3(-6, 0, -8)); p.y = heightAt(p.x, p.z) + 0.1; addPickup('olivebranch', p, oliveBranch); }
 loadModelBuffer('axe').then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
   fixMaterials(obj);
@@ -2209,11 +2355,11 @@ function placeCampfire() {
   for (let i = 0; i < 4; i++) { const l = mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.9, 5), trunkMat, 0, 0.25, 0, f); l.rotation.set(0.9, (i / 4) * 6.28, 0); }
   const flames = [];
   for (let i = 0; i < 3; i++) { const fl = new THREE.Mesh(new THREE.ConeGeometry(0.22 - i * 0.05, 0.7 - i * 0.1, 6), new THREE.MeshBasicMaterial({ color: [0xff7a1a, 0xffb02e, 0xffe27a][i] })); fl.position.y = 0.45; f.add(fl); flames.push(fl); }
-  const light = new THREE.PointLight(0xff9a40, 60, 18, 1.4); light.position.y = 1.2; f.add(light);
+  const light = new THREE.PointLight(0xff9a40, 60, 18, 1.4);
   const p = player.position.clone().add(new THREE.Vector3(Math.sin(P.yaw), 0, Math.cos(P.yaw)).multiplyScalar(2));
   p.y = heightAt(p.x, p.z); f.position.copy(p); scene.add(f);
-  if (S.campfire) scene.remove(S.campfire.obj);  // one fire at a time keeps it simple
-  S.campfire = { obj: f, flames, light, pos: p };
+  if (S.campfire) { scene.remove(S.campfire.obj); removeEmitter(S.campfire.light); }  // one fire at a time keeps it simple
+  S.campfire = { obj: f, flames, light, pos: p }; addEmitter(light, p.clone().setY(p.y + 1.2));
 }
 
 // ============================================================
@@ -2266,7 +2412,7 @@ $('dialog').addEventListener('click', nextLine);
 // Quests
 // ============================================================
 const Q = [
-  { title: 'The Chosen One', desc: 'Zeus has brought you to Nisos, the first island of Argonisos. An old man waits by the hut near the shore: Nestor, the guide Zeus set here for the chosen.',
+  { title: 'The Chosen One', desc: 'Your boat broke on the rocks of Nisos, the first island of Argonisos. An old man lives by the hut above the cove: Nestor, the guide Zeus set here for the chosen.',
     obj: () => [['Meet Nestor by his hut', S.talkedNestor]], target: () => nestor.position },
   { title: 'The First Tool', desc: 'Nestor wants to see you make something with your own hands. Pick up branches and pebbles, pull fiber from bushes and reeds, then craft a Stone Axe with C.',
     obj: () => [[`Wood ${Math.min(S.inv.wood, 3)}/3`, S.inv.wood >= 3 || S.tools.axe], [`Stone ${Math.min(S.inv.stone, 2)}/2`, S.inv.stone >= 2 || S.tools.axe], [`Fiber ${Math.min(S.inv.fiber, 1)}/1`, S.inv.fiber >= 1 || S.tools.axe], ['Craft a Stone Axe (C)', S.tools.axe]], target: () => null },
@@ -2287,11 +2433,11 @@ const Q = [
     obj: () => [[`Survive a night (${S.nights - S.nightsAtStart}/1)`, S.nights - S.nightsAtStart >= 1]], target: () => S.campfire?.pos, start: () => { S.nightsAtStart = S.nights; } },
   { title: 'The Cave of Echoes', desc: 'Zeus left a sail in the cave on the mountain\'s flank for the chosen. Chosen who failed now guard it. Clear the skeletons and open the chest.',
     obj: () => { const k = skeletons.filter((s) => s.dead).length; return [[`Skeletons ${k}/3`, k >= 3], ['Loot the old chest', !chest.alive]]; }, target: () => chestPos },
-  { title: 'The Raft', desc: 'Lash logs together at the old dock on the south beach. You need rope, the sail, and food for the crossing to Pedias.',
-    obj: () => [[`Wood ${Math.min(S.inv.wood, 12)}/12`, S.inv.wood >= 12 || S.raftBuilt], [`Rope ${Math.min(S.inv.rope, 4)}/4`, S.inv.rope >= 4 || S.raftBuilt], [`Sailcloth ${S.inv.sail}/1`, S.inv.sail >= 1 || S.raftBuilt], [`Cooked meat ${Math.min(S.inv.meat, 3)}/3`, S.inv.meat >= 3 || S.raftBuilt], ['Build the raft at the dock (E)', S.raftBuilt]],
+  { title: 'Mend Your Boat', desc: 'Your boat lies broken in the cove. Patch the hull with timber, lash it with rope, rig the sail from the cave and stock food for the crossing to Pedias.',
+    obj: () => [[`Wood ${Math.min(S.inv.wood, 12)}/12`, S.inv.wood >= 12 || S.raftBuilt], [`Rope ${Math.min(S.inv.rope, 4)}/4`, S.inv.rope >= 4 || S.raftBuilt], [`Sailcloth ${S.inv.sail}/1`, S.inv.sail >= 1 || S.raftBuilt], [`Cooked meat ${Math.min(S.inv.meat, 3)}/3`, S.inv.meat >= 3 || S.raftBuilt], ['Mend the boat in the cove (E)', S.raftBuilt]],
     target: () => RAFT_SITE },
-  { title: 'To Pedias', desc: 'Your trial on Nisos is done. Say goodbye to Nestor, then board the raft and sail south to the fertile fields of Pedias, the first of the nine biomes.',
-    obj: () => [['Set sail from the dock (E)', S.sailing]], target: () => RAFT_SITE },
+  { title: 'To Pedias', desc: 'Your trial on Nisos is done. Say goodbye to Nestor, then board your boat and sail through the channel to the fertile fields of Pedias, the first of the nine biomes.',
+    obj: () => [['Set sail from the cove (E)', S.sailing]], target: () => RAFT_SITE },
 ];
 function nearestCreature(type) {
   let best = null, bd = 1e9;
@@ -2300,7 +2446,10 @@ function nearestCreature(type) {
 }
 function renderQuest() {
   const q = Q[S.questIdx]; $('quest').classList.toggle('hidden', !q); if (!q) return;
-  $('quest').innerHTML = `<div class="step">Quest ${S.questIdx + 1} / ${Q.length}</div><h3 class="cinzel">${q.title}</h3><p>${q.desc}</p><ul>${q.obj().map(([t, d]) => `<li class="${d ? 'done' : ''}">${d ? '✔' : '○'} ${t}</li>`).join('')}</ul>`;
+  const li = (list) => list.map(([t, d]) => `<li class="${d ? 'done' : ''}">${d ? '✔' : '○'} ${t}</li>`).join('');
+  let html = `<div class="step">Quest ${S.questIdx + 1} / ${Q.length}</div><h3 class="cinzel">${q.title}</h3><p>${q.desc}</p><ul>${li(q.obj())}</ul>`;
+  if (S.questIdx >= 1 && S.questIdx < 10 && !S.raftBuilt) html += `<div class="step" style="margin-top:10px">Main quest</div><h3 class="cinzel" style="font-size:15px">Mend Your Boat</h3><ul>${li(Q[10].obj())}</ul>`;
+  $('quest').innerHTML = html;
 }
 function checkQuest() {
   if (S.explore) return;
@@ -2317,10 +2466,11 @@ function checkQuest() {
 function talkNestor() {
   const i = S.questIdx;
   if (i === 0) return say([
-    ['Nestor', 'So. Zeus chose you. Let me look at you... Thin arms, but steady eyes. It will do.'],
+    ['Nestor', 'So. Zeus chose you, and Poseidon broke your boat on the way in. He does that to all of them. Let me look at you... Thin arms, but steady eyes. It will do.'],
     ['Nestor', 'I am Nestor. Once a king of Pylos, now a teacher. The Father of the Gods set me on Nisos to prepare the chosen ones.'],
     ['Nestor', 'Hera killed Hercules. Zeus built Argonisos so that someone worthy can inherit his strength. Nine lands, nine Guardians, and Olympos at the end.'],
-    ['Nestor', 'But nobody walks into Pedias with empty hands. Your first task: make me a Stone Axe. Listen closely, I will only say this once.'],
+    ['Nestor', 'Your boat can be mended. Timber, rope, a sail and food, and she will carry you to Pedias. That is the road off this island.'],
+    ['Nestor', 'But nobody mends a boat with bare hands. Your first task: make me a Stone Axe. Listen closely, I will only say this once.'],
   ], () => { S.talkedNestor = true; showCards(TUTORIAL); });
   if (i === 4) return say([
     ['Nestor', 'A column of gold over the temple. I saw it from here. So did half of Olympos, I think.'],
@@ -2336,7 +2486,7 @@ function talkNestor() {
     7: 'Rabbits run and boars fight back. Keep the spear pointed at the tusks. Cook the meat, raw meat will make you sick.',
     8: 'Stay close to the fire tonight. The wolves are cowards, but hungry ones.',
     9: 'The cave is north, where the trail climbs the mountain. Bring courage. Or do not come back at all, ha.',
-    10: 'The old dock is on the south beach. Twelve logs, four ropes, the sail, and food for the crossing.',
+    10: 'Your boat is still in the cove. Twelve logs, four ropes, the sail from the cave, and food for the crossing.',
     11: 'Pedias waits across the water. When you face its Guardian, remember what old Nestor taught you.',
   };
   say([['Nestor', lines[i] || 'The gods are watching. Do not bore them.']]);
@@ -2464,7 +2614,7 @@ function debugSkipQuest() {
   if (i === 7) { S.kills.rabbit = Math.max(2, S.kills.rabbit); S.kills.boar = Math.max(1, S.kills.boar); S.cooked = Math.max(3, S.cooked); S.inv.meat += 3; }
   if (i === 8) S.nights++;
   if (i === 9) { skeletons.forEach((s) => { if (!s.dead) killCreature(s); }); openChest(); }
-  if (i === 10) { Object.assign(S.inv, { wood: S.inv.wood + 12, rope: S.inv.rope + 4, meat: S.inv.meat + 3 }); player.position.set(RAFT_SITE.x - 2, 0.5, RAFT_SITE.z - 3); }
+  if (i === 10) { Object.assign(S.inv, { wood: S.inv.wood + 12, rope: S.inv.rope + 4, meat: S.inv.meat + 3, sail: Math.max(1, S.inv.sail) }); player.position.set(START.x, START.y + 0.5, START.z); }
   toast('Playtest: quest step skipped');
 }
 
@@ -2490,15 +2640,15 @@ function getInteractable() {
   if (CAVE_ALTAR && pp.distanceTo(CAVE_ALTAR) < 3.4) consider(1, { label: 'Examine the altar', act: () => say([['You', 'An old altar, cold as snow. There is a hollow in the stone, as if something is meant to rest here.'], ['You', 'Not yet. But I will be back.']]) });
   if (S.questIdx === 3 && Math.hypot(pp.x - ATHENA_OFFER.x, pp.z - ATHENA_OFFER.z) < 2.6) consider(0.8, { label: 'Place the offering before Athena', act: makeOffering });
   const rd = Math.hypot(pp.x - RAFT_SITE.x, pp.z - RAFT_SITE.z);
-  if (rd < 4.5) {
-    if (!S.raftBuilt) consider(Math.max(0, rd - 2.5), { label: S.questIdx >= 10 ? 'Build the raft' : 'Old dock: a raft could launch here', act: buildRaft });
+  if (rd < 5.5) {
+    if (!S.raftBuilt) consider(Math.max(0, rd - 2.8), { label: S.questIdx >= 1 ? 'Mend your boat' : 'Your broken boat', act: buildRaft });
     else consider(Math.max(0, rd - 2.5), { label: 'Set sail for Pedias', act: setSail });
   }
   return best;
 }
 // Offering at the statue: berries + olive branch, answered by a column of golden light
 // A column of golden light from the sky (Athena's answer, Zeus delivering a chosen one). One persistent light, no shader recompiles.
-const divineLight = new THREE.PointLight(0xffcf70, 0, 30); scene.add(divineLight);
+const divineLight = new THREE.PointLight(0xffcf70, 0, 30); divineLight.userData.dyn = true; scene.add(divineLight);
 function divineBeam(base, life = 6, r = 1.6) {
   const beamMat = new THREE.MeshBasicMaterial({ color: 0xffd98a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.5, 60, 24, 1, true), beamMat); beam.position.copy(base).setY(base.y + 30); scene.add(beam);
@@ -2549,13 +2699,13 @@ function cook() {
   floatText(`+${n} 🍖`, S.campfire.pos.clone().setY(S.campfire.pos.y + 1.5), '#ffcf7a'); snd.sizzle();
 }
 function buildRaft() {
-  if (S.questIdx < 10) { say([['You', 'Old planks and rotten rope. With enough wood, rope and a sail, a raft could launch from here.']]); return; }
+  if (S.questIdx < 1) { say([['You', 'My boat... Poseidon made kindling of it. I will need wood, rope, a new sail and food before she swims again.']]); return; }
   const need = { wood: 12, rope: 4, sail: 1, meat: 3 };
-  if (!canAfford(need)) { toast('Missing materials. Check the quest list.'); return; }
+  if (!canAfford(need)) { toast('Missing materials. Check <b>Mend Your Boat</b> in the quest panel.'); return; }
   for (const [k, v] of Object.entries(need)) S.inv[k] -= v;
-  S.raftBuilt = true; raftGhost.visible = false;
-  raftParts.forEach((p, i) => setTimeout(() => { p.visible = true; burst(raftGroup.position.clone().add(new THREE.Vector3(0, 0.6, 0)), 0x9b6e3f, 4); sfx(200 + i * 40, 0.08); }, i * 180));
-  toast('The raft is ready.', true);
+  S.raftBuilt = true; wreckGroup.visible = false; colliders.forEach((c) => { if (c.x === WRECK.x && c.z === WRECK.z) c.r = 0; });
+  raftParts.forEach((p, i) => setTimeout(() => { p.visible = true; burst(raftGroup.position.clone().add(new THREE.Vector3(0, 0.8, 0)), 0x9b6e3f, 6); snd.hitWood(); }, i * 220));
+  setTimeout(() => { toast('Your boat is whole again.', true); snd.questDone(); }, raftParts.length * 220);
 }
 function eat() {
   if (S.inv.meat > 0) { S.inv.meat--; S.food = clamp(S.food + 35, 0, 100); S.hp = clamp(S.hp + 10, 0, 100); toast('Ate cooked meat 🍖'); }
@@ -2854,7 +3004,13 @@ function updateWorld(dt, t) {
   const sa = S.time * Math.PI * 2;
   sun.position.set(player.position.x + Math.sin(sa) * 60, Math.max(8, e * 80), player.position.z + 30 + Math.cos(sa) * 20);
   if (e < -0.1) sun.position.y = 50;   // moonlight from above
-  sun.target.position.copy(player.position);
+  { // texel-snapped shadow frustum: moving the player no longer makes shadow edges shimmer ('electric' flicker on the hero)
+    const fwd = _sv1.subVectors(player.position, sun.position).normalize(), right = _sv2.crossVectors(fwd, UPV).normalize(), up2 = _sv3.crossVectors(right, fwd);
+    const texel = (sun.shadow.camera.right - sun.shadow.camera.left) / sun.shadow.mapSize.x, pp = player.position;
+    const r = Math.round(pp.dot(right) / texel) * texel, u = Math.round(pp.dot(up2) / texel) * texel, f = pp.dot(fwd);
+    const c = _sv4.copy(right).multiplyScalar(r).addScaledVector(up2, u).addScaledVector(fwd, f), off = _sv5.subVectors(sun.position, player.position);
+    sun.target.position.copy(c); sun.position.copy(c).add(off);
+  }
   // Physical sky + reflections follow the true sun; at night the sky shader fades and a moonlit tint takes over
   const sa2 = S.time * Math.PI * 2;
   sunDir.set(Math.sin(sa2) * 0.55, e, 0.35 + Math.cos(sa2) * 0.25).normalize();
@@ -2862,9 +3018,6 @@ function updateWorld(dt, t) {
   skyDome.material.uniforms.top.value.copy(skyNight).lerp(new THREE.Color(0x3a78c8), day).lerp(new THREE.Color(0x6a6fae), dusk * 0.4);
   skyDome.material.uniforms.hor.value.copy(new THREE.Color(0x1a2a48)).lerp(new THREE.Color(0xb8dcf0), day).lerp(new THREE.Color(0xf2b27a), dusk * 0.7);
   skyDome.material.uniforms.sunDir.value.copy(sunDir); skyDome.position.copy(camera.position); renderer.toneMappingExposure = lerp(0.5, 0.82, day);
-  water.material.uniforms.sunDirection.value.copy(sunDir.y > 0 ? sunDir : new THREE.Vector3(0.2, 0.6, 0.3).normalize());
-  water.material.uniforms.sunColor.value.setHex(day > 0.1 ? (dusk > 0.4 ? 0xffb070 : 0xfff1d6) : 0x8fa6d6);
-  water.material.uniforms.time.value += dt * 0.6 + 0.0005;
   WATER_U.uTime.value = t; WATER_U.uSky.value.copy(skyDome.material.uniforms.top.value); WATER_U.uHor.value.copy(skyDome.material.uniforms.hor.value);
   WATER_U.uSunDir.value.copy(sunDir.y > 0 ? sunDir : new THREE.Vector3(0.2, 0.6, 0.3)); WATER_U.uSunCol.value.setHex(day > 0.1 ? (dusk > 0.4 ? 0xffb070 : 0xfff1d6) : 0x7088b8).multiplyScalar(0.3 + day * 0.7);
   windUniform.value = t; grassU.uCenter.value.set(player.position.x, player.position.z);
@@ -2887,6 +3040,7 @@ function updateWorld(dt, t) {
   if (snow.material.opacity > 0.01) { const sa3 = snow.geometry.attributes.position; for (let i = 0; i < sa3.count; i++) { let y = sa3.getY(i) - dt * 2.2 * S.timeScale; if (y < 0) y += 25; sa3.setY(i, y); sa3.setX(i, sa3.getX(i) + Math.sin(t + i) * 0.01); } sa3.needsUpdate = true; }
   fireflies.material.opacity = lerp(fireflies.material.opacity, night ? 0.9 * (0.6 + Math.sin(t * 3) * 0.4) : 0, dt * 2);
   crystals.forEach((c, i) => { c.rotation.y += dt * 0.2; if (c.material.emissiveIntensity !== undefined) c.material.emissiveIntensity = 1.3 + Math.sin(t * 2 + i) * 0.4; });
+  fallFx.forEach((m) => { const k = (t * 0.25 + m.userData.ph) % 1; m.position.copy(m.userData.base).setY(m.userData.base.y + 0.5 + k * 5); m.scale.setScalar(3 + k * 6); m.material.opacity = 0.3 * Math.sin(k * Math.PI); });
   braziers.forEach((f, i) => { f.scale.y = 1 + Math.sin(t * 13 + i) * 0.2; f.scale.x = f.scale.z = 1 + Math.sin(t * 9 + i * 2) * 0.08; if (f.userData.glow) f.userData.glow.material.opacity = 0.55 + Math.sin(t * 17 + i) * 0.12; });
   fallU.t.value = t;
   pollen.material.opacity = 0.7 * day; pollen.position.set(camera.position.x, Math.max(heightAt(camera.position.x, camera.position.z), 0), camera.position.z);
@@ -2985,7 +3139,7 @@ const waypoint = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0), new THREE.
 scene.add(waypoint);
 // Quest markers, World of Warcraft style: gold ! = someone has a task for you, gold ? = come here to hand in / deliver
 function questMarkers() {
-  if (S.explore || S.sailing || talkCam.on) return [];
+  if (S.explore || S.sailing || talkCam.on || S.cine) return [];
   const i = S.questIdx, out = [];
   if (i === 0) out.push({ pos: nestor.position, g: '!', h: 2.9 });
   if (i === 3) out.push({ pos: ATHENA_OFFER, g: '?', h: 1.2 });
@@ -3043,7 +3197,7 @@ function setSail() {
     player.position.set(0, 0.5, 0.8); player.rotation.set(0, 0, 0); raftGroup.add(player); P.yaw = 0;
     const tick = () => {
       const k = (performance.now() - start) / 1000;
-      raftGroup.position.z += 0.08 + k * 0.01; raftGroup.rotation.z = Math.sin(k * 1.4) * 0.05;
+      { const v = 0.08 + k * 0.01; raftGroup.position.x += Math.sin(boatYaw) * v; raftGroup.position.z += Math.cos(boatYaw) * v; } raftGroup.rotation.z = Math.sin(k * 1.4) * 0.05;
       if (k > 9) { $('fade').style.opacity = 1; }
       if (k > 11.5) {
         $('ending').classList.remove('hidden');
@@ -3076,8 +3230,8 @@ const grade = new ShaderPass({
 composer.addPass(grade);
 composer.addPass(new OutputPass());
 const PRESETS = {
-  low:    { scale: 0.75, min: 0.5, bloom: false, post: false, grass: 0.22, flowers: 0.25, shadow: 512, shadowBox: 22, soft: false, near: 40, far: 700, fogFar: 520, ambient: false },
-  medium: { scale: 1, min: 0.72, bloom: false, post: true, grass: 0.5, flowers: 0.5, shadow: 1024, shadowBox: 32, soft: false, near: 70, far: 3000, fogFar: 1150, ambient: true },
+  low:    { scale: Math.min(devicePixelRatio, 1), min: 0.7, bloom: false, post: false, grass: 0.22, flowers: 0.25, shadow: 512, shadowBox: 22, soft: false, near: 40, far: 700, fogFar: 520, ambient: false },
+  medium: { scale: Math.min(devicePixelRatio, 1.5), min: 0.9, bloom: false, post: true, grass: 0.5, flowers: 0.5, shadow: 1024, shadowBox: 32, soft: false, near: 70, far: 3000, fogFar: 1150, ambient: true },
   high:   { scale: Math.min(devicePixelRatio, 2), min: 1, bloom: true, post: true, grass: 1, flowers: 1, shadow: 2048, shadowBox: 36, soft: true, near: 130, far: 3000, fogFar: 1150, ambient: true },
 };
 function setQuality(level) {
@@ -3102,11 +3256,14 @@ const FPS = { frames: 0, t: 0, fps: 60, lowStreak: 0 };
 function trackFps(dt) {
   FPS.frames++; FPS.t += dt; if (FPS.t < 1) return;
   FPS.fps = FPS.frames / FPS.t; FPS.frames = 0; FPS.t = 0;
-  if (!S.running || S.paused || GFX.level === 'high') return;
+  if (!S.running || S.paused || S.cine || GFX.level === 'high') return;
+  // hysteresis: drop after 2 slow seconds in a row, climb back only after 5 smooth ones, so resolution never pumps
+  FPS.slow = FPS.fps < 50 ? (FPS.slow || 0) + 1 : 0; FPS.fast = FPS.fps > 58 ? (FPS.fast || 0) + 1 : 0;
   let s2 = GFX.scale;
-  if (FPS.fps < 56) s2 = Math.max(GFX.min, s2 - 0.08); else if (FPS.fps > 64 && s2 < GFX.base) s2 = Math.min(GFX.base, s2 + 0.04);
-  if (s2 !== GFX.scale) { GFX.scale = s2; renderer.setPixelRatio(s2); renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(s2); composer.setSize(innerWidth, innerHeight); }
-  if (GFX.level === 'medium' && FPS.fps < 40 && GFX.scale <= GFX.min) { if (++FPS.lowStreak >= 4) { setQuality('low'); toast('Switched to Low graphics for smoother play (change it in the pause menu)'); } } else FPS.lowStreak = 0;
+  if (FPS.slow >= 2) { s2 = Math.max(GFX.min, s2 - 0.1); FPS.slow = 0; }
+  else if (FPS.fast >= 5 && s2 < GFX.base) { s2 = Math.min(GFX.base, s2 + 0.05); FPS.fast = 0; }
+  if (Math.abs(s2 - GFX.scale) > 0.001) { GFX.scale = s2; renderer.setPixelRatio(s2); renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(s2); composer.setSize(innerWidth, innerHeight); }
+  if (GFX.level === 'medium' && FPS.fps < 38 && GFX.scale <= GFX.min) { if (++FPS.lowStreak >= 4) { setQuality('low'); toast('Switched to Low graphics for smoother play (change it in the pause menu)'); } } else FPS.lowStreak = 0;
 }
 const clock = new THREE.Clock();
 let hudT = 0;
@@ -3118,7 +3275,7 @@ function loop() {
     if (!S.sailing && (!frozen || S.cine)) updatePlayer(dt);
     if (!frozen || S.cine || talkCam.on) { updateWorld(dt, t); if (!S.cine) for (const c of creatures) updateCreature(c, dt); }
     if (S.sailing) {
-      const rp = raftGroup.position; camera.position.lerp(new THREE.Vector3(rp.x - 10, 6, rp.z - 14), dt); camera.lookAt(rp.x, 2, rp.z + 20);
+      const rp = raftGroup.position, fx = Math.sin(boatYaw), fz = Math.cos(boatYaw); camera.position.lerp(new THREE.Vector3(rp.x - fx * 14 - fz * 8, 6, rp.z - fz * 14 + fx * 8), dt); camera.lookAt(rp.x + fx * 20, 2, rp.z + fz * 20);
     } else if (S.cine) updateCine(dt); else if (talkCam.on) { updateTalkCam(dt); if (hero.rig && !talkCam.fixed) poseHero(0, 0, 0, t); } else updateCamera(dt);
     // Chips
     for (let i = chips.length - 1; i >= 0; i--) { const c = chips[i]; c.t += dt; c.v.y -= 15 * dt; c.m.position.addScaledVector(c.v, dt); if (c.t > 0.7) { scene.remove(c.m); chips.splice(i, 1); } }
@@ -3154,12 +3311,34 @@ function loop() {
     { const near = Math.hypot(CAVE.x - cx, CAVE.z - cz) < 70; for (const o of caveInner) o.visible = near; }
     for (const c of creatures) c.obj.visible = S.running && !S.cine && Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < (c.type === 'rabbit' ? 70 : 140);
   }
-  ambientSound(dt);
-  shadowTick = (shadowTick + 1) % (GFX.level === 'low' ? 2 : 1); renderer.shadowMap.needsUpdate = shadowTick === 0;   // Low: shadows refresh every other frame
+  ambientSound(dt); updateLightPool();
+  renderer.shadowMap.needsUpdate = true;
   renderer.info.reset(); trackFps(dt);
   if (GFX.post) composer.render(); else renderer.render(scene, camera);
 }
 let cullFrame = 0, shadowTick = 0;
+// ---- Light pool: three.js shades every pixel for every light in the scene, so ~16 torches and braziers were costing
+//      everywhere. Instead each source becomes an 'emitter' and 4 real point lights hop to the nearest ones.
+//      The light count never changes, so no shader recompiles either.
+const EMITTERS = [], LIGHT_POOL = [];
+function addEmitter(src, pos) { EMITTERS.push({ src, pos: pos.clone() }); }
+function removeEmitter(src) { const i = EMITTERS.findIndex((e) => e.src === src); if (i >= 0) EMITTERS.splice(i, 1); }
+{
+  scene.updateMatrixWorld(true); const found = [];
+  scene.traverse((o) => { if (o.isPointLight) found.push(o); });
+  for (const L of found) { addEmitter(L, L.getWorldPosition(new THREE.Vector3())); if (!L.userData.dyn) L.parent.remove(L); }
+  divineLight.visible = false;
+  for (let i = 0; i < 4; i++) { const L = new THREE.PointLight(0xffffff, 0, 10, 1.5); LIGHT_POOL.push(L); scene.add(L); }
+}
+const _lp = [];
+function updateLightPool() {
+  const c = S.running && !S.cine ? player.position : camera.position; _lp.length = 0;
+  for (const e of EMITTERS) { const src = e.src, p = src.userData.dyn ? src.position : e.pos, inten = src.intensity;
+    if (inten <= 0.01) continue; const d = c.distanceTo(p); if (d > src.distance + 20) continue; _lp.push([d, e, p, inten]); }
+  _lp.sort((a, b) => a[0] - b[0]);
+  LIGHT_POOL.forEach((L, i) => { const it = _lp[i]; if (!it) { L.intensity = 0; return; } const [, e, p, inten] = it;
+    L.position.copy(p); L.color.copy(e.src.color); L.distance = e.src.distance; L.decay = e.src.decay; L.intensity = inten; });
+}
 // Fire: every brazier cone becomes an additive flame with a hot core and a soft glow, so it reads as fire in daylight too
 { const outer = new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false }),
     core = new THREE.MeshBasicMaterial({ color: 0xffe28a, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
@@ -3222,40 +3401,35 @@ $('exploreBtn').onclick = () => {
 // ---- Intro cinematic: the menu fades, the camera leaves the title orbit and flies over Nisos while the story is told,
 //      then comes down to the cove where Zeus delivers you in a column of light.
 const CINE_LINES = [
-  [1.0, 7.5, '<small>Argonisos</small>Hera has finally slain Hercules.'],
-  [9.5, 17.0, 'Mourning his son, Zeus shaped a world between the earth and the sky, where mortals can prove themselves worthy of his strength.'],
-  [19.5, 26.5, '<small>Nine lands · Nine Guardians</small>Each land is ruled by a Guardian. Defeat all nine and ascend to Olympos with the power of a demigod.'],
-  [29.0, 36.0, '<small>The chosen</small>You are one of the chosen. Your trial begins here, on Nisos.'],
-  [38.5, 44.5, 'The gods are watching. Honour them, and they will answer.'],
-  [46.5, 51.5, 'Zeus has left a guide on this island. Find Nestor.'],
+  [1.5, 8.0, '<small>Argonisos</small>Hera has finally slain Hercules.'],
+  [10.0, 17.0, 'Mourning his son, Zeus shaped a world between the earth and the sky, where mortals can prove themselves worthy of his strength.'],
+  [19.0, 25.5, '<small>Nine lands · Nine Guardians</small>Defeat each Guardian and ascend to Olympos with the power of a demigod.'],
+  [27.5, 33.5, '<small>The chosen</small>You are one of the chosen. The sea brought you to Nisos, and broke your boat on its shore.'],
+  [35.5, 40.5, 'Your trial begins here. Find Nestor.'],
 ];
 function playIntro() {
-  S.cine = { t: 0, dur: 53, line: -1, bank: 0 }; $('cine').classList.add('intro');
+  S.cine = { t: 0, dur: 42, line: -1 }; $('cine').classList.add('intro');
   $('cine').classList.remove('hidden'); requestAnimationFrame(() => $('cine').classList.add('on'));
-  $('hud').classList.add('hidden'); player.visible = false; S.time = 0.285;
+  $('hud').classList.add('hidden'); S.time = 0.285;
   // final pose: exactly where the gameplay camera will sit
   camYaw = P.yaw + Math.PI; camPitch = 0.28; const save = camera.position.clone(); camera.position.copy(player.position).add(new THREE.Vector3(0, 4, 7)); updateCamera(1);
   const endPos = camera.position.clone(), endLook = player.position.clone().add(new THREE.Vector3(0, 1.7, 0)); camera.position.copy(save);
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
-  const hy = (x, z, o) => Math.max(heightAt(x, z), 0) + o;
-  // A full loop around Nisos: south-west sea, the marsh, the dark woods, the watchtower cliffs, over the summit arena,
-  // down past the waterfall and the lake, the Temple of Athena, the olive terraces, and finally the cove
-  S.cine.pos = new THREE.CatmullRomCurve3([save, V(-250, 105, 230), V(SWAMP.x - 20, hy(SWAMP.x, SWAMP.z, 38), SWAMP.z + 55), V(FOREST.x + 30, hy(FOREST.x, FOREST.z, 42), FOREST.z + 40),
-    V(TOWER.x + 45, TOWER_TOP.y + 16, TOWER.z + 55), V(MOUNT.x - 120, SUMMIT_Y + 26, MOUNT.z - 50), V(MOUNT.x - 25, SUMMIT_Y + 24, MOUNT.z + 5), V(MOUNT.x + 45, SUMMIT_Y + 8, MOUNT.z + 45),
-    V(LAKE.x + 25, LAKE_Y + 26, LAKE.z - 30), V(TEMPLE.x + 42, TEMPLE_Y + 18, TEMPLE.z + 38), V(OLIVE.x + 35, hy(OLIVE.x, OLIVE.z, 16), OLIVE.z + 28),
-    V(START.x + 48, START.y + 22, START.z + 26), V(START.x + 16, START.y + 8, START.z + 13), endPos], false, 'centripetal');
-  S.cine.look = new THREE.CatmullRomCurve3([V(30, 22, -50), V(-60, 10, 60), V(SWAMP.x, 2, SWAMP.z), V(FOREST.x, 10, FOREST.z), TOWER_TOP.clone(), SUMMIT.clone(), SUMMIT.clone().add(V(0, 4, -16)),
-    V(LAKE.x, LAKE_Y + 6, LAKE.z), V(LAKE.x, LAKE_Y, LAKE.z + 10), V(TEMPLE.x, TEMPLE_Y + 6, TEMPLE.z), V(OLIVE.x, hy(OLIVE.x, OLIVE.z, 2), OLIVE.z),
-    V(HUT.x, HUT.y + 2, HUT.z), endLook.clone(), endLook], false, 'centripetal');
+  // One long, calm approach from far out at sea: high and wide over the water, the island growing on the horizon,
+  // sinking low over the waves, in through the channel, and settling on the cove where your boat lies wrecked
+  const dir = new THREE.Vector3(SEA_OUT.x - DOCK.x, 0, SEA_OUT.z - DOCK.z).normalize(), far = (d, y, side = 0) => V(SEA_OUT.x + dir.x * d - dir.z * side, y, SEA_OUT.z + dir.z * d + dir.x * side);
+  camera.position.copy(far(760, 300, -620));
+  S.cine.pos = new THREE.CatmullRomCurve3([far(760, 300, -620), far(540, 210, -430), far(340, 120, -220), far(170, 45, -60), far(60, 14, 0), far(10, 7, 0),
+    V(DOCK.x + dir.x * 12, 6, DOCK.z + dir.z * 12), endPos], false, 'centripetal');
+  S.cine.look = new THREE.CatmullRomCurve3([V(MOUNT.x, SUMMIT_Y * 0.6, MOUNT.z), V(40, 30, -40), V(20, 18, 20), V(DOCK.x, 6, DOCK.z - 30), V(HUT.x, HUT.y + 3, HUT.z),
+    WRECK.clone().setY(1), endLook.clone(), endLook], false, 'centripetal');
   snd.whoosh();
 }
 function updateCine(dt) {
   const C = S.cine; C.t += dt;
-  const u = clamp(C.t / C.dur, 0, 1), e = u * u * u * (u * (u * 6 - 15) + 10);          // smootherstep: gentle take-off and landing
+  const u = clamp(C.t / C.dur, 0, 1), e = 1 - Math.pow(1 - u, 2.2);                    // ease-out: steady glide in, slow settle at the end
   camera.position.copy(C.pos.getPointAt(e)); camera.lookAt(C.look.getPoint(e));
-  { const t0 = C.pos.getTangentAt(Math.min(0.999, e)), t1 = C.pos.getTangentAt(Math.min(1, e + 0.01)), turn = Math.atan2(t0.x * t1.z - t0.z * t1.x, t0.x * t1.x + t0.z * t1.z);
-    C.bank = lerp(C.bank, clamp(-turn * 9, -0.14, 0.14) * (1 - e * e), Math.min(1, dt * 1.5)); camera.rotateZ(C.bank); }
-  camera.fov = 60 + Math.sin(u * Math.PI) * 6; camera.updateProjectionMatrix();
+  camera.fov = 60 - (1 - e) * 12; camera.updateProjectionMatrix();                          // long lens far out, opening up as we arrive
   const li = CINE_LINES.findIndex(([a, b]) => C.t >= a && C.t < b);
   if (li !== C.line) { C.line = li; const el = $('cineText'); el.classList.remove('show'); if (li >= 0) setTimeout(() => { el.innerHTML = CINE_LINES[li][2]; el.classList.add('show'); }, li === 0 ? 0 : 500); }
   if (C.t >= C.dur) endIntro();
@@ -3264,11 +3438,8 @@ function endIntro() {
   if (!S.cine) return; S.cine = null; $('cine').classList.remove('intro'); camera.fov = 60; camera.updateProjectionMatrix();
   camera.position.copy(player.position).add(new THREE.Vector3(0, 4, 7)); updateCamera(1);
   $('cineText').classList.remove('show'); $('cine').classList.remove('on'); setTimeout(() => $('cine').classList.add('hidden'), 1400);
-  // Zeus delivers you: flash, thunder, a column of light where you stand
-  $('flash').style.opacity = 0.85; setTimeout(() => { $('flash').style.transition = 'opacity 1.6s'; $('flash').style.opacity = 0; setTimeout(() => ($('flash').style.transition = ''), 1700); }, 120);
-  snd.thunder(); divineBeam(player.position.clone(), 4.5, 1.1); player.visible = true;
-  burst(player.position.clone().setY(player.position.y + 1), 0xffe6a0, 18);
-  setTimeout(() => { $('hud').classList.remove('hidden'); questCard(Q[0]); }, 1500);
+  player.visible = true;
+  setTimeout(() => { $('hud').classList.remove('hidden'); questCard(Q[0]); }, 900);
 }
 $('cineSkip').onclick = () => endIntro();
 $('startBtn').onclick = () => {
@@ -3281,4 +3452,4 @@ $('startBtn').onclick = () => {
   S.running = true; setPause(false); canvas.requestPointerLock();
 };
 renderer.info.autoReset = false;
-window.ARG = { pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
+window.ARG = { THREE, pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, START, WRECK, DOCK, SEA_OUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
