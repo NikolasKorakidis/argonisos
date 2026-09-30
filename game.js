@@ -340,7 +340,13 @@ const tools = makeTools(); player.userData.arms[1].add(tools.axe, tools.spear);
 const hero = { wrap: new THREE.Group(), hand: new THREE.Group(), model: null };
 player.add(hero.wrap); hero.wrap.add(hero.hand);
 hero.hand.position.set(-0.8, 1.3, 0.02);
-new FBXLoader().load('models/hero.fbx', (obj) => {
+// Try the raw .fbx first (local server); fall back to the base64 module (artifact hosting can't serve .fbx).
+async function loadHeroBuffer() {
+  try { const r = await fetch('models/hero.fbx'); if (r.ok) return await r.arrayBuffer(); } catch { /* fall through */ }
+  const b64 = (await import('./models/hero.fbx.js')).default;
+  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer;
+}
+loadHeroBuffer().then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
   const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3());
   const s = 1.95 / size.y; obj.scale.setScalar(s);
   const b2 = new THREE.Box3().setFromObject(obj), c = b2.getCenter(new THREE.Vector3());
@@ -356,7 +362,7 @@ new FBXLoader().load('models/hero.fbx', (obj) => {
   hero.wrap.add(obj); hero.model = obj;
   player.userData.body.visible = false;
   for (const t of [tools.axe, tools.spear]) { hero.hand.add(t); t.position.set(0, -0.35, 0.15); }
-}, undefined, (e) => console.warn('Hero model failed to load, keeping placeholder', e));
+}).catch((e) => console.warn('Hero model failed to load, keeping placeholder', e));
 const P = { vel: new THREE.Vector3(), yaw: Math.PI, onGround: true, swing: 0, swingHit: false, hurtT: 0, animT: 0, dead: false };
 
 // NPC Nestor the hermit (the Elder from the cast sheet)
