@@ -337,9 +337,94 @@ const player = makeHumanoid({ tunic: 0xf1ead9, belt: 0x7a4f2c, hair: 0x3a2412 })
 player.position.copy(START); scene.add(player);
 const tools = makeTools(); player.userData.arms[1].add(tools.axe, tools.spear);
 // Hero model (static FBX, no rig): replaces the procedural body once loaded and gets procedural animation.
-const hero = { wrap: new THREE.Group(), hand: new THREE.Group(), model: null };
-player.add(hero.wrap); hero.wrap.add(hero.hand);
-hero.hand.position.set(-0.8, 1.3, 0.02);
+const hero = { wrap: new THREE.Group(), model: null, rig: null };
+player.add(hero.wrap);
+// ---- Auto-rig: the FBX is a static T-pose mesh, so build a skeleton and skin weights in code ----
+// Model space: feet at y=0, height 1.95, facing +z. Right side of the character is -x.
+function autoRig(obj) {
+  obj.updateMatrixWorld(true);
+  const meshes = []; obj.traverse((m) => { if (m.isMesh) meshes.push(m); });
+  // Gather vertices in model space to find landmarks
+  const geos = meshes.map((m) => { const g = m.geometry.clone(); g.applyMatrix4(m.matrixWorld); return g; });
+  const H = 1.95; let X = 0;
+  for (const g of geos) { const a = g.attributes.position; for (let i = 0; i < a.count; i++) X = Math.max(X, Math.abs(a.getX(i))); }
+  let ay = 0, an = 0;                                                    // arm height = mean y of the outer arm
+  for (const g of geos) { const a = g.attributes.position; for (let i = 0; i < a.count; i++) if (Math.abs(a.getX(i)) > X * 0.7) { ay += a.getY(i); an++; } }
+  ay /= Math.max(an, 1);
+  let torsoW = 0;                                                        // torso half-width just under the armpit
+  for (const g of geos) { const a = g.attributes.position; for (let i = 0; i < a.count; i++) { const y = a.getY(i); if (y > ay - 0.34 && y < ay - 0.2) torsoW = Math.max(torsoW, Math.abs(a.getX(i))); } }
+  torsoW = Math.min(torsoW, X * 0.45);
+  const sx = torsoW - 0.02, ex = sx + (X - sx) * 0.47;                 // shoulder / elbow x
+  const hipY = H * 0.47, kneeY = H * 0.25, neckY = ay + 0.14, hipX = 0.11;
+  console.log('autoRig', { X: X.toFixed(2), armY: ay.toFixed(2), torsoW: torsoW.toFixed(2) });
+
+  const mk = (name, x, y, z, parent) => { const b = new THREE.Bone(); b.name = name; const wp = new THREE.Vector3(x, y, z); b.userData.wp = wp; if (parent) { b.position.copy(wp).sub(parent.userData.wp); parent.add(b); } else b.position.copy(wp); return b; };
+  const B = {};
+  B.hips = mk('hips', 0, hipY, 0);
+  B.spine = mk('spine', 0, ay - 0.3, 0, B.hips);
+  B.head = mk('head', 0, neckY, 0, B.spine);
+  for (const [side, sg] of [['L', 1], ['R', -1]]) {
+    B['arm' + side] = mk('arm' + side, sg * sx, ay, 0, B.spine);
+    B['fore' + side] = mk('fore' + side, sg * ex, ay, 0, B['arm' + side]);
+    B['thigh' + side] = mk('thigh' + side, sg * hipX, hipY, 0, B.hips);
+    B['shin' + side] = mk('shin' + side, sg * hipX, kneeY, 0, B['thigh' + side]);
+  }
+  const list = Object.values(B), idx = (b) => list.indexOf(b);
+  const sm = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+
+  // Two influences per vertex: pick the region, blend with its parent near the joint
+  function weigh(x, y) {
+    const ax = Math.abs(x), side = x >= 0 ? 'L' : 'R';
+    if (ax > sx - 0.05 && Math.abs(y - ay) < 0.22 && y > hipY + 0.2) {      // arm
+      const tArm = sm(sx - 0.05, sx + 0.07, ax);
+      if (ax > ex - 0.05) { const tf = sm(ex - 0.05, ex + 0.05, ax); return [B['fore' + side], B['arm' + side], tf]; }
+      return [B['arm' + side], B.spine, tArm];
+    }
+    if (y < hipY + 0.04) {                                                  // leg
+      const tLeg = sm(hipY + 0.04, hipY - 0.14, y);
+      if (y < kneeY + 0.06) { const ts = sm(kneeY + 0.06, kneeY - 0.06, y); return [B['shin' + side], B['thigh' + side], ts]; }
+      return [B['thigh' + side], B.hips, tLeg];
+    }
+    if (y > neckY - 0.04) return [B.head, B.spine, sm(neckY - 0.04, neckY + 0.04, y)];
+    return [B.spine, B.hips, sm(hipY, ay - 0.3, y)];
+  }
+  const root = new THREE.Group(); root.add(B.hips); hero.wrap.add(root);
+  const skinned = [];
+  meshes.forEach((m, k) => {
+    const g = geos[k], a = g.attributes.position, si = [], sw = [];
+    for (let i = 0; i < a.count; i++) { const [b1, b2, w] = weigh(a.getX(i), a.getY(i)); si.push(idx(b1), idx(b2), 0, 0); sw.push(w, 1 - w, 0, 0); }
+    g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+    g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+    const sk = new THREE.SkinnedMesh(g, m.material); sk.castShadow = sk.receiveShadow = true; sk.frustumCulled = false;
+    hero.wrap.add(sk); skinned.push(sk);
+  });
+  hero.wrap.updateMatrixWorld(true);
+  const skeleton = new THREE.Skeleton(list);
+  skinned.forEach((sk) => sk.bind(skeleton));
+  return { bones: B, handOffset: new THREE.Vector3(-(X - ex) + 0.06, 0, 0) };
+}
+
+// Pose the rig every frame. speed: m/s, ph: gait phase, sw: attack swing 1→0, t: time
+function poseHero(speed, ph, sw, t) {
+  const B = hero.rig.bones, k = Math.min(speed / 5, 1), run = k > 0.9 ? 1 : k;
+  const s = Math.sin(ph), breathe = Math.sin(t * 2) * 0.02;
+  // Arms down from the T-pose (rotate about z), then swing about x
+  B.armL.rotation.set(-s * 0.55 * run, 0, -1.25 + breathe);
+  B.armR.rotation.set(s * 0.55 * run, 0, 1.25 - breathe);
+  B.foreL.rotation.set(0, -0.25 - 0.3 * run, 0);
+  B.foreR.rotation.set(0, 0.25 + 0.3 * run, 0);
+  if (sw > 0) {                                     // overhead chop: raise forward, then strike down
+    const a = sw > 0.55 ? lerp(0.4, -2.3, (1 - sw) / 0.45) : lerp(-2.3, 0.6, (0.55 - sw) / 0.55);
+    B.armR.rotation.set(a, 0, 1.25); B.foreR.rotation.set(0, 0.2, 0);
+    B.spine.rotation.set(sw > 0.55 ? -0.12 : 0.18, sw > 0.55 ? -0.3 : 0.25, 0);
+  } else B.spine.rotation.set(0.06 * run + breathe, s * 0.08 * run, 0);
+  // Legs: thigh swing, knee bends on the back-swing
+  B.thighL.rotation.x = s * 0.7 * run; B.thighR.rotation.x = -s * 0.7 * run;
+  B.shinL.rotation.x = Math.max(0, s) * 0.9 * run; B.shinR.rotation.x = Math.max(0, -s) * 0.9 * run;
+  B.hips.position.y = B.hips.userData.wp.y + Math.abs(Math.cos(ph)) * 0.05 * run - (1 - Math.abs(Math.cos(ph))) * 0.02 * run;
+  B.head.rotation.set(-0.04 * run, -s * 0.06 * run, 0);
+}
+
 // Try the raw .fbx first (local server); fall back to the base64 module (artifact hosting can't serve .fbx).
 async function loadHeroBuffer() {
   try { const r = await fetch('models/hero.fbx'); if (r.ok) return await r.arrayBuffer(); } catch { /* fall through */ }
@@ -359,9 +444,10 @@ loadHeroBuffer().then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
     if (m.material.length === 1) m.material = m.material[0];
     for (const mt of [].concat(m.material)) if (mt.map) mt.map.colorSpace = THREE.SRGBColorSpace;
   });
-  hero.wrap.add(obj); hero.model = obj;
+  hero.rig = autoRig(obj); hero.model = obj;
   player.userData.body.visible = false;
-  for (const t of [tools.axe, tools.spear]) { hero.hand.add(t); t.position.set(0, -0.35, 0.15); }
+  const rf = hero.rig.bones.foreR;   // tools go in the right fist (end of the right forearm)
+  for (const t of [tools.axe, tools.spear]) { rf.add(t); t.position.copy(hero.rig.handOffset); t.rotation.set(Math.PI / 2 - 0.8, 0, 0); }
 }).catch((e) => console.warn('Hero model failed to load, keeping placeholder', e));
 const P = { vel: new THREE.Vector3(), yaw: Math.PI, onGround: true, swing: 0, swingHit: false, hurtT: 0, animT: 0, dead: false };
 
@@ -907,15 +993,7 @@ function updatePlayer(dt) {
   if (P.swing > 0) { P.swing -= dt * 3.2; if (!P.swingHit && P.swing < 0.55) { P.swingHit = true; doHit(); } }
   P.animT += dt * (speed > 0 ? speed / 4.6 : 0.3);
   animateHumanoid(player, speed, P.animT, Math.max(P.swing, 0));
-  if (hero.model) {
-    const k = Math.min(speed / 5, 1), ph = P.animT * 10;
-    hero.wrap.position.y = Math.abs(Math.sin(ph)) * 0.07 * k;
-    hero.wrap.rotation.x = k * 0.12;
-    hero.wrap.rotation.z = Math.sin(ph) * 0.05 * k;
-    const sw = Math.max(P.swing, 0);
-    hero.wrap.rotation.y = sw > 0 ? Math.sin(sw * Math.PI) * -0.5 : 0;
-    hero.hand.rotation.x = sw > 0 ? -2.4 + (1 - sw) * 3.2 : Math.sin(ph) * 0.3 * k;
-  }
+  if (hero.rig) poseHero(speed, P.animT * 10, Math.max(P.swing, 0), performance.now() / 1000);
   tools.axe.visible = S.slot === 1; tools.spear.visible = S.slot === 2;
   if (P.hurtT > 0) P.hurtT -= dt;
 }
@@ -1121,4 +1199,4 @@ $('startBtn').onclick = () => {
     toast('Follow the gold ◆ marker', false);
   }
 };
-window.ARG = { S, player };  // console access for playtesting
+window.ARG = { S, player, hero, poseHero, P };  // console access for playtesting
