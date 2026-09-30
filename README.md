@@ -49,3 +49,10 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
 - **Cave mouth**: natural rock arch, dark depth veils that fade as you enter, entrance torches.
 - **Temple of Athena**: Doric peristyle with entasis columns and echinus capitals, painted triglyph/metope frieze, sculpted pediments, tiled roof with antefixes, pronaos with bronze doors, coffered ceiling, polished floor, two-tier inner colonnade, reflecting pool, offering table, owls on plinths, and a chryselephantine Athena Parthenos with Nike, shield, serpent and spear.
 - **Performance**: pickups merged per material, cave interior merged and distance-culled, creatures culled tighter (and hidden on the title), Low refreshes shadows every other frame.
+
+## v6: cutscene camera, trees, summit arena
+- **Intro** now loops the whole island (sea, marsh, woods, watchtower, summit arena, waterfall, temple, olive terraces, cove) in ~53 s, with camera banking on turns and a slow FOV breathe.
+- **Conversations** play as cutscenes: letterbox, over-the-shoulder shots that cut between speakers and drift slowly. The offering to Athena gets its own push-in shot on the statue.
+- **Trees** are grown from a branching generator: gnarled trunks with knots and roots, limbs forking into twigs, and leaf clusters at every twig tip (oak, birch, autumn oak, and twisted, often split-trunk olives).
+- **Summit**: the mountain is bigger and its peak is cut into a ~76 m paved arena ("Throne of Olympos") with a ring of broken columns, four great braziers, and the ruins of a Temple of Zeus: broken peristyle, a standing corner with its painted entablature, a fallen pediment, ruined cella walls and Zeus' empty colossal throne with his fallen head. Built for the boss fight.
+- **No bow on Nisos**: bow pickup, arrow recipe and slot 4 removed.

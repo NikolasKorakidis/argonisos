@@ -50,8 +50,8 @@ function baseHeight(x, z) {
   const d = Math.hypot(x, z * 1.05) / ISLAND_R;
   let h = (1 - d * d) * 14 + (fbm(x * 0.012 + 10, z * 0.012) - 0.5) * 20 + (fbm(x * 0.05, z * 0.05) - 0.5) * 4 - 1.5;
   const dm = Math.hypot(x - MOUNT.x, z - MOUNT.z);                       // the mountain: broad base, rugged ridges
-  h += 88 * Math.exp(-(dm * dm) / (2 * 52 * 52)) * (0.8 + 0.4 * fbm(x * 0.035, z * 0.035));
-  h += 18 * Math.exp(-(dm * dm) / (2 * 95 * 95));
+  h += 100 * Math.exp(-(dm * dm) / (2 * 60 * 60)) * (0.8 + 0.4 * fbm(x * 0.035, z * 0.035));
+  h += 20 * Math.exp(-(dm * dm) / (2 * 108 * 108));
   const dw = Math.hypot(x - TOWER.x, z - TOWER.z); h += 24 * Math.exp(-(dw * dw) / (2 * 42 * 42));   // cliff headland
   const dp = Math.hypot(x - TEMPLE.x, z - TEMPLE.z); h += 12 * Math.exp(-(dp * dp) / (2 * 45 * 45)); // temple hill
   const ds = Math.hypot(x - SWAMP.x, z - SWAMP.z), sw = clamp(1 - (ds - 55) / 40, 0, 1);        // swamp basin
@@ -67,12 +67,12 @@ function caveDist(x, z) {
 }
 const flatten = (h, x, z, c, r0, r1, target) => { const t = clamp((Math.hypot(x - c.x, z - c.z) - r0) / (r1 - r0), 0, 1); return lerp(target, h, t * t * (3 - 2 * t)); };
 const RUINS_Y = baseHeight(RUINS.x, RUINS.z) + 3, CAVE_Y = baseHeight(CAVE_MOUTH.x, CAVE_MOUTH.z) - 2.5, TEMPLE_Y = baseHeight(TEMPLE.x, TEMPLE.z) + 1.5, LAKE_Y = baseHeight(LAKE.x, LAKE.z) - 1;
-const SUMMIT = MOUNT.clone(), SUMMIT_Y = baseHeight(MOUNT.x, MOUNT.z) - 6; SUMMIT.y = SUMMIT_Y;   // boss arena on the peak
+const SUMMIT = MOUNT.clone(), SUMMIT_Y = baseHeight(MOUNT.x, MOUNT.z) - 14; const ARENA_R = 38; SUMMIT.y = SUMMIT_Y;   // boss arena on the peak
 RUINS.y = RUINS_Y; CAVE.y = CAVE_Y; TEMPLE.y = TEMPLE_Y; LAKE.y = LAKE_Y;
 function heightAt(x, z) {
   let h = baseHeight(x, z);
   h = flatten(h, x, z, RUINS, 10, 22, RUINS_Y);
-  h = flatten(h, x, z, SUMMIT, 13, 24, SUMMIT_Y);
+  h = flatten(h, x, z, SUMMIT, ARENA_R, ARENA_R + 16, SUMMIT_Y);
   // Cave: the mountain is kept tall over the chamber, then the footprint is carved down to the cave floor
   const cd = caveDist(x, z);
   if (cd.over < 10) h = Math.max(h, lerp(CAVE_Y + 13, h, clamp(cd.over / 10, 0, 1)));
@@ -87,7 +87,7 @@ const REGIONS = [
   { key: 'cave', name: 'Cave of Echoes', sub: 'Something old sleeps in the dark', c: CAVE, r: 0 },
   { key: 'temple', name: 'Temple of Athena', sub: 'Marble that remembers the gods', c: TEMPLE, r: 42 },
   { key: 'lake', name: 'Lake Kastalia', sub: 'Snowmelt from the high peaks', c: LAKE, r: 38 },
-  { key: 'summit', name: 'Throne of Olympos', sub: 'A champion waits above the clouds', c: SUMMIT, r: 26 },
+  { key: 'summit', name: 'Throne of Olympos', sub: 'A champion waits above the clouds', c: SUMMIT, r: ARENA_R + 12 },
   { key: 'tower', name: 'Watchtower of Aeolus', sub: 'Climb it to see the whole island', c: TOWER, r: 55 },
   { key: 'mountain', name: 'Mount Olympos', sub: 'Thin air, cold stone, old snow', c: MOUNT, r: 100, minH: 26 },
   { key: 'swamp', name: 'Stymphalian Marsh', sub: 'Keep to the reeds. Mind the mist', c: SWAMP, r: 92 },
@@ -238,7 +238,7 @@ const ASCENT = [];
 {
   const S0 = [-9, -60];   // branches off the cave trail ~30 m before the ravine
   const a0 = Math.atan2(S0[1] - MOUNT.z, S0[0] - MOUNT.x), r0 = Math.hypot(S0[0] - MOUNT.x, S0[1] - MOUNT.z), sweep = Math.PI * 2.3, n = 96;
-  for (let i = 0; i <= n; i++) { const t = i / n, a = a0 + sweep * t, r = lerp(r0, 17, Math.pow(t, 0.85)) + Math.sin(t * 40) * 2.5 * (1 - t);
+  for (let i = 0; i <= n; i++) { const t = i / n, a = a0 + sweep * t, r = lerp(r0, ARENA_R + 1, Math.pow(t, 0.85)) + Math.sin(t * 40) * 2.5 * (1 - t);
     ASCENT.push([MOUNT.x + Math.cos(a) * r, MOUNT.z + Math.sin(a) * r]); }
 }
 // Smooth every trail with a centripetal Catmull-Rom so corners become curves (sampled every ~3 m)
@@ -427,7 +427,7 @@ function landSpot(minH, maxH, avoid = []) {
   return null;
 }
 
-const AVOID = [{ x: HUT.x, z: HUT.z, r: 12 }, { x: SUMMIT.x, z: SUMMIT.z, r: 18 }, { x: DOCK.x, z: DOCK.z, r: 12 }, { x: START.x, z: START.z, r: 5 },
+const AVOID = [{ x: HUT.x, z: HUT.z, r: 12 }, { x: SUMMIT.x, z: SUMMIT.z, r: ARENA_R + 8 }, { x: DOCK.x, z: DOCK.z, r: 12 }, { x: START.x, z: START.z, r: 5 },
   { x: CAVE.x, z: CAVE.z, r: CH_R + 8 }, { x: CAVE_MOUTH.x, z: CAVE_MOUTH.z, r: 12 }, { x: CAVE_APPROACH.x, z: CAVE_APPROACH.z, r: 8 }, { x: TEMPLE.x, z: TEMPLE.z, r: 30 }, { x: LAKE.x, z: LAKE.z, r: 26 }, { x: TOWER.x, z: TOWER.z, r: 10 }];
 
 const windUniformEarly = { value: 0 };
@@ -446,14 +446,14 @@ const leafTex = (() => {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 })();
 let CARD_PARTS = [];   // collected while building a tree's high-detail version
-function leafCards(centre, rx, ry, n, color) {
+function leafCards(centre, rx, ry, n, color, size0 = 1.5, size1 = 2.2, nc = centre) {
   if (PROP_LO) return;
   for (let i = 0; i < n; i++) {
     const u = rand() * 6.28, v = Math.acos(rr(-0.55, 1)), sh = rr(0.72, 1.08);
     const p = new THREE.Vector3(Math.sin(v) * Math.cos(u) * rx * sh, Math.cos(v) * ry * sh, Math.sin(v) * Math.sin(u) * rx * sh).add(centre);
-    const size = rr(1.5, 2.2), g = new THREE.PlaneGeometry(size, size);
+    const size = rr(size0, size1), g = new THREE.PlaneGeometry(size, size);
     g.rotateZ(rand() * 6.28); g.rotateX(rr(-1.2, 1.2)); g.rotateY(rand() * 6.28); g.translate(p.x, p.y, p.z);
-    const nrm = p.clone().sub(centre); nrm.y = nrm.y / ry * rx + 0.35; nrm.normalize();   // soft, rounded crown lighting
+    const nrm = p.clone().sub(nc); nrm.y = nrm.y / ry * rx + 0.35; nrm.normalize();   // soft, rounded crown lighting
     const na = g.attributes.normal; for (let k = 0; k < na.count; k++) na.setXYZ(k, nrm.x, nrm.y, nrm.z);
     CARD_PARTS.push([g, new THREE.Color(color).offsetHSL(rr(-0.02, 0.02), rr(-0.05, 0.05), rr(-0.06, 0.06)).getHex()]);
   }
@@ -493,7 +493,7 @@ function mergeParts(parts) {            // parts: [geometry(already placed), hex
 // Fluffy canopy blob: normals point away from the canopy centre so the whole crown shades as one soft volume
 let PROP_LO = false;   // true while building the far-distance LOD
 function blob(r, x, y, z, centre, stretchY = 1, detail = 1) {
-  const g = new THREE.IcosahedronGeometry(r, PROP_LO ? 0 : 1); g.translate(x, y, z);
+  const g = new THREE.IcosahedronGeometry(r, PROP_LO ? 0 : detail); g.translate(x, y, z);
   const a = g.attributes.position, v = new THREE.Vector3(), n = new Float32Array(a.count * 3);
   for (let k = 0; k < a.count; k++) {
     v.fromBufferAttribute(a, k); v.x += (hash(v.x * 9, v.z * 9) - 0.5) * r * 0.25; v.y += (hash(v.y * 9, v.x * 5) - 0.5) * r * 0.2;
@@ -505,16 +505,54 @@ function limb(r0, r1, len, x, y, z, rx, rz, seg = 6) {   // tapered trunk / bran
   const g = new THREE.CylinderGeometry(r1, r0, len, PROP_LO ? Math.min(seg, 4) : seg, PROP_LO ? 1 : 2); g.translate(0, len / 2, 0);
   g.rotateX(rx); g.rotateZ(rz); g.translate(x, y, z); return g;
 }
+// Branching tree generator: a gnarled trunk that forks into limbs and twigs (tapered segments with knots), and every
+// twig ends in a leaf cluster (a dark core blob + leaf cards), so the foliage actually grows out of the branches.
+const UPV = new THREE.Vector3(0, 1, 0);
+function segGeo(a, b, r0, r1, sides) {
+  const d = b.clone().sub(a), L = d.length(), g = new THREE.CylinderGeometry(r1, r0, L, sides, 1, true); g.translate(0, L / 2, 0);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UPV, d.normalize())); g.translate(a.x, a.y, a.z); return g;
+}
+function growTree(P, o) {
+  const tips = [], bark = o.bark, sidesOf = (r) => (PROP_LO ? 4 : r > 0.25 ? 8 : r > 0.1 ? 6 : 4);
+  const grow = (a, dir, len, r0, depth) => {
+    const n = PROP_LO ? 2 : (depth === o.depth ? o.trunkSteps : 3); let p = a.clone(), d = dir.clone(), r = r0; const rEnd = r0 * o.taper;
+    for (let i = 0; i < n; i++) {
+      d.x += rr(-o.gnarl, o.gnarl); d.z += rr(-o.gnarl, o.gnarl); d.y += o.rise; d.normalize();
+      const q = p.clone().addScaledVector(d, len / n), r2 = lerp(r0, rEnd, (i + 1) / n);
+      P.push([segGeo(p, q, r, r2, sidesOf(r)), bark]);
+      if (!PROP_LO && r2 > 0.16) P.push([new THREE.IcosahedronGeometry(r2 * (o.knot || 1.08), 0).translate(q.x, q.y, q.z), bark]);   // joint knot hides the seams
+      p = q; r = r2;
+    }
+    if (depth <= 0) { tips.push({ p, d }); return; }
+    const k = o.kids(depth);
+    for (let j = 0; j < k; j++) {
+      const az = (j / k) * Math.PI * 2 + rr(-0.5, 0.5), tilt = o.spread(depth) * rr(0.8, 1.2);
+      const side = new THREE.Vector3(Math.cos(az), 0, Math.sin(az)), cd = d.clone().multiplyScalar(Math.cos(tilt)).addScaledVector(side, Math.sin(tilt)).normalize();
+      grow(p, cd, len * o.lenF * rr(0.8, 1.15), Math.max(0.03, r * o.rF), depth - 1);
+    }
+    if (o.midKids && depth >= 1) { const mp = a.clone().lerp(p, rr(0.45, 0.7)), az = rand() * 6.28;   // a side limb from mid-branch
+      grow(mp, new THREE.Vector3(Math.cos(az), 0.6, Math.sin(az)).normalize(), len * o.lenF * 0.8, Math.max(0.03, r0 * o.rF * 0.8), depth - 1); }
+  };
+  grow(new THREE.Vector3(0, -0.25, 0), new THREE.Vector3(rr(-0.08, 0.08), 1, rr(-0.08, 0.08)).normalize(), o.trunkH, o.trunkR, o.depth);
+  // roots flaring into the ground
+  for (let i = 0; i < (o.roots || 0); i++) { const a = i / o.roots * 6.28 + rr(-0.3, 0.3); P.push([limb(o.trunkR * 0.55, 0.05, o.trunkR * 2.4, Math.cos(a) * o.trunkR * 0.5, -0.15, Math.sin(a) * o.trunkR * 0.5, Math.sin(a) * 1.25, -Math.cos(a) * 1.25, 5), bark]); }
+  // foliage at every tip, normals from the whole crown so it shades as one soft mass
+  const cc = new THREE.Vector3(); tips.forEach((t) => cc.add(t.p)); cc.multiplyScalar(1 / Math.max(1, tips.length)); cc.y -= o.clusterR * 0.6;
+  for (const t of tips) {
+    const c = t.p.clone().addScaledVector(t.d, o.clusterR * 0.35);
+    const core = PROP_LO ? o.leaf : new THREE.Color(o.leaf).multiplyScalar(0.58).getHex();
+    P.push([blob(o.clusterR * (PROP_LO ? 1.05 : o.core || 0.62), c.x, c.y, c.z, cc, 1, 0), core]);
+    if (!PROP_LO && o.extraBlob) P.push([blob(o.clusterR * 0.45, c.x + rr(-0.5, 0.5), c.y + o.clusterR * 0.4, c.z + rr(-0.5, 0.5), cc, 1), core]);
+    leafCards(c, o.clusterR, o.clusterR * o.flat, o.cards, o.leaf, o.card0, o.card1, cc);
+  }
+  return tips;
+}
 const TREE_BUILDERS = {
   oak(v) {
-    const P = [], lean = rr(-0.08, 0.08), H = rr(3, 3.8);
-    P.push([limb(0.62, 0.38, H, 0, -0.2, 0, lean, rr(-0.06, 0.06), 8), 0x6b4a30]);
-    for (let i = 0; i < 3; i++) { const a = i * 2.1 + v; P.push([limb(0.22, 0.1, 2.2, 0, H - 0.4, 0, Math.cos(a) * 0.9, Math.sin(a) * 0.9), 0x6b4a30]); }
-    for (let i = 0; i < 4; i++) { const a = i * 1.57 + v; P.push([limb(0.3, 0.05, 1, Math.cos(a) * 0.3, -0.1, Math.sin(a) * 0.3, Math.sin(a) * 1.3, -Math.cos(a) * 1.3, 5), 0x5d4029]); } // roots
-    const c = new THREE.Vector3(0, H + 1.6, 0), leaf = [0x4f7f2e, 0x5d8a34, 0x6b9338, 0x46752b][v % 4];
-    const core = PROP_LO ? leaf : new THREE.Color(leaf).multiplyScalar(0.55).getHex();
-    for (let i = 0; i < 9; i++) { const a = rand() * 6.28, rr0 = rr(0.6, 2.2), top = i > 6; P.push([blob((top ? rr(0.9, 1.3) : rr(1.2, 1.9)) * (PROP_LO ? 1 : 0.62), Math.cos(a) * rr0 * (top ? 0.6 : 1), c.y + (top ? rr(1, 1.8) : rr(-0.6, 1.1)), Math.sin(a) * rr0 * (top ? 0.6 : 1), c), top && PROP_LO ? new THREE.Color(leaf).offsetHSL(0.02, 0.05, 0.08).getHex() : core]); }
-    leafCards(c.clone().setY(c.y + 0.4), 2.8, 2.2, 110, leaf);
+    const P = [], leaf = [0x4f7f2e, 0x5d8a34, 0x6b9338, 0x46752b][v % 4];
+    growTree(P, { bark: 0x6b4a30, leaf, trunkH: rr(3, 3.8), trunkR: rr(0.5, 0.62), trunkSteps: 3, depth: 2, taper: 0.62, gnarl: 0.16, rise: 0.12, roots: 5,
+      kids: (d) => (d === 2 ? 3 + (v % 2) : 2), spread: (d) => (d === 2 ? 0.85 : 0.6), lenF: 0.72, rF: 0.62, midKids: true,
+      clusterR: 1.5, flat: 0.78, cards: 12, card0: 1.25, card1: 1.85 });
     return P;
   },
   autumn(v) {
@@ -543,12 +581,10 @@ const TREE_BUILDERS = {
     return P;
   },
   birch(v) {
-    const P = [], H = rr(5, 6.5);
-    P.push([limb(0.26, 0.14, H, 0, -0.2, 0, rr(-0.05, 0.05), rr(-0.05, 0.05), 7), 0xe9e4d8]);
-    for (let i = 0; i < 6; i++) { const y = rr(0.4, H - 1.4), r = lerp(0.26, 0.14, (y + 0.2) / H) + 0.012; P.push([limb(r, r, rr(0.04, 0.08), 0, y, 0, 0, 0, 7), 0x55504a]); }   // thin bark marks that follow the taper
-    const c = new THREE.Vector3(0, H + 0.6, 0), leaf = [0x9fb23e, 0xb7bf45, 0x86a83a][v % 3];
-    for (let i = 0; i < 7; i++) { const a = rand() * 6.28; P.push([blob(rr(0.9, 1.3) * (PROP_LO ? 1 : 0.8), Math.cos(a) * rr(0.3, 1.1), c.y + rr(-1.4, 1), Math.sin(a) * rr(0.3, 1.1), c, 1.5), PROP_LO ? leaf : new THREE.Color(leaf).multiplyScalar(0.75).getHex()]); }
-    leafCards(c, 1.6, 2.1, 72, leaf);
+    const P = [], leaf = [0x9fb23e, 0xb7bf45, 0x86a83a][v % 3];
+    growTree(P, { bark: 0xe9e4d8, leaf, trunkH: rr(4.6, 5.8), trunkR: 0.24, trunkSteps: 4, depth: 2, taper: 0.55, gnarl: 0.05, rise: 0.35, roots: 0,
+      kids: (d) => (d === 2 ? 3 : 2), spread: (d) => (d === 2 ? 0.55 : 0.5), lenF: 0.5, rF: 0.55, clusterR: 0.95, flat: 1.2, cards: 9, card0: 0.9, card1: 1.4 });
+    if (!PROP_LO) for (let i = 0; i < 6; i++) { const y = rr(0.4, 3.6), r = lerp(0.24, 0.16, y / 5) + 0.012; P.push([limb(r, r, rr(0.04, 0.08), 0, y, 0, 0, 0, 8), 0x55504a]); }   // bark marks
     return P;
   },
   cypress(v) {
@@ -557,11 +593,17 @@ const TREE_BUILDERS = {
     return P;
   },
   olive(v) {
-    const P = [];
-    for (let i = 0; i < 3; i++) { const a = i * 2.1 + v; P.push([limb(0.3, 0.16, 2.6, Math.cos(a) * 0.15, -0.1, Math.sin(a) * 0.15, Math.cos(a) * 0.35, Math.sin(a) * 0.35, 6), 0x6e6252]); }
-    const c = new THREE.Vector3(0, 3.3, 0);
-    leafCards(c.clone().setY(c.y + 0.2), 2.0, 1.1, 64, 0x8a9a66);
-    for (let i = 0; i < 9; i++) { const a = rand() * 6.28, d = rr(0.3, 1.5); P.push([blob(rr(0.55, 0.85) * (PROP_LO ? 1 : 0.85), Math.cos(a) * d, c.y + rr(-0.3, 0.6), Math.sin(a) * d, c, 0.6), [0x7d8f5a, 0x8a9a66, 0x6f8352][i % 3]]); }
+    // Olive: a short, twisted, often split trunk, wide low limbs, many silvery-green clusters of small leaves
+    const P = [], leaf = [0x95a67a, 0x879b6c, 0xa2b086][v % 3];
+    for (let s2 = 0; s2 < (v % 2 ? 2 : 1); s2++) {                                                      // some olives split into two trunks
+      const sub = [], cs = CARD_PARTS.length; growTree(sub, { bark: 0x6e6252, leaf, trunkH: rr(1.6, 2.2), trunkR: rr(0.34, 0.44) * (v % 2 ? 0.8 : 1), trunkSteps: 4, depth: 3, taper: 0.6, gnarl: 0.42, rise: 0.02, roots: 4, knot: 1.25,
+        kids: (d) => (d === 3 ? (v % 2 ? 2 : 3) : 2), spread: (d) => (d === 3 ? 1.0 : d === 2 ? 0.75 : 0.55), lenF: 0.78, rF: 0.62,
+        clusterR: 1.15, flat: 0.6, cards: 14, card0: 0.85, card1: 1.3, core: 0.42 });
+      const off = v % 2 ? (s2 ? 0.35 : -0.35) : 0, tl = v % 2 ? (s2 ? 0.25 : -0.25) : 0;
+      for (const [g] of sub) { g.rotateZ(tl); g.translate(off, 0, 0); }
+      for (let q = cs; q < CARD_PARTS.length; q++) { CARD_PARTS[q][0].rotateZ(tl); CARD_PARTS[q][0].translate(off, 0, 0); }
+      P.push(...sub);
+    }
     return P;
   },
   dead(v) {
@@ -720,7 +762,7 @@ function addRock(pos, scale, choppable) {
 for (let i = 0; i < 170; i++) { const p = landSpot(0.8, 40, AVOID); if (p) addRock(p, rr(0.8, 1.4), true); }
 for (let i = 0; i < 220; i++) {
   const a = rand() * 6.28, d = rr(20, 110), px = MOUNT.x + Math.cos(a) * d, pz = MOUNT.z + Math.sin(a) * d, h = heightAt(px, pz);
-  if (h > 8 && caveDist(px, pz).foot > 6 && Math.hypot(px - LAKE.x, pz - LAKE.z) > 28) addRock(new THREE.Vector3(px, h - 0.4, pz), rr(1.5, 4), false);
+  if (h > 8 && caveDist(px, pz).foot > 6 && Math.hypot(px - LAKE.x, pz - LAKE.z) > 28 && d > ARENA_R + 10) addRock(new THREE.Vector3(px, h - 0.4, pz), rr(1.5, 4), false);
 }
 for (let i = 0; i < 40; i++) { const a = rand() * 6.28, d = rr(10, 45), px = TOWER.x + Math.cos(a) * d, pz = TOWER.z + Math.sin(a) * d, h = heightAt(px, pz); if (h > 2 && d > 8) addRock(new THREE.Vector3(px, h - 0.3, pz), rr(1.2, 3), false); }
 // --- Ground pickups ---
@@ -788,7 +830,7 @@ const grassU = { uWind: windUniform, uCenter: { value: new THREE.Vector2() }, uT
     const x = (i + 0.5) / N * W - W / 2, z = (j + 0.5) / N * W - W / 2, h = heightAt(x, z);
     const R = regionAt(x, z, h), sl = Math.hypot(heightAt(x + 1, z) - h, heightAt(x, z + 1) - h);
     let mask = clamp((h - 1.3) / 0.6, 0, 1) * clamp((44 - h) / 6, 0, 1) * clamp((1.1 - sl) / 0.4, 0, 1);
-    mask *= clamp((Math.hypot(x - SUMMIT.x, z - SUMMIT.z) - 12) / 2, 0, 1) * clamp((Math.hypot(x - HUT.x, z - HUT.z) - 4) / 1.5, 0, 1);
+    mask *= clamp((Math.hypot(x - SUMMIT.x, z - SUMMIT.z) - ARENA_R) / 3, 0, 1) * clamp((Math.hypot(x - HUT.x, z - HUT.z) - 4) / 1.5, 0, 1);
     mask *= clamp((caveDist(x, z).foot - 1) / 3, 0, 1) * clamp((Math.hypot(x - LAKE.x, z - LAKE.z) - 24) / 3, 0, 1);
     if (Math.abs(x - TEMPLE.x) < 14 && Math.abs(z - TEMPLE.z) < 20) mask = 0;
     if (R.key === 'swamp') mask *= 0.35; if (R.key === 'forest') mask *= 0.55;
@@ -1451,9 +1493,6 @@ const RAFT_SITE_EARLY = DOCK.clone().add(new THREE.Vector3(3.6, 0, 1));
   sign(-14, -56, [['Cave of Echoes', CAVE_MOUTH.x, CAVE_MOUTH.z], ['The Ascent · Summit', ASCENT[6][0], ASCENT[6][1]]]);
 }
 
-const groundBow = new THREE.Group();
-{ const p = HUT.clone().add(new THREE.Vector3(5.5, 0, 6)); p.y = heightAt(p.x, p.z) + 0.1; addPickup('bowitem', p, () => groundBow);
-  loadTexturedFBX('bow', 1.35, (obj) => { obj.rotation.z = Math.PI / 2; obj.position.set(0.6, 0.12, 0); groundBow.add(obj); }); }
 // --- Nestor's hut (small house from the buildings sheet): stone plinth, plaster + timber frame, tiled roof, porch
 {
   const g = new THREE.Group(), M = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.9 });
@@ -1507,26 +1546,102 @@ for (let i = 0; i < 6; i++) {
 }
 const CHIMNEY = new THREE.Vector3(1.8, 6, -0.8).applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.3).add(HUT);
 
-// --- Ruins (columns, blocks, chest) ---
+// --- Throne of Olympos: the summit arena. A paved ring ~38 m across and the ruins of a great Temple of Zeus at its north end,
+//     broken columns, a standing corner of entablature, a fallen pediment, toppled drums and an empty colossal throne. Boss fight goes here.
 const ruinsGroup = new THREE.Group();
 {
-  const stone = flat(0xd8cfbd);
-  mesh(new THREE.CylinderGeometry(9, 9.5, 0.6, 12), flat(0xb9ae98), 0, 0.3, 0, ruinsGroup);
-  // Boss-arena dressing: a sealed bronze gate and two great braziers (the fight comes later)
-  mesh(new THREE.BoxGeometry(1.2, 7, 1.2), stone, -2.6, 3.8, -8.4, ruinsGroup); mesh(new THREE.BoxGeometry(1.2, 7, 1.2), stone, 2.6, 3.8, -8.4, ruinsGroup);
-  mesh(new THREE.BoxGeometry(6.6, 1.2, 1.4), stone, 0, 7.8, -8.4, ruinsGroup);
-  mesh(new THREE.BoxGeometry(4, 6.2, 0.3), new THREE.MeshStandardMaterial({ color: 0x8a6a30, metalness: 0.7, roughness: 0.35 }), 0, 3.4, -8.4, ruinsGroup);
-  for (const sx of [-5, 5]) { mesh(new THREE.CylinderGeometry(0.7, 0.4, 1.2, 10), new THREE.MeshStandardMaterial({ color: 0x6a5030, metalness: 0.6, roughness: 0.4 }), sx, 1.2, 4, ruinsGroup);
-    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.4, 7), new THREE.MeshBasicMaterial({ color: 0xff8a2a })); fl.position.set(sx, 2.4, 4); ruinsGroup.add(fl); braziers.push(fl);
-    const L = new THREE.PointLight(0xff8a3a, 40, 22, 1.5); L.position.set(sx, 3.2, 4); ruinsGroup.add(L); }
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2, broken = i % 3 === 1, h = broken ? rr(1.2, 2.5) : 5;
-    const x = Math.cos(a) * 7, z = Math.sin(a) * 7;
-    mesh(new THREE.CylinderGeometry(0.45, 0.5, h, 10), stone, x, 0.6 + h / 2, z, ruinsGroup);
-    colliders.push({ x: SUMMIT.x + x, z: SUMMIT.z + z, r: 0.6 });
-    if (!broken) mesh(new THREE.BoxGeometry(1.2, 0.35, 1.2), stone, x, 5.75, z, ruinsGroup);
+  const g = ruinsGroup, stone = new THREE.MeshStandardMaterial({ color: 0xd9d0bd, roughness: 0.75 }), stoneD = new THREE.MeshStandardMaterial({ color: 0xbdb29c, roughness: 0.85 }),
+    blue = new THREE.MeshStandardMaterial({ color: 0x3a5480, roughness: 0.8 }), red = new THREE.MeshStandardMaterial({ color: 0x8e3a2e, roughness: 0.8 });
+  const bronze = new THREE.MeshStandardMaterial({ color: 0x7a5a2a, metalness: 0.75, roughness: 0.4 });
+  // Arena floor: weathered flagstones with cracks and grass, a mosaic ring and a sunburst of Zeus in the centre
+  { const c = document.createElement('canvas'); c.width = c.height = 1024; const x = c.getContext('2d');
+    x.fillStyle = '#8f877a'; x.fillRect(0, 0, 1024, 1024);
+    for (let ring = 0; ring < 16; ring++) { const r0 = 40 + ring * 30, n = Math.floor(6 + ring * 5.5);
+      for (let k = 0; k < n; k++) { const a0 = (k + (ring % 2) * 0.5) / n * Math.PI * 2, a1 = a0 + Math.PI * 2 / n, v = (Math.random() * 30 - 15) | 0;
+        x.fillStyle = `rgb(${196 + v},${188 + v},${170 + v})`; x.beginPath(); x.arc(512, 512, r0 + 27, a0 + 0.012, a1 - 0.012); x.arc(512, 512, r0 + 2, a1 - 0.012, a0 + 0.012, true); x.closePath(); x.fill(); } }
+    x.strokeStyle = '#c9a13a'; x.lineWidth = 10; x.beginPath(); x.arc(512, 512, 250, 0, 7); x.stroke(); x.lineWidth = 4; x.beginPath(); x.arc(512, 512, 272, 0, 7); x.stroke();
+    x.fillStyle = '#c9a13a'; for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2; x.beginPath(); x.moveTo(512 + Math.cos(a) * 30, 512 + Math.sin(a) * 30); x.lineTo(512 + Math.cos(a + 0.12) * 140, 512 + Math.sin(a + 0.12) * 140); x.lineTo(512 + Math.cos(a - 0.12) * 140, 512 + Math.sin(a - 0.12) * 140); x.fill(); }
+    x.fillStyle = '#2f4a78'; x.beginPath(); x.arc(512, 512, 34, 0, 7); x.fill();
+    x.strokeStyle = 'rgba(40,34,28,.55)'; x.lineWidth = 2; for (let k = 0; k < 60; k++) { let px = Math.random() * 1024, py = Math.random() * 1024; x.beginPath(); x.moveTo(px, py); for (let q = 0; q < 6; q++) { px += Math.random() * 40 - 20; py += Math.random() * 40 - 20; x.lineTo(px, py); } x.stroke(); }
+    x.fillStyle = 'rgba(80,110,50,.6)'; for (let k = 0; k < 900; k++) x.fillRect(Math.random() * 1024, Math.random() * 1024, 2, 5);
+    const im = x.getImageData(0, 0, 1024, 1024), d = im.data;                  // broken, ragged outer edge
+    for (let py = 0; py < 1024; py++) for (let px = 0; px < 1024; px++) { const r = Math.hypot(px - 512, py - 512), e = 505 - Math.sin(Math.atan2(py - 512, px - 512) * 9) * 10 - Math.random() * 12; if (r > e) d[(py * 1024 + px) * 4 + 3] = 0; }
+    x.putImageData(im, 0, 0);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    const fl = new THREE.Mesh(new THREE.CircleGeometry(ARENA_R - 1, 64).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: t, alphaTest: 0.5, roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+    fl.position.y = 0.36; fl.receiveShadow = true; fl.userData.keep = true; g.add(fl); }
+  // Ring of broken columns around the arena
+  const col = new THREE.CylinderGeometry(0.75, 0.85, 1, 24, 1);
+  { const a = col.attributes.position; for (let i = 0; i < a.count; i++) { const ang = Math.atan2(a.getZ(i), a.getX(i)), f = 1 - 0.06 * (0.5 + 0.5 * Math.cos(ang * 20)); a.setX(i, a.getX(i) * f); a.setZ(i, a.getZ(i) * f); } col.computeVertexNormals(); }
+  const drum = (x, z, rot, rz) => { const d = mesh(new THREE.CylinderGeometry(0.8, 0.8, 1.5, 20), stoneD, x, 0.75, z, g); d.rotation.set(0, rot, Math.PI / 2 + (rz || 0)); };
+  for (let i = 0; i < 20; i++) {
+    const a = i / 20 * Math.PI * 2; if (Math.sin(a) < -0.55) continue;                                     // gap to the north where the temple stands
+    const x = Math.cos(a) * (ARENA_R - 3), z = Math.sin(a) * (ARENA_R - 3), h = [8, 2.5, 5.5, 1.2, 7, 3.4][i % 6] * rr(0.85, 1.1);
+    const c = mesh(col, stone, x, 0.3 + h / 2, z, g); c.scale.y = h; colliders.push({ x: SUMMIT.x + x, z: SUMMIT.z + z, r: 0.9 });
+    if (h > 7.5) mesh(new THREE.BoxGeometry(2.1, 0.45, 2.1), stone, x, 0.3 + h + 0.22, z, g);
+    else { const top = mesh(new THREE.CylinderGeometry(0.78, 0.8, 0.5, 9), stoneD, x, 0.3 + h + 0.1, z, g); top.rotation.set(rr(-0.2, 0.2), rand(), rr(-0.2, 0.2)); }
+    if (h < 4) drum(x + Math.cos(a + 1.3) * 2.2, z + Math.sin(a + 1.3) * 2.2, a, rr(-0.1, 0.1));
   }
-  for (let i = 0; i < 6; i++) { const b = mesh(new THREE.BoxGeometry(rr(1, 2), 0.7, 0.8), stone, rr(-8, 8), 0.8, rr(-8, 8), ruinsGroup); b.rotation.y = rr(0, 3); }
+  // The temple: platform, a 6×10 Doric peristyle (most columns broken), a surviving corner with its entablature, ruined cella walls
+  const TW = 10, TD = 15, TZ = -(ARENA_R - TD - 4), top = 1.5, colH = 9;
+  for (let i = 0; i < 3; i++) { mesh(new THREE.BoxGeometry((TW + 1.8 - i * 0.9) * 2, 0.5, (TD + 1.8 - i * 0.9) * 2), i === 2 ? stone : stoneD, 0, 0.55 + i * 0.5, TZ, g);
+    FLOORS.push({ rect: true, x: SUMMIT.x, z: SUMMIT.z + TZ, w: TW + 1.8 - i * 0.9, d: TD + 1.8 - i * 0.9, y: SUMMIT_Y - 0.3 + 0.8 + i * 0.5 }); }
+  const echinus = new THREE.LatheGeometry([new THREE.Vector2(0.62, 0), new THREE.Vector2(0.8, 0.12), new THREE.Vector2(0.95, 0.3), new THREE.Vector2(0.98, 0.4)], 20);
+  const spots = [];
+  for (let i = 0; i < 6; i++) { const x = -TW + 1 + i * (2 * TW - 2) / 5; spots.push([x, TZ - TD + 1], [x, TZ + TD - 1]); }
+  for (let j = 1; j < 9; j++) { const z = TZ - TD + 1 + j * (2 * TD - 2) / 9; spots.push([-TW + 1, z], [TW - 1, z]); }
+  const standing = new Set([0, 1, 2, 3, 4]);                  // the north-west corner still carries its architrave
+  spots.forEach(([x, z], i) => {
+    const corner = x < -TW + 2 && z < TZ - TD + 2 + (2 * TD - 2) / 9 * 2.1 || (z < TZ - TD + 2 && x < -TW + 1 + (2 * TW - 2) / 5 * 1.1);
+    const h = corner ? colH : [0.8, 3.2, 1.6, 5.4, 2.4, 0][i % 6] * rr(0.8, 1.2);
+    if (h < 0.4) { drum(x + rr(-1, 1), z + rr(1.5, 3), rr(0, 3)); drum(x + rr(-1, 1), z + rr(3.5, 5), rr(0, 3)); return; }
+    const c = mesh(col, stone, x, top + 0.5 + h / 2, z, g); c.scale.y = h; colliders.push({ x: SUMMIT.x + x, z: SUMMIT.z + z, r: 0.9 });
+    if (corner) mesh(echinus, stone, x, top + 0.5 + colH, z, g), mesh(new THREE.BoxGeometry(2.1, 0.36, 2.1), stone, x, top + 0.5 + colH + 0.58, z, g);
+    else { const tp = mesh(new THREE.CylinderGeometry(0.72, 0.76, 0.35, 9), stoneD, x, top + 0.5 + h + 0.05, z, g); tp.rotation.set(rr(-0.25, 0.25), 0, rr(-0.25, 0.25)); if (h > 2) drum(x + rr(1.4, 2.4) * Math.sign(x || 1), z + rr(-1.5, 1.5), rr(0, 3)); }
+  });
+  { const eY = top + 0.5 + colH + 0.76, x0 = -TW + 1, z0 = TZ - TD + 1, lenX = (2 * TW - 2) / 5 * 1 + 1.4, lenZ = (2 * TD - 2) / 9 * 2 + 1.4;
+    mesh(new THREE.BoxGeometry(lenX, 1.1, 1.6), stone, x0 + lenX / 2 - 0.7, eY + 0.55, z0, g); mesh(new THREE.BoxGeometry(1.6, 1.1, lenZ), stone, x0, eY + 0.55, z0 + lenZ / 2 - 0.7, g);
+    for (let u = 0; u < lenX - 1; u += 1.8) { mesh(new THREE.BoxGeometry(0.7, 1.1, 0.12), blue, x0 + u, eY + 1.65, z0 - 0.82, g); mesh(new THREE.BoxGeometry(1, 0.95, 0.06), red, x0 + u + 0.9, eY + 1.65, z0 - 0.79, g); }
+    mesh(new THREE.BoxGeometry(lenX, 1.1, 1.5), stone, x0 + lenX / 2 - 0.7, eY + 1.65, z0, g); mesh(new THREE.BoxGeometry(1.5, 1.1, lenZ), stone, x0, eY + 1.65, z0 + lenZ / 2 - 0.7, g);
+    mesh(new THREE.BoxGeometry(lenX + 0.6, 0.4, 2), stone, x0 + lenX / 2 - 0.7, eY + 2.4, z0, g); }
+  // fallen pediment slab leaning against the platform, and a toppled chunk of cornice
+  { const sh = new THREE.Shape(); sh.moveTo(-6, 0); sh.lineTo(6, 0); sh.lineTo(0, 2.6); sh.closePath();
+    const pd = mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.9, bevelEnabled: false }), stone, 8, 1.2, TZ + TD + 4.5, g); pd.rotation.set(-1.15, 0.35, 0.12);
+    const ty = new THREE.Shape(); ty.moveTo(-5, 0.3); ty.lineTo(5, 0.3); ty.lineTo(0, 2.2); ty.closePath(); const tm = mesh(new THREE.ShapeGeometry(ty), blue, 0, 0, 0, pd); tm.position.z = 0.92;
+    const cr = mesh(new THREE.BoxGeometry(5, 1.1, 1.6), stoneD, -9, 0.9, TZ + TD + 3, g); cr.rotation.set(0.2, 0.8, 0.35);
+    colliders.push({ x: SUMMIT.x + 8, z: SUMMIT.z + TZ + TD + 4.5, r: 3.5 }, { x: SUMMIT.x - 9, z: SUMMIT.z + TZ + TD + 3, r: 2 }); }
+  // Cella: walls broken to uneven heights, a doorway to the south
+  const cw = 6, cd = 10, wall = (x0, z0, x1, z1) => { const L = Math.hypot(x1 - x0, z1 - z0), n = Math.round(L / 1.2);
+    for (let k = 0; k < n; k++) { const t = (k + 0.5) / n, hh = Math.max(0.6, 4.5 * (0.5 + 0.5 * Math.sin(k * 0.9 + x0)) + rr(-1, 1));
+      for (let y = 0; y < hh; y += 0.6) { if (y + 0.6 > hh && rand() < 0.5) break; const b = mesh(new THREE.BoxGeometry(1.18, 0.58, 0.9), (k + Math.round(y / 0.6)) % 3 ? stoneD : stone, lerp(x0, x1, t), top + 0.8 + y, TZ + lerp(z0, z1, t), g); b.rotation.y = Math.atan2(x1 - x0, z1 - z0) + Math.PI / 2 + rr(-0.03, 0.03); } }
+    wallColliders(SUMMIT.x + x0, SUMMIT.z + TZ + z0, SUMMIT.x + x1, SUMMIT.z + TZ + z1); };
+  wall(-cw, -cd, cw, -cd); wall(-cw, -cd, -cw, cd); wall(cw, -cd, cw, cd); wall(-cw, cd, -1.8, cd); wall(1.8, cd, cw, cd);
+  // The empty throne of Zeus: colossal, marble with gilt bronze, a broken statue's feet still on the seat, the head fallen at its base
+  { const th = new THREE.Group(); th.position.set(0, top + 0.5, TZ - cd + 3.2); g.add(th);
+    mesh(new THREE.BoxGeometry(6, 1.2, 4.2), stoneD, 0, 0.6, 0, th); mesh(new THREE.BoxGeometry(5.2, 1.6, 3.6), stone, 0, 2, 0.1, th);
+    mesh(new THREE.BoxGeometry(5.4, 6.5, 0.9), stone, 0, 4.5, -1.5, th);
+    for (const sx of [-1, 1]) { mesh(new THREE.BoxGeometry(0.8, 1.6, 3.4), stone, sx * 2.6, 3.4, 0.1, th); mesh(new THREE.SphereGeometry(0.5, 12, 8), bronze, sx * 2.6, 4.3, 1.6, th); mesh(new THREE.BoxGeometry(0.9, 0.4, 3.6), bronze, sx * 2.6, 4.2, 0.1, th); }
+    mesh(new THREE.BoxGeometry(5.6, 0.5, 1.1), bronze, 0, 7.9, -1.5, th); mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.3, 24).rotateX(Math.PI / 2), bronze, 0, 6.2, -1.0, th);
+    const bolt = new THREE.Shape(); bolt.moveTo(0.1, 0.8); bolt.lineTo(-0.35, 0); bolt.lineTo(0, 0.05); bolt.lineTo(-0.15, -0.8); bolt.lineTo(0.35, 0.1); bolt.lineTo(0, 0.05); bolt.closePath();
+    mesh(new THREE.ExtrudeGeometry(bolt, { depth: 0.1, bevelEnabled: false }), new THREE.MeshStandardMaterial({ color: 0xffd060, emissive: 0xffa020, emissiveIntensity: 0.8, metalness: 0.6, roughness: 0.3 }), 0, 6.2, -0.8, th);
+    for (const sx of [-1, 1]) mesh(new THREE.BoxGeometry(0.9, 0.7, 1.6), stone, sx * 0.8, 3.15, 1.2, th);                 // the feet that remain
+    const head = new THREE.Group(); head.position.set(3.4, 0.9, 5.2); head.rotation.set(0.25, 0.9, 1.3); th.add(head);
+    mesh(new THREE.SphereGeometry(1.3, 18, 14), stone, 0, 0, 0, head).scale.set(0.9, 1.1, 1);
+    mesh(new THREE.SphereGeometry(1.0, 14, 10), stoneD, 0, -1.1, 0.4, head).scale.set(1.1, 0.9, 0.8);                        // beard
+    mesh(new THREE.SphereGeometry(1.2, 14, 10, 0, Math.PI * 2, 0, 1.1), stoneD, 0, 0.35, -0.1, head);                        // hair
+    mesh(new THREE.BoxGeometry(0.25, 0.5, 0.3), stone, 0, -0.05, 1.2, head);
+    colliders.push({ x: SUMMIT.x, z: SUMMIT.z + TZ - cd + 3.2, r: 3.2 }, { x: SUMMIT.x + 3.4, z: SUMMIT.z + TZ - cd + 8.4, r: 1.6 }); }
+  // Rubble and blocks all over; four great bronze braziers mark the fighting ring
+  for (let i = 0; i < 40; i++) { const a = rand() * 6.28, d = rr(6, ARENA_R - 4), b = mesh(new THREE.BoxGeometry(rr(0.5, 1.6), rr(0.3, 0.8), rr(0.5, 1.2)), rand() < 0.5 ? stone : stoneD, Math.cos(a) * d, 0.5, Math.sin(a) * d, g); b.rotation.set(rr(-0.3, 0.3), rand() * 3, rr(-0.3, 0.3)); }
+  for (const [bx, bz, lit] of [[-14, 10, true], [14, 10, true], [-15, -4, false], [15, -4, false]]) {
+    const b = new THREE.Group(); b.position.set(bx, 0.35, bz); g.add(b);
+    mesh(new THREE.CylinderGeometry(0.9, 1.2, 0.6, 12), stoneD, 0, 0.3, 0, b);
+    for (let k = 0; k < 3; k++) { const leg = mesh(new THREE.CylinderGeometry(0.1, 0.14, 2.6, 6), bronze, Math.cos(k * 2.1) * 0.55, 1.8, Math.sin(k * 2.1) * 0.55, b); leg.rotation.set(Math.sin(k * 2.1) * 0.18, 0, -Math.cos(k * 2.1) * 0.18); }
+    mesh(new THREE.CylinderGeometry(1.3, 0.55, 0.7, 14), bronze, 0, 3.3, 0, b);
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.95, 2, 8), new THREE.MeshBasicMaterial({ color: 0xff8a2a })); fl.position.y = 4.5; b.add(fl); braziers.push(fl);
+    if (lit) { const L = new THREE.PointLight(0xff8a3a, 60, 30, 1.4); L.position.y = 5.4; b.add(L); }
+    colliders.push({ x: SUMMIT.x + bx, z: SUMMIT.z + bz, r: 1.3 });
+  }
   ruinsGroup.position.set(SUMMIT.x, SUMMIT_Y - 0.3, SUMMIT.z); bakeGroup(ruinsGroup); scene.add(ruinsGroup);
 }
 const chestObj = new THREE.Group();
@@ -2037,7 +2152,7 @@ function burst(pos, color, n = 8) {
 }
 
 // Hotbar
-const SLOTS = [{ k: 'hands', ic: '✊', n: 'Hands' }, { k: 'axe', ic: '🪓', n: 'Axe' }, { k: 'spear', ic: '🔱', n: 'Spear' }, { k: 'bow', ic: '🏹', n: 'Bow' }];
+const SLOTS = [{ k: 'hands', ic: '✊', n: 'Hands' }, { k: 'axe', ic: '🪓', n: 'Axe' }, { k: 'spear', ic: '🔱', n: 'Spear' }];
 function renderHUD() {
   $('hpB').style.width = S.hp + '%'; $('foodB').style.width = S.food + '%'; $('staB').style.width = S.sta + '%';
   $('hpN').textContent = Math.ceil(S.hp); $('staN').textContent = Math.ceil(S.sta); $('foodN').textContent = Math.ceil(S.food);
@@ -2070,7 +2185,6 @@ const RECIPES = [
   { id: 'rope', ic: '🧶', name: 'Rope', desc: 'Twisted fiber. Holds a raft together.', cost: { fiber: 3 }, make: () => give('rope', 1) },
   { id: 'axe', ic: '🪓', name: 'Stone Axe', desc: 'Fells trees and breaks rocks 4× faster.', cost: { wood: 3, stone: 2, fiber: 1 }, once: () => S.tools.axe, make: () => { S.tools.axe = true; S.slot = 1; } },
   { id: 'spear', ic: '🔱', name: 'Spear', desc: 'Long reach, heavy damage. For hunting and fights.', cost: { wood: 4, stone: 1, fiber: 2 }, once: () => S.tools.spear, make: () => { S.tools.spear = true; S.slot = 2; } },
-  { id: 'arrows', ic: '➶', name: 'Arrows ×5', desc: 'Stone-tipped, fletched with fiber. Shoot with the bow (4).', cost: { wood: 1, stone: 1, fiber: 1 }, make: () => give('arrows', 5) },
   { id: 'fire', ic: '🔥', name: 'Campfire', desc: 'Light, warmth, cooking. Wolves keep their distance. Placed in front of you.', cost: { wood: 5, stone: 3 }, make: placeCampfire },
 ];
 const canAfford = (cost) => Object.entries(cost).every(([k, v]) => S.inv[k] >= v);
@@ -2107,11 +2221,43 @@ function placeCampfire() {
 // ============================================================
 let dialogQueue = [], dialogDone = null;
 function say(lines, done) {
-  dialogQueue = lines.slice(); dialogDone = done || null; $('dialog').classList.remove('hidden'); nextLine();
+  dialogQueue = lines.slice(); dialogDone = done || null; $('dialog').classList.remove('hidden');
+  if (lines.some(([w]) => w === 'Nestor') && !S.explore && player.position.distanceTo(nestor.position) < 10) startTalkCam(nestor);
+  nextLine();
 }
 function nextLine() {
-  if (!dialogQueue.length) { $('dialog').classList.add('hidden'); const d = dialogDone; dialogDone = null; if (d) d(); return; }
+  if (!dialogQueue.length) { $('dialog').classList.add('hidden'); if (talkCam.on && !talkCam.fixed) stopTalkCam(); const d = dialogDone; dialogDone = null; if (d) d(); return; }
   const [who, txt] = dialogQueue.shift(); $('dialog').querySelector('.who').textContent = who; $('dialog').querySelector('.txt').textContent = txt;
+  talkCam.who = who === 'You' ? 'you' : 'npc'; talkCam.lineT = 0; talkCam.cut = true; snd.page();
+}
+// ---- Conversation camera: letterbox, over-the-shoulder shots that cut between speakers and drift slowly (a gentle
+//      handheld dolly), so quest scenes play like cutscenes. Also used for fixed shots (the offering to Athena).
+const talkCam = { on: false, t: 0, lineT: 0, who: 'npc', npc: null, look: new THREE.Vector3(), fixed: null };
+function startTalkCam(npc, fixed = null) {
+  Object.assign(talkCam, { on: true, t: 0, lineT: 0, npc, fixed }); talkCam.look.copy(fixed ? fixed.look : npc.position).setY(fixed ? fixed.look.y : npc.position.y + 1.6);
+  $('cine').classList.remove('hidden'); $('cineText').classList.remove('show'); requestAnimationFrame(() => $('cine').classList.add('on'));
+  $('hud').classList.add('hidden');
+}
+function stopTalkCam() {
+  talkCam.on = false; talkCam.fixed = null; $('cine').classList.remove('on'); setTimeout(() => { if (!talkCam.on && !S.cine) $('cine').classList.add('hidden'); }, 1400);
+  $('hud').classList.remove('hidden'); camYaw = P.yaw + Math.PI;
+}
+function updateTalkCam(dt) {
+  talkCam.t += dt; talkCam.lineT += dt; const k = Math.min(1, dt * 2.2);
+  if (talkCam.fixed) {                                     // scripted shot: slow push from p0 to p1
+    const F = talkCam.fixed, u = clamp(talkCam.t / F.dur, 0, 1), e = u * u * (3 - 2 * u);
+    camera.position.lerpVectors(F.p0, F.p1, e); camera.position.y += Math.sin(talkCam.t * 0.6) * 0.05; camera.lookAt(F.look);
+    if (u >= 1 && F.done) { const d = F.done; F.done = null; stopTalkCam(); d(); }
+    return;
+  }
+  const P0 = player.position, N = talkCam.npc.position, ax = new THREE.Vector3(N.x - P0.x, 0, N.z - P0.z); ax.normalize(); const side = new THREE.Vector3(-ax.z, 0, ax.x);
+  P.yaw = Math.atan2(ax.x, ax.z); player.rotation.y = P.yaw; talkCam.npc.rotation.y = Math.atan2(-ax.x, -ax.z);
+  const drift = Math.sin(talkCam.t * 0.33) * 0.3, push = Math.min(1, talkCam.lineT / 7) * 0.45, bob = Math.sin(talkCam.t * 0.9) * 0.04;
+  let want, look;
+  if (talkCam.who !== 'you') { want = P0.clone().addScaledVector(ax, -1.25 + push).addScaledVector(side, 0.95 + drift); want.y = P0.y + 1.9 + bob; look = N.clone().setY(N.y + 1.55); }
+  else { want = N.clone().addScaledVector(ax, 1.25 - push).addScaledVector(side, -0.95 - drift); want.y = N.y + 1.85 + bob; look = P0.clone().setY(P0.y + 1.5); }
+  want.y = Math.max(want.y, heightAt(want.x, want.z) + 0.8);
+  const cut = talkCam.cut; talkCam.cut = false; camera.position.lerp(want, cut ? 1 : k); talkCam.look.lerp(look, cut ? 1 : k); camera.lookAt(talkCam.look);   // hard cut on a new line, then drift
 }
 const inDialog = () => !$('dialog').classList.contains('hidden') || !$('card').classList.contains('hidden');
 $('dialog').addEventListener('click', nextLine);
@@ -2207,7 +2353,7 @@ const STORY = [
 ];
 const TUTORIAL = [
   { kicker: 'Nestor teaches · 1/5', title: 'Gather', body: 'Walk up to branches, pebbles, bushes and reeds and press <b>E</b> to pick them up. Bushes give berries and grow back.', keys: [['E', 'Interact / pick up'], ['WASD', 'Move'], ['Shift', 'Sprint'], ['Space', 'Jump']] },
-  { kicker: 'Nestor teaches · 2/5', title: 'Strike', body: 'Hit trees and rocks with <b>Left Click</b> to break off wood and stone. Bare hands work, but slowly. An axe is four times faster.', keys: [['LMB', 'Swing / attack'], ['1–4', 'Hands · Axe · Spear · Bow']] },
+  { kicker: 'Nestor teaches · 2/5', title: 'Strike', body: 'Hit trees and rocks with <b>Left Click</b> to break off wood and stone. Bare hands work, but slowly. An axe is four times faster.', keys: [['LMB', 'Swing / attack'], ['1–3', 'Hands · Axe · Spear']] },
   { kicker: 'Nestor teaches · 3/5', title: 'Craft', body: 'Press <b>C</b> to open crafting. A Stone Axe needs 3 wood, 2 stone and 1 fiber. Your bag is on <b>Tab</b>.', keys: [['C', 'Crafting'], ['Tab', 'Inventory']] },
   { kicker: 'Nestor teaches · 4/5', title: 'Stay Alive', body: 'Watch the three bars: <b>health</b>, <b>stamina</b> and <b>hunger</b>. Sprinting and fighting burn stamina. Press <b>F</b> to eat when hunger drops, or your health follows.', keys: [['F', 'Eat'], ['R', 'Rest at a fire']] },
   { kicker: 'Nestor teaches · 5/5', title: 'Find Your Way', body: 'Follow the gold <b>◆</b> marker on the compass to your current objective. <b>M</b> opens the map. Climbing the watchtower in the north-west reveals the whole island.', keys: [['M', 'Map'], ['◆', 'Objective marker']] },
@@ -2245,7 +2391,7 @@ canvas.addEventListener('click', () => { if (S.running && !S.sailing && !S.cine 
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === canvas;
   if (locked && S.running && $('title').classList.contains('hidden')) setPause(false);
-  if (!locked && S.running && !S.sailing && !S.cine && !menuOpen() && !inDialog()) setPause(true);
+  if (!locked && S.running && !S.sailing && !S.cine && !talkCam.on && !menuOpen() && !inDialog()) setPause(true);
 });
 document.addEventListener('mousemove', (e) => {
   if (!locked) return;
@@ -2277,7 +2423,7 @@ addEventListener('keydown', (e) => {
     if (e.code === 'KeyH') $('hud').classList.toggle('hidden');
   }
   if (e.code === 'KeyT') { S.timeScale = S.timeScale === 1 ? 10 : 1; toast(`Playtest: time ×${S.timeScale}`); }
-  if (e.code === 'KeyG') { for (const k of ['wood', 'stone', 'fiber', 'rawmeat', 'rope', 'arrows']) S.inv[k] += 10; toast('Playtest: +10 materials'); }
+  if (e.code === 'KeyG') { for (const k of ['wood', 'stone', 'fiber', 'rawmeat', 'rope']) S.inv[k] += 10; toast('Playtest: +10 materials'); }
   if (e.code === 'KeyN') debugSkipQuest();
 });
 addEventListener('keyup', (e) => (keys[e.code] = false));
@@ -2370,7 +2516,9 @@ function makeOffering() {
   { const og = new THREE.Group(); og.position.copy(ATHENA_OFFER); scene.add(og); for (let i = 0; i < 9; i++) mesh(new THREE.SphereGeometry(0.06, 6, 4), flat(0x6a2a6a), rr(-0.25, 0.25), 0.05, rr(-0.15, 0.15), og); const br = oliveBranch(); br.scale.setScalar(0.8); br.position.set(0.1, 0, 0); og.add(br); }
   divineBeam(base, 6);
   snd.blessing();
-  setTimeout(() => showCards([{ kicker: 'The goddess answers', title: 'Athena\'s Blessing', body: 'The branch turns to gold in your hands, then to light. Somewhere above the clouds, grey eyes open and look at you for the first time.<br><br>Athena has seen you. Return to Nestor and tell him.', keys: [] }]), 1800);
+  const head = new THREE.Vector3(TEMPLE.x, TEMPLE_Y + 6.2, TEMPLE.z - 8);
+  startTalkCam(null, { p0: new THREE.Vector3(TEMPLE.x + 2.6, TEMPLE_Y + 1.6, TEMPLE.z - 1.5), p1: new THREE.Vector3(TEMPLE.x + 1.2, TEMPLE_Y + 2.6, TEMPLE.z - 4.2), look: head, dur: 6,
+    done: () => showCards([{ kicker: 'The goddess answers', title: 'Athena\'s Blessing', body: 'The branch turns to gold in your hands, then to light. Somewhere above the clouds, grey eyes open and look at you for the first time.<br><br>Athena has seen you. Return to Nestor and tell him.', keys: [] }]) });
 }
 function climbTower() {
   player.position.set(TOWER_TOP.x, TOWER_TOP.y + 0.2, TOWER_TOP.z); P.vel.y = 0;
@@ -2423,7 +2571,7 @@ function eat() {
 const TOOL_STATS = { hands: { dmg: 5, wood: 1, stone: 1, reach: 2.3 }, axe: { dmg: 11, wood: 4, stone: 4, reach: 2.6 }, spear: { dmg: 24, wood: 1, stone: 1, reach: 3.4 } };
 // ---- Bow & arrows: models from the user's asset pack
 const bowHeld = new THREE.Group(), arrowProto = { obj: null }, arrows = [];
-loadTexturedFBX('bow', 1.35, (obj) => { bowHeld.add(obj); obj.position.y -= 0.675; });
+// (bow disabled for the prologue: no ranged weapon on Nisos)
 loadTexturedFBX('arrow', 0.9, (obj) => { obj.position.y -= 0.45; const g = new THREE.Group(); g.add(obj); g.rotation.x = Math.PI / 2; const w = new THREE.Group(); w.add(g); arrowProto.obj = w; });
 function shootArrow() {
   if (S.inv.arrows <= 0) { toast('No arrows. Craft some (C)'); return; }
@@ -2638,8 +2786,7 @@ function updatePlayer(dt) {
   const wasAir = !P.onGround && P.vel.y < -4;
   P.vel.y -= 20 * dt; player.position.y += P.vel.y * dt;
   const floor = Math.max(heightAt(player.position.x, player.position.z), swimming ? -1.2 : -99);
-  const onRuins = Math.hypot(player.position.x - SUMMIT.x, player.position.z - SUMMIT.z) < 9.2;
-  const fl = Math.max(onRuins ? Math.max(floor, SUMMIT_Y + 0.3) : floor, floorAt(player.position));
+  const fl = Math.max(floor, floorAt(player.position));
   if (player.position.y <= fl) { if (wasAir) snd.land(); player.position.y = fl; P.vel.y = 0; P.onGround = true; }
   if (speed > 0 && (P.onGround || swimming)) { P.stepD = (P.stepD || 0) + speed * dt; if (P.stepD > (P.sprinting ? 2.3 : 1.6)) { P.stepD = 0; snd.step(surfaceAt(player.position, ground, swimming), P.sprinting); } }
   // Swing
@@ -2740,7 +2887,7 @@ function updateWorld(dt, t) {
   if (snow.material.opacity > 0.01) { const sa3 = snow.geometry.attributes.position; for (let i = 0; i < sa3.count; i++) { let y = sa3.getY(i) - dt * 2.2 * S.timeScale; if (y < 0) y += 25; sa3.setY(i, y); sa3.setX(i, sa3.getX(i) + Math.sin(t + i) * 0.01); } sa3.needsUpdate = true; }
   fireflies.material.opacity = lerp(fireflies.material.opacity, night ? 0.9 * (0.6 + Math.sin(t * 3) * 0.4) : 0, dt * 2);
   crystals.forEach((c, i) => { c.rotation.y += dt * 0.2; if (c.material.emissiveIntensity !== undefined) c.material.emissiveIntensity = 1.3 + Math.sin(t * 2 + i) * 0.4; });
-  braziers.forEach((f, i) => { f.scale.y = 1 + Math.sin(t * 13 + i) * 0.2; });
+  braziers.forEach((f, i) => { f.scale.y = 1 + Math.sin(t * 13 + i) * 0.2; f.scale.x = f.scale.z = 1 + Math.sin(t * 9 + i * 2) * 0.08; if (f.userData.glow) f.userData.glow.material.opacity = 0.55 + Math.sin(t * 17 + i) * 0.12; });
   fallU.t.value = t;
   pollen.material.opacity = 0.7 * day; pollen.position.set(camera.position.x, Math.max(heightAt(camera.position.x, camera.position.z), 0), camera.position.z);
   { const pa = pollen.geometry.attributes.position; for (let i = 0; i < pa.count; i += 3) { pa.setY(i, (pa.getY(i) + dt * 0.15) % 6); pa.setX(i, pa.getX(i) + Math.sin(t * 0.5 + i) * dt * 0.2); } pa.needsUpdate = true; }
@@ -2838,7 +2985,7 @@ const waypoint = new THREE.Mesh(new THREE.OctahedronGeometry(0.4, 0), new THREE.
 scene.add(waypoint);
 // Quest markers, World of Warcraft style: gold ! = someone has a task for you, gold ? = come here to hand in / deliver
 function questMarkers() {
-  if (S.explore || S.sailing) return [];
+  if (S.explore || S.sailing || talkCam.on) return [];
   const i = S.questIdx, out = [];
   if (i === 0) out.push({ pos: nestor.position, g: '!', h: 2.9 });
   if (i === 3) out.push({ pos: ATHENA_OFFER, g: '?', h: 1.2 });
@@ -2969,10 +3116,10 @@ function loop() {
   if (S.running && !S.paused) {
     const frozen = inDialog() || menuOpen() || !!S.cine;
     if (!S.sailing && (!frozen || S.cine)) updatePlayer(dt);
-    if (!frozen || S.cine) { updateWorld(dt, t); if (!S.cine) for (const c of creatures) updateCreature(c, dt); }
+    if (!frozen || S.cine || talkCam.on) { updateWorld(dt, t); if (!S.cine) for (const c of creatures) updateCreature(c, dt); }
     if (S.sailing) {
       const rp = raftGroup.position; camera.position.lerp(new THREE.Vector3(rp.x - 10, 6, rp.z - 14), dt); camera.lookAt(rp.x, 2, rp.z + 20);
-    } else if (S.cine) updateCine(dt); else updateCamera(dt);
+    } else if (S.cine) updateCine(dt); else if (talkCam.on) { updateTalkCam(dt); if (hero.rig && !talkCam.fixed) poseHero(0, 0, 0, t); } else updateCamera(dt);
     // Chips
     for (let i = chips.length - 1; i >= 0; i--) { const c = chips[i]; c.t += dt; c.v.y -= 15 * dt; c.m.position.addScaledVector(c.v, dt); if (c.t > 0.7) { scene.remove(c.m); chips.splice(i, 1); } }
     // Floating texts
@@ -3013,6 +3160,11 @@ function loop() {
   if (GFX.post) composer.render(); else renderer.render(scene, camera);
 }
 let cullFrame = 0, shadowTick = 0;
+// Fire: every brazier cone becomes an additive flame with a hot core and a soft glow, so it reads as fire in daylight too
+{ const outer = new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false }),
+    core = new THREE.MeshBasicMaterial({ color: 0xffe28a, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+  for (const fl of braziers) { fl.material = outer; fl.castShadow = false; const p = fl.geometry.parameters, c = new THREE.Mesh(new THREE.ConeGeometry(p.radius * 0.5, p.height * 0.6, 7), core); c.position.y = -p.height * 0.15; fl.add(c);
+    const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xff9a40, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); gl.scale.setScalar(p.height * 3.2); fl.parent.add(gl); gl.position.copy(fl.position); fl.userData.glow = gl; } }
 renderer.shadowMap.autoUpdate = false; renderer.shadowMap.needsUpdate = true;
 function ambientSound(dt) {
   const p = S.running ? player.position : camera.position, h = S.time * 24, g = heightAt(p.x, p.z);
@@ -3060,7 +3212,7 @@ function syncExplore() {
 }
 $('exploreBtn').onclick = () => {
   initAudio();
-  S.explore = true; Object.assign(S.tools, { axe: true, spear: true, bow: true }); S.inv.arrows = 99;
+  S.explore = true; Object.assign(S.tools, { axe: true, spear: true });
   $('quest').classList.add('hidden'); $('hints').innerHTML = '<span>Fly / walk</span><span class="kbd">V</span><span>Travel &amp; time</span><span class="kbd">O</span><span>Time of day</span><span class="kbd">[ ]</span><span>Hide HUD</span><span class="kbd">H</span><span>Map</span><span class="kbd">M</span><span>Fast</span><span class="kbd">SHIFT</span>';
   $('title').classList.add('hidden'); $('hud').classList.remove('hidden');
   S.running = true; S.started = performance.now(); setPause(false); canvas.requestPointerLock();
@@ -3070,36 +3222,46 @@ $('exploreBtn').onclick = () => {
 // ---- Intro cinematic: the menu fades, the camera leaves the title orbit and flies over Nisos while the story is told,
 //      then comes down to the cove where Zeus delivers you in a column of light.
 const CINE_LINES = [
-  [0.8, 6.6, '<small>Argonisos</small>Hera has finally slain Hercules.'],
-  [7.6, 13.6, 'Mourning his son, Zeus shaped a world between the earth and the sky, where mortals can prove themselves worthy of his strength.'],
-  [14.6, 20.6, '<small>Nine lands · Nine Guardians</small>Conquer them all and ascend to Olympos with the power of a demigod.'],
-  [21.6, 27.4, '<small>The chosen</small>You are one of the chosen. Your trial begins here, on Nisos.'],
-  [28.2, 32.6, 'Zeus has left a guide on this island. Find Nestor.'],
+  [1.0, 7.5, '<small>Argonisos</small>Hera has finally slain Hercules.'],
+  [9.5, 17.0, 'Mourning his son, Zeus shaped a world between the earth and the sky, where mortals can prove themselves worthy of his strength.'],
+  [19.5, 26.5, '<small>Nine lands · Nine Guardians</small>Each land is ruled by a Guardian. Defeat all nine and ascend to Olympos with the power of a demigod.'],
+  [29.0, 36.0, '<small>The chosen</small>You are one of the chosen. Your trial begins here, on Nisos.'],
+  [38.5, 44.5, 'The gods are watching. Honour them, and they will answer.'],
+  [46.5, 51.5, 'Zeus has left a guide on this island. Find Nestor.'],
 ];
 function playIntro() {
-  S.cine = { t: 0, dur: 34, line: -1 };
+  S.cine = { t: 0, dur: 53, line: -1, bank: 0 }; $('cine').classList.add('intro');
   $('cine').classList.remove('hidden'); requestAnimationFrame(() => $('cine').classList.add('on'));
   $('hud').classList.add('hidden'); player.visible = false; S.time = 0.285;
   // final pose: exactly where the gameplay camera will sit
   camYaw = P.yaw + Math.PI; camPitch = 0.28; const save = camera.position.clone(); camera.position.copy(player.position).add(new THREE.Vector3(0, 4, 7)); updateCamera(1);
   const endPos = camera.position.clone(), endLook = player.position.clone().add(new THREE.Vector3(0, 1.7, 0)); camera.position.copy(save);
   const V = (x, y, z) => new THREE.Vector3(x, y, z);
-  S.cine.pos = new THREE.CatmullRomCurve3([save, V(MOUNT.x - 150, SUMMIT_Y + 55, MOUNT.z + 120), V(MOUNT.x - 60, SUMMIT_Y + 22, MOUNT.z + 70), V(MOUNT.x + 75, SUMMIT_Y + 10, MOUNT.z + 60),
-    V(TEMPLE.x + 40, TEMPLE_Y + 22, TEMPLE.z + 48), V(START.x + 70, START.y + 34, START.z + 40), V(START.x + 18, START.y + 10, START.z + 16), endPos], false, 'centripetal');
-  S.cine.look = new THREE.CatmullRomCurve3([V(20, 20, -30), V(MOUNT.x, SUMMIT_Y - 10, MOUNT.z), SUMMIT.clone(), V(MOUNT.x + 20, SUMMIT_Y - 20, MOUNT.z + 20),
-    V(TEMPLE.x, TEMPLE_Y + 6, TEMPLE.z), V(HUT.x, HUT.y + 2, HUT.z), endLook.clone(), endLook], false, 'centripetal');
+  const hy = (x, z, o) => Math.max(heightAt(x, z), 0) + o;
+  // A full loop around Nisos: south-west sea, the marsh, the dark woods, the watchtower cliffs, over the summit arena,
+  // down past the waterfall and the lake, the Temple of Athena, the olive terraces, and finally the cove
+  S.cine.pos = new THREE.CatmullRomCurve3([save, V(-250, 105, 230), V(SWAMP.x - 20, hy(SWAMP.x, SWAMP.z, 38), SWAMP.z + 55), V(FOREST.x + 30, hy(FOREST.x, FOREST.z, 42), FOREST.z + 40),
+    V(TOWER.x + 45, TOWER_TOP.y + 16, TOWER.z + 55), V(MOUNT.x - 120, SUMMIT_Y + 26, MOUNT.z - 50), V(MOUNT.x - 25, SUMMIT_Y + 24, MOUNT.z + 5), V(MOUNT.x + 45, SUMMIT_Y + 8, MOUNT.z + 45),
+    V(LAKE.x + 25, LAKE_Y + 26, LAKE.z - 30), V(TEMPLE.x + 42, TEMPLE_Y + 18, TEMPLE.z + 38), V(OLIVE.x + 35, hy(OLIVE.x, OLIVE.z, 16), OLIVE.z + 28),
+    V(START.x + 48, START.y + 22, START.z + 26), V(START.x + 16, START.y + 8, START.z + 13), endPos], false, 'centripetal');
+  S.cine.look = new THREE.CatmullRomCurve3([V(30, 22, -50), V(-60, 10, 60), V(SWAMP.x, 2, SWAMP.z), V(FOREST.x, 10, FOREST.z), TOWER_TOP.clone(), SUMMIT.clone(), SUMMIT.clone().add(V(0, 4, -16)),
+    V(LAKE.x, LAKE_Y + 6, LAKE.z), V(LAKE.x, LAKE_Y, LAKE.z + 10), V(TEMPLE.x, TEMPLE_Y + 6, TEMPLE.z), V(OLIVE.x, hy(OLIVE.x, OLIVE.z, 2), OLIVE.z),
+    V(HUT.x, HUT.y + 2, HUT.z), endLook.clone(), endLook], false, 'centripetal');
   snd.whoosh();
 }
 function updateCine(dt) {
   const C = S.cine; C.t += dt;
   const u = clamp(C.t / C.dur, 0, 1), e = u * u * u * (u * (u * 6 - 15) + 10);          // smootherstep: gentle take-off and landing
   camera.position.copy(C.pos.getPointAt(e)); camera.lookAt(C.look.getPoint(e));
+  { const t0 = C.pos.getTangentAt(Math.min(0.999, e)), t1 = C.pos.getTangentAt(Math.min(1, e + 0.01)), turn = Math.atan2(t0.x * t1.z - t0.z * t1.x, t0.x * t1.x + t0.z * t1.z);
+    C.bank = lerp(C.bank, clamp(-turn * 9, -0.14, 0.14) * (1 - e * e), Math.min(1, dt * 1.5)); camera.rotateZ(C.bank); }
+  camera.fov = 60 + Math.sin(u * Math.PI) * 6; camera.updateProjectionMatrix();
   const li = CINE_LINES.findIndex(([a, b]) => C.t >= a && C.t < b);
   if (li !== C.line) { C.line = li; const el = $('cineText'); el.classList.remove('show'); if (li >= 0) setTimeout(() => { el.innerHTML = CINE_LINES[li][2]; el.classList.add('show'); }, li === 0 ? 0 : 500); }
   if (C.t >= C.dur) endIntro();
 }
 function endIntro() {
-  if (!S.cine) return; S.cine = null;
+  if (!S.cine) return; S.cine = null; $('cine').classList.remove('intro'); camera.fov = 60; camera.updateProjectionMatrix();
   camera.position.copy(player.position).add(new THREE.Vector3(0, 4, 7)); updateCamera(1);
   $('cineText').classList.remove('show'); $('cine').classList.remove('on'); setTimeout(() => $('cine').classList.add('hidden'), 1400);
   // Zeus delivers you: flash, thunder, a column of light where you stand
@@ -3119,4 +3281,4 @@ $('startBtn').onclick = () => {
   S.running = true; setPause(false); canvas.requestPointerLock();
 };
 renderer.info.autoReset = false;
-window.ARG = { pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, ASCENT, MOUNT, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
+window.ARG = { pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting

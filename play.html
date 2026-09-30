@@ -129,6 +129,7 @@
   #cineText small { display:block; font-size:.62em; letter-spacing:.3em; color:#e8c27a; margin-bottom:10px; text-transform:uppercase; }
   #cineSkip { position:absolute; right:24px; bottom:calc(11vh + 14px); pointer-events:auto; background:rgba(0,0,0,.35); border:1px solid rgba(201,161,58,.5); color:#cdbf9f; font:14px 'Alegreya Sans',sans-serif; padding:6px 14px; cursor:pointer; opacity:0; transition:opacity 1s; }
   #cine.on #cineSkip { opacity:1; }
+  #cine:not(.intro) #cineSkip { display:none; }
   #flash { position:fixed; inset:0; background:#fff8e0; opacity:0; pointer-events:none; z-index:39; transition:opacity .15s; }
   #title { transition:opacity 1.6s ease; }
   #title.fading { opacity:0; pointer-events:none; }
@@ -148,7 +149,7 @@
   #card .cbtns { margin-top:auto; display:flex; justify-content:space-between; align-items:center; gap:10px; }
   #card .cskip { background:none; border:0; color:#9a8b6c; cursor:pointer; font:inherit; }
   @media (max-width:640px) { #card .cin { flex-direction:column; } #card .cimg { flex-basis:140px; } #card h2 { font-size:24px; } }
-  #dialog { position:fixed; left:50%; bottom:110px; transform:translateX(-50%); width:min(92vw,640px); padding:16px 20px; z-index:15; }
+  #dialog { position:fixed; left:50%; bottom:calc(11vh + 18px); transform:translateX(-50%); width:min(92vw,640px); padding:16px 20px; z-index:41; }
   #dialog .who { color:var(--gold); font-family:Cinzel,serif; font-size:17px; margin-bottom:6px; }
   #dialog .txt { font-size:17px; line-height:1.5; min-height:48px; }
   #dialog .next { text-align:right; font-size:12px; color:var(--dim); margin-top:6px; }
