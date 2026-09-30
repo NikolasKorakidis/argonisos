@@ -3,169 +3,242 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Argonisos — Island Prologue</title>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<title>Argonisos Island Prologue</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Alegreya+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
-  :root { --gold:#e8c27a; --ink:#1b2330; --panel:rgba(18,24,34,.82); --line:rgba(232,194,122,.35); --red:#c8483a; }
+  /* Look: dark carved wood + bronze trim (survival-RPG menus), Cinzel headers, Alegreya Sans body */
+  :root { --bg:#14120f; --panel:#1d1a15; --panel2:#26221b; --edge:#5c4a33; --edge2:#8a7250; --gold:#e3c07a; --text:#eee3cc; --dim:#a89a80;
+          --leather:#5a4430; --leather2:#6e543a; --red:#c8483a; --slot:#191612; color-scheme:dark; }
   * { box-sizing:border-box; }
-  html,body { margin:0; height:100%; overflow:hidden; background:#0e141c; color:#f3ead8; font-family:Inter,system-ui,sans-serif; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--text); font-family:'Alegreya Sans',system-ui,sans-serif; }
   canvas { display:block; }
   .cinzel { font-family:Cinzel,serif; letter-spacing:.08em; }
   .hidden { display:none !important; }
+  .kbd { display:inline-block; min-width:20px; padding:0 6px; border:1px solid var(--edge2); border-radius:4px; background:#2b251d; color:var(--gold); font-size:12px; line-height:18px; text-align:center; font-weight:700; }
+
+  /* ---------- Carved panel ---------- */
+  .pnl { background:linear-gradient(180deg,var(--panel2),var(--panel)); border:2px solid var(--edge); border-radius:6px;
+         box-shadow:inset 0 0 0 1px #0c0a08, inset 0 0 0 3px #3a2f22, 0 12px 40px rgba(0,0,0,.6); position:relative; }
+  .pnl::before { content:""; position:absolute; inset:5px; border:1px solid rgba(227,192,122,.14); border-radius:3px; pointer-events:none; }
+  .pnl > h2, .pnl-h { margin:0; padding:14px 18px 10px; text-align:center; font-family:Cinzel,serif; font-weight:600; font-size:17px; letter-spacing:.14em; color:var(--text); text-transform:uppercase;
+         border-bottom:1px solid var(--edge); background:linear-gradient(180deg,rgba(255,255,255,.03),transparent); }
+  .xbtn { position:absolute; right:10px; top:9px; background:none; border:0; color:var(--dim); font-size:20px; cursor:pointer; padding:2px 6px; }
+  .xbtn:hover { color:var(--gold); }
+  .btn { font-family:Cinzel,serif; font-size:15px; letter-spacing:.04em; color:var(--text); background:linear-gradient(180deg,#3a3024,#2a231a); border:1px solid var(--edge);
+         border-radius:3px; padding:8px 18px; cursor:pointer; box-shadow:inset 0 1px 0 rgba(255,255,255,.06); }
+  .btn:hover, .btn.on { border-color:var(--edge2); color:#fff; background:linear-gradient(180deg,var(--leather2),var(--leather)); }
+  .btn.primary { background:linear-gradient(180deg,#7a5c3a,#5a4228); border-color:var(--edge2); color:#fff3dc; }
+  .btn:disabled { opacity:.4; cursor:not-allowed; }
+  .btn:focus-visible { outline:2px solid var(--gold); outline-offset:2px; }
+  .modal { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); max-width:94vw; max-height:90vh; overflow:auto; z-index:20; }
+  .slot { width:56px; height:56px; background:var(--slot); border:1px solid #3a3024; border-radius:3px; box-shadow:inset 0 0 8px rgba(0,0,0,.8);
+          display:flex; align-items:center; justify-content:center; font-size:26px; position:relative; }
+  .slot b { position:absolute; left:4px; top:1px; font-size:10px; color:var(--dim); font-weight:700; }
+  .slot em { position:absolute; right:4px; bottom:1px; font-style:normal; font-size:12px; font-weight:700; color:var(--text); text-shadow:0 1px 2px #000; }
+  .slot.sel { border-color:var(--gold); box-shadow:inset 0 0 8px rgba(0,0,0,.8), 0 0 0 1px var(--gold); }
+  .slot.locked { opacity:.35; }
 
   /* ---------- HUD ---------- */
   #hud { position:fixed; inset:0; pointer-events:none; }
-  #bars { position:absolute; left:18px; bottom:18px; width:240px; }
-  .bar { height:14px; background:rgba(0,0,0,.45); border:1px solid var(--line); border-radius:8px; margin-top:6px; overflow:hidden; position:relative; }
-  .bar > i { display:block; height:100%; border-radius:8px; transition:width .15s; }
-  .bar span { position:absolute; left:8px; top:-1px; font-size:11px; font-weight:600; text-shadow:0 1px 2px #000; }
-  #hpB { background:linear-gradient(90deg,#9b2d25,#e0584a); }
-  #foodB { background:linear-gradient(90deg,#9a5a1c,#e8a04a); }
-  #staB { background:linear-gradient(90deg,#8b8a2a,#e6de6a); }
-  #hotbar { position:absolute; left:50%; bottom:18px; transform:translateX(-50%); display:flex; gap:6px; }
-  .slot { width:62px; height:62px; background:var(--panel); border:1px solid var(--line); border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:22px; position:relative; }
-  .slot.sel { border-color:var(--gold); box-shadow:0 0 12px rgba(232,194,122,.5); }
-  .slot.locked { opacity:.35; }
-  .slot small { font-size:10px; opacity:.8; }
-  .slot b { position:absolute; top:3px; left:6px; font-size:10px; opacity:.6; }
-  .slot em { position:absolute; bottom:2px; right:6px; font-size:11px; font-style:normal; font-weight:600; }
-  #inv { position:absolute; right:18px; bottom:18px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:8px 12px; font-size:13px; display:grid; grid-template-columns:auto auto; gap:2px 14px; }
-  #clock { position:absolute; left:18px; top:176px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:6px 12px; font-size:13px; width:160px; text-align:center; }
-  #minimap { position:absolute; left:18px; top:14px; width:160px; height:160px; border-radius:50%; border:2px solid var(--line); background:#123; }
-  #compass { position:absolute; left:50%; top:14px; transform:translateX(-50%); width:min(520px,60vw); height:40px; overflow:hidden;
-    background:linear-gradient(90deg,transparent,rgba(12,18,26,.55) 18%,rgba(12,18,26,.55) 82%,transparent); border-bottom:1px solid var(--line); }
-  #compass > i { position:absolute; left:50%; bottom:-1px; margin-left:-5px; border:5px solid transparent; border-bottom-color:#fff; }
-  #compassInner span { position:absolute; top:8px; transform:translateX(-50%); font-family:Cinzel,serif; font-size:15px; color:#f3ead8; text-shadow:0 1px 3px #000; white-space:nowrap; }
-  #compassInner span.tick { top:22px; width:1px; height:8px; background:rgba(243,234,216,.5); }
-  #compassInner span.goal { color:var(--gold); font-family:Inter; font-size:12px; top:6px; text-align:center; line-height:1.1; }
+  #hotbar { position:absolute; left:14px; top:14px; display:flex; gap:4px; padding:5px; }
+  #hotbar .slot { width:50px; height:50px; font-size:22px; background:rgba(20,17,13,.78); border-color:#4a3c2a; }
+  #hotbar .slot small { display:none; }
+  #mmWrap { position:absolute; right:14px; top:14px; width:176px; padding:6px; }
+  #minimap { width:160px; height:160px; display:block; margin:0 auto; border:1px solid #0c0a08; }
+  #mmLabel { position:absolute; right:22px; top:22px; background:rgba(20,17,13,.75); padding:1px 7px; border-radius:2px; font-family:Cinzel,serif; font-size:12px; color:var(--text); text-shadow:0 1px 3px #000; }
+  #clock { position:absolute; right:14px; top:196px; width:176px; text-align:center; font-size:13px; padding:5px 0; background:rgba(20,17,13,.78); border:1px solid #4a3c2a; border-radius:3px; }
+  #quest { position:absolute; right:14px; top:232px; width:260px; padding:10px 14px 12px; background:rgba(20,17,13,.8); border:1px solid #4a3c2a; border-radius:4px; }
+  #quest h3 { margin:0 0 2px; font-family:Cinzel,serif; font-size:15px; color:var(--gold); }
+  #quest p { margin:4px 0 8px; font-size:13px; color:var(--dim); line-height:1.35; }
+  #quest ul { list-style:none; margin:0; padding:0; font-size:14px; }
+  #quest li { margin:3px 0; } #quest li.done { color:#9fc48a; text-decoration:line-through; opacity:.8; }
+  #quest .step { font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.14em; }
+  #compass { position:absolute; left:50%; top:14px; transform:translateX(-50%); width:min(460px,40vw); height:40px; overflow:hidden;
+    background:linear-gradient(90deg,transparent,rgba(20,17,13,.7) 18%,rgba(20,17,13,.7) 82%,transparent); border-bottom:1px solid var(--edge); }
+  #compass > i { position:absolute; left:50%; bottom:-1px; margin-left:-5px; border:5px solid transparent; border-bottom-color:var(--gold); }
+  #compassInner span { position:absolute; top:8px; transform:translateX(-50%); font-family:Cinzel,serif; font-size:15px; color:var(--text); text-shadow:0 1px 3px #000; white-space:nowrap; }
+  #compassInner span.tick { top:22px; width:1px; height:8px; background:rgba(238,227,204,.45); }
+  #compassInner span.goal { color:var(--gold); font-family:'Alegreya Sans'; font-size:12px; top:6px; text-align:center; line-height:1.1; }
   #compassInner span.goal b { display:block; font-size:16px; }
-  #quest { position:absolute; right:18px; top:14px; width:300px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
-  #quest h3 { margin:0 0 2px; font-size:15px; color:var(--gold); }
-  #quest p { margin:4px 0 8px; font-size:12px; opacity:.85; line-height:1.35; }
-  #quest ul { list-style:none; margin:0; padding:0; font-size:13px; }
-  #quest li { margin:3px 0; }
-  #quest li.done { color:#9fd49a; text-decoration:line-through; opacity:.8; }
-  #quest .step { font-size:10px; opacity:.6; text-transform:uppercase; letter-spacing:.1em; }
-  #prompt { position:absolute; left:50%; bottom:100px; transform:translateX(-50%); background:var(--panel); border:1px solid var(--gold); border-radius:8px; padding:6px 14px; font-size:14px; }
-  #prompt kbd, .kbd { background:var(--gold); color:#1b2330; border-radius:4px; padding:0 6px; font-weight:700; font-family:Inter; }
+  #bars { position:absolute; left:14px; bottom:16px; width:260px; display:flex; flex-direction:column; gap:6px; }
+  .bar { height:18px; background:rgba(12,10,8,.8); border:1px solid #4a3c2a; border-radius:2px; overflow:hidden; position:relative; padding-left:26px; }
+  .bar > i { display:block; height:100%; transition:width .15s; }
+  .bar span { position:absolute; left:0; top:0; width:24px; height:100%; display:flex; align-items:center; justify-content:center; font-size:12px; background:rgba(0,0,0,.35); }
+  .bar u { position:absolute; left:32px; top:0; font-size:12px; font-weight:700; line-height:18px; text-decoration:none; text-shadow:0 1px 2px #000; }
+  #hpB { background:linear-gradient(180deg,#d65446,#9a2a22); } #foodB { background:linear-gradient(180deg,#e0963e,#9a5a1c); } #staB { background:linear-gradient(180deg,#e8cf52,#a18a22); }
+  #hints { position:absolute; right:14px; bottom:16px; display:grid; grid-template-columns:auto auto; gap:4px 10px; padding:8px 12px; background:rgba(20,17,13,.7); border:1px solid #4a3c2a; border-radius:3px; font-size:13px; }
+  #hints span:nth-child(odd) { text-align:right; }
+  #inv { display:none; }
+  #prompt { position:absolute; left:50%; bottom:110px; transform:translateX(-50%); background:rgba(20,17,13,.85); border:1px solid var(--edge2); border-radius:3px; padding:6px 14px; font-size:15px; }
+  #prompt kbd { background:var(--gold); color:#1b160f; border-radius:3px; padding:0 6px; font-weight:700; font-family:inherit; }
   #crosshair { position:absolute; left:50%; top:50%; width:6px; height:6px; margin:-3px 0 0 -3px; border-radius:50%; background:rgba(255,255,255,.7); }
-  #toasts { position:absolute; left:50%; top:70px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:6px; }
-  .toast { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:6px 14px; font-size:14px; animation:toast 3.2s forwards; }
-  .toast.big { font-family:Cinzel,serif; font-size:20px; border-color:var(--gold); color:var(--gold); padding:10px 22px; }
+  #toasts { position:absolute; left:50%; top:66px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .toast { background:rgba(20,17,13,.88); border:1px solid #4a3c2a; border-radius:3px; padding:6px 14px; font-size:15px; animation:toast 3.2s forwards; }
+  .toast.big { font-family:Cinzel,serif; font-size:19px; border-color:var(--edge2); color:var(--gold); padding:10px 22px; }
   @keyframes toast { 0%{opacity:0;transform:translateY(-8px)} 10%{opacity:1;transform:none} 80%{opacity:1} 100%{opacity:0} }
   .dmg { position:absolute; font-weight:700; font-size:16px; text-shadow:0 2px 3px #000; transform:translate(-50%,-50%); }
   #vignette { position:absolute; inset:0; box-shadow:inset 0 0 160px rgba(200,20,20,0); transition:box-shadow .2s; }
+  #region { position:absolute; left:50%; top:24%; transform:translateX(-50%); text-align:center; opacity:0; pointer-events:none; }
+  #region.show { animation:region 4.2s ease forwards; }
+  #region .rname { font-family:Cinzel,serif; font-size:clamp(28px,4vw,46px); letter-spacing:.16em; color:#fff6e2; text-shadow:0 2px 18px rgba(0,0,0,.7); }
+  #region .rname::before, #region .rname::after { content:""; display:inline-block; width:60px; height:1px; background:var(--gold); vertical-align:middle; margin:0 16px; opacity:.7; }
+  #region .rsub { font-style:italic; color:var(--gold); font-size:17px; margin-top:4px; text-shadow:0 1px 6px #000; }
+  @keyframes region { 0%{opacity:0; letter-spacing:.3em} 15%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
 
-  /* ---------- Panels ---------- */
-  .panel { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); background:rgba(16,21,30,.95); border:1px solid var(--line); border-radius:16px; padding:22px 26px; max-width:min(92vw,760px); max-height:88vh; overflow:auto; }
-  .panel h2 { margin:0 0 12px; color:var(--gold); }
-  .recipe { display:flex; align-items:center; gap:12px; padding:10px; border:1px solid rgba(255,255,255,.08); border-radius:10px; margin-bottom:8px; }
-  .recipe .ic { font-size:28px; width:40px; text-align:center; }
-  .recipe .info { flex:1; font-size:13px; }
-  .recipe .info b { font-size:14px; }
-  .recipe .cost span { margin-right:10px; }
-  .recipe .cost .no { color:#e37b6f; }
-  button { font-family:Inter; font-weight:600; background:var(--gold); color:#1b2330; border:0; border-radius:8px; padding:8px 16px; cursor:pointer; font-size:14px; }
-  button:disabled { background:#555; color:#999; cursor:not-allowed; }
-  button.ghost { background:transparent; color:var(--gold); border:1px solid var(--line); }
-  #dialog { position:fixed; left:50%; bottom:110px; transform:translateX(-50%); width:min(92vw,640px); background:rgba(16,21,30,.95); border:1px solid var(--gold); border-radius:14px; padding:16px 20px; }
-  #dialog .who { color:var(--gold); font-family:Cinzel,serif; font-size:16px; margin-bottom:6px; }
-  #dialog .txt { font-size:15px; line-height:1.5; min-height:48px; }
-  #dialog .next { text-align:right; font-size:12px; opacity:.7; margin-top:6px; }
+  /* ---------- Inventory ---------- */
+  #invPanel { width:360px; }
+  #invGrid { display:grid; grid-template-columns:repeat(5,56px); gap:6px; padding:16px; justify-content:center; }
+  #invFoot { display:flex; align-items:center; gap:10px; padding:0 18px 16px; font-size:13px; color:var(--dim); }
+  #invFoot .wt { flex:1; height:6px; background:#0e0c09; border:1px solid #3a3024; } #invFoot .wt i { display:block; height:100%; background:var(--edge2); }
+  .slot .tip { display:none; }
 
-  /* ---------- Title ---------- */
-  #title { position:fixed; inset:0; background:radial-gradient(ellipse at 50% 30%, rgba(30,44,66,.55), rgba(8,12,18,.94)); display:flex; flex-direction:column; align-items:center; overflow:auto; padding:5vh 16px; }
-  #title h1 { position:relative; padding:6px 42px; background:linear-gradient(100deg,transparent 0,rgba(20,16,12,.85) 6%,rgba(28,22,16,.92) 50%,rgba(20,16,12,.85) 94%,transparent 100%); border-radius:40% 10% 38% 12%/60% 20% 70% 30%; }
-  #title h1::before, #title h1::after { content:""; position:absolute; width:90px; height:90px; border-radius:50%; filter:blur(.5px); z-index:-1; }
-  #title h1::before { left:-10px; top:-22px; background:radial-gradient(circle at 40% 40%,#e2493a 0 38%,transparent 40%),radial-gradient(circle at 80% 20%,#e2493a 0 9%,transparent 11%),radial-gradient(circle at 15% 85%,#e2493a 0 7%,transparent 9%); }
-  #title h1::after { right:-14px; bottom:-26px; background:radial-gradient(circle at 50% 50%,#3fa3e0 0 36%,transparent 38%),radial-gradient(circle at 12% 18%,#3fa3e0 0 8%,transparent 10%),radial-gradient(circle at 88% 82%,#f2c230 0 10%,transparent 12%); }
-  #title h1 { font-family:Cinzel,serif; font-size:clamp(40px,8vw,84px); margin:0; color:var(--gold); letter-spacing:.14em; text-shadow:0 4px 30px rgba(232,194,122,.35); }
-  #title .sub { font-family:Cinzel,serif; opacity:.8; letter-spacing:.3em; font-size:13px; margin-bottom:22px; text-align:center; }
-  .tabs { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:14px; }
-  .tabs button { background:transparent; color:#f3ead8; border:1px solid var(--line); }
-  .tabs button.on { background:var(--gold); color:#1b2330; }
-  .tabpage { width:min(94vw,900px); background:rgba(16,21,30,.8); border:1px solid var(--line); border-radius:16px; padding:20px 26px; line-height:1.55; font-size:14px; }
-  .tabpage h3 { color:var(--gold); font-family:Cinzel,serif; margin:14px 0 6px; }
-  .tabpage h3:first-child { margin-top:0; }
-  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px 22px; }
-  .keys div { margin:3px 0; }
-  .gallery { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px; }
-  .gallery figure { margin:0; }
-  .gallery img { width:100%; border-radius:10px; border:1px solid var(--line); cursor:zoom-in; }
-  .gallery figcaption { font-size:12px; opacity:.75; margin-top:4px; }
-  .swatches { display:flex; gap:6px; flex-wrap:wrap; }
-  .swatches i { width:44px; height:44px; border-radius:8px; display:inline-block; border:1px solid rgba(255,255,255,.15); }
-  #startBtn { font-size:18px; padding:12px 38px; margin:18px 0 8px; font-family:Cinzel,serif; letter-spacing:.1em; }
-  #lightbox { position:fixed; inset:0; background:rgba(0,0,0,.9); display:flex; align-items:center; justify-content:center; cursor:zoom-out; }
+  /* ---------- Crafting ---------- */
+  #craft { width:min(620px,94vw); }
+  #craftTabs { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; padding:10px 12px 0; }
+  #craftTabs button { font-size:18px; padding:7px 0; }
+  #craftBody { display:grid; grid-template-columns:220px 1fr; gap:10px; padding:10px 12px 14px; }
+  #recipes { display:flex; flex-direction:column; gap:3px; }
+  .rrow { display:flex; align-items:center; gap:8px; padding:6px 8px; border:1px solid transparent; border-radius:3px; cursor:pointer; font-size:15px; color:var(--text); background:none; text-align:left; font-family:inherit; }
+  .rrow:hover { background:rgba(255,255,255,.04); } .rrow.on { border-color:var(--edge2); background:linear-gradient(180deg,#3a3024,#2a231a); }
+  .rrow.no { color:var(--dim); } .rrow i { font-style:normal; width:22px; text-align:center; }
+  #rdetail { border:1px solid #3a3024; background:#1a1713; border-radius:3px; padding:14px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px; min-height:260px; }
+  #rdetail h3 { margin:0; font-family:Cinzel,serif; font-size:20px; font-weight:600; }
+  #rdetail .big { font-size:64px; line-height:1.1; }
+  #rdetail .desc { color:var(--dim); font-size:14px; }
+  #rdetail .cost { display:flex; gap:8px; } #rdetail .cost .slot { width:48px; height:48px; font-size:22px; } #rdetail .cost .slot.no em { color:#e37b6f; }
+  #rdetail .btn { margin-top:auto; width:100%; font-size:17px; }
+  #closeCraft { display:none; }
+
+  /* ---------- Map ---------- */
+  #mapPanel { width:min(720px,94vw); }
+  #mapBody { position:relative; padding:14px; }
+  #bigmap { width:100%; height:auto; aspect-ratio:1; display:block; border:2px solid #3a2f22; filter:sepia(.25) saturate(.9); border-radius:2px; }
+  #mapLegend { position:absolute; left:26px; bottom:26px; background:rgba(26,22,17,.88); border:1px solid var(--edge); border-radius:3px; padding:8px 12px; font-size:14px; line-height:1.6; }
+
+  /* ---------- Pause / dialog ---------- */
+  #pause { width:320px; padding-bottom:16px; }
+  #pause .stack { display:flex; flex-direction:column; gap:8px; padding:16px 22px 4px; }
+  #pause .stack .btn { width:100%; }
+  #pause p { font-size:12px; color:var(--dim); text-align:center; margin:10px 16px 0; }
+  #dialog { position:fixed; left:50%; bottom:110px; transform:translateX(-50%); width:min(92vw,640px); padding:16px 20px; z-index:15; }
+  #dialog .who { color:var(--gold); font-family:Cinzel,serif; font-size:17px; margin-bottom:6px; }
+  #dialog .txt { font-size:17px; line-height:1.5; min-height:48px; }
+  #dialog .next { text-align:right; font-size:12px; color:var(--dim); margin-top:6px; }
+
+  /* ---------- Main menu ---------- */
+  #title { position:fixed; inset:0; display:grid; grid-template-columns:minmax(300px,420px) 1fr; background:linear-gradient(90deg,rgba(10,8,6,.82) 0%,rgba(10,8,6,.55) 30%,rgba(10,8,6,0) 55%); }
+  #menuCol { display:flex; flex-direction:column; justify-content:center; padding:0 0 0 7vw; gap:6px; }
+  .logo { display:flex; flex-direction:column; align-items:center; width:max-content; margin-bottom:26px; }
+  .logo svg { width:120px; height:46px; margin-bottom:-6px; }
+  .logo h1 { font-family:Cinzel,serif; font-weight:700; font-size:clamp(40px,5vw,62px); margin:0; letter-spacing:.06em; color:#efe0bf; text-shadow:0 3px 0 #3a2c1a, 0 8px 30px rgba(0,0,0,.6); }
+  .logo .sub { font-family:Cinzel,serif; font-size:12px; letter-spacing:.42em; color:var(--gold); margin-top:2px; }
+  .tabs { display:flex; flex-direction:column; align-items:center; width:min(300px,80vw); gap:2px; }
+  .tabs button { width:100%; background:none; border:1px solid transparent; color:#e8dcc2; font-family:Cinzel,serif; font-size:19px; padding:7px 0; cursor:pointer; text-shadow:0 2px 6px #000; border-radius:2px; }
+  .tabs button:hover { color:#fff; }
+  .tabs button.on, #startBtn { background:linear-gradient(90deg,transparent,rgba(122,92,58,.95) 12%,rgba(122,92,58,.95) 88%,transparent); border-top-color:rgba(227,192,122,.5); border-bottom-color:rgba(227,192,122,.5); color:#fff6e2; }
+  #startBtn { font-size:21px; }
+  #menuPage { align-self:center; justify-self:center; width:min(760px,92%); max-height:78vh; overflow:auto; }
+  .tabpage { padding:18px 24px; line-height:1.55; font-size:15px; }
+  .tabpage h3 { color:var(--gold); font-family:Cinzel,serif; margin:14px 0 6px; font-weight:600; } .tabpage h3:first-child { margin-top:0; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px 22px; }
+  .keys div { margin:4px 0; }
+  .gallery { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px; }
+  .gallery figure { margin:0; } .gallery img { width:100%; border-radius:3px; border:1px solid var(--edge); cursor:zoom-in; }
+  .gallery figcaption { font-size:12px; color:var(--dim); margin-top:4px; }
+  .swatches { display:flex; gap:6px; flex-wrap:wrap; } .swatches i { width:40px; height:40px; border-radius:3px; display:inline-block; border:1px solid rgba(255,255,255,.15); }
+  #loadMsg { font-size:12px; color:var(--dim); text-align:center; margin-top:10px; }
+  #lightbox { position:fixed; inset:0; background:rgba(0,0,0,.9); display:flex; align-items:center; justify-content:center; cursor:zoom-out; z-index:30; }
   #lightbox img { max-width:96vw; max-height:94vh; }
   #fade { position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; transition:opacity 2.5s; }
-  #ending { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:rgba(5,8,12,.85); }
-  #ending h1 { font-family:Cinzel,serif; color:var(--gold); font-size:clamp(32px,6vw,64px); margin:0; }
-  #pause h2 { text-align:center; }
+  #ending { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; background:rgba(8,6,4,.85); gap:8px; }
+  #ending h1 { font-family:Cinzel,serif; color:var(--gold); font-size:clamp(32px,6vw,60px); margin:0; }
+  @media (max-width:760px) { #title { grid-template-columns:1fr; } #menuCol { padding:6vh 16px 0; align-items:center; } #menuPage { width:94%; } #craftBody { grid-template-columns:1fr; } }
+  @media (prefers-reduced-motion:reduce) { #region.show, .toast { animation-duration:.01s; } }
 </style>
 </head>
 <body>
 
 <div id="hud" class="hidden">
-  <canvas id="minimap" width="160" height="160"></canvas>
+  <div id="hotbar"></div>
+  <div id="mmWrap" class="pnl"><canvas id="minimap" width="160" height="160"></canvas></div>
+  <div id="mmLabel">Nestor's Cove</div>
   <div id="clock"></div>
   <div id="compass"><div id="compassInner"></div><i></i></div>
   <div id="quest"></div>
   <div id="crosshair"></div>
   <div id="toasts"></div>
+  <div id="region"></div>
   <div id="prompt" class="hidden"></div>
   <div id="bars">
-    <div class="bar"><i id="hpB"></i><span>Health</span></div>
-    <div class="bar"><i id="foodB"></i><span>Hunger</span></div>
-    <div class="bar"><i id="staB"></i><span>Stamina</span></div>
+    <div class="bar"><span>❤</span><i id="hpB"></i><u id="hpN"></u></div>
+    <div class="bar"><span>⚡</span><i id="staB"></i><u id="staN"></u></div>
+    <div class="bar"><span>🍖</span><i id="foodB"></i><u id="foodN"></u></div>
   </div>
-  <div id="hotbar"></div>
+  <div id="hints"><span>Attack</span><span class="kbd">LMB</span><span>Interact</span><span class="kbd">E</span><span>Jump</span><span class="kbd">SPACE</span><span>Inventory</span><span class="kbd">TAB</span><span>Craft</span><span class="kbd">C</span><span>Map</span><span class="kbd">M</span></div>
   <div id="inv"></div>
   <div id="vignette"></div>
 </div>
 
-<div id="craft" class="panel hidden">
-  <h2 class="cinzel">Crafting</h2>
-  <div id="recipes"></div>
-  <div style="text-align:right;margin-top:8px"><button class="ghost" id="closeCraft">Close (C)</button></div>
+<div id="invPanel" class="pnl modal hidden">
+  <h2>Inventory</h2><button class="xbtn" data-close="invPanel" aria-label="Close">✕</button>
+  <div id="invGrid"></div>
+  <div id="invFoot"><span>⚖</span><div class="wt"><i id="invWt"></i></div><span id="invWtN"></span></div>
 </div>
 
-<div id="dialog" class="hidden"><div class="who"></div><div class="txt"></div><div class="next">E / Click to continue</div></div>
+<div id="craft" class="pnl modal hidden">
+  <h2>Crafting</h2><button class="xbtn" id="craftX" aria-label="Close">✕</button>
+  <div id="craftTabs"><button class="btn on" title="Tools">🔨</button><button class="btn" title="Building" disabled>🏠</button><button class="btn" title="Workbench" disabled>⚒</button><button class="btn" title="Special" disabled>★</button></div>
+  <div id="craftBody"><div id="recipes"></div><div id="rdetail"></div></div>
+  <button id="closeCraft">Close</button>
+</div>
 
-<div id="pause" class="panel hidden">
-  <h2 class="cinzel">Paused</h2>
-  <p style="text-align:center;opacity:.8">Click Resume to lock the mouse again.</p>
-  <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-    <button id="resume">Resume</button>
-    <button class="ghost" id="toTitle">Game Guide</button>
-    <button class="ghost" id="gfxBtn">Graphics: High</button>
+<div id="mapPanel" class="pnl modal hidden">
+  <h2>Map</h2><button class="xbtn" data-close="mapPanel" aria-label="Close">✕</button>
+  <div id="mapBody"><canvas id="bigmap" width="640" height="640"></canvas>
+    <div id="mapLegend"><div>▲ You</div><div>▪ Nestor</div><div style="color:var(--gold)">◆ Quest</div><div style="color:#d0584a">▪ Hostile</div><div style="color:var(--dim);font-size:12px">Explore or climb towers to reveal</div></div></div>
+</div>
+
+<div id="dialog" class="pnl hidden"><div class="who"></div><div class="txt"></div><div class="next">E / Click to continue</div></div>
+
+<div id="pause" class="pnl modal hidden">
+  <h2>Pause Menu</h2>
+  <div class="stack">
+    <button class="btn primary" id="resume">Resume</button>
+    <button class="btn" id="gfxBtn">Graphics: Performance</button>
+    <button class="btn" id="toTitle">Controls &amp; Guide</button>
+    <button class="btn" onclick="location.reload()">Exit to Main Menu</button>
   </div>
-  <p style="font-size:12px;opacity:.6;text-align:center;margin-top:16px">Playtest keys: <span class="kbd">T</span> time ×10 · <span class="kbd">G</span> +10 of every material · <span class="kbd">N</span> skip to next quest</p>
+  <p>Playtest keys: <span class="kbd">T</span> time ×10 · <span class="kbd">G</span> +10 materials · <span class="kbd">N</span> skip quest</p>
 </div>
 
 <div id="title">
-  <h1>ARGONISOS</h1>
-  <div class="sub">PROLOGUE · THE ISLAND OF THE WRECK</div>
-  <div class="tabs">
-    <button data-tab="t-play" class="on">Play</button>
-    <button data-tab="t-how">How to Play</button>
-    <button data-tab="t-dir">Game Direction</button>
-    <button data-tab="t-art">Concept Art</button>
-  </div>
-
-  <div class="tabpage" id="t-play">
-    <h3>The Story So Far</h3>
-    <p>A storm split your ship on the rocks. You wake on a small island in the Aegean with nothing but a torn tunic. An old hermit, Nestor, has lived here for years. He knows the island, the beasts that hunt at night, and the cursed ruins on the hill.</p>
-    <p>Survive a few days. Gather. Hunt. Fight what guards the ruins. Build a raft and sail south to Greece, where your real journey begins.</p>
-    <div class="grid2">
-      <div><h3>Prologue Loop</h3>
-        Gather → Craft tools → Make fire → Hunt & cook → Survive the night → Clear the ruins → Build the raft → Sail.</div>
-      <div><h3>Length</h3>~20–30 minutes. One in-game day = 5 real minutes. Wolves come at night.</div>
+  <div id="menuCol">
+    <div class="logo">
+      <svg viewBox="0 0 120 46" aria-hidden="true"><path d="M4 44 L38 10 L52 24 L66 4 L116 44 Z" fill="none" stroke="#efe0bf" stroke-width="3" stroke-linejoin="round"/><path d="M58 16 L66 4 L74 16" fill="#efe0bf"/></svg>
+      <h1>ARGONISOS</h1>
+      <div class="sub">PROLOGUE</div>
     </div>
-    <div style="text-align:center"><button id="startBtn">Begin</button><div id="loadMsg" style="font-size:12px;opacity:.6"></div></div>
+    <div class="tabs">
+      <button id="startBtn">New Game</button>
+      <button data-tab="t-play">The Story</button>
+      <button data-tab="t-how">Controls</button>
+      <button data-tab="t-dir">Game Direction</button>
+      <button data-tab="t-art">Concept Art</button>
+      <button data-tab="t-credits">Credits</button>
+    </div>
+    <div id="loadMsg"></div>
   </div>
-
-  <div class="tabpage hidden" id="t-how">
+  <div id="menuPage" class="pnl hidden">
+  <div class="tabpage hidden" id="t-play">
+    <h3>The Story So Far</h3>
+    <p>A storm split your ship on the rocks. You wake on an Aegean island with nothing but a torn tunic. An old hermit, Nestor, has lived here for years. He knows the island: the dark woods, the marsh, the cold mountain and the cave in its side, and the dead who guard the hill.</p>
+    <p>Survive. Gather. Hunt. Explore. Build a raft and sail south to Greece, where your real journey begins.</p>
+    <div class="grid2">
+      <div><h3>Regions</h3>Nestor's Cove · Hill of the Fallen · Hylaea Woods · Stymphalian Marsh · Mount Olympos · Cave of Echoes · Lake Kastalia · Temple of Athena · Olive Terraces · Watchtower of Aeolus</div>
+      <div><h3>Length</h3>~30–60 minutes. One in-game day = 5 real minutes. Wolves come at night.</div>
+    </div>
+  </div>
+<div class="tabpage hidden" id="t-how">
     <div class="grid2">
       <div class="keys"><h3>Controls</h3>
         <div><span class="kbd">W A S D</span> move · <span class="kbd">Shift</span> sprint</div>
@@ -173,8 +246,9 @@
         <div><span class="kbd">Left Click</span> swing / attack / chop / mine</div>
         <div><span class="kbd">E</span> interact · talk · pick up · cook</div>
         <div><span class="kbd">Space</span> jump · <span class="kbd">F</span> eat</div>
-        <div><span class="kbd">1–3</span> hands / axe / spear</div>
-        <div><span class="kbd">C</span> crafting · <span class="kbd">Esc</span> pause</div>
+        <div><span class="kbd">1–3</span> hands / axe / spear (press again to put away)</div>
+        <div><span class="kbd">Tab</span> inventory · <span class="kbd">C</span> crafting · <span class="kbd">M</span> map</div>
+        <div><span class="kbd">Esc</span> pause</div>
         <div><span class="kbd">R</span> rest at a campfire (fast time)</div>
       </div>
       <div><h3>Survival</h3>
@@ -226,14 +300,21 @@
       <figure><img src="concept/animals.webp" alt="Animals"><figcaption>Fauna: rabbit, fox, fish, hog, wolf</figcaption></figure>
     </div>
   </div>
+
+  <div class="tabpage hidden" id="t-credits">
+    <h3>Argonisos Prologue</h3>
+    <p>Game design document: George Tsounis. Direction &amp; playtesting: Nikolas Korakidis.</p>
+    <p>Prototype built with three.js. Character animations from Mixamo. Concept art by the Argonisos team.</p>
+  </div>
+  </div>
 </div>
 
 <div id="lightbox" class="hidden"><img alt=""></div>
 <div id="ending" class="hidden">
   <h1>Chapter I Begins</h1>
-  <p class="cinzel" style="opacity:.8;letter-spacing:.2em">THE SEA TO GREECE IS OPEN</p>
+  <p class="cinzel" style="color:var(--dim);letter-spacing:.2em">THE SEA TO GREECE IS OPEN</p>
   <p id="endStats" style="max-width:520px;line-height:1.6"></p>
-  <button onclick="location.reload()">Play Again</button>
+  <button class="btn primary" onclick="location.reload()">Play Again</button>
 </div>
 <div id="fade"></div>
 

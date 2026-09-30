@@ -29,3 +29,13 @@ Characters are procedural placeholders. Swap `makeHumanoid()` / `makeQuad()` for
 
 ## Graphics
 Reflective sea (planar mirror), physical sky with image-based reflections, soft shadows, bloom and vignette, and about 60k wind-animated grass blades plus wildflowers. Pause menu → **Graphics** switches to Performance mode (plain water, no post-processing) for slower machines.
+
+## World (v2)
+~580 m island (≈9× the original area), nine regions linked by trails:
+Nestor's Cove (start) · Hill of the Fallen (skeletons) · Hylaea Woods (dense forest) · Stymphalian Marsh (swamp) · Mount Olympos (90 m, snow, cold) ·
+Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kastalia (waterfall) · Temple of Athena · Olive Terraces (vineyard, farmhouse) · Watchtower of Aeolus (climb to reveal the map).
+
+- Region title banners, map fog-of-war that clears as you explore, **M** for the full map, **Tab** inventory, **C** crafting
+- Trees: 7 species × 3 variants, merged + instanced per 100 m chunk (thousands of trees, few draw calls), wind sway in the shader
+- Graphics preset defaults to **Performance**; High adds reflective sea, bloom, full grass density, sharper shadows
+- Layout constants (`MOUNT`, `CAVE`, `TEMPLE`, …) and `FLORA` densities at the top of `game.js` control the whole map
