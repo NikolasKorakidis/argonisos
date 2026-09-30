@@ -120,7 +120,14 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+// Colour grade lives inside tone mapping: saturation, a warm push and teal shadows, then ACES. Every material
+// already runs this code, so the grade costs nothing extra (it used to be its own full-screen pass).
+THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace('vec3 CustomToneMapping( vec3 color ) { return color; }',
+  `vec3 CustomToneMapping( vec3 color ) {
+    float l = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    color = max(mix(vec3(l), color, 1.12) * vec3(1.04, 1.0, 0.93) + (1.0 - smoothstep(0.0, 0.5, l)) * vec3(-0.012, 0.01, 0.03), 0.0);
+    return ACESFilmicToneMapping(color); }`);
+renderer.toneMapping = THREE.CustomToneMapping;
 renderer.toneMappingExposure = 0.95;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.prepend(renderer.domElement);
@@ -240,7 +247,10 @@ const skyDome = new THREE.Mesh(new THREE.SphereGeometry(2400, 48, 24), new THREE
         }
       }
       if (vDir.y < 0.0) c = hor;
-      gl_FragColor = vec4(c, 1.0); }`,
+      gl_FragColor = vec4(c, 1.0);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+    }`,
 }));
 scene.add(skyDome);
 sky.material.uniforms.turbidity.value = 1.8;
@@ -442,6 +452,8 @@ function makeWaterMat({ level, shallow, deep, foam = 1, depthScale = 6, clarity 
         float alpha = mix(0.4, 0.97, smoothstep(0.0, 1.6 / uClar, depth));
         alpha = max(alpha, max(foam, wk)) * smoothstep(0.0, 0.05, depth + foam * 0.05);
         gl_FragColor = vec4(col, alpha);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
         #include <fog_fragment>
       }`,
   });
@@ -978,6 +990,8 @@ const grassU = { uWind: windUniform, uCenter: { value: new THREE.Vector2() }, uT
         float bend = gh * gh * sc * (0.07 + gust * 0.1);
         p.x += sin(uWind * 1.9 + wp.x * 0.35 + wp.y * 0.22) * bend;
         p.z += cos(uWind * 1.5 + wp.y * 0.3) * bend * 0.7;
+        vec2 away = wp - uCenter; float pd = length(away), push = (1.0 - smoothstep(0.25, 1.5, pd)) * gh * sc;   // blades part around your legs
+        p.xz += away / max(pd, 0.001) * push * 0.55; p.y *= 1.0 - push * 0.35;
         vec3 transformed = p + vec3(wp.x, hm.r - 0.03, wp.y) - ip;
         vGH = gh; vVar = hm.b;`);
     sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB; varying float vGH, vVar;\n` + sh.fragmentShader
@@ -1294,7 +1308,7 @@ let _glowTex; function glowTex() { if (_glowTex) return _glowTex; const c = docu
   // Darkness: two soft black veils inside the mouth sell the depth; they fade away once you step in
   const veilMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { uO: { value: 1 } },
     vertexShader: 'varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
-    fragmentShader: 'uniform float uO; varying vec2 vU; void main(){ float e = smoothstep(0.,.22,vU.x)*smoothstep(1.,.78,vU.x)*smoothstep(1.,.7,vU.y); gl_FragColor = vec4(0.012,0.01,0.008, e*uO); }' });
+    fragmentShader: 'uniform float uO; varying vec2 vU; void main(){ float e = smoothstep(0.,.22,vU.x)*smoothstep(1.,.78,vU.x)*smoothstep(1.,.7,vU.y); gl_FragColor = vec4(0.012,0.01,0.008, e*uO);\n#include <colorspace_fragment>\n}' });
   CAVE_VEILS.mat = veilMat;
   for (const [dd, sc] of [[1.2, 1], [3.8, 0.92], [7, 0.85]]) { const v = new THREE.Mesh(new THREE.PlaneGeometry(archR * 2.1 * sc, 7 * sc), veilMat); v.position.copy(CAVE_MOUTH).addScaledVector(CAVE_DIR, dd); v.position.y = CAVE_Y + 3.3 * sc; v.rotation.y = yaw + Math.PI; v.renderOrder = 2; g.add(v); }
   // Entrance torches in iron sconces: the mouth reads from far away, day or night
@@ -1429,7 +1443,10 @@ const fallU = { t: { value: 0 } }, fallFx = [];
         float bottom = 1.0 - smoothstep(0.0, 0.3, vUv.y);
         vec3 c = mix(vec3(0.42, 0.72, 0.84), vec3(1.0), clamp(streak * 0.85 + bottom * 0.8 + (1.0 - vUv.y) * 0.2, 0.0, 1.0));
         float edge = smoothstep(0.0, 0.1 + n * 0.1, vUv.x) * smoothstep(1.0, 0.9 - n * 0.1, vUv.x);
-        gl_FragColor = vec4(c, clamp((0.55 + streak * 0.4 + bottom * 0.3) * edge, 0.0, 0.95)); }`,
+        gl_FragColor = vec4(c, clamp((0.55 + streak * 0.4 + bottom * 0.3) * edge, 0.0, 0.95));
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
   }));
   wf.position.copy(fp).addScaledVector(dir, 1.2); wf.position.y = LAKE_Y + hgt / 2; wf.lookAt(wf.position.clone().sub(dir)); wf.renderOrder = 2; scene.add(wf);
   // plunge-pool foam: churning noise ring
@@ -1440,7 +1457,10 @@ const fallU = { t: { value: 0 } }, fallFx = [];
       void main(){ vec2 d = vUv - 0.5; float r = length(d) * 2.0, a = atan(d.y, d.x);
         float n = vn(vec2(a * 3.0, r * 6.0 - t * 1.4)) * 0.6 + vn(vec2(a * 7.0, r * 11.0 - t * 2.2)) * 0.4;
         float m = smoothstep(0.35, 0.7, n + (1.0 - r) * 0.45) * (1.0 - smoothstep(0.75, 1.0, r));
-        gl_FragColor = vec4(vec3(0.97, 0.99, 1.0), m * 0.85); }` }));
+        gl_FragColor = vec4(vec3(0.97, 0.99, 1.0), m * 0.85);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }` }));
   foam.position.copy(fp).addScaledVector(dir, -1.5); foam.position.y = LAKE_Y + 0.3; foam.renderOrder = 3; scene.add(foam);
   // mist: soft additive puffs drifting up from the pool
   for (let k = 0; k < 7; k++) { const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xe8f4ff, transparent: true, opacity: 0.35, depthWrite: false }));
@@ -2470,11 +2490,13 @@ const SLOTS = [{ k: 'hands', ic: '✊', n: 'Hands' }, { k: 'axe', ic: '🪓', n:
 function renderHUD() {
   $('hpB').style.width = S.hp + '%'; $('foodB').style.width = S.food + '%'; $('staB').style.width = S.sta + '%';
   $('enB').style.width = S.energy + '%'; $('enN').textContent = Math.ceil(S.energy); $('hpN').textContent = Math.ceil(S.hp); $('staN').textContent = Math.ceil(S.sta); $('foodN').textContent = Math.ceil(S.food);
-  $('hotbar').innerHTML = SLOTS.map((s, i) => {
+  const hb = SLOTS.map((s, i) => {
     const locked = s.k !== 'hands' && !S.tools[s.k];
     return `<div class="slot ${S.slot === i ? 'sel' : ''} ${locked ? 'locked' : ''}"><b>${i + 1}</b>${s.ic}<small>${s.n}</small></div>`;
   }).join('') + `<div class="slot"><b>F</b>${S.inv.meat ? '🍖' : '🫐'}<em>${S.inv.meat || S.inv.berries}</em></div>` + ['wood', 'stone', 'fiber', 'rope'].map((k, i) => `<div class="slot"><b>${i + 5}</b>${S.inv[k] ? ICONS[k] : ''}<em>${S.inv[k] || ''}</em></div>`).join('');
-  $('inv').innerHTML = Object.keys(S.inv).filter((k) => S.inv[k] > 0).map((k) => `<span>${ICONS[k]} ${NAMES[k]}</span><b>${S.inv[k]}</b>`).join('') || '<span style="opacity:.6">Empty pouch</span>';
+  if (hb !== renderHUD.hb) { renderHUD.hb = hb; $('hotbar').innerHTML = hb; }
+  const iv = Object.keys(S.inv).filter((k) => S.inv[k] > 0).map((k) => `<span>${ICONS[k]} ${NAMES[k]}</span><b>${S.inv[k]}</b>`).join('') || '<span style="opacity:.6">Empty pouch</span>';
+  if (iv !== renderHUD.iv) { renderHUD.iv = iv; $('inv').innerHTML = iv; }
   const hours = Math.floor(S.time * 24), mins = Math.floor((S.time * 24 - hours) * 60);
   $('clock').innerHTML = `<b class="cinzel">Day ${S.day}</b> · ${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')} ${isNight() ? '🌙' : '☀️'}${S.timeScale > 1 ? ` <span style="color:#e8c27a">×${S.timeScale}</span>` : ''} <span style="color:var(--dim);font-size:11px">· ${Math.round(FPS.fps)} fps</span>`;
   // Compass bar: cardinal points, ticks and the quest target with distance
@@ -2856,7 +2878,7 @@ function getInteractable() {
   consider(pp.distanceTo(nestor.position), { label: 'Talk to Nestor', act: talkNestor });
   consider(Math.hypot(pp.x - BENCH.x, pp.z - BENCH.z) + 0.3, { label: 'Use the workbench', act: () => openMenu('craft') });
   for (const pk of pickups) {
-    if (!pk.alive || (pk.kind === 'bush' && pk.regrow > 0)) continue;
+    if (!pk.alive || (pk.kind === 'bush' && pk.regrow > 0) || Math.abs(pk.pos.x - pp.x) > 3 || Math.abs(pk.pos.z - pp.z) > 3) continue;
     const labels = { bowitem: 'Pick up the bow and arrows', axeitem: 'Pick up the axe', olivebranch: 'Cut a branch from the Sacred Olive', branch: 'Pick up branch', pebble: 'Pick up pebbles', bush: 'Harvest bush', reeds: 'Cut reeds', chest: 'Open the old chest' };
     consider(pp.distanceTo(pk.pos), { label: labels[pk.kind], act: () => harvest(pk) });
   }
@@ -3131,8 +3153,17 @@ function updateCreature(c, dt) {
 // Camera + player update
 // ============================================================
 let camYaw = Math.PI, camPitch = 0.35;
+// Spatial grid over the colliders (8 m cells), rebuilt only when colliders are added
+let colGrid = null, colGridN = -1;
+function colCells(x, z) {
+  if (colGridN !== colliders.length) { colGrid = new Map(); colGridN = colliders.length;
+    for (const c of colliders) { const k = Math.floor(c.x / 8) + ',' + Math.floor(c.z / 8); let a = colGrid.get(k); if (!a) colGrid.set(k, (a = [])); a.push(c); } }
+  const cx = Math.floor(x / 8), cz = Math.floor(z / 8), out = [];
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const a = colGrid.get((cx + i) + ',' + (cz + j)); if (a) out.push(a); }
+  return out;
+}
 function collide(pos, r, lift = 0) {
-  for (const c of colliders) {
+  for (const cell of colCells(pos.x, pos.z)) for (const c of cell) {
     if (c.ref && !c.ref.alive) continue;
     if (c.h !== undefined && lift > c.h) continue;                 // high enough in a jump to clear it
     const dx = pos.x - c.x, dz = pos.z - c.z, d = Math.hypot(dx, dz), m = c.r + r;
@@ -3523,11 +3554,10 @@ const grade = new ShaderPass({
       c.rgb += (1.0 - smoothstep(0.0, 0.5, l)) * vec3(-0.012, 0.01, 0.03);   // teal shadows
       gl_FragColor = c; }`,
 });
-composer.addPass(grade);
 composer.addPass(new OutputPass());
 const PRESETS = {
   low:    { scale: Math.min(devicePixelRatio, 1), min: 0.7, bloom: false, post: false, grass: 0.22, flowers: 0.25, shadow: 512, shadowBox: 22, soft: false, near: 40, far: 700, fogFar: 520, ambient: false },
-  medium: { scale: Math.min(devicePixelRatio, 1.5), min: 0.9, bloom: false, post: true, grass: 0.5, flowers: 0.5, shadow: 1024, shadowBox: 32, soft: false, near: 70, far: 3000, fogFar: 1150, ambient: true },
+  medium: { scale: Math.min(devicePixelRatio, 1.5), min: 0.9, bloom: false, post: false, grass: 0.5, flowers: 0.5, shadow: 1024, shadowBox: 32, soft: false, near: 70, far: 3000, fogFar: 1150, ambient: true },
   high:   { scale: Math.min(devicePixelRatio, 2), min: 1, bloom: true, post: true, grass: 1, flowers: 1, shadow: 2048, shadowBox: 36, soft: true, near: 130, far: 3000, fogFar: 1150, ambient: true },
 };
 function setQuality(level) {
@@ -3541,6 +3571,7 @@ function setQuality(level) {
   sun.shadow.map?.dispose(); sun.shadow.map = null;
   camera.far = Q2.far; camera.updateProjectionMatrix(); GFX.fogFar = Q2.fogFar; skyDome.scale.setScalar(Q2.far < 2500 ? 0.27 : 1);
   pollen.visible = Q2.ambient; birds.forEach((b) => (b.visible = Q2.ambient));
+  document.getElementById('vig')?.classList.toggle('hidden', !!Q2.post);
   GFX.base = Q2.scale; GFX.scale = Q2.scale; renderer.setPixelRatio(GFX.scale); renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(GFX.scale); composer.setSize(innerWidth, innerHeight);
   updatePropLOD();
   const gb = document.getElementById('gfxBtn'); if (gb) gb.textContent = `Graphics: ${level[0].toUpperCase() + level.slice(1)}`;
@@ -3814,4 +3845,4 @@ $('startBtn').onclick = () => {
   S.running = true; setPause(false); canvas.requestPointerLock();
 };
 renderer.info.autoReset = false;
-window.ARG = { sleep: (h) => sleep(h), backAxe, BENCH_: null, OLIVE, HEARTH, moonDir, sky: skyDome, fire: () => placeCampfire(), setTime: (v) => { S.time = v; }, talkT: (v) => { talkCam.t = v; }, THREE, pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); updateLightPool(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, BENCH, START, WRECK, DOCK, SEA_OUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
+window.ARG = { gp: () => ({ PROPS, PROP_CHUNKS, LO_GROUPS, renderer, composer, sun, GFX, scene, leafMat, propMat, camera }), prof: () => { const T = {}, time = (k, f, n = 20) => { const t0 = performance.now(); for (let i = 0; i < n; i++) f(); T[k] = +((performance.now() - t0) / n).toFixed(3); }; time("updateWorld", () => updateWorld(0.016, performance.now() / 1000)); time("creatures", () => { for (const c of creatures) updateCreature(c, 0.016); }); time("lightPool", updateLightPool); time("propLOD", updatePropLOD); time("minimap", () => drawMinimap(null)); time("hud", renderHUD); time("quest", renderQuest); time("interact", getInteractable); time("player", () => updatePlayer(0.016)); return T; }, sleep: (h) => sleep(h), backAxe, BENCH_: null, OLIVE, HEARTH, moonDir, sky: skyDome, fire: () => placeCampfire(), setTime: (v) => { S.time = v; }, talkT: (v) => { talkCam.t = v; }, THREE, pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); updateLightPool(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, BENCH, START, WRECK, DOCK, SEA_OUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); if (GFX.post) composer.render(); else renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
