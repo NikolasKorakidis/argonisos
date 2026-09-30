@@ -85,3 +85,10 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
 - **Sleep**: press E at any fire, or at **Nestor's hearth** (a permanent fire pit in his courtyard), and pick 1–8 hours or until dawn. Restores energy and health, costs hunger. New **energy** bar: it drains while awake and caps stamina.
 - **Safe zones**: beasts can't enter firelight or Nestor's house and courtyard; they prowl the edge.
 - Nothing interrupts a conversation anymore: cards (quest, night warning) wait until the dialogue ends, and dialogue waits for an open card.
+
+## v11: roots, the Sacred Olive, walls, minimap
+- Tree roots now start on the trunk with a flared base, arch outward and dive into the soil (no more starfish roots on the grass).
+- The Sacred Olive is three trunks twisting around each other with burls, smooth bark with procedural fissures (no banding), splitting into gnarled limbs and a pale-gold crown; rough standing stones ring the clearing.
+- Olive terrace walls are real dry-stone walls: rough base blocks, a smaller top course, capstones, a few mossy stones, gently curving with the ground; they stop cleanly at trees, paths and the sacred circle, and olive trees are planted between the wall lines, not on them.
+- Fallen branches lie under trees (around the crown), not in open fields.
+- The minimap shows everything nearby you can gather (berries, branches, stones, reeds, the sacred branch) and fires.

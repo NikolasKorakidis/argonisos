@@ -588,6 +588,19 @@ function segGeo(a, b, r0, r1, sides) {
   const d = b.clone().sub(a), L = d.length(), g = new THREE.CylinderGeometry(r1, r0, L, sides, 1, true); g.translate(0, L / 2, 0);
   g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UPV, d.normalize())); g.translate(a.x, a.y, a.z); return g;
 }
+// Root flare: the trunk widens at its foot and buttress roots arch out from it and dive into the soil
+// (they start on the trunk, bend over and end below ground, so nothing sits on top of the grass like a starfish)
+function addRoots(P, R, n, bark) {
+  if (!PROP_LO) P.push([new THREE.CylinderGeometry(R * 0.98, R * 1.38, 0.9, 12, 1, true).translate(0, 0.1, 0), bark]);
+  for (let i = 0; i < n; i++) {
+    const a = i / n * 6.28 + rr(-0.25, 0.25), a2 = a + rr(-0.25, 0.25), sp = rr(0.85, 1.2);
+    const p0 = new THREE.Vector3(Math.cos(a) * R * 0.6, R * rr(0.55, 0.8), Math.sin(a) * R * 0.6);
+    const p1 = new THREE.Vector3(Math.cos(a) * R * 1.3 * sp, R * 0.16, Math.sin(a) * R * 1.3 * sp);
+    const p2 = new THREE.Vector3(Math.cos(a2) * R * 2.2 * sp, -0.5, Math.sin(a2) * R * 2.2 * sp);
+    P.push([segGeo(p0, p1, R * 0.4, R * 0.27, PROP_LO ? 4 : 6), bark], [segGeo(p1, p2, R * 0.27, R * 0.06, PROP_LO ? 4 : 5), bark]);
+    if (!PROP_LO) P.push([new THREE.IcosahedronGeometry(R * 0.28, 0).translate(p1.x, p1.y, p1.z), bark]);
+  }
+}
 function growTree(P, o) {
   const tips = [], bark = o.bark, sidesOf = (r) => (PROP_LO ? 4 : r > 0.25 ? 8 : r > 0.1 ? 6 : 4);
   const grow = (a, dir, len, r0, depth) => {
@@ -610,9 +623,8 @@ function growTree(P, o) {
       grow(mp, new THREE.Vector3(Math.cos(az), 0.6, Math.sin(az)).normalize(), len * o.lenF * 0.8, Math.max(0.03, r0 * o.rF * 0.8), depth - 1); }
   };
   const ln = o.lean || 0, la = rand() * 6.28;
-  grow(new THREE.Vector3(0, -0.25, 0), new THREE.Vector3(Math.cos(la) * ln + rr(-0.08, 0.08), 1, Math.sin(la) * ln + rr(-0.08, 0.08)).normalize(), o.trunkH, o.trunkR, o.depth);
-  // roots flaring into the ground
-  for (let i = 0; i < (o.roots || 0); i++) { const a = i / o.roots * 6.28 + rr(-0.3, 0.3); P.push([limb(o.trunkR * 0.55, 0.05, o.trunkR * 2.4, Math.cos(a) * o.trunkR * 0.5, -0.15, Math.sin(a) * o.trunkR * 0.5, Math.sin(a) * 1.25, -Math.cos(a) * 1.25, 5), bark]); }
+  grow(o.start ? o.start.clone() : new THREE.Vector3(0, -0.25, 0), o.dir ? o.dir.clone().normalize() : new THREE.Vector3(Math.cos(la) * ln + rr(-0.08, 0.08), 1, Math.sin(la) * ln + rr(-0.08, 0.08)).normalize(), o.trunkH, o.trunkR, o.depth);
+  if (o.roots) addRoots(P, o.trunkR, o.roots, bark);
   // foliage at every tip, normals from the whole crown so it shades as one soft mass
   const cc = new THREE.Vector3(); tips.forEach((t) => cc.add(t.p)); cc.multiplyScalar(1 / Math.max(1, tips.length)); cc.y -= o.clusterR * 0.6;
   if (o.noLeaf) return tips;
@@ -846,7 +858,8 @@ for (let z = -ISLAND_R; z < ISLAND_R; z += 4) for (let x = -ISLAND_R; x < ISLAND
 // Olive terraces: planted rows
 for (let i = -5; i <= 5; i++) for (let j = -4; j <= 4; j++) {
   const px = OLIVE.x + i * 7 + j * 1.5 + rr(-0.8, 0.8), pz = OLIVE.z + j * 8 + rr(-0.8, 0.8), h = heightAt(px, pz);
-  if (h > 1.5 && Math.hypot(i * 7, j * 8) < 42 && Math.hypot(i * 7, j * 8) > 19 && pathDist(px, pz) > 3) addTree('olive', new THREE.Vector3(px, h - 0.1, pz), rr(0.9, 1.2));
+  const rowD = Math.min(...[-2, -1, 0, 1, 2].map((k) => Math.abs(pz - OLIVE.z - k * 16)));
+  if (h > 1.5 && rowD > 3.2 && Math.hypot(i * 7, j * 8) < 42 && Math.hypot(i * 7, j * 8) > 19 && pathDist(px, pz) > 3) addTree('olive', new THREE.Vector3(px, h - 0.1, pz), rr(0.9, 1.2));
 }
 // --- Rocks: choppable stone + big non-choppable boulders on the mountain and cliffs
 function addRock(pos, scale, choppable) {
@@ -894,7 +907,12 @@ function reeds() {
   mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.25, 5), flat(0x6b4a2e), 0, 1.3, 0, g);
   return g;
 }
-for (let i = 0; i < 420; i++) { const p = landSpot(1.2, 30, AVOID); if (p) addPickup('branch', p, branch); }
+{ // fallen branches lie under trees (in the drip line of the crown), not in the open
+  const trees = resources.filter((r) => r.type === 'tree');
+  for (let i = 0, n = 0; i < 2000 && n < 420; i++) { const t = trees[Math.floor(rand() * trees.length)], a = rand() * 6.28, d = t.r + rr(0.7, 3.2);
+    const p = new THREE.Vector3(t.pos.x + Math.cos(a) * d, 0, t.pos.z + Math.sin(a) * d); p.y = heightAt(p.x, p.z);
+    if (p.y < 1.2 || p.y > 30 || pathDist(p.x, p.z) < 1.8 || AVOID.some((v) => Math.hypot(v.x - p.x, v.z - p.z) < v.r) || colliders.some((c) => Math.abs(c.x - p.x) < 2 && Math.abs(c.z - p.z) < 2 && Math.hypot(c.x - p.x, c.z - p.z) < c.r + 0.4)) continue;
+    addPickup('branch', p, branch); n++; } }
 for (let i = 0; i < 360; i++) { const p = landSpot(0.4, 40, AVOID); if (p) addPickup('pebble', p, pebble); }
 for (let i = 0; i < 170; i++) { const p = landSpot(1.5, 25, AVOID); if (p) addPickup('bush', p, bush); }
 for (let i = 0; i < 70; i++) { const p = landSpot(0.15, 1.2, AVOID); if (p) addPickup('reeds', p, reeds); }
@@ -1454,10 +1472,23 @@ const fireflies = (() => {
 // ---- Olive terraces: dry-stone walls, vine rows, a roofless farmhouse
 {
   const stone = new THREE.MeshStandardMaterial({ color: 0xb5ab98, roughness: 1, flatShading: true }), og = new THREE.Group();
-  for (let k = -2; k <= 2; k++) {                      // terrace walls
-    const z0 = OLIVE.z + k * 16, len = 80 - Math.abs(k) * 12;
-    for (let x = -len / 2; x < len / 2; x += 1.6) { const px = OLIVE.x + x, h = heightAt(px, z0); if (pathDist(px, z0) < 2.5 || Math.hypot(px - OLIVE.x, z0 - OLIVE.z) < 19) continue; mesh(new THREE.BoxGeometry(1.7, rr(0.6, 0.9), 0.9), stone, px, h + 0.3, z0 + rr(-0.1, 0.1), og).rotation.y = rr(-0.08, 0.08); }
-    if (k === 0) { wallColliders(OLIVE.x - len / 2, z0, OLIVE.x - 19, z0, 0.5, 0.95); wallColliders(OLIVE.x + 19, z0, OLIVE.x + len / 2, z0, 0.5, 0.95); } else wallColliders(OLIVE.x - len / 2, z0, OLIVE.x + len / 2, z0, 0.5, 0.95);
+  // Dry-stone terrace walls: a base course of big rough blocks, a top course of smaller stones and the odd flat
+  // capstone, following the ground and gently curving. They stop cleanly at trees, paths and the sacred circle.
+  const sm = [0xb5ab98, 0xa89e8a, 0xc2b9a6, 0x9c9282].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 1, flatShading: true })), moss = new THREE.MeshStandardMaterial({ color: 0x7d8a52, roughness: 1, flatShading: true });
+  const rough = []; for (let v = 0; v < 6; v++) { const q = new THREE.BoxGeometry(1, 1, 1, 2, 2, 2), a = q.attributes.position; for (let i = 0; i < a.count; i++) a.setXYZ(i, a.getX(i) * rr(0.86, 1.08), a.getY(i) * rr(0.85, 1.1), a.getZ(i) * rr(0.86, 1.08)); q.computeVertexNormals(); rough.push(q); }
+  const treeNear = (x, z, pad) => resources.some((t) => t.type === 'tree' && Math.abs(t.pos.x - x) < 6 && Math.abs(t.pos.z - z) < 6 && Math.hypot(t.pos.x - x, t.pos.z - z) < t.r + pad);
+  for (let k = -2; k <= 2; k++) {
+    const len = 80 - Math.abs(k) * 12, zAt = (x) => OLIVE.z + k * 16 + Math.sin(x * 0.045 + k) * 1.4;
+    for (let x = -len / 2; x < len / 2;) {
+      const w = rr(0.8, 1.35), px = OLIVE.x + x + w / 2, pz = zAt(x + w / 2); x += w + 0.04;
+      if (pathDist(px, pz) < 2.6 || Math.hypot(px - OLIVE.x, pz - OLIVE.z) < 19 || treeNear(px, pz, 0.9)) continue;
+      const h = heightAt(px, pz), yaw = Math.atan2(zAt(x) - zAt(x - w), w);
+      const b = mesh(rough[Math.floor(rand() * 6)], sm[Math.floor(rand() * 4)], px, h + 0.22, pz, og); b.scale.set(w, rr(0.48, 0.6), rr(0.75, 0.9)); b.rotation.set(rr(-0.04, 0.04), -yaw + rr(-0.05, 0.05), rr(-0.04, 0.04));
+      for (let j = 0; j < 2; j++) { if (rand() < 0.2) continue; const t2 = mesh(rough[Math.floor(rand() * 6)], rand() < 0.12 ? moss : sm[Math.floor(rand() * 4)], px + (j - 0.5) * w * 0.48, h + 0.62, pz + rr(-0.06, 0.06), og);
+        t2.scale.set(w * rr(0.4, 0.52), rr(0.3, 0.4), rr(0.55, 0.7)); t2.rotation.set(0, -yaw + rr(-0.15, 0.15), rr(-0.08, 0.08)); }
+      if (rand() < 0.25) { const cap = mesh(rough[0], sm[2], px, h + 0.86, pz, og); cap.scale.set(w * 0.9, 0.14, 0.8); cap.rotation.y = -yaw; }
+      colliders.push({ x: px, z: pz, r: 0.55, h: 0.95 });
+    }
   }
   const vine = new THREE.MeshStandardMaterial({ color: 0x4f7a2e, roughness: 0.9 }), grape = new THREE.MeshStandardMaterial({ color: 0x5a2d6a, roughness: 0.4 });
   for (let r = 0; r < 6; r++) {                        // vineyard east of the olives
@@ -2164,15 +2195,39 @@ const sacredMotes = [];
 {
   const g = new THREE.Group(); g.position.copy(SACRED_OLIVE); scene.add(g);
   const P = [], cs = CARD_PARTS.length;
-  growTree(P, { bark: 0x7d6f5e, leaf: 0xc4d19c, trunkH: 3.0, trunkR: 0.95, trunkSteps: 5, depth: 3, taper: 0.58, gnarl: 0.5, rise: 0.02, lean: 0.12, roots: 8, knot: 1.3,
-    kids: (d) => (d === 3 ? 5 : 2), spread: (d) => (d === 3 ? 1.15 : d === 2 ? 0.8 : 0.6), lenF: 0.8, rF: 0.6, midKids: true, clusterR: 1.2, flat: 0.6, cards: 16, card0: 0.85, card1: 1.3, core: 0.42 });
+  // an ancient olive: three trunks twist around one another as they rise, each splitting into gnarled limbs
+  const bark = 0x7d6f5e, H = 2.4;
+  addRoots(P, 1.0, 10, bark);
+  for (let k = 0; k < 3; k++) {
+    const ph = k * 2.094 + 0.3; let prev = null;
+    for (let i = 0; i <= 18; i++) { const t = i / 18, a = ph + t * 2.2, rad = lerp(0.5, 0.42, t) + Math.sin(t * 9 + k) * 0.04;
+      const q = new THREE.Vector3(Math.cos(a) * rad * (1 + t * 0.35), -0.2 + t * H, Math.sin(a) * rad * (1 + t * 0.35)), r = lerp(0.47, 0.34, t) * (1 + Math.sin(t * 13 + k * 2) * 0.05);
+      if (prev) P.push([segGeo(prev.q, q, prev.r, r, 12), bark]);
+      if (i % 6 === 3) { const bu = new THREE.IcosahedronGeometry(r * 0.55, 1); bu.scale(1, 1.4, 1); bu.translate(q.x + Math.cos(a + 1) * r * 0.75, q.y, q.z + Math.sin(a + 1) * r * 0.75); P.push([bu, 0x6e6252]); }   // burls
+      prev = { q, r }; }
+    const out = new THREE.Vector3(prev.q.x, 0, prev.q.z).normalize();
+    growTree(P, { start: prev.q, dir: new THREE.Vector3(out.x * 0.9, 1, out.z * 0.9), bark, leaf: 0xc4d19c, trunkH: 1.5, trunkR: 0.33, trunkSteps: 3, depth: 3, taper: 0.62, gnarl: 0.42, rise: 0.02, knot: 1.25,
+      kids: (d) => (d === 3 ? 3 : 2), spread: (d) => (d === 3 ? 0.95 : d === 2 ? 0.75 : 0.55), lenF: 0.82, rF: 0.62, clusterR: 1.1, flat: 0.6, cards: 15, card0: 0.8, card1: 1.25, core: 0.4 });
+  }
   const cards = CARD_PARTS.splice(cs);
-  const tree = new THREE.Mesh(mergeParts(P), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 })); tree.castShadow = tree.receiveShadow = true;
+  // bark: one continuous material (no per-segment tint), with vertical fissures and ridges shaded in the shader
+  const barkParts = P.filter(([, c]) => c === bark || c === 0x6e6252).map(([geo]) => { const q = geo.clone(); for (const k of Object.keys(q.attributes)) if (k !== 'position' && k !== 'normal') q.deleteAttribute(k); if (!q.attributes.normal) q.computeVertexNormals(); return q; });
+  const barkMat = new THREE.MeshStandardMaterial({ color: 0x8a7b68, roughness: 0.95 });
+  barkMat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vBP;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvBP = position;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vBP;').replace('#include <color_fragment>', `#include <color_fragment>
+      float ang = atan(vBP.z, vBP.x), f = fract(ang * 2.4 + sin(vBP.y * 1.7 + ang * 3.0) * 0.35 + vBP.y * 0.12);
+      float fis = smoothstep(0.42, 0.5, abs(f - 0.5)), grain = fract(sin(dot(floor(vBP * 9.0), vec3(12.9, 78.2, 37.7))) * 43758.5);
+      diffuseColor.rgb *= mix(1.05, 0.55, fis) * (0.92 + grain * 0.12);`);
+  };
+  const tree = new THREE.Mesh(mergeGeometries(barkParts), barkMat); tree.castShadow = tree.receiveShadow = true;
+  const coreParts = P.filter(([, c]) => !(c === bark || c === 0x6e6252));
+  if (coreParts.length) { const cm = new THREE.Mesh(mergeParts(coreParts), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 })); cm.castShadow = true; tree.add(cm); }
   const leaves = new THREE.Mesh(mergeCards(cards), new THREE.MeshStandardMaterial({ map: leafTex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8, emissive: 0x6a5a18, emissiveIntensity: 0.35 })); leaves.castShadow = true;
   const T = new THREE.Group(); T.scale.setScalar(3.4); T.add(tree, leaves); g.add(T);
   // a ring of standing stones with a gap facing the path, a low altar with oil lamps, votive jars
-  const st = new THREE.MeshStandardMaterial({ color: 0xcfc6b2, roughness: 0.9, flatShading: true }), lampM = new THREE.MeshStandardMaterial({ color: 0xffd28a, emissive: 0xffa040, emissiveIntensity: 1.6 });
-  for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; if (Math.abs(Math.sin(a) - 1) < 0.25) continue; const b = mesh(new THREE.BoxGeometry(0.8, rr(1.1, 1.8), 0.7), st, Math.cos(a) * 15, 0.5, Math.sin(a) * 15, g); b.rotation.y = -a; }
+  const st = new THREE.MeshStandardMaterial({ color: 0xa69d8a, roughness: 1, flatShading: true }), lampM = new THREE.MeshStandardMaterial({ color: 0xffd28a, emissive: 0xffa040, emissiveIntensity: 1.6 });
+  for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; if (Math.abs(Math.sin(a) - 1) < 0.25) continue; const sh = rr(1.1, 1.9), sg = new THREE.DodecahedronGeometry(0.5, 0); sg.scale(0.9, sh, 0.7); const b = mesh(sg, st, Math.cos(a) * 15, sh * 0.35, Math.sin(a) * 15, g); b.rotation.set(rr(-0.08, 0.08), -a, rr(-0.08, 0.08)); }
   mesh(new THREE.BoxGeometry(2.2, 0.8, 1), st, 0, 0.4, 7.5, g); mesh(new THREE.BoxGeometry(2.5, 0.12, 1.25), st, 0, 0.86, 7.5, g);
   for (const x of [-0.8, 0, 0.8]) { mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.12, 8), st, x, 0.98, 7.5, g); const fl = mesh(new THREE.SphereGeometry(0.06, 6, 4), lampM, x, 1.1, 7.5, g); fl.userData.keep = true; }
   for (let i = 0; i < 6; i++) { const a = rr(0, 6.28), r = rr(3.2, 4.5); mesh(new THREE.LatheGeometry([[0.001, 0], [0.14, 0.03], [0.22, 0.25], [0.12, 0.45], [0.09, 0.52]].map(([x, y]) => new THREE.Vector2(x, y)), 10), flat(0xb2663a), Math.cos(a) * r, 0, Math.sin(a) * r, g); }
@@ -3360,6 +3415,15 @@ function revealMap(x, z, r) {
 }
 const toMapPx = (p) => [(p.x / MAPW + 0.5) * MAPN, (p.z / MAPW + 0.5) * MAPN];
 function drawMapMarkers(ctx, tf, target, big) {
+  if (!big) {   // minimap: everything you can pick up nearby
+    const pp = player.position, ic = { bush: '🫐', branch: '🪵', pebble: '🪨', reeds: '🌾', olivebranch: '🌿', chest: '🧰' };
+    ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const pk of pickups) { if (!pk.alive || (pk.kind === 'bush' && pk.regrow > 0) || !ic[pk.kind]) continue;
+      if (Math.abs(pk.pos.x - pp.x) > 60 || Math.abs(pk.pos.z - pp.z) > 60) continue;
+      const [x, y] = tf(pk.pos); ctx.globalAlpha = pk.kind === 'bush' ? 0.95 : 0.85; ctx.fillText(ic[pk.kind], x, y); }
+    ctx.globalAlpha = 1;
+    for (const f of FIRES) { const [x, y] = tf(f.pos); ctx.fillText('🔥', x, y); }
+  }
   ctx.fillStyle = '#b0392e'; creatures.forEach((c) => { if (!c.dead && c.def.hostile) { const [x, y] = tf(c.obj.position); ctx.fillRect(x - 1.5, y - 1.5, 3, 3); } });
   ctx.fillStyle = '#fff'; { const [x, y] = tf(nestor.position); ctx.fillRect(x - 2, y - 2, 4, 4); }
   for (const m of questMarkers()) { const [x, y] = tf(m.pos); ctx.font = `900 ${big ? 26 : 17}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineWidth = 3.5; ctx.strokeStyle = '#2a1a06'; ctx.strokeText(m.g, x, y - (big ? 10 : 7)); ctx.fillStyle = '#ffd23a'; ctx.fillText(m.g, x, y - (big ? 10 : 7)); }
