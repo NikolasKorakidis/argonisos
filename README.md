@@ -26,3 +26,6 @@ Playtest keys: **T** time ×10 · **G** +10 materials · **N** skip current ques
 - Hunger drain in `updateWorld()` (`0.28`/s)
 
 Characters are procedural placeholders. Swap `makeHumanoid()` / `makeQuad()` for GLTF assets later.
+
+## Graphics
+Reflective sea (planar mirror), physical sky with image-based reflections, soft shadows, bloom and vignette, and about 60k wind-animated grass blades plus wildflowers. Pause menu → **Graphics** switches to Performance mode (plain water, no post-processing) for slower machines.

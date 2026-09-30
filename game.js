@@ -2,6 +2,14 @@
 // Single-module game: world gen, characters, survival, combat, crafting, quests, sailing ending.
 import * as THREE from 'three';
 import { FBXLoader } from './jsm/loaders/FBXLoader.js';
+import { Water } from './jsm/objects/Water.js';
+import { Sky } from './jsm/objects/Sky.js';
+import { EffectComposer } from './jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from './jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from './jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from './jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from './jsm/postprocessing/OutputPass.js';
+import { VignetteShader } from './jsm/shaders/VignetteShader.js';
 
 // ============================================================
 // Utilities
@@ -42,22 +50,82 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.95;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.prepend(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x9cc8e8, 90, 560);
-const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1500);
-addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+scene.fog = new THREE.Fog(0x9cc8e8, 140, 950);
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 3000);
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); });
 
 const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x5a4a30, 0.9);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffe2b0, 2.2);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 200 });
-sun.shadow.bias = -0.0005;
+Object.assign(sun.shadow.camera, { left: -32, right: 32, top: 32, bottom: -32, near: 1, far: 220 });
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.03; sun.shadow.radius = 3;
 scene.add(sun, sun.target);
+
+// ============================================================
+// Graphics: procedural textures, physical sky, image-based reflections, post-processing
+// ============================================================
+// Tileable value noise on a canvas (period-wrapped so textures repeat seamlessly)
+function tileNoise(size, period, octaves, seedOff = 0) {
+  const h = (x, z) => { x = ((x % period) + period) % period; z = ((z % period) + period) % period; return hash(x + seedOff, z - seedOff); };
+  const f = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    let a = 0.5, fr = 1, v = 0;
+    for (let o = 0; o < octaves; o++) {
+      const px = (x / size) * period * fr, pz = (y / size) * period * fr, P = period * fr;
+      const xi = Math.floor(px), zi = Math.floor(pz), xf = px - xi, zf = pz - zi, u = xf * xf * (3 - 2 * xf), w = zf * zf * (3 - 2 * zf);
+      const hh = (i, j) => { const X = ((i % P) + P) % P, Z = ((j % P) + P) % P; return hash(X + seedOff * 3 + o * 17, Z + o * 31); };
+      v += a * lerp(lerp(hh(xi, zi), hh(xi + 1, zi), u), lerp(hh(xi, zi + 1), hh(xi + 1, zi + 1), u), w);
+      a *= 0.5; fr *= 2;
+    }
+    f[y * size + x] = v;
+  }
+  void h; return f;
+}
+function canvasTex(size, fill, repeat) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d'), img = g.createImageData(size, size); fill(img.data); g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; if (repeat) t.repeat.set(repeat, repeat);
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return t;
+}
+// Water ripple normal map from a height field
+const waterNormals = (() => {
+  const N = 256, hf = tileNoise(N, 8, 4, 7);
+  const t = canvasTex(N, (d) => {
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const i = y * N + x, hx = hf[y * N + ((x + 1) % N)] - hf[y * N + ((x - 1 + N) % N)], hz = hf[((y + 1) % N) * N + x] - hf[((y - 1 + N) % N) * N + x];
+      const nx = -hx * 6, nz = -hz * 6, l = Math.hypot(nx, nz, 1);
+      d.set([(nx / l * 0.5 + 0.5) * 255, (nz / l * 0.5 + 0.5) * 255, (1 / l * 0.5 + 0.5) * 255, 255], i * 4);
+    }
+  });
+  return t;
+})();
+// Ground detail: soft mottling that breaks up the flat colours
+const groundDetail = (() => {
+  const N = 256, hf = tileNoise(N, 16, 5, 3);
+  const t = canvasTex(N, (d) => { for (let i = 0; i < N * N; i++) { const v = 200 + hf[i] * 55; d.set([v, v, v, 255], i * 4); } }, 60);
+  t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+
+// Physical sky (Rayleigh/Mie scattering) + a copy used to build reflection lighting
+const sky = new Sky(); sky.scale.setScalar(2500); scene.add(sky);
+sky.material.uniforms.turbidity.value = 2.6;
+sky.material.uniforms.rayleigh.value = 2.2; sky.material.uniforms.mieCoefficient.value = 0.004; sky.material.uniforms.mieDirectionalG.value = 0.85;
+const sunDir = new THREE.Vector3(0, 1, 0);
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envScene = new THREE.Scene(); const envSky = new Sky(); envSky.material = sky.material; envSky.scale.setScalar(1000); envScene.add(envSky);
+let envRT = null, envTimer = 0;
+function refreshEnvironment() {
+  if (envRT) envRT.dispose();
+  envRT = pmrem.fromScene(envScene, 0.04); scene.environment = envRT.texture;
+}
+const GFX = { high: true };
 
 // Material helpers: flat-shaded world, smooth "Pixar" characters
 const flatMats = {};
@@ -75,7 +143,7 @@ function mesh(geo, mat, x = 0, y = 0, z = 0, parent) {
   const size = 260, seg = 150;
   const g = new THREE.PlaneGeometry(size, size, seg, seg); g.rotateX(-Math.PI / 2);
   const pos = g.attributes.position, cols = [];
-  const cSand = new THREE.Color(0xe3cf98), cGrass = new THREE.Color(0x7d9a45), cGrass2 = new THREE.Color(0x5d7d34), cRock = new THREE.Color(0x9a8f80), cDeep = new THREE.Color(0xb8a676);
+  const cSand = new THREE.Color(0xe3cf98), cGrass = new THREE.Color(0x73903f), cGrass2 = new THREE.Color(0x55732f), cRock = new THREE.Color(0x9a8f80), cDeep = new THREE.Color(0xb8a676);
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i), h = heightAt(x, z); pos.setY(i, h);
     let c;
@@ -86,25 +154,36 @@ function mesh(geo, mat, x = 0, y = 0, z = 0, parent) {
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
   g.computeVertexNormals();
-  const t = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1 }));
+  const t = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95, map: groundDetail, envMapIntensity: 0.4 }));
   t.receiveShadow = true; scene.add(t);
 }
-const water = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400, 60, 60).rotateX(-Math.PI / 2),
-  new THREE.MeshStandardMaterial({ color: 0x2c7fb0, transparent: true, opacity: 0.82, roughness: 0.25, metalness: 0.1, flatShading: true }));
-water.position.y = -0.15; scene.add(water);
-const waterBase = water.geometry.attributes.position.array.slice();
+// Reflective sea (planar mirror + animated ripple normals). Low-quality mode swaps in a plain plane.
+const water = new Water(new THREE.PlaneGeometry(2400, 2400), {
+  textureWidth: 1024, textureHeight: 1024, waterNormals, sunDirection: new THREE.Vector3(0, 1, 0),
+  sunColor: 0xfff1d6, waterColor: 0x14708f, distortionScale: 2.2, fog: true,
+});
+water.rotation.x = -Math.PI / 2; water.position.y = -0.15; water.material.uniforms.size.value = 3; scene.add(water);
+const waterLow = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400).rotateX(-Math.PI / 2),
+  new THREE.MeshStandardMaterial({ color: 0x1f6f96, roughness: 0.15, metalness: 0.2, transparent: true, opacity: 0.88 }));
+waterLow.position.y = -0.15; waterLow.visible = false; scene.add(waterLow);
 
-// Greece on the horizon: the goal is visible from the first minute
+// Greece on the horizon: rugged low-poly ranges with snow caps, visible from the first minute
 {
   const land = new THREE.Group();
-  const mats = [flat(0x6f86a6), flat(0x7d93b0), flat(0x8aa0bb)];
-  for (let i = 0; i < 9; i++) {
-    const r = rr(40, 90), hgt = rr(35, 110);
-    const m = mesh(new THREE.ConeGeometry(r, hgt, 7), mats[i % 3], rr(-260, 260), hgt / 2 - 6, rr(-20, 30), land);
-    m.castShadow = false;
-    if (hgt > 80) mesh(new THREE.ConeGeometry(r * 0.28, hgt * 0.28, 7), flat(0xf2f4f8), m.position.x, hgt - 6 - hgt * 0.14 + 0.5, m.position.z, land).castShadow = false;
-  }
-  land.position.z = 470; scene.add(land);
+  const cols = [0x5f7a8f, 0x6b8499, 0x7890a3, 0x566f63];
+  const peak = (r, h, x, z, col, snow) => {
+    const g = new THREE.IcosahedronGeometry(1, 1), a = g.attributes.position;
+    for (let i = 0; i < a.count; i++) {
+      let y = a.getY(i); const k = 0.85 + hash(a.getX(i) * 7 + x, a.getZ(i) * 7 + z) * 0.35;
+      a.setXYZ(i, a.getX(i) * r * k, Math.max(y, -0.2) * h * (y > 0.6 ? 1.15 : 1), a.getZ(i) * r * k);
+    }
+    g.computeVertexNormals();
+    const m = mesh(g, flat(col), x, 0, z, land); m.castShadow = false; m.receiveShadow = false;
+    if (snow) { const c = mesh(new THREE.ConeGeometry(r * 0.3, h * 0.3, 6), flat(0xeef2f6), x, h * 0.86, z, land); c.castShadow = false; }
+  };
+  for (let i = 0; i < 14; i++) { const h = rr(50, 130); peak(rr(45, 85), h, rr(-420, 420), rr(-10, 60), cols[i % 4], h > 95); }
+  for (let i = 0; i < 10; i++) peak(rr(50, 90), rr(18, 35), rr(-380, 380), rr(-60, -20), 0x5c7a4e, false);   // green foothills in front
+  land.position.z = 640; scene.add(land);
 }
 // Clouds
 const clouds = [];
@@ -198,6 +277,53 @@ for (let i = 0; i < 40; i++) { const p = landSpot(1.5, 11, AVOID); if (p) addPic
 for (let i = 0; i < 30; i++) { const p = landSpot(0.15, 1.2, AVOID); if (p) addPickup('reeds', p, reeds); }
 // A few starter materials right at the wake-up spot, so the first minute teaches pickup
 for (let i = 0; i < 3; i++) { const p = START.clone().add(new THREE.Vector3(rr(-4, 4), 0, rr(-5, -2))); p.y = heightAt(p.x, p.z); addPickup(i < 2 ? 'branch' : 'pebble', p, i < 2 ? branch : pebble); }
+
+// --- Grass & flowers: instanced, swaying in the wind ---
+const windUniform = { value: 0 };
+function windify(mat, strength) {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uWind = windUniform;
+    sh.vertexShader = 'uniform float uWind;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+      vec4 ip = instanceMatrix[3];
+      float bend = pow(max(position.y, 0.0) * 2.0, 2.0) * ${strength.toFixed(3)};
+      transformed.x += sin(uWind * 1.7 + ip.x * 0.35 + ip.z * 0.2) * bend;
+      transformed.z += cos(uWind * 1.3 + ip.z * 0.3) * bend * 0.6;`);
+  };
+  return mat;
+}
+{
+  const blade = new THREE.PlaneGeometry(0.11, 0.38, 1, 3); blade.translate(0, 0.19, 0);
+  const bp = blade.attributes.position; for (let i = 0; i < bp.count; i++) bp.setX(i, bp.getX(i) * (1 - bp.getY(i) / 0.42));
+  blade.computeVertexNormals();
+  const COUNT = 60000, grass = new THREE.InstancedMesh(blade, windify(new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.85 }), 0.08), COUNT);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), col = new THREE.Color(); let n = 0;
+  const c1 = new THREE.Color(0x5f7f33), c2 = new THREE.Color(0x86993f), c3 = new THREE.Color(0x46652a);
+  let cx = 0, cz = 0;
+  for (let i = 0; i < COUNT * 3 && n < COUNT; i++) {
+    if (i % 8 === 0) { cx = rr(-92, 92); cz = rr(-92, 92); }
+    const x = cx + rr(-0.5, 0.5), z = cz + rr(-0.5, 0.5), h = heightAt(x, z);
+    if (h < 1.6 || h > 12) continue;
+    if (Math.hypot(x - RUINS.x, z - RUINS.z) < 11 || Math.hypot(x - HUT.x, z - HUT.z) < 4.5) continue;
+    if (fbm(x * 0.05 + 3, z * 0.05) < 0.36) continue;                    // leave natural bare patches
+    e.set(rr(-0.25, 0.25), rr(0, 6.28), rr(-0.25, 0.25)); q.setFromEuler(e);
+    const s = rr(0.7, 1.5); m.compose(new THREE.Vector3(x, h - 0.03, z), q, new THREE.Vector3(s, s * rr(0.8, 1.4), s));
+    grass.setMatrixAt(n, m); grass.setColorAt(n, col.copy(c1).lerp(rand() < 0.5 ? c2 : c3, rand())); n++;
+  }
+  grass.count = n; grass.receiveShadow = true; grass.frustumCulled = false; scene.add(grass);
+  // Wildflowers (white, yellow, purple, red) from the plants concept sheet
+  const petal = new THREE.IcosahedronGeometry(0.07, 0); petal.translate(0, 0.38, 0);
+  const stem = new THREE.CylinderGeometry(0.01, 0.01, 0.38, 3); stem.translate(0, 0.19, 0);
+  const FL = 1600, flowers = new THREE.InstancedMesh(petal, windify(new THREE.MeshStandardMaterial({ roughness: 0.6 }), 0.06), FL);
+  const stems = new THREE.InstancedMesh(stem, windify(new THREE.MeshStandardMaterial({ color: 0x4e7a2e }), 0.06), FL);
+  const fcols = [0xf4f1e6, 0xf3c83a, 0x9c6cc9, 0xd2463f, 0xf29ab8]; n = 0;
+  for (let i = 0; i < FL * 4 && n < FL; i++) {
+    const x = rr(-90, 90), z = rr(-90, 90), h = heightAt(x, z);
+    if (h < 1.8 || h > 11 || fbm(x * 0.09, z * 0.09 + 5) < 0.55) continue;
+    m.makeTranslation(x, h - 0.02, z); flowers.setMatrixAt(n, m); stems.setMatrixAt(n, m);
+    flowers.setColorAt(n, col.setHex(fcols[Math.floor(rand() * fcols.length)])); n++;
+  }
+  flowers.count = stems.count = n; flowers.frustumCulled = stems.frustumCulled = false; scene.add(flowers, stems);
+}
 
 // --- Nestor's hut (small house from the buildings sheet) ---
 {
@@ -1063,14 +1189,25 @@ function updateWorld(dt, t) {
 
   const e = -Math.cos(S.time * Math.PI * 2);                    // -1 midnight, +1 noon
   const day = clamp(e * 2.2 + 0.35, 0, 1), dusk = clamp(1 - Math.abs(e) * 3.5, 0, 1);
-  const sky = skyNight.clone().lerp(skyDay, day).lerp(skyDusk, dusk * 0.55);
-  scene.background = sky; scene.fog.color.copy(sky);
+  const skyCol = skyNight.clone().lerp(skyDay, day).lerp(skyDusk, dusk * 0.55);
+  scene.fog.color.copy(skyCol); scene.background = skyCol;
   sun.intensity = 0.15 + day * 2.4; sun.color.setHex(dusk > 0.4 ? 0xffb070 : 0xffe2b0);
-  hemi.intensity = 0.25 + day * 0.75;
+  hemi.intensity = 0.2 + day * 0.45;
   const sa = S.time * Math.PI * 2;
   sun.position.set(player.position.x + Math.sin(sa) * 60, Math.max(8, e * 80), player.position.z + 30 + Math.cos(sa) * 20);
   if (e < -0.1) sun.position.y = 50;   // moonlight from above
   sun.target.position.copy(player.position);
+  // Physical sky + reflections follow the true sun; at night the sky shader fades and a moonlit tint takes over
+  const sa2 = S.time * Math.PI * 2;
+  sunDir.set(Math.sin(sa2) * 0.55, e, 0.35 + Math.cos(sa2) * 0.25).normalize();
+  sky.material.uniforms.sunPosition.value.copy(sunDir);
+  sky.visible = day > 0.02; renderer.toneMappingExposure = lerp(0.5, 0.82, day);
+  water.material.uniforms.sunDirection.value.copy(sunDir.y > 0 ? sunDir : new THREE.Vector3(0.2, 0.6, 0.3).normalize());
+  water.material.uniforms.sunColor.value.setHex(day > 0.1 ? (dusk > 0.4 ? 0xffb070 : 0xfff1d6) : 0x8fa6d6);
+  water.material.uniforms.time.value += dt * 0.6 + 0.0005;
+  windUniform.value = t;
+  envTimer -= 1;
+  if (envTimer <= 0) { envTimer = 240; refreshEnvironment(); scene.environmentIntensity = lerp(0.15, 1, day); }
 
   // Hunger & regen
   S.food = clamp(S.food - dt * S.timeScale * (P.resting ? 8 : 1) * 0.28, 0, 100);
@@ -1112,9 +1249,6 @@ function updateWorld(dt, t) {
   }
   P.resting = !!(keys.KeyR && S.campfire && player.position.distanceTo(S.campfire.pos) < 4 && !creatures.some((c) => c.state === 'chase' && !c.dead));
   // Water, smoke, clouds, NPC
-  const wp = water.geometry.attributes.position;
-  for (let i = 0; i < wp.count; i++) wp.setY(i, Math.sin(waterBase[i * 3] * 0.05 + t * 1.2) * 0.15 + Math.cos(waterBase[i * 3 + 2] * 0.06 + t) * 0.12);
-  wp.needsUpdate = true;
   smoke.forEach((s) => { s.userData.t = (s.userData.t + dt * 0.15) % 1; const k = s.userData.t; s.position.set(CHIMNEY.x + k * 2, CHIMNEY.y + k * 6, CHIMNEY.z); s.scale.setScalar(0.5 + k * 1.8); s.material.opacity = 0.5 * (1 - k); });
   clouds.forEach((c) => { c.position.x += dt * 2; if (c.position.x > 320) c.position.x = -320; });
   const nd = nestor.position.distanceTo(player.position);
@@ -1179,6 +1313,20 @@ function setSail() {
 // ============================================================
 // Main loop
 // ============================================================
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 }));
+composer.setPixelRatio(Math.min(devicePixelRatio, 2)); composer.setSize(innerWidth, innerHeight);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.32, 0.55, 0.88); composer.addPass(bloom);
+const vignette = new ShaderPass(VignetteShader); vignette.uniforms.offset.value = 0.95; vignette.uniforms.darkness.value = 1.15; composer.addPass(vignette);
+composer.addPass(new OutputPass());
+function setQuality(high) {
+  GFX.high = high; water.visible = high; waterLow.visible = !high;
+  renderer.shadowMap.type = high ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+  sun.shadow.mapSize.set(high ? 2048 : 1024, high ? 2048 : 1024); sun.shadow.map?.dispose(); sun.shadow.map = null;
+  renderer.setPixelRatio(high ? Math.min(devicePixelRatio, 2) : 1); renderer.setSize(innerWidth, innerHeight);
+  const gb = document.getElementById('gfxBtn'); if (gb) gb.textContent = `Graphics: ${high ? 'High' : 'Performance'}`;
+}
+document.getElementById('gfxBtn')?.addEventListener('click', () => setQuality(!GFX.high));
 const clock = new THREE.Clock();
 let hudT = 0;
 function loop() {
@@ -1217,7 +1365,7 @@ function loop() {
     const a = t * 0.05; camera.position.set(Math.sin(a) * 120, 45, Math.cos(a) * 120); camera.lookAt(0, 5, 0);
     updateWorld(0, t); S.time = 0.3;
   }
-  renderer.render(scene, camera);
+  if (GFX.high) composer.render(); else renderer.render(scene, camera);
 }
 loop();
 
@@ -1241,4 +1389,4 @@ $('startBtn').onclick = () => {
     toast('Follow the gold ◆ marker', false);
   }
 };
-window.ARG = { S, player, hero, poseHero, P, tools, camera };  // console access for playtesting
+window.ARG = { S, player, hero, poseHero, P, tools, camera, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: () => { updateCamera(1); composer.render(); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
