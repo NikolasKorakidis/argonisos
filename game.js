@@ -1446,6 +1446,7 @@ function renderQuest() {
   $('quest').innerHTML = `<div class="step">Quest ${S.questIdx + 1} / ${Q.length}</div><h3 class="cinzel">${q.title}</h3><p>${q.desc}</p><ul>${q.obj().map(([t, d]) => `<li class="${d ? 'done' : ''}">${d ? '✔' : '○'} ${t}</li>`).join('')}</ul>`;
 }
 function checkQuest() {
+  if (S.explore) return;
   const q = Q[S.questIdx]; if (!q) return;
   if (q.obj().every(([, d]) => d)) {
     toast(`Quest complete: ${q.title}`, true); sfx(523, 0.12, 'triangle', 0.08); setTimeout(() => sfx(784, 0.25, 'triangle', 0.08), 120);
@@ -1510,12 +1511,18 @@ addEventListener('keydown', (e) => {
     if (prev !== 1 && S.slot === 1) P.equip = { kind: 'equip', t: 0 };        // draw the axe
     else if (prev === 1 && S.slot !== 1) P.equip = { kind: 'disarm', t: 0 };  // put it away
   } }
+  if (S.explore) {
+    if (e.code === 'KeyV') { P.fly = !P.fly; toast(P.fly ? 'Flying: WASD · Space up · Z down · Shift fast' : 'Walking'); }
+    if (e.code === 'KeyO') openMenu('explorePanel');
+    if (e.code === 'BracketLeft' || e.code === 'BracketRight') { S.time = (S.time + (e.code === 'BracketLeft' ? -1 : 1) / 48 + 1) % 1; S.timeLock = true; syncExplore(); }
+    if (e.code === 'KeyH') $('hud').classList.toggle('hidden');
+  }
   if (e.code === 'KeyT') { S.timeScale = S.timeScale === 1 ? 10 : 1; toast(`Playtest: time ×${S.timeScale}`); }
   if (e.code === 'KeyG') { for (const k of ['wood', 'stone', 'fiber', 'rawmeat', 'rope']) S.inv[k] += 10; toast('Playtest: +10 materials'); }
   if (e.code === 'KeyN') debugSkipQuest();
 });
 addEventListener('keyup', (e) => (keys[e.code] = false));
-const MENUS = ['craft', 'invPanel', 'mapPanel'];
+const MENUS = ['craft', 'invPanel', 'mapPanel', 'explorePanel'];
 const menuOpen = () => MENUS.some((m) => !$(m).classList.contains('hidden'));
 function openMenu(id) {                      // one panel at a time; frees the mouse while open
   const el = $(id), opening = el.classList.contains('hidden');
@@ -1669,6 +1676,7 @@ function killCreature(c) {
   if (c.type === 'skeleton') burst(c.obj.position.clone().setY(c.obj.position.y + 1), 0xe9e0c9, 16);
 }
 function hurtPlayer(dmg, reason) {
+  if (S.explore) return;
   if (P.dead) return;
   S.hp -= dmg; P.hurtT = 0.25; sfx(70, 0.2, 'sawtooth', 0.08, -20);
   floatText(`-${dmg}`, player.position.clone().setY(player.position.y + 2.3), '#ff6b5b');
@@ -1697,7 +1705,8 @@ function updateCreature(c, dt) {
   const d = c.def, pp = player.position; const dist = o.position.distanceTo(pp);
   c.t -= dt; c.atkCd -= dt;
   const fireNear = S.campfire && S.campfire.pos.distanceTo(o.position) < 7;
-  if (d.hostile) {
+  if (d.hostile && S.explore) { if (c.state === 'chase') c.state = 'wander'; }
+  else if (d.hostile) {
     const aggro = d.aggro || 40;
     if (c.type === 'skeleton' && c.home.distanceTo(pp) > 22) c.state = 'return';
     else if (dist < aggro && !P.dead) c.state = 'chase';
@@ -1763,6 +1772,17 @@ function updatePlayer(dt) {
   const swimming = ground < -0.6;
   let speed = 0;
   P.sprinting = false;
+  if (P.fly) {                                   // Explore mode: free flight, no collisions, no gravity
+    const fast = keys.ShiftLeft || keys.ShiftRight, v = (fast ? 60 : 18) * dt;
+    const fwd = new THREE.Vector3(-Math.sin(camYaw) * Math.cos(camPitch), -Math.sin(camPitch), -Math.cos(camYaw) * Math.cos(camPitch));
+    const right = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
+    if (locked) { player.position.addScaledVector(fwd, input.z * v).addScaledVector(right, input.x * v);
+      if (keys.Space) player.position.y += v; if (keys.KeyZ) player.position.y -= v; }
+    player.position.y = Math.max(player.position.y, Math.max(heightAt(player.position.x, player.position.z), -0.2) + 0.3);
+    P.yaw = Math.atan2(fwd.x, fwd.z); player.rotation.y = P.yaw; P.vel.y = 0; P.onGround = true;
+    animateHumanoid(player, 0, P.animT); if (hero.rig) poseHero(0, 0, 0, performance.now() / 1000);
+    return;
+  }
   if (input.lengthSq() > 0 && locked) {
     input.normalize();
     const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);             // camera forward on XZ
@@ -1837,7 +1857,7 @@ function updateCamera(dt) {
 const skyDay = new THREE.Color(0xa9cfe8), skyDusk = new THREE.Color(0xf0a070), skyNight = new THREE.Color(0x0b1630);
 let wolfTimer = 5;
 function updateWorld(dt, t) {
-  S.time += (dt * S.timeScale * (P.resting ? 8 : 1)) / DAY_LEN;
+  if (!S.timeLock) S.time += (dt * S.timeScale * (P.resting ? 8 : 1)) / DAY_LEN;
   if (S.time >= 1) { S.time -= 1; S.day++; }
   const night = isNight();
   if (S.wasNight && !night) { S.nights++; toast(`Dawn of day ${S.day}`, true); creatures.filter((c) => c.type === 'wolf').forEach((c) => (c.state = 'flee')); }
@@ -1893,7 +1913,8 @@ function updateWorld(dt, t) {
   else if (S.food > 50 && S.hp < 100) S.hp = Math.min(100, S.hp + dt * 1.2);
 
   // Night wolves
-  if (night && !P.dead) {
+  if (S.explore) { S.food = S.hp = 100; S.sta = Math.max(S.sta, 60); }
+  if (night && !P.dead && !S.explore) {
     wolfTimer -= dt * S.timeScale;
     const wolves = creatures.filter((c) => c.type === 'wolf' && !c.dead && !c.gone).length;
     if (wolfTimer <= 0 && wolves < Math.min(1 + S.day, 4)) {
@@ -2097,6 +2118,34 @@ document.querySelectorAll('.tabs button[data-tab]').forEach((b) => b.onclick = (
 });
 document.querySelectorAll('.gallery img').forEach((img) => img.onclick = () => { $('lightbox').querySelector('img').src = img.src; $('lightbox').classList.remove('hidden'); });
 $('lightbox').onclick = () => $('lightbox').classList.add('hidden');
+function travelTo(x, z, look) {
+  const y = Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z)), 0);
+  player.position.set(x, y + (P.fly ? 12 : 0.3), z); P.vel.y = 0; if (look !== undefined) camYaw = look;
+  revealMap(x, z, 80);
+}
+function syncExplore() {
+  const h = Math.floor(S.time * 24), m = Math.floor((S.time * 24 - h) * 60);
+  $('exTime').value = Math.round(S.time * 96); $('exTimeN').textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  $('exFly').textContent = P.fly ? 'Flying (V)' : 'Walking (V)'; $('exLock').textContent = S.timeLock ? 'Time: frozen' : 'Time: running';
+}
+{
+  const spots = [['Nestor\'s Cove', () => [START.x, START.z]], ...REGIONS.map((R) => [R.name, () => (R.key === 'cave' ? [CAVE.x, CAVE.z + CAVE_R + 6] : R.key === 'temple' ? [TEMPLE.x, TEMPLE.z + 28] : R.key === 'mountain' ? [MOUNT.x, MOUNT.z + 40] : R.key === 'tower' ? [TOWER.x + 8, TOWER.z + 10] : [R.c.x, R.c.z + 10])])];
+  $('exList').innerHTML = spots.map(([n], i) => `<button class="btn" data-go="${i}">${n}</button>`).join('');
+  $('exList').onclick = (e) => { const b = e.target.closest('[data-go]'); if (!b) return; const [x, z] = spots[+b.dataset.go][1](); travelTo(x, z, 0); openMenu('explorePanel'); };
+  $('exTime').oninput = () => { S.time = $('exTime').value / 96; S.timeLock = true; syncExplore(); };
+  $('exLock').onclick = () => { S.timeLock = !S.timeLock; syncExplore(); };
+  $('exFly').onclick = () => { P.fly = !P.fly; if (P.fly) player.position.y += 10; syncExplore(); };
+  $('exHud').onclick = () => $('hud').classList.toggle('hidden');
+  $('exMap').onclick = () => { revealMap(0, 0, 700); toast('Whole map revealed'); };
+}
+$('exploreBtn').onclick = () => {
+  S.explore = true; Object.assign(S.tools, { axe: true, spear: true });
+  $('quest').classList.add('hidden'); $('hints').innerHTML = '<span>Fly / walk</span><span class="kbd">V</span><span>Travel &amp; time</span><span class="kbd">O</span><span>Time of day</span><span class="kbd">[ ]</span><span>Hide HUD</span><span class="kbd">H</span><span>Map</span><span class="kbd">M</span><span>Fast</span><span class="kbd">SHIFT</span>';
+  $('title').classList.add('hidden'); $('hud').classList.remove('hidden');
+  S.running = true; S.started = performance.now(); setPause(false); canvas.requestPointerLock();
+  S.time = 0.4; S.timeLock = true; P.fly = true; travelTo(START.x, START.z, P.yaw + Math.PI);
+  syncExplore(); toast('Explore mode: no enemies, no hunger. Press O for travel and time of day', true);
+};
 $('startBtn').onclick = () => {
   $('title').classList.add('hidden'); $('hud').classList.remove('hidden');
   const first = !S.running;

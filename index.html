@@ -116,6 +116,8 @@
   #mapLegend { position:absolute; left:26px; bottom:26px; background:rgba(26,22,17,.88); border:1px solid var(--edge); border-radius:3px; padding:8px 12px; font-size:14px; line-height:1.6; }
 
   /* ---------- Pause / dialog ---------- */
+  .pnl-sub { font-family:Cinzel,serif; font-size:13px; letter-spacing:.12em; color:var(--dim); text-transform:uppercase; margin-bottom:6px; }
+  #exList .btn { font-size:13px; padding:7px 8px; }
   #pause { width:320px; padding-bottom:16px; }
   #pause .stack { display:flex; flex-direction:column; gap:8px; padding:16px 22px 4px; }
   #pause .stack .btn { width:100%; }
@@ -198,6 +200,17 @@
     <div id="mapLegend"><div>▲ You</div><div>▪ Nestor</div><div style="color:var(--gold)">◆ Quest</div><div style="color:#d0584a">▪ Hostile</div><div style="color:var(--dim);font-size:12px">Explore or climb towers to reveal</div></div></div>
 </div>
 
+<div id="explorePanel" class="pnl modal hidden" style="width:min(560px,94vw)">
+  <h2>Explore</h2><button class="xbtn" data-close="explorePanel" aria-label="Close">✕</button>
+  <div style="padding:14px 18px 18px;display:flex;flex-direction:column;gap:14px">
+    <div><div class="pnl-sub">Travel to</div><div id="exList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px"></div></div>
+    <div><div class="pnl-sub">Time of day <b id="exTimeN" style="color:var(--gold)"></b></div>
+      <input id="exTime" type="range" min="0" max="95" style="width:100%;accent-color:#a88a5a"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="exFly">Flying (V)</button><button class="btn" id="exLock">Time: frozen</button><button class="btn" id="exHud">Toggle HUD (H)</button><button class="btn" id="exMap">Reveal map</button></div>
+    <div style="color:var(--dim);font-size:13px">Flying: WASD + mouse, Space up, Z down, Shift fast. [ and ] step the clock by 30 minutes.</div>
+  </div>
+</div>
+
 <div id="dialog" class="pnl hidden"><div class="who"></div><div class="txt"></div><div class="next">E / Click to continue</div></div>
 
 <div id="pause" class="pnl modal hidden">
@@ -220,6 +233,7 @@
     </div>
     <div class="tabs">
       <button id="startBtn">New Game</button>
+      <button id="exploreBtn">Explore Mode</button>
       <button data-tab="t-play">The Story</button>
       <button data-tab="t-how">Controls</button>
       <button data-tab="t-dir">Game Direction</button>
