@@ -4213,7 +4213,7 @@ function loop() {
     const qm = updateQuestMarkers(t);
     waypoint.visible = !!target && !S.sailing && !qm.some((m) => m.pos.distanceTo(target) < 3);
     if (target) { waypoint.position.set(target.x, target.y + 3.2 + Math.sin(t * 3) * 0.2, target.z); waypoint.rotation.y = t * 2; }
-    hudT -= dt; if (hudT <= 0) { hudT = 0.1; renderHUD(); renderQuest(); }
+    hudT -= dt; if (hudT <= 0) { hudT = 0.1; renderHUD(); renderQuest(); $('crosshair').classList.toggle('bow', S.slot === 2 && !!S.tools.bow); }   // aiming dot only with the bow
     drawMinimap(target);   // every frame: the map glides with you instead of stepping 10× a second
   } else if (!S.running) {
     // Title screen flyover
