@@ -72,7 +72,8 @@ const RUINS_Y = baseHeight(RUINS.x, RUINS.z) + 3, CAVE_Y = baseHeight(CAVE_MOUTH
 const SUMMIT = MOUNT.clone(), SUMMIT_Y = baseHeight(MOUNT.x, MOUNT.z) - 14; const ARENA_R = 38; SUMMIT.y = SUMMIT_Y;   // boss arena on the peak
 RUINS.y = RUINS_Y; CAVE.y = CAVE_Y; TEMPLE.y = TEMPLE_Y; LAKE.y = LAKE_Y;
 let CHAN = null;   // sea channel into Nestor's cove, set once the cove is found
-let CAUSEWAY = null;   // the marsh trail, raised a little above the water
+let CAUSEWAY = null;
+let HUT_PAD = null;   // flat ground under Nestor's farmhouse, smithy and paddock, set once the hut is placed   // the marsh trail, raised a little above the water
 function heightAt(x, z) {
   let h = baseHeight(x, z);
   h = flatten(h, x, z, RUINS, 10, 22, RUINS_Y);
@@ -90,6 +91,7 @@ function heightAt(x, z) {
     let d = 99; for (let i = 0; i < CAUSEWAY.length - 1; i++) { const [ax, az] = CAUSEWAY[i], [bx, bz] = CAUSEWAY[i + 1]; if (Math.abs(x - ax) > 30 && Math.abs(x - bx) > 30) continue; const dx = bx - ax, dz = bz - az, q = clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz), 0, 1); d = Math.min(d, Math.hypot(x - ax - dx * q, z - az - dz * q)); }
     if (d < 5) { const k = clamp((d - 1.9) / 3, 0, 1); h = Math.max(h, lerp(0.85, h, k * k * (3 - 2 * k))); }
   }
+  if (HUT_PAD) h = flatten(h, x, z, HUT_PAD, 17, 25, HUT_PAD.y);
   if (CHAN) {                                                                  // cove + channel out to the open sea
     const w = (fbm(x * 0.07, z * 0.07) - 0.5) * 5, dc = segDist(x, z, CHAN.a, CHAN.b) + w, db = Math.hypot(x - CHAN.a.x, z - CHAN.a.z) + w;
     const k1 = clamp((dc - 4.5) / 9, 0, 1), k2 = clamp((db - 7) / 9, 0, 1);
@@ -289,7 +291,10 @@ const SEA_OUT = CHAN.b.clone();
 const WRECK = DOCK.clone().add(new THREE.Vector3(-7, 0, 2));
 for (let dx = -2; dx > -22; dx -= 0.5) { const h = heightAt(DOCK.x + dx, DOCK.z + 2); if (h > -0.35 && h < 0.25) { WRECK.set(DOCK.x + dx, 0, DOCK.z + 2); break; } }
 const START = WRECK.clone().add(new THREE.Vector3(3.8, 0, -3.2)); START.y = heightAt(START.x, START.z);
-const HUT = new THREE.Vector3(-12, 0, DOCK.z - 26); HUT.y = heightAt(HUT.x, HUT.z);
+const HUT = new THREE.Vector3(-12, 0, DOCK.z - 26);
+// Level a pad for the house, the smithy and the paddock so nothing sits on a slope or floats
+{ const c = new THREE.Vector3(HUT.x - 6 * Math.cos(0.3) - Math.sin(0.3), 0, HUT.z + 6 * Math.sin(0.3) - Math.cos(0.3)); c.y = heightAt(HUT.x, HUT.z) + 0.05; HUT_PAD = c; }
+HUT.y = heightAt(HUT.x, HUT.z);
 // Dirt paths: dock → start → Nestor's hut → winding up to the ruins
 // A trail network like a real island: every landmark is reachable on foot
 const PATHS = [
@@ -1023,10 +1028,32 @@ function addPickup(kind, p, build, extra = {}) {
 }
 const branch = () => { const g = new THREE.Group(); const m = mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.3, 5), trunkMat, 0, 0.08, 0, g); m.rotation.z = Math.PI / 2; m.rotation.y = rr(0, 3); return g; };
 const pebble = () => { const g = new THREE.Group(); for (let i = 0; i < 3; i++) mesh(new THREE.DodecahedronGeometry(0.16, 0), rockMat, rr(-0.25, 0.25), 0.1, rr(-0.25, 0.25), g); return g; };
+// Leafy bush made of leaf-cluster cards (the tree pack's foliage texture) arranged as a dome: reads as a real shrub
+// from every angle instead of a faceted blob. n cards, radius r, height h.
+function cardBushGeo(n, r, h) {
+  const parts = [];
+  for (let i = 0; i < n; i++) {
+    const s2 = rr(0.85, 1.25) * r * 1.5, q = new THREE.PlaneGeometry(s2, s2), a = (i / n) * Math.PI * 2 + rr(-0.3, 0.3), up = i < n * 0.35;
+    if (up) q.rotateX(-Math.PI / 2 + rr(-0.5, 0.5)); else q.rotateY(a + Math.PI / 2 + rr(-0.4, 0.4));
+    q.rotateZ(rr(-0.25, 0.25));
+    const d = up ? rr(0, r * 0.4) : r * rr(0.35, 0.6);
+    q.translate(Math.cos(a) * d, up ? h * rr(0.8, 1.0) : h * rr(0.45, 0.65), Math.sin(a) * d); parts.push(q);
+  }
+  return mergeGeometries(parts);
+}
+const BUSH_GEOS = [0, 1, 2].map(() => cardBushGeo(13, 0.95, 1.4));
+let BUSH_MAT = null;
+// Berry bush: a dark, glossy bush heavy with bright red berry clusters. Clearly different from the plain green shrubs.
 function bush() {
+  BUSH_MAT ||= new THREE.MeshStandardMaterial({ map: new THREE.TextureLoader().load('models/q_tree_leaves.png', (t) => { t.colorSpace = THREE.SRGBColorSpace; }), color: 0x5f8a48, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.7 });
   const g = new THREE.Group(); const berries = new THREE.Group();
-  for (let i = 0; i < 3; i++) mesh(new THREE.IcosahedronGeometry(rr(0.5, 0.75), 0), flat(0x55803a), rr(-0.4, 0.4), 0.45, rr(-0.4, 0.4), g);
-  for (let i = 0; i < 7; i++) mesh(new THREE.SphereGeometry(0.08, 6, 4), flat(0xc42f3a), rr(-0.6, 0.6), rr(0.4, 0.95), rr(-0.6, 0.6), berries);
+  const leaves = new THREE.Mesh(BUSH_GEOS[Math.floor(rand() * 3)], BUSH_MAT); leaves.userData.keep = true; leaves.rotation.y = rr(0, 6.28); leaves.scale.setScalar(rr(0.85, 1.1)); g.add(leaves);
+  const core = mesh(new THREE.IcosahedronGeometry(0.62, 1), flat(0x2f5222), 0, 0.6, 0, g); core.scale.set(1.25, 0.9, 1.25);   // fills the gaps between cards
+  const berryM = new THREE.MeshStandardMaterial({ color: 0xe0203a, emissive: 0x5a0010, emissiveIntensity: 0.6, roughness: 0.25 });
+  for (let c = 0; c < 8; c++) {                                  // clusters of 3-5 berries on the outside of the bush
+    const a = rr(0, 6.28), y = rr(0.5, 1.3), rad = 0.85 + (1.3 - y) * 0.15, cx = Math.cos(a) * rad, cz = Math.sin(a) * rad;
+    for (let k = 0; k < 4; k++) mesh(new THREE.SphereGeometry(rr(0.08, 0.11), 8, 6), berryM, cx + rr(-0.1, 0.1), y + rr(-0.08, 0.08), cz + rr(-0.1, 0.1), berries);
+  }
   g.add(berries); g.userData.berries = berries; return g;
 }
 function reeds() {
@@ -1682,7 +1709,7 @@ const snow = (() => {
   const inForest = () => { const a = rand() * 6.28, d = Math.sqrt(rand()) * 100, x = FOREST.x + Math.cos(a) * d, z = FOREST.z + Math.sin(a) * d, h = heightAt(x, z); return h > 1.5 && h < 40 && pathDist(x, z) > 2.5 ? new THREE.Vector3(x, h - 0.05, z) : null; };
   place(fernGeo, fernMat, 2600, inForest);
   place(fernGeo, fernMat, 500, () => { const a = rand() * 6.28, d = Math.sqrt(rand()) * 90, x = SWAMP.x + Math.cos(a) * d, z = SWAMP.z + Math.sin(a) * d, h = heightAt(x, z); return h > 0.5 ? new THREE.Vector3(x, h, z) : null; });
-  const shrubs = place(shrubGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), 1400, () => { const x = rr(-ISLAND_R, ISLAND_R), z = rr(-ISLAND_R, ISLAND_R), h = heightAt(x, z); const R = regionAt(x, z, h); return h > 1.6 && h < 38 && pathDist(x, z) > 3 && (R.key === 'forest' || R.key === 'meadow' || R.key === 'lake') && fbm(x * 0.04, z * 0.04) > 0.45 ? new THREE.Vector3(x, h - 0.1, z) : null; });
+  const shrubs = place(cardBushGeo(9, 0.65, 1.0), qLeafMat('q_tree_leaves.png', 0x86a86c), 1400, () => { const x = rr(-ISLAND_R, ISLAND_R), z = rr(-ISLAND_R, ISLAND_R), h = heightAt(x, z); const R = regionAt(x, z, h); return h > 1.6 && h < 38 && pathDist(x, z) > 3 && (R.key === 'forest' || R.key === 'meadow' || R.key === 'lake') && fbm(x * 0.04, z * 0.04) > 0.45 ? new THREE.Vector3(x, h - 0.1, z) : null; });
   shrubs.castShadow = false;
 }
 
@@ -1897,6 +1924,47 @@ const forgeGlow = new THREE.MeshStandardMaterial({ color: 0xff6a20, emissive: 0x
   { const a = hutW(-9, -2.6), b2 = hutW(-9, 2.6), c2 = hutW(-4.5, -2.6); wallColliders(a.x, a.z, b2.x, b2.z, 0.4); wallColliders(a.x, a.z, c2.x, c2.z, 0.4); }
   for (const [x, z, r] of [[-8, -1.5, 1], [-6.4, -0.2, 0.5], [-6.6, 1.4, 0.8]]) { const w = hutW(x, z); colliders.push({ x: w.x, z: w.z, r }); }
   for (const [x, z] of [[-3.8, 5.2], [-1.3, 5.2], [1.3, 5.2], [3.8, 5.2]]) { const w = hutW(x, z); colliders.push({ x: w.x, z: w.z, r: 0.25 }); }
+}
+// ---- Paddock west of the smithy: post-and-rail fence, a gate facing the house, water trough, hay rack and bales.
+//      Nestor's donkey, cow, horse and alpaca live here. A stone well stands outside the courtyard by the path.
+const PEN = { x0: -22, x1: -12, z0: -6, z1: 5 };
+{
+  const g = new THREE.Group(), M = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.92 });
+  const wood = M(0x7a5634), woodD = M(0x5e4128), hay = M(0xd8b860), hayD = M(0xc09a45), stoneM = M(0xa39a8a), water = M(0x4a7f99);
+  const rail = (x0, z0, x1, z1, gate) => {
+    const L = Math.hypot(x1 - x0, z1 - z0), n = Math.round(L / 2.2), ang = Math.atan2(z1 - z0, x1 - x0);
+    for (let k = 0; k <= n; k++) { const t2 = k / n, px = lerp(x0, x1, t2), pz = lerp(z0, z1, t2); const po = mesh(new THREE.CylinderGeometry(0.09, 0.11, 1.35, 6), woodD, px, 0.62, pz, g); po.rotation.z = rr(-0.04, 0.04); }
+    for (let k = 0; k < n; k++) { if (gate && k === Math.floor(n / 2)) continue;
+      const mx = lerp(x0, x1, (k + 0.5) / n), mz = lerp(z0, z1, (k + 0.5) / n);
+      for (const y of [0.55, 1.05]) { const r2 = mesh(new THREE.BoxGeometry(L / n + 0.1, 0.09, 0.07), wood, mx, y + rr(-0.03, 0.03), mz, g); r2.rotation.y = -ang; } }
+    const a = hutW(x0, z0), b2 = hutW(x1, z1); wallColliders(a.x, a.z, b2.x, b2.z, 0.35, 1.2);
+  };
+  rail(PEN.x0, PEN.z0, PEN.x1, PEN.z0); rail(PEN.x0, PEN.z1, PEN.x1, PEN.z1); rail(PEN.x0, PEN.z0, PEN.x0, PEN.z1); rail(PEN.x1, PEN.z0, PEN.x1, PEN.z1, true);
+  // trough
+  mesh(new THREE.BoxGeometry(2.2, 0.5, 0.7), stoneM, -14, 0.25, -4.6, g); mesh(new THREE.BoxGeometry(2.0, 0.06, 0.5), water, -14, 0.46, -4.6, g);
+  // hay rack with hay, and bales in the corner
+  for (const x of [-20.6, -18.4]) mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.5, 5), woodD, x, 0.75, 3.9, g);
+  mesh(new THREE.BoxGeometry(2.4, 0.08, 0.08), wood, -19.5, 1.45, 3.9, g);
+  const hp = mesh(new THREE.IcosahedronGeometry(0.75, 1), hay, -19.5, 0.85, 3.9, g); hp.scale.set(1.5, 0.75, 0.6);
+  for (const [x, z, y, r] of [[-21, -5, 0.3, 0.3], [-19.9, -5.1, 0.3, -0.2], [-20.5, -5, 0.85, 0.1]]) { const b = mesh(new THREE.BoxGeometry(1.0, 0.55, 0.6), (x + z) % 2 ? hay : hayD, x, y, z, g); b.rotation.y = r; }
+  // straw scattered on the ground
+  for (let i = 0; i < 26; i++) { const st = mesh(new THREE.BoxGeometry(0.5, 0.02, 0.05), hayD, rr(PEN.x0 + 1, PEN.x1 - 1), 0.04, rr(PEN.z0 + 1, PEN.z1 - 1), g); st.rotation.y = rr(0, 3); }
+  // the well: round stone drum, wooden frame and a bucket
+  const W = [12, -2];
+  mesh(new THREE.CylinderGeometry(0.85, 0.95, 0.85, 14), stoneM, W[0], 0.42, W[1], g); mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.05, 14), water, W[0], 0.78, W[1], g);
+  for (const dx of [-0.75, 0.75]) mesh(new THREE.CylinderGeometry(0.07, 0.08, 1.9, 6), woodD, W[0] + dx, 1.3, W[1], g);
+  const ax = mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.7, 6), wood, W[0], 2.1, W[1], g); ax.rotation.z = Math.PI / 2;
+  const roofW = mesh(new THREE.ConeGeometry(1.15, 0.7, 4), M(0xa84e2e), W[0], 2.6, W[1], g); roofW.rotation.y = Math.PI / 4;
+  mesh(new THREE.CylinderGeometry(0.18, 0.14, 0.26, 8), wood, W[0] + 0.3, 1.0, W[1] + 0.2, g);
+  colliders.push({ x: hutW(W[0], W[1]).x, z: hutW(W[0], W[1]).z, r: 1.0 });
+  g.position.copy(HUT); g.position.y -= 0.2; g.rotation.y = HUT_ROT; bakeGroup(g); scene.add(g);
+}
+// keep penned animals inside the paddock (local hut coordinates)
+function clampToPen(o) {
+  const dx = o.position.x - HUT.x, dz = o.position.z - HUT.z, c = Math.cos(HUT_ROT), sn = Math.sin(HUT_ROT);
+  let lx = dx * c - dz * sn, lz = dx * sn + dz * c;
+  lx = clamp(lx, PEN.x0 + 1.3, PEN.x1 - 1.3); lz = clamp(lz, PEN.z0 + 1.3, PEN.z1 - 1.3);
+  const w = hutW(lx, lz); o.position.x = w.x; o.position.z = w.z;
 }
 const CHIMNEY_L = [-8, 5.4, -1.5];
 // Chimney smoke
@@ -2628,11 +2696,11 @@ const TYPES = {
   stag: { hp: 60, speed: 6.8, dmg: 14, flee: false, retaliate: true, drops: { rawmeat: 3, hide: 2 }, r: 0.75, reach: 2.1 },
   fox: { hp: 14, speed: 7, dmg: 0, flee: true, drops: { hide: 1 }, r: 0.4, reach: 0 },
   // Nestor's farm animals: they graze inside the courtyard and can't be hurt
-  donkey: { hp: 1, speed: 1.4, dmg: 0, passive: true, drops: {}, r: 0.8, reach: 0, roam: 5 },
-  cow: { hp: 1, speed: 1.2, dmg: 0, passive: true, drops: {}, r: 0.9, reach: 0, roam: 5 },
-  horse: { hp: 1, speed: 1.6, dmg: 0, passive: true, drops: {}, r: 0.9, reach: 0, roam: 6 },
-  alpaca: { hp: 1, speed: 1.3, dmg: 0, passive: true, drops: {}, r: 0.7, reach: 0, roam: 5 },
-  shibainu: { hp: 1, speed: 2.2, dmg: 0, passive: true, drops: {}, r: 0.4, reach: 0, roam: 4 },          // Nestor's dog
+  donkey: { hp: 1, speed: 1.4, dmg: 0, passive: true, drops: {}, r: 0.8, reach: 0, roam: 3 },
+  cow: { hp: 1, speed: 1.2, dmg: 0, passive: true, drops: {}, r: 0.9, reach: 0, roam: 3 },
+  horse: { hp: 1, speed: 1.6, dmg: 0, passive: true, drops: {}, r: 0.9, reach: 0, roam: 3 },
+  alpaca: { hp: 1, speed: 1.3, dmg: 0, passive: true, drops: {}, r: 0.7, reach: 0, roam: 3 },
+  shibainu: { hp: 1, speed: 2.2, dmg: 0, passive: true, drops: {}, r: 0.4, reach: 0, roam: 1.5 },          // Nestor's dog
   horse_white: { hp: 1, speed: 1.4, dmg: 0, passive: true, drops: {}, r: 0.9, reach: 0, roam: 8 },     // Athena's sacred mare
   bull: { hp: 90, speed: 6, dmg: 18, flee: false, retaliate: true, drops: { rawmeat: 4, hide: 2 }, r: 1.0, reach: 2.4 },   // wild bulls of the plain
   // A stray husky in the woods: walk up to it and it joins you, follows you around and goes for wolves and boars that come close
@@ -2694,10 +2762,7 @@ function animateAnimal(c, speed, dt) {
 }
 function spawnCreature(type, pos) {
   let obj;
-  if (type === 'rabbit') obj = makeRabbit();
-  else if (type === 'boar') obj = makeQuad(0x6e4630, 1.1, 0.55, { tusks: true, snout: 0.3 });
-  else if (type === 'wolf') obj = makeQuad(0x77706a, 1.1, 0.7, { tail: 0x8a847c, snout: 0.4 });
-  else if (type === 'skeleton') obj = makeSkeleton();
+  if (type === 'skeleton') obj = makeSkeleton();
   else obj = new THREE.Group();                                    // model-only animals: empty until the model streams in
   obj.position.copy(pos); scene.add(obj);
   const c = { type, obj, def: TYPES[type], hp: TYPES[type].hp, state: 'wander', target: pos.clone(), t: rr(0, 5), atkCd: 0, flash: 0, dead: false, home: pos.clone(), vy: 0 };
@@ -2705,11 +2770,11 @@ function spawnCreature(type, pos) {
   if (ANIMALS[type]) attachAnimal(c);
   creatures.push(c); return c;
 }
-for (let i = 0; i < 24; i++) { const p = landSpot(1.5, 30, AVOID); if (p) spawnCreature('rabbit', p); }
-for (let i = 0; i < 10; i++) { const p = landSpot(3, 30, AVOID); if (p) spawnCreature('boar', p); }
-for (let i = 0; i < 8; i++) { const p = landSpot(3, 40, AVOID); if (p) spawnCreature('deer', p); }
-for (let i = 0; i < 3; i++) { const p = landSpot(6, 45, AVOID); if (p) spawnCreature('stag', p); }
-for (let i = 0; i < 6; i++) { const p = landSpot(2, 35, AVOID); if (p) spawnCreature('fox', p); }
+// Wildlife: every animal is a real animated model (the old block rabbits and boars are gone).
+// Deer are the easy game, stags and bulls fight back, foxes are skittish and give hides.
+for (let i = 0; i < 16; i++) { const p = landSpot(2, 40, AVOID); if (p) spawnCreature('deer', p); }
+for (let i = 0; i < 7; i++) { const p = landSpot(4, 45, AVOID); if (p) spawnCreature('stag', p); }
+for (let i = 0; i < 8; i++) { const p = landSpot(2, 35, AVOID); if (p) spawnCreature('fox', p); }
 // A small herd of wild bulls on the open plain
 { const p0 = landSpot(3, 20, AVOID); if (p0) for (let i = 0; i < 3; i++) { const p = p0.clone().add(new THREE.Vector3(rr(-6, 6), 0, rr(-6, 6))); p.y = heightAt(p.x, p.z); if (p.y > 1) spawnCreature('bull', p); } }
 // Athena's white mare grazes on the temple plateau
@@ -2735,7 +2800,8 @@ const HUSKY = (() => { for (let k = 0; k < 400; k++) { const p = landSpot(4, 30,
   }).catch((e) => console.warn('wolf statue failed', e));
 }
 // Nestor's livestock in the meadow beside the farmhouse
-for (const [type, lx, lz] of [['donkey', -15, 6], ['cow', -17, 12], ['horse', -13, 15], ['alpaca', -19, 8], ['shibainu', 3, 9]]) { const p = hutW(lx, lz); p.y = heightAt(p.x, p.z); spawnCreature(type, p); }
+for (const [type, lx, lz] of [['donkey', -15, 2], ['cow', -19, -2], ['horse', -15.5, -3.5], ['alpaca', -19.5, 2.5]]) { const p = hutW(lx, lz); p.y = heightAt(p.x, p.z); spawnCreature(type, p).pen = true; }
+{ const p = hutW(2.6, 6.2); p.y = heightAt(p.x, p.z); spawnCreature('shibainu', p); }   // Nestor's dog dozes by the porch
 const skeletons = [];
 for (let i = 0; i < 3; i++) { const a = i * 2.1 + 0.4; const p = new THREE.Vector3(CAVE.x + Math.cos(a) * 5, CAVE_Y, CAVE.z + Math.sin(a) * 5); const sk = spawnCreature('skeleton', p); sk.home.copy(p); skeletons.push(sk); }
 
@@ -2964,9 +3030,9 @@ const Q = [
     obj: () => [['Craft a Spear at the workbench', S.tools.spear]], target: () => BENCH },
   { title: 'Fire Before Dark', desc: 'Nights on Nisos are long and the wolves come out. Build a campfire. Resting at it with R makes time pass faster.',
     obj: () => [['Build a Campfire (C)', !!S.campfire]], target: () => null },
-  { title: 'The Hunt', desc: 'Berries alone will not keep you alive. Hunt rabbits and a wild boar, then cook the meat at your fire with E.',
-    obj: () => [[`Rabbits ${Math.min(S.kills.rabbit, 2)}/2`, S.kills.rabbit >= 2], [`Boar ${Math.min(S.kills.boar, 1)}/1`, S.kills.boar >= 1], [`Cook meat ${Math.min(S.cooked, 3)}/3`, S.cooked >= 3]],
-    target: () => nearestCreature('boar') },
+  { title: 'The Hunt', desc: 'Berries alone will not keep you alive. Hunt two deer, then a stag or a wild bull (they fight back), and cook the meat at your fire with E.',
+    obj: () => [[`Deer ${Math.min(S.kills.deer, 2)}/2`, S.kills.deer >= 2], [`Stag or wild bull ${Math.min(S.kills.stag + S.kills.bull, 1)}/1`, S.kills.stag + S.kills.bull >= 1], [`Cook meat ${Math.min(S.cooked, 3)}/3`, S.cooked >= 3]],
+    target: () => (S.kills.deer < 2 ? nearestCreature('deer') : S.kills.stag + S.kills.bull < 1 ? nearestCreature('stag', 'bull') : null) },
   { title: 'The Long Night', desc: 'Survive until dawn. Stay near the fire, keep your spear ready and eat when you are hungry.',
     obj: () => [[`Survive a night (${S.nights - S.nightsAtStart}/1)`, S.nights - S.nightsAtStart >= 1]], target: () => S.campfire?.pos, start: () => { S.nightsAtStart = S.nights; } },
   { title: 'The Cave of Echoes', desc: 'Zeus left a sail in the cave on the mountain\'s flank for the chosen. Chosen who failed now guard it. Clear the skeletons and open the chest.',
@@ -2977,9 +3043,9 @@ const Q = [
   { title: 'To Pedias', desc: 'Your trial on Nisos is done. Say goodbye to Nestor, then board your boat and sail through the channel to the fertile fields of Pedias, the first of the nine biomes.',
     obj: () => [['Set sail from the cove (E)', S.sailing]], target: () => RAFT_SITE },
 ];
-function nearestCreature(type) {
+function nearestCreature(...types) {
   let best = null, bd = 1e9;
-  for (const c of creatures) if (!c.dead && c.type === type) { const d = c.obj.position.distanceTo(player.position); if (d < bd) { bd = d; best = c.obj.position; } }
+  for (const c of creatures) if (!c.dead && !c.gone && types.includes(c.type)) { const d = c.obj.position.distanceTo(player.position); if (d < bd) { bd = d; best = c.obj.position; } }
   return best;
 }
 // Quest tracker (top left): full card when something changes, then it settles to just the title and objectives.
@@ -3036,7 +3102,7 @@ function talkNestor() {
     3: 'The temple is east, past the lake. Place the offering at Athena\'s feet. Kneel if you want to, she likes that.',
     5: 'An axe first, now a spear. Use the workbench in the smithy. Trust me on the spear.',
     6: 'The sun falls fast here. When it is gone the wolves come out of the pines. Build a fire.',
-    7: 'Rabbits run and boars fight back. Keep the spear pointed at the tusks. Cook the meat, raw meat will make you sick.',
+    7: 'Deer run, but stags and wild bulls fight back. Keep the spear pointed at the horns. Cook the meat, raw meat will make you sick.',
     8: 'Stay close to the fire tonight. The wolves are cowards, but hungry ones.',
     9: 'The cave is north, where the trail climbs the mountain. Bring courage. Or do not come back at all, ha.',
     10: 'Your boat is still in the cove. Twelve logs, four ropes, the sail from the cave, and food for the crossing.',
@@ -3185,7 +3251,7 @@ function debugSkipQuest() {
   if (i === 4) S.reported = true;
   if (i === 5) S.tools.spear = true;
   if (i === 6) placeCampfire();
-  if (i === 7) { S.kills.rabbit = Math.max(2, S.kills.rabbit); S.kills.boar = Math.max(1, S.kills.boar); S.cooked = Math.max(3, S.cooked); S.inv.meat += 3; }
+  if (i === 7) { S.kills.deer = Math.max(2, S.kills.deer); S.kills.stag = Math.max(1, S.kills.stag); S.cooked = Math.max(3, S.cooked); S.inv.meat += 3; }
   if (i === 8) S.nights++;
   if (i === 9) { skeletons.forEach((s) => { if (!s.dead) killCreature(s); }); openChest(); }
   if (i === 10) { Object.assign(S.inv, { wood: S.inv.wood + 12, rope: S.inv.rope + 4, meat: S.inv.meat + 3, sail: Math.max(1, S.inv.sail) }); player.position.set(START.x, START.y + 0.5, START.z); }
@@ -3431,7 +3497,7 @@ function updateCreature(c, dt) {
   if (d.companion) {                                   // the husky: waits until you come close, then sticks with you
     if (!c.tamed && dist < 4 && !S.explore) { c.tamed = true; toast('A <b>husky</b> sniffs your hand and decides to follow you.', true); }
     if (c.tamed) {
-      const foe = creatures.find((e) => !e.dead && !e.gone && (e.def.hostile || e.type === 'boar') && e.type !== 'skeleton' && e.obj.position.distanceTo(o.position) < 12 && e.obj.position.distanceTo(pp) < 20);
+      const foe = creatures.find((e) => !e.dead && !e.gone && e.def.hostile && e.type !== 'skeleton' && e.obj.position.distanceTo(o.position) < 12 && e.obj.position.distanceTo(pp) < 20);
       if (foe) {
         const fd = foe.obj.position.distanceTo(o.position); goal.copy(foe.obj.position); speed = fd > 1.8 ? d.speed : 0;
         if (fd <= 2 && c.atkCd <= 0) { c.atkCd = 1.2; c.lunge = 0.35; foe.hp -= 8; foe.flash = 0.15; if (foe.def.flee) foe.state = 'flee'; floatText(8, foe.obj.position.clone().setY(foe.obj.position.y + 1.4), '#ffdf8a'); if (foe.hp <= 0) killCreature(foe); }
@@ -3477,14 +3543,12 @@ function updateCreature(c, dt) {
     const dx = o.position.x - CAVE.x, dz = o.position.z - CAVE.z, d = Math.hypot(dx, dz), m = CH_R - 1.8;
     if (d > m) { o.position.x = CAVE.x + dx / d * m; o.position.z = CAVE.z + dz / d * m; }
   }
-  o.position.y = gy;
+  if (c.pen) { clampToPen(o); }
+  o.position.y = heightAt(o.position.x, o.position.z);
   // Animation
   c.anim = (c.anim || 0) + dt * (speed > 0 ? speed * 1.6 : 0);
   if (animateAnimal(c, speed, dt)) { /* skinned model */ }
-  else if (!o.userData.legs && c.type !== 'rabbit' && c.type !== 'skeleton') { /* model still loading */ }
-  else if (c.type === 'rabbit') o.children[0].position.y = 0.3 + Math.abs(Math.sin(c.anim * 1.5)) * (speed > 0 ? 0.25 : 0);
   else if (c.type === 'skeleton') animateHumanoid(o, speed, c.anim / 3.4, c.lunge > 0 ? c.lunge / 0.3 : 0);
-  else o.userData.legs.forEach((l, i) => (l.rotation.x = Math.sin(c.anim * 2.5 + (i % 3 ? Math.PI : 0)) * 0.6));
   if (c.lunge > 0) c.lunge -= dt;
   const flashing = c.flash > 0; c.flash -= dt;
   if (flashing !== !!c.flashOn) { c.flashOn = flashing; o.traverse((m) => { if (m.isMesh && m.material.emissive) m.material.emissive.setHex(flashing ? 0x882211 : 0x000000); }); }
@@ -3725,7 +3789,7 @@ function updateWorld(dt, t) {
     }
   }
   // Keep game animals stocked
-  for (const [type, n] of [['rabbit', 20], ['boar', 8]]) {
+  for (const [type, n] of [['deer', 14], ['stag', 6], ['fox', 6]]) {
     if (creatures.filter((c) => c.type === type && !c.dead).length < n && rand() < dt * 0.05) {
       const p = landSpot(2, 30, AVOID.concat([{ x: player.position.x, z: player.position.z, r: 30 }])); if (p) spawnCreature(type, p);
     }
@@ -3796,6 +3860,10 @@ function drawMapMarkers(ctx, tf, target, big) {
       const [x, y] = tf(pk.pos); ctx.globalAlpha = pk.kind === 'bush' ? 0.95 : 0.85; ctx.fillText(ic[pk.kind], x, y); }
     ctx.globalAlpha = 1;
     for (const f of FIRES) { const [x, y] = tf(f.pos); ctx.fillText('🔥', x, y); }
+    // animals within 40 m, each with its own icon (game you can hunt, livestock, your husky)
+    const AI = { deer: '🦌', stag: '🦌', fox: '🦊', bull: '🐂', cow: '🐄', horse: '🐎', horse_white: '🐎', donkey: '🫏', alpaca: '🦙', shibainu: '🐕', husky: '🐺' };
+    ctx.font = '11px sans-serif';
+    for (const c of creatures) { if (c.dead || c.gone || !AI[c.type] || Math.hypot(c.obj.position.x - pp.x, c.obj.position.z - pp.z) > 40) continue; const [x, y] = tf(c.obj.position); ctx.fillText(AI[c.type], x, y); }
   }
   ctx.fillStyle = '#b0392e'; creatures.forEach((c) => { if (!c.dead && c.def.hostile) { const [x, y] = tf(c.obj.position); ctx.fillRect(x - 1.5, y - 1.5, 3, 3); } });
   ctx.fillStyle = '#fff'; { const [x, y] = tf(nestor.position); ctx.fillRect(x - 2, y - 2, 4, 4); }
@@ -3870,7 +3938,7 @@ function setSail() {
       if (k > 9) { $('fade').style.opacity = 1; }
       if (k > 11.5) {
         $('ending').classList.remove('hidden');
-        $('endStats').innerHTML = `Survived <b>${S.day}</b> days · Rabbits ${S.kills.rabbit} · Boars ${S.kills.boar} · Wolves ${S.kills.wolf} · Skeletons ${S.kills.skeleton} · Deaths ${S.deaths}<br>Time played: ${Math.round((performance.now() - S.started) / 60000)} min<br><br>Next in the Unity build: landfall in Pedias, the first biome, and its Guardian.`;
+        $('endStats').innerHTML = `Survived <b>${S.day}</b> days · Deer ${S.kills.deer} · Stags ${S.kills.stag} · Bulls ${S.kills.bull} · Wolves ${S.kills.wolf} · Skeletons ${S.kills.skeleton} · Deaths ${S.deaths}<br>Time played: ${Math.round((performance.now() - S.started) / 60000)} min<br><br>Next in the Unity build: landfall in Pedias, the first biome, and its Guardian.`;
         return;
       }
       requestAnimationFrame(tick);
@@ -3978,7 +4046,7 @@ function loop() {
     const cx = camera.position.x, cz = camera.position.z;
     for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90;
     { const near = Math.hypot(CAVE.x - cx, CAVE.z - cz) < 70; for (const o of caveInner) o.visible = near; }
-    for (const c of creatures) c.obj.visible = S.running && !S.cine && Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < (c.type === 'rabbit' ? 70 : 140);
+    for (const c of creatures) c.obj.visible = S.running && !S.cine && Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < (c.type === 'fox' ? 80 : 140);
   }
   ambientSound(dt); updateLightPool();
   renderer.shadowMap.needsUpdate = true;
@@ -3988,7 +4056,7 @@ function loop() {
 let cullFrame = 0, shadowTick = 0;
 // ---- Save / load (browser storage). The world is generated from a fixed seed, so pickups, trees, rocks and
 //      creatures are saved by index: what you picked up, felled or killed stays that way.
-const SAVE_KEY = 'argonisos.save.v1', INIT_CREATURES = creatures.length;
+const SAVE_KEY = 'argonisos.save.v2'   // v2: new world layout (animal pack, paddock); v1 saves no longer line up, INIT_CREATURES = creatures.length;
 const SAVE_FIELDS = ['questIdx', 'inv', 'tools', 'slot', 'day', 'time', 'hp', 'food', 'sta', 'energy', 'talkedNestor', 'oliveBranch', 'offered', 'reported', 'raftBuilt', 'kills', 'cooked', 'nights', 'nightsAtStart', 'warnedOnce', 'warnDay'];
 function saveGame(manual) {
   if (!S.running || S.explore || S.sailing) { if (manual) toast('Nothing to save here.'); return; }
@@ -4005,6 +4073,7 @@ function saveGame(manual) {
 function readSave() { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch { return null; } }
 function loadGame(d) {
   for (const k of SAVE_FIELDS) if (d.S[k] !== undefined) S[k] = typeof d.S[k] === 'object' && d.S[k] ? JSON.parse(JSON.stringify(d.S[k])) : d.S[k];
+  S.kills = { rabbit: 0, boar: 0, wolf: 0, skeleton: 0, deer: 0, stag: 0, fox: 0, bull: 0, ...S.kills };
   pickups.forEach((p, i) => { if (d.pick[i] === '0' && p.alive) { p.alive = false; scene.remove(p.obj); } });
   for (const i of d.bush || []) { const p = pickups[i]; if (p) { p.regrow = 60; p.obj.userData.berries.visible = false; } }
   resources.forEach((r, i) => { if (d.res[i] === '0' && r.alive) { r.alive = false; updateProp(r.item, true); } });

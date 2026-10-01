@@ -135,3 +135,17 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
   - Companion: a stray husky in the forest. It joins you when you walk up to it, follows you, and attacks wolves and boars that come close.
   - Trees: birches added sparingly on the mountain and by the lake (4 variants).
   - Wolf sculpt: the realistic wolf (static) is a bronze-tinted monument on a rock at the ravine before the Cave of Echoes. It loads after start-up.
+
+## v16: modelled animals only, bushes, farmhouse
+- **Animals:** the old block rabbits, boars and placeholder wolves are gone, and every animal is now an animated model.
+  - Deer (16) are the easy game. Stags (7) and wild bulls (3) fight back. Foxes (8) give hides.
+  - The Hunt quest is now: 2 deer, plus 1 stag or wild bull, plus cook 3 meat.
+- **Minimap:** shows animals within 40 m with their own icons.
+- **Bushes:** rebuilt from leaf-cluster cards.
+  - Berry bushes are big dark-green domes with clusters of bright red berries.
+  - The 1,400 scenery shrubs use the same card style and still sway in the wind.
+- **Farmhouse:** the ground is levelled under the house, smithy and yard, so nothing floats.
+  - New paddock west of the smithy: fence with a gate, water trough, hay rack, bales and straw. The donkey, cow, horse and alpaca stay inside it.
+  - Nestor's dog stays by the porch.
+  - New stone well by the path.
+- **Saves:** the save key is now `argonisos.save.v2`, because the world layout changed.
