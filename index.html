@@ -268,6 +268,13 @@
   #minimap { width:172px; height:172px; border-radius:50%; border:0; margin:6px; box-shadow:0 0 0 3px #6b4f2c, 0 0 0 7px #e3d0a4, 0 0 0 9px #7a2a18, 0 6px 18px rgba(0,0,0,.5); }
   #mmLabel { right:50%; transform:translateX(50%); top:auto; bottom:-6px; background:var(--papyrus), #e9d8ad; color:var(--ink); text-shadow:none; border:1px solid #6b4f2c; }
   #clock { top:212px; width:184px; }
+
+  /* hotbar at the bottom centre so it never runs into the compass; prompt sits above it; quest tracker takes the top-left */
+  #hotbar { left:50%; top:auto; bottom:14px; transform:translateX(-50%); }
+  #prompt { bottom:84px; }
+  #quest { top:14px; }
+  @media (max-width:900px) { #compass { width:min(300px,34vw); } }
+  #mmLabel { right:106px; transform:translateX(50%); top:188px; bottom:auto; white-space:nowrap; z-index:1; } #clock { top:222px; }
 </style>
 </head>
 <body>
