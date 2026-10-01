@@ -2193,7 +2193,8 @@ function loadClip(name) {
   loadModelBuffer(name).then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
     const clip = obj.animations[0]; if (!clip) throw new Error(`no animation in ${name}.fbx`);
     for (const t of clip.tracks) if (/Hips\.position/.test(t.name)) {          // keep it in place: we move the player ourselves
-      const v = t.values, x0 = v[0], z0 = v[2]; for (let i = 0; i < v.length; i += 3) { v[i] = x0; v[i + 2] = z0; }
+      const v = t.values, x0 = v[0], z0 = v[2], n = v.length; C.rootSpeed = Math.hypot(v[n - 3] - x0, v[n - 1] - z0) / clip.duration;   // cm/s of root motion, if the clip has any
+      for (let i = 0; i < v.length; i += 3) { v[i] = x0; v[i + 2] = z0; }
     }
     obj.updateMatrixWorld(true); obj.getWorldQuaternion(C.rootInv).invert();
     obj.traverse((o) => { for (const [mine, mx] of Object.entries(RUN_MAP)) if (o.name === 'mixamorig' + mx || o.name.endsWith(':' + mx) || o.name === mx) C.src[mine] = o; });
@@ -2388,7 +2389,7 @@ async function loadModelBuffer(name) {
   const b64 = (await import(`./models/${name}.fbx.js`)).default;
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer;
 }
-loadModelBuffer('hero').then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
+const loadStaticHero = () => loadModelBuffer('hero').then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
   const box = new THREE.Box3().setFromObject(obj), size = box.getSize(new THREE.Vector3());
   const s = 1.95 / size.y; obj.scale.setScalar(s);
   const b2 = new THREE.Box3().setFromObject(obj), c = b2.getCenter(new THREE.Vector3());
@@ -2408,6 +2409,95 @@ loadModelBuffer('hero').then((buf) => new FBXLoader().parse(buf, '')).then((obj)
   for (const t of [tools.axe, tools.spear]) { rf.add(t); t.position.copy(hero.rig.handOffset); t.rotation.set(0.7, 0, -1.25, 'ZYX'); }   // undo the arm's T-pose drop so the tool points forward-up
   hero.rig.bones.spine.add(backAxe, backSpear);                  // stowed: axe slung diagonally across the back, spear behind it
 }).catch((e) => console.warn('Hero model failed to load, keeping placeholder', e));
+
+// ---- Native Mixamo hero ----
+// hero_rig.fbx is the hero auto-rigged by Mixamo, so the Mixamo clips play on its own skeleton: no retargeting.
+// Base layer (idle / run / sprint) runs on an AnimationMixer with speed-matched playback.
+// One-shots (jump, strike, punch, draw, sheathe) are sampled straight from their tracks and blended over it,
+// full body when standing, upper body only while moving.
+const HA = { mixer: null, root: null, bones: {}, acts: {}, samplers: {}, s: 1, t: 0 };
+const UPPER = /Spine|Neck|Head|Shoulder|Arm|Hand/;
+const _hq = new THREE.Quaternion();
+function heroAct(key, C, idleAt) {
+  if (HA.acts[key] || !C.ready) return HA.acts[key];
+  const a = HA.mixer.clipAction(C.action.getClip().clone());
+  if (idleAt !== undefined) { a.time = C.dur * idleAt; a.paused = true; }   // a held frame used as the idle pose
+  a.setEffectiveWeight(0); a.play(); return (HA.acts[key] = a);
+}
+// Quaternion samplers for every bone in a one-shot clip, built once
+function heroSampler(C) {
+  if (!C.ready) return null;
+  let S_ = HA.samplers[C.dur + ':' + C.action.getClip().uuid]; if (S_) return S_;
+  S_ = [];
+  for (const tr of C.action.getClip().tracks) {
+    if (!tr.name.endsWith('.quaternion')) continue;
+    const bone = HA.bones[tr.name.slice(0, -11)]; if (!bone) continue;
+    S_.push({ bone, upper: UPPER.test(bone.name), interp: tr.createInterpolant() });
+  }
+  return (HA.samplers[C.dur + ':' + C.action.getClip().uuid] = S_);
+}
+// Blend clip C at normalised time t (0..1) over the current pose with weight w
+function heroOverlay(C, t, w, upperOnly) {
+  const S_ = heroSampler(C); if (!S_ || w <= 0.001) return;
+  const time = clamp(t, 0, 0.999) * C.dur;
+  for (const s of S_) { if (upperOnly && !s.upper) continue; const v = s.interp.evaluate(time); _hq.fromArray(v); s.bone.quaternion.slerp(_hq, w); }
+}
+loadModelBuffer('hero_rig').then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
+  const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
+  HA.s = 1.95 / size.y; obj.scale.setScalar(HA.s);
+  const tl = new THREE.TextureLoader(), map = tl.load('models/hero_diffuse.jpg'), nrm = tl.load('models/hero_normal.jpg');
+  map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 4;
+  obj.traverse((m) => {
+    if (m.isBone) HA.bones[m.name] = m;
+    if (!m.isMesh) return;
+    m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;   // skinned bounds don't follow the pose
+    m.material = new THREE.MeshStandardMaterial({ map, normalMap: nrm, roughness: 0.8, metalness: 0 });
+  });
+  obj.animations = [];
+  hero.wrap.add(obj); hero.model = obj; hero.native = true;
+  HA.mixer = new THREE.AnimationMixer(obj); HA.root = obj;
+  player.userData.body.visible = false;
+  // Tools in the right palm; stowed tools on the upper back. Bones are in cm, so undo the model scale.
+  const hand = HA.bones.mixamorigRightHand, back = HA.bones.mixamorigSpine2, inv = 1 / HA.s;
+  for (const t of [tools.axe, tools.spear]) { hand.add(t); t.scale.setScalar(inv); t.position.set(0, 9, 3); t.rotation.set(0, 0, -1.4); }   // handle across the palm, head out past the thumb
+  hand.add(bowHeld); bowHeld.scale.setScalar(inv);
+  for (const g of [backAxe, backSpear]) { back.add(g); g.scale.setScalar(inv); }
+  backAxe.position.set(2, 8, -16); backSpear.position.set(-4, 4, -18);
+}).catch((e) => { console.warn('Rigged hero failed to load, using the static model', e); loadStaticHero(); });
+
+// Drive the hero every frame. speed in m/s.
+function animateHero(dt, speed) {
+  if (!HA.mixer) return;
+  const idle = heroAct('idle', DISARM, 0.97), run = heroAct('run', RUN), sprint = heroAct('sprint', SPRINT);
+  const moveW = clamp(speed / 2.2, 0, 1);
+  P.sprintW = lerp(P.sprintW || 0, P.sprinting && sprint ? 1 : 0, Math.min(1, dt * 6));
+  // Play rate follows ground speed so feet don't skate (clip root speed if it has one, else a measured stride)
+  const runV = RUN.rootSpeed > 50 ? RUN.rootSpeed * HA.s : 3.9, sprV = SPRINT.rootSpeed > 50 ? SPRINT.rootSpeed * HA.s : 7.2;
+  if (run) { run.setEffectiveWeight(moveW * (1 - P.sprintW)); run.timeScale = clamp(speed / runV, 0.55, 1.5); }
+  if (sprint) {
+    sprint.setEffectiveWeight(moveW * P.sprintW); sprint.timeScale = clamp(speed / sprV, 0.7, 1.4);
+    if (run) sprint.time = (run.time / RUN.dur) * SPRINT.dur;        // keep both gaits on the same foot
+  }
+  if (idle) idle.setEffectiveWeight(Math.max(1 - moveW, run ? 0 : 1));
+  HA.mixer.update(dt);
+  // Breathing on top of the held idle frame
+  HA.t += dt;
+  const sp = HA.bones.mixamorigSpine2; if (sp) sp.rotateX(Math.sin(HA.t * 1.9) * 0.025 * (1 - moveW));
+  const moving = speed > 0.5;
+  // Jump: skip the wind-up crouch, map airtime onto the rise/fall, then a short landing settle
+  if (!P.onGround) P.jumpT = (P.jumpT || 0) + dt; else if (P.jumpT) { P.landT = 0.25; P.jumpT = 0; }
+  if (P.landT > 0) P.landT -= dt;
+  if (P.jumpT > 0) heroOverlay(JUMP, 0.28 + P.jumpT / 0.7 * 0.5, 1, false);
+  else if (P.landT > 0) heroOverlay(JUMP, 0.8 + (0.25 - P.landT) * 0.6, P.landT / 0.25, false);
+  if (P.equip) {
+    P.equip.t += dt / 0.9;
+    const C = P.equip.kind === 'equip' ? EQUIP : DISARM, w = Math.min(1, Math.sin(Math.min(P.equip.t, 1) * Math.PI) * 2.5);
+    heroOverlay(C, P.equip.t, w, moving);
+    if (P.equip.t >= 1) P.equip = null;
+  }
+  const AC = S.slot === 0 ? PUNCH : ATTACK;
+  if (P.swing > 0) heroOverlay(AC, 1 - P.swing, Math.min(1, P.swing * 6, (1 - P.swing) * 8 + 0.2), moving || !P.onGround);
+}
 const P = { vel: new THREE.Vector3(), yaw: Math.PI, onGround: true, swing: 0, swingHit: false, hurtT: 0, animT: 0, dead: false };
 
 // NPC Nestor the hermit (the Elder from the cast sheet)
@@ -3284,7 +3374,7 @@ function updatePlayer(dt) {
       if (keys.Space) player.position.y += v; if (keys.KeyZ) player.position.y -= v; }
     player.position.y = Math.max(player.position.y, Math.max(heightAt(player.position.x, player.position.z), -0.2) + 0.3);
     P.yaw = Math.atan2(fwd.x, fwd.z); player.rotation.y = P.yaw; P.vel.y = 0; P.onGround = true;
-    animateHumanoid(player, 0, P.animT); if (hero.rig) poseHero(0, 0, 0, performance.now() / 1000);
+    animateHumanoid(player, 0, P.animT); if (hero.native) animateHero(dt, 0); else if (hero.rig) poseHero(0, 0, 0, performance.now() / 1000);
     return;
   }
   // Movement with momentum: accelerate into a run, ease to a stop, keep your speed through a jump (little air control)
@@ -3329,7 +3419,8 @@ function updatePlayer(dt) {
   if (P.swing > 0) { P.swing -= dt * (S.slot === 0 ? (PUNCH.ready ? 2.2 : 3.2) : (ATTACK.ready ? 1.35 : 3.2)); if (!P.swingHit && P.swing < 0.55) { P.swingHit = true; doHit(); } }
   P.animT += dt * (speed > 0 ? speed / 4.6 : 0.3);
   animateHumanoid(player, speed, P.animT, Math.max(P.swing, 0));
-  if (hero.rig) {
+  if (hero.native) animateHero(dt, speed);
+  else if (hero.rig) {
     poseHero(speed, P.animT * 10, Math.max(P.swing, 0), performance.now() / 1000);
     const moveW = clamp(speed / 3, 0, 1);
     P.sprintW = lerp(P.sprintW || 0, P.sprinting && SPRINT.ready ? 1 : 0, Math.min(1, dt * 6));   // smooth crossfade
@@ -3693,7 +3784,7 @@ function loop() {
     if (!frozen || S.cine || talkCam.on) { updateWorld(dt, t); if (!S.cine) for (const c of creatures) updateCreature(c, dt); }
     if (S.sailing) {
       const rp = raftGroup.position, fx = Math.sin(boatYaw), fz = Math.cos(boatYaw); camera.position.lerp(new THREE.Vector3(rp.x - fx * 14 - fz * 8, 6, rp.z - fz * 14 + fx * 8), dt); camera.lookAt(rp.x + fx * 20, 2, rp.z + fz * 20);
-    } else if (S.cine) updateCine(dt); else if (talkCam.on) { updateTalkCam(dt); if (hero.rig && !talkCam.fixed) poseHero(0, 0, 0, t); } else updateCamera(dt);
+    } else if (S.cine) updateCine(dt); else if (talkCam.on) { updateTalkCam(dt); if (hero.native) animateHero(dt, 0); else if (hero.rig && !talkCam.fixed) poseHero(0, 0, 0, t); } else updateCamera(dt);
     // Chips
     for (let i = chips.length - 1; i >= 0; i--) { const c = chips[i]; c.t += dt; c.v.y -= 15 * dt; c.m.position.addScaledVector(c.v, dt); if (c.t > 0.7) { scene.remove(c.m); chips.splice(i, 1); } }
     // Floating texts
@@ -3935,4 +4026,4 @@ $('startBtn').onclick = () => {
   S.running = true; setPause(false); canvas.requestPointerLock();
 };
 renderer.info.autoReset = false;
-window.ARG = { gp: () => ({ PROPS, PROP_CHUNKS, LO_GROUPS, renderer, composer, sun, GFX, scene, leafMat, propMat, camera }), prof: () => { const T = {}, time = (k, f, n = 20) => { const t0 = performance.now(); for (let i = 0; i < n; i++) f(); T[k] = +((performance.now() - t0) / n).toFixed(3); }; time("updateWorld", () => updateWorld(0.016, performance.now() / 1000)); time("creatures", () => { for (const c of creatures) updateCreature(c, 0.016); }); time("lightPool", updateLightPool); time("propLOD", updatePropLOD); time("minimap", () => drawMinimap(null)); time("hud", renderHUD); time("quest", renderQuest); time("interact", getInteractable); time("player", () => updatePlayer(0.016)); return T; }, sleep: (h) => sleep(h), backAxe, BENCH_: null, OLIVE, HEARTH, moonDir, sky: skyDome, fire: () => placeCampfire(), setTime: (v) => { S.time = v; }, talkT: (v) => { talkCam.t = v; }, THREE, pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); updateLightPool(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, BENCH, START, WRECK, DOCK, SEA_OUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); if (GFX.post) composer.render(); else renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
+window.ARG = { gp: () => ({ PROPS, PROP_CHUNKS, LO_GROUPS, renderer, composer, sun, GFX, scene, leafMat, propMat, camera }), prof: () => { const T = {}, time = (k, f, n = 20) => { const t0 = performance.now(); for (let i = 0; i < n; i++) f(); T[k] = +((performance.now() - t0) / n).toFixed(3); }; time("updateWorld", () => updateWorld(0.016, performance.now() / 1000)); time("creatures", () => { for (const c of creatures) updateCreature(c, 0.016); }); time("lightPool", updateLightPool); time("propLOD", updatePropLOD); time("minimap", () => drawMinimap(null)); time("hud", renderHUD); time("quest", renderQuest); time("interact", getInteractable); time("player", () => updatePlayer(0.016)); return T; }, sleep: (h) => sleep(h), backAxe, BENCH_: null, OLIVE, HEARTH, moonDir, sky: skyDome, fire: () => placeCampfire(), setTime: (v) => { S.time = v; }, talkT: (v) => { talkCam.t = v; }, THREE, pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); updateLightPool(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, BENCH, START, WRECK, DOCK, SEA_OUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, HA, animateHero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); if (GFX.post) composer.render(); else renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting

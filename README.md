@@ -105,3 +105,10 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
 - All baked buildings get procedural plaster/stone/marble grain in the shader (no textures).
 - Nestor's house: rafter ends under the eaves, geranium window boxes, stone door steps, bougainvillea on the pergola, strings of garlic and peppers, a paved path across the yard.
 - Conversation camera frames both speakers in full (heads no longer cut by the letterbox). Daytime firelight toned down.
+
+## v14: native rigged hero
+- `models/hero_rig.fbx` is the hero auto-rigged by Mixamo. The Mixamo clips now play on its own skeleton, with no retargeting onto a home-made rig.
+- Base layer (idle / run / sprint) runs on an `AnimationMixer`. Its playback rate follows ground speed to cut foot sliding, and run and sprint stay phase-locked.
+- One-shot clips are sampled from their tracks and blended over the base layer: jump, strike, punch, draw and sheathe. They play full body when standing and upper body only while moving.
+- Idle is a held end frame of the sheathe clip plus procedural breathing. A real Idle clip would replace it.
+- Textures were extracted from the old `hero.fbx` and saved as `hero_diffuse.jpg` and `hero_normal.jpg`. If the rig fails to load, the old static hero is used.
