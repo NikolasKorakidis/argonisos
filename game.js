@@ -2983,6 +2983,13 @@ addEventListener('keydown', (e) => {
   if (S.cine) { if (e.code === 'Escape' || e.code === 'Space' || e.code === 'Enter') endIntro(); return; }
   if (inCard()) { if (!e.repeat && (e.code === 'KeyE' || e.code === 'Enter')) nextCard(true); return; }
   if (inDialog()) { if (!e.repeat && (e.code === 'KeyE' || e.code === 'Space' || e.code === 'Enter') && performance.now() - lineShownAt > 350) nextLine(); return; }
+  // P: pause / resume / close a panel without Esc, which can't be held back from leaving fullscreen in every browser
+  if (e.code === 'KeyP' && !e.repeat) {
+    if (menuOpen()) { MENUS.forEach((m) => $(m).classList.add('hidden')); canvas.requestPointerLock(); }
+    else if (S.paused) { setPause(false); canvas.requestPointerLock(); }
+    else { setPause(true); document.exitPointerLock(); }
+    return;
+  }
   if (S.sailing) return;
   if (e.code === 'KeyC') toggleCraft();
   if (e.code === 'KeyM') openMenu('mapPanel');
@@ -3882,7 +3889,7 @@ async function toggleFullscreen() {
 }
 function syncFsBtn() { const on = !!document.fullscreenElement; $('fsBtn').textContent = `Fullscreen: ${on ? 'On' : 'Off'}`; $('fsBtn2').textContent = on ? 'Exit Fullscreen' : 'Fullscreen'; }
 $('fsBtn').onclick = toggleFullscreen; $('fsBtn2').onclick = toggleFullscreen;
-document.addEventListener('fullscreenchange', () => { syncFsBtn(); if (document.fullscreenElement) toast('Fullscreen · hold <b>Esc</b> for 2 s to leave', true); else navigator.keyboard?.unlock?.(); });
+document.addEventListener('fullscreenchange', () => { syncFsBtn(); if (document.fullscreenElement) toast('Fullscreen · press <b>P</b> to pause, hold <b>Esc</b> to leave', true); else navigator.keyboard?.unlock?.(); });
 let escDownAt = 0, escTimer = null;
 addEventListener('keydown', (e) => {
   if (e.code !== 'Escape' || e.repeat || !wantFs) return;
