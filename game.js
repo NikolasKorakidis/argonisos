@@ -3866,21 +3866,28 @@ $('continueBtn').onclick = () => {
 $('saveBtn').onclick = () => { saveGame(true); };
 // ---- Fullscreen. While fullscreen the Escape key is captured (Keyboard Lock), so a tap still opens the pause menu
 //      and you HOLD Esc to leave fullscreen (Chrome/Edge do the hold natively; this handles the rest).
+//      Browsers without Keyboard Lock (Safari, Firefox, or the game inside an embedded frame) always drop fullscreen
+//      on Esc. There we remember that you want fullscreen and restore it on your next click or key press.
+let wantFs = false;
+async function enterFs() { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); try { await navigator.keyboard?.lock?.(['Escape']); } catch {} }
+function leaveFs() { wantFs = false; navigator.keyboard?.unlock?.(); if (document.fullscreenElement) document.exitFullscreen(); }
+const restoreFs = (e) => { if (!wantFs || document.fullscreenElement || e.code === 'Escape') return; enterFs().catch(() => {}); };
+addEventListener('pointerdown', restoreFs, true); addEventListener('keydown', restoreFs, true);
 async function toggleFullscreen() {
   try {
-    if (!document.fullscreenElement) { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); try { await navigator.keyboard?.lock?.(['Escape']); } catch {} }
-    else { navigator.keyboard?.unlock?.(); await document.exitFullscreen(); }
+    if (!document.fullscreenElement) { await enterFs(); wantFs = true; }
+    else leaveFs();
     syncFsBtn();
   } catch { toast('Fullscreen is not allowed here. Open the game in its own tab to use it.'); }
 }
 function syncFsBtn() { const on = !!document.fullscreenElement; $('fsBtn').textContent = `Fullscreen: ${on ? 'On' : 'Off'}`; $('fsBtn2').textContent = on ? 'Exit Fullscreen' : 'Fullscreen'; }
 $('fsBtn').onclick = toggleFullscreen; $('fsBtn2').onclick = toggleFullscreen;
-document.addEventListener('fullscreenchange', () => { syncFsBtn(); if (document.fullscreenElement) toast('Fullscreen · hold <b>Esc</b> to leave', true); else navigator.keyboard?.unlock?.(); });
+document.addEventListener('fullscreenchange', () => { syncFsBtn(); if (document.fullscreenElement) toast('Fullscreen · hold <b>Esc</b> for 2 s to leave', true); else navigator.keyboard?.unlock?.(); });
 let escDownAt = 0, escTimer = null;
 addEventListener('keydown', (e) => {
-  if (e.code !== 'Escape' || e.repeat || !document.fullscreenElement) return;
+  if (e.code !== 'Escape' || e.repeat || !wantFs) return;
   escDownAt = performance.now(); clearTimeout(escTimer);
-  escTimer = setTimeout(() => { if (escDownAt && document.fullscreenElement) { navigator.keyboard?.unlock?.(); document.exitFullscreen(); } }, 1000);   // held 1 s
+  escTimer = setTimeout(() => { if (escDownAt) { leaveFs(); toast('Left fullscreen'); } }, 2000);   // held 2 s
   if (locked) document.exitPointerLock();          // a tap behaves like normal: release the mouse, open the pause menu
 });
 addEventListener('keyup', (e) => { if (e.code === 'Escape') { escDownAt = 0; clearTimeout(escTimer); } });
