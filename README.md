@@ -112,3 +112,18 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
 - One-shot clips are sampled from their tracks and blended over the base layer: jump, strike, punch, draw and sheathe. They play full body when standing and upper body only while moving.
 - Idle is a held end frame of the sheathe clip plus procedural breathing. A real Idle clip would replace it.
 - Textures were extracted from the old `hero.fbx` and saved as `hero_diffuse.jpg` and `hero_normal.jpg`. If the rig fails to load, the old static hero is used.
+
+## v15: animal and tree packs
+- **Animals:** low-poly rigged glTF pack, trimmed to 7 clips each (`models/*.glb`, ~1.1 MB). Each creature gets a skeleton clone and its own mixer, and crossfades between Idle, Walk, Gallop, Attack, Hit, Death and Eating. Walk and gallop speed follow movement speed.
+  - Wolf: now the animated model.
+  - New wild animals:
+    - deer (8): flees; drops meat and hide.
+    - stag (3): fights back like the boar.
+    - fox (6): flees; drops hide.
+  - New livestock: Nestor has a donkey, a cow and a horse grazing beside the farmhouse. They can't be hurt.
+  - Not changed yet: the boar and rabbit stay procedural (the pack has neither).
+- **Trees:** stylised pack added as `qtree`, `qpine` and `qdead`, packed as quantised binary in `models/qtrees.js`.
+  - They run through the same instanced and chunked prop system as the other trees, so they cost no extra per-tree draw calls.
+  - Leaf clusters use their own alpha-cut textures, tinted to the island palette.
+  - Mixed into the regional flora: meadow, forest, mountain, swamp (dead trees), lake and tower.
+  - Birch was left out because it isn't an Aegean tree.

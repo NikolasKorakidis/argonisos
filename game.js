@@ -9,6 +9,9 @@ import { UnrealBloomPass } from './jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from './jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from './jsm/postprocessing/OutputPass.js';
 import { VignetteShader } from './jsm/shaders/VignetteShader.js';
+import { GLTFLoader } from './jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from './jsm/utils/SkeletonUtils.js';
+import QTREES from './models/qtrees.js';
 import { initAudio, snd, updateAmbience, setVolume, VOL } from './audio.js';
 
 // ============================================================
@@ -804,10 +807,38 @@ const TREE_BUILDERS = {
     return rk;
   },
 };
+// ---- Imported stylised trees (the uploaded pack): broadleaf 'qtree', 'qpine', and leafless 'qdead' (tree trunks, weathered).
+// Packed as quantised binary (models/qtrees.js). Trunks get vertex colours sampled from the bark texture, so they share
+// propMat with every other tree; leaf clusters keep their own alpha-cut textures.
+const b64arr = (str, T) => { const u = Uint8Array.from(atob(str), (ch) => ch.charCodeAt(0)); return new T(u.buffer); };
+function qGeo(g, tint) {
+  const geo = new THREE.BufferGeometry(), p = b64arr(g.p, Int16Array), n = b64arr(g.nr, Int8Array), uv = b64arr(g.uv, Int16Array);
+  geo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(p, (v) => v / 1000), 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(n, (v) => v / 127), 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(Float32Array.from(uv, (v) => v / 4096), 2));
+  if (g.c) { const c = b64arr(g.c, Uint8Array); geo.setAttribute('color', new THREE.BufferAttribute(Float32Array.from(c, (v, i) => v / 255 * tint[i % 3]), 3)); }
+  return geo;
+}
+function qLeafMat(file, tint) {
+  const t = new THREE.TextureLoader().load(`models/${file}`); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  const m = new THREE.MeshStandardMaterial({ map: t, color: tint, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85 });   // tinted down to the island palette
+  m.onBeforeCompile = leafMat.onBeforeCompile; return m;
+}
+const Q_SRC = { qtree: 'qtree', qpine: 'qpine', qdead: 'qtree' };
+const Q_TINT = { qtree: [0.72, 0.62, 0.52], qpine: [0.68, 0.58, 0.5], qdead: [0.62, 0.6, 0.57] };
+let Q_LEAF_MATS = null;
+function qBuild(species, v) {
+  Q_LEAF_MATS ||= { qtree: qLeafMat('q_tree_leaves.png', 0x9ab884), qpine: qLeafMat('q_pine_leaves.png', 0x6f8f62) };
+  const src = QTREES[Q_SRC[species]][v % QTREES[Q_SRC[species]].length];
+  const geo = qGeo(src.bark, Q_TINT[species]);
+  const cards = species !== 'qdead' && src.leaves ? qGeo(src.leaves) : null;
+  return { geo, lo: geo, cards, cardMat: cards && Q_LEAF_MATS[species], leafFar: true };
+}
 const PROPS = {};  // key -> { geo, variants:[geo], chunks: Map }
 const CHUNK = 100;
 function propGeo(species, v) {
   const k = species + v;
+  if (!PROPS[k] && Q_SRC[species]) { const q = qBuild(species, v); PROPS[k] = { species, v, ...q, items: [] }; }
   if (!PROPS[k]) {
     CARD_PARTS = [];
     const s0 = seed, r = TREE_BUILDERS[species](v), s1 = seed, cards = CARD_PARTS.length ? mergeCards(CARD_PARTS) : null; CARD_PARTS = [];
@@ -851,11 +882,12 @@ function buildProps() {
     const hi = new THREE.InstancedMesh(P.geo, propMat, items.length);
     items.forEach((it, i) => { it.mesh = hi; it.idx = i; hi.setMatrixAt(i, propMatrix(it)); });
     hi.castShadow = hi.receiveShadow = true; hi.computeBoundingSphere(); scene.add(hi);
-    const lk = P.species + '|' + key; (LO_GROUPS[lk] || (LO_GROUPS[lk] = { geo: P.lo, items: [] })).items.push(...items);
+    const lk = P.species + (P.leafFar ? P.v : '') + '|' + key;  // imported trees: far trunk must match its own canopy
+    (LO_GROUPS[lk] || (LO_GROUPS[lk] = { geo: P.lo, items: [] })).items.push(...items);
     const lo = LO_GROUPS[lk];
     let leaf = null;
-    if (P.cards) { leaf = new THREE.InstancedMesh(P.cards, leafMat, items.length); items.forEach((it, i) => { it.meshLeaf = leaf; leaf.setMatrixAt(i, propMatrix(it)); }); leaf.castShadow = leaf.receiveShadow = true; leaf.computeBoundingSphere(); scene.add(leaf); }
-    const [cx, cz] = key.split(',').map((n) => (+n + 0.5) * CHUNK); PROP_CHUNKS.push({ hi, loGroup: lo, leaf, cx, cz });
+    if (P.cards) { leaf = new THREE.InstancedMesh(P.cards, P.cardMat || leafMat, items.length); items.forEach((it, i) => { it.meshLeaf = leaf; leaf.setMatrixAt(i, propMatrix(it)); }); leaf.castShadow = leaf.receiveShadow = true; leaf.computeBoundingSphere(); scene.add(leaf); }
+    const [cx, cz] = key.split(',').map((n) => (+n + 0.5) * CHUNK); PROP_CHUNKS.push({ hi, loGroup: lo, leaf, leafFar: !!P.leafFar, cx, cz });
   }
   for (const G of Object.values(LO_GROUPS)) {       // far version: all variants of a species in a chunk share one draw
     const im = new THREE.InstancedMesh(G.geo, propMat, G.items.length);
@@ -868,7 +900,7 @@ function updatePropLOD() {
   const px = camera.position.x, pz = camera.position.z, near = GFX.near;
   const cut = GFX.level === 'low' ? (GFX.fogFar || 520) : 1e9;
   for (const G of Object.values(LO_GROUPS)) if (G.mesh) G.mesh.visible = false;
-  for (const c of PROP_CHUNKS) { const d = Math.hypot(c.cx - px, c.cz - pz) - CHUNK * 0.7; c.hi.visible = d < near; if (c.leaf) c.leaf.visible = c.hi.visible; if (!c.hi.visible && d < cut) c.lo.visible = true; }
+  for (const c of PROP_CHUNKS) { const d = Math.hypot(c.cx - px, c.cz - pz) - CHUNK * 0.7; c.hi.visible = d < near; if (c.leaf) c.leaf.visible = c.hi.visible || (c.leafFar && d < cut); if (!c.hi.visible && d < cut) c.lo.visible = true; }
 }
 function updateProp(it, hidden = false) {
   const m = propMatrix(it, hidden);
@@ -923,21 +955,21 @@ function bakeGroup(g) {
 
 // Scatter by region: density per square metre + species mix, like a hand-dressed open world
 const FLORA = {   // native Greek mixes per region (birch removed: not a tree of the Aegean)
-  meadow: { d: 0.004, mix: [['oak', 3], ['olive', 3], ['carob', 2], ['cypress', 2], ['pine', 1], ['fig', 1], ['autumn', 1]] },
+  meadow: { d: 0.004, mix: [['oak', 3], ['olive', 3], ['carob', 2], ['cypress', 2], ['pine', 1], ['fig', 1], ['autumn', 1], ['qtree', 2]] },
   ruins: { d: 0.002, mix: [['cypress', 2], ['olive', 3], ['carob', 1]] },
-  forest: { d: 0.029, mix: [['holm', 5], ['aleppo', 4], ['oak', 2], ['arbutus', 2], ['autumn', 1]] },   // Hylaea: evergreen oak and pine woods
-  mountain: { d: 0.01, mix: [['fir', 6], ['aleppo', 2], ['holm', 1]] },
-  swamp: { d: 0.006, mix: [['dead', 5], ['plane', 2]] },
+  forest: { d: 0.029, mix: [['holm', 5], ['aleppo', 4], ['oak', 2], ['arbutus', 2], ['autumn', 1], ['qtree', 3], ['qpine', 2]] },   // Hylaea: evergreen oak and pine woods
+  mountain: { d: 0.01, mix: [['fir', 6], ['aleppo', 2], ['holm', 1], ['qpine', 4]] },
+  swamp: { d: 0.006, mix: [['dead', 5], ['plane', 2], ['qdead', 4]] },
   olive: { d: 0.003, mix: [['olive', 3], ['cypress', 1]] },
   temple: { d: 0.002, mix: [['cypress', 3], ['olive', 3], ['pine', 1]] },
-  lake: { d: 0.007, mix: [['plane', 4], ['aleppo', 1], ['arbutus', 1]] },          // great planes by the water
-  tower: { d: 0.005, mix: [['aleppo', 3], ['cypress', 1]] },
+  lake: { d: 0.007, mix: [['plane', 4], ['aleppo', 1], ['arbutus', 1], ['qtree', 2]] },          // great planes by the water
+  tower: { d: 0.005, mix: [['aleppo', 3], ['cypress', 1], ['qpine', 1]] },
   cave: { d: 0, mix: [] },
 };
 function pickSpecies(mix) { let t = rand() * mix.reduce((a, m) => a + m[1], 0); for (const [s2, w] of mix) if ((t -= w) <= 0) return s2; return mix[0][0]; }
 function addTree(species, pos, scale) {
-  const it = placeProp(species, Math.floor(rand() * 3), pos, rr(0, 6.28), scale);
-  const TR = { oak: 0.55, autumn: 0.55, olive: 0.42, pine: 0.38, birch: 0.24, cypress: 0.3, dead: 0.38, aleppo: 0.34, plane: 0.78, holm: 0.48, carob: 0.55, arbutus: 0.35, fig: 0.4, fir: 0.42 }[species] || 0.45;
+  const it = placeProp(species, Math.floor(rand() * (Q_SRC[species] ? QTREES[Q_SRC[species]].length : 3)), pos, rr(0, 6.28), scale);
+  const TR = { oak: 0.55, autumn: 0.55, olive: 0.42, pine: 0.38, birch: 0.24, cypress: 0.3, dead: 0.38, aleppo: 0.34, plane: 0.78, holm: 0.48, carob: 0.55, arbutus: 0.35, fig: 0.4, fir: 0.42, qtree: 0.4, qpine: 0.34, qdead: 0.36 }[species] || 0.45;
   const res = { type: 'tree', item: it, hp: 8, max: 8, alive: true, pos, r: TR * scale + 0.15, fall: 0 };
   resources.push(res); colliders.push({ x: pos.x, z: pos.z, r: res.r, ref: res }); return res;
 }
@@ -2592,20 +2624,87 @@ const TYPES = {
   boar: { hp: 45, speed: 5, dmg: 12, flee: false, retaliate: true, drops: { rawmeat: 2, hide: 1 }, r: 0.8, reach: 1.8 },
   wolf: { hp: 35, speed: 6.2, dmg: 9, hostile: true, drops: { hide: 1, rawmeat: 1 }, r: 0.7, reach: 1.8 },
   skeleton: { hp: 55, speed: 3.4, dmg: 12, hostile: true, drops: {}, r: 0.5, reach: 1.9, aggro: 13 },
+  deer: { hp: 30, speed: 7.5, dmg: 0, flee: true, drops: { rawmeat: 2, hide: 1 }, r: 0.6, reach: 0 },
+  stag: { hp: 60, speed: 6.8, dmg: 14, flee: false, retaliate: true, drops: { rawmeat: 3, hide: 2 }, r: 0.75, reach: 2.1 },
+  fox: { hp: 14, speed: 7, dmg: 0, flee: true, drops: { hide: 1 }, r: 0.4, reach: 0 },
+  // Nestor's farm animals: they graze inside the courtyard and can't be hurt
+  donkey: { hp: 1, speed: 1.4, dmg: 0, passive: true, drops: {}, r: 0.8, reach: 0, roam: 5 },
+  cow: { hp: 1, speed: 1.2, dmg: 0, passive: true, drops: {}, r: 0.9, reach: 0, roam: 5 },
+  horse: { hp: 1, speed: 1.6, dmg: 0, passive: true, drops: {}, r: 0.9, reach: 0, roam: 6 },
 };
+// ---- Animated animal models (the uploaded low-poly pack: ~2k triangles, rigged, with Idle/Walk/Gallop/Attack/Hit/Death/Eating).
+// One template per species is loaded lazily; each creature gets a skeleton clone and its own mixer.
+// len: nose-to-tail length in metres the model is scaled to.
+const ANIMALS = { wolf: { file: 'wolf', len: 1.45 }, deer: { file: 'deer', len: 1.6 }, stag: { file: 'stag', len: 1.9 }, fox: { file: 'fox', len: 0.95 },
+  donkey: { file: 'donkey', len: 1.7 }, cow: { file: 'cow', len: 2.2 }, horse: { file: 'horse', len: 2.3 } };
+const ANIM_TPL = {};
+async function loadGlb(name) {
+  try { const r = await fetch(`models/${name}.glb`); if (r.ok) return await r.arrayBuffer(); } catch { /* fall through */ }
+  const b64 = (await import(`./models/${name}.glb.js`)).default;
+  return Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)).buffer;
+}
+function animalTemplate(type) {
+  const A = ANIMALS[type];
+  return (ANIM_TPL[type] ||= loadGlb(A.file).then((buf) => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej))).then((gl) => {
+    const root = gl.scene; root.updateMatrixWorld(true);
+    const size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3());
+    root.scale.multiplyScalar(A.len / Math.max(size.x, size.z));
+    root.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; } });
+    const clips = {}; for (const c of gl.animations) clips[c.name.replace('Attack_Headbutt', 'Attack')] = c;
+    return { root, clips };
+  }));
+}
+// Give creature c its animated body once the template is in
+function attachAnimal(c) {
+  animalTemplate(c.type).then((T) => {
+    if (c.gone) return;
+    const m = cloneSkinned(T.root);
+    m.traverse((o) => { if (o.isMesh) o.material = Array.isArray(o.material) ? o.material.map((mt) => mt.clone()) : o.material.clone(); });   // own materials for the hit flash
+    c.obj.clear(); c.obj.add(m);
+    c.mixer = new THREE.AnimationMixer(m); c.acts = {};
+    for (const [k, clip] of Object.entries(T.clips)) c.acts[k] = c.mixer.clipAction(clip);
+    for (const k of ['Death', 'Attack', 'Idle_HitReact1']) if (c.acts[k]) { c.acts[k].setLoop(THREE.LoopOnce); c.acts[k].clampWhenFinished = true; }
+    c.cur = null; c.mixer.update(rr(0, 2));
+  }).catch((e) => console.warn(`${c.type} model failed, keeping the placeholder`, e));
+}
+// Pick and crossfade the animal's clip from its state
+function animateAnimal(c, speed, dt) {
+  if (!c.mixer) return false;
+  let want = 'Idle', rate = 1;
+  if (c.dead) want = 'Death';
+  else if (c.lunge > 0) want = 'Attack';
+  else if (c.flash > 0 && c.acts.Idle_HitReact1) want = 'Idle_HitReact1';
+  else if (speed > c.def.speed * 0.55) { want = 'Gallop'; rate = clamp(speed / (c.def.speed * 0.85), 0.7, 1.4); }
+  else if (speed > 0) { want = 'Walk'; rate = clamp(speed / (c.def.speed * 0.3), 0.6, 1.6); }
+  else if (c.idle && !c.def.hostile && (c.t % 6) > 3) want = 'Eating';
+  if (want === 'Idle_HitReact1' && c.cur === 'Attack') want = 'Attack';
+  const a = c.acts[want] || c.acts.Idle;
+  if (c.cur !== want) {
+    const prev = c.acts[c.cur]; a.reset().setEffectiveWeight(1).fadeIn(0.18).play(); if (prev) prev.fadeOut(0.18);
+    c.cur = want;
+  }
+  a.timeScale = rate; c.mixer.update(dt); return true;
+}
 function spawnCreature(type, pos) {
   let obj;
   if (type === 'rabbit') obj = makeRabbit();
   else if (type === 'boar') obj = makeQuad(0x6e4630, 1.1, 0.55, { tusks: true, snout: 0.3 });
   else if (type === 'wolf') obj = makeQuad(0x77706a, 1.1, 0.7, { tail: 0x8a847c, snout: 0.4 });
-  else obj = makeSkeleton();
+  else if (type === 'skeleton') obj = makeSkeleton();
+  else obj = new THREE.Group();                                    // model-only animals: empty until the model streams in
   obj.position.copy(pos); scene.add(obj);
   const c = { type, obj, def: TYPES[type], hp: TYPES[type].hp, state: 'wander', target: pos.clone(), t: rr(0, 5), atkCd: 0, flash: 0, dead: false, home: pos.clone(), vy: 0 };
   obj.traverse((m) => { if (m.isMesh) { m.material = m.material.clone(); } });
+  if (ANIMALS[type]) attachAnimal(c);
   creatures.push(c); return c;
 }
 for (let i = 0; i < 24; i++) { const p = landSpot(1.5, 30, AVOID); if (p) spawnCreature('rabbit', p); }
 for (let i = 0; i < 10; i++) { const p = landSpot(3, 30, AVOID); if (p) spawnCreature('boar', p); }
+for (let i = 0; i < 8; i++) { const p = landSpot(3, 40, AVOID); if (p) spawnCreature('deer', p); }
+for (let i = 0; i < 3; i++) { const p = landSpot(6, 45, AVOID); if (p) spawnCreature('stag', p); }
+for (let i = 0; i < 6; i++) { const p = landSpot(2, 35, AVOID); if (p) spawnCreature('fox', p); }
+// Nestor's livestock in the meadow beside the farmhouse
+for (const [type, lx, lz] of [['donkey', -15, 6], ['cow', -17, 12], ['horse', -13, 15]]) { const p = hutW(lx, lz); p.y = heightAt(p.x, p.z); spawnCreature(type, p); }
 const skeletons = [];
 for (let i = 0; i < 3; i++) { const a = i * 2.1 + 0.4; const p = new THREE.Vector3(CAVE.x + Math.cos(a) * 5, CAVE_Y, CAVE.z + Math.sin(a) * 5); const sk = spawnCreature('skeleton', p); sk.home.copy(p); skeletons.push(sk); }
 
@@ -2617,7 +2716,7 @@ const S = {
   hp: 100, food: 100, sta: 100, time: 0.3, day: 1, nights: 0, wasNight: false,
   inv: { wood: 0, stone: 0, fiber: 0, berries: 0, rawmeat: 0, meat: 0, hide: 0, rope: 0, sail: 0, arrows: 0 },
   tools: { axe: false, spear: false, bow: false }, slot: 0, energy: 100,
-  kills: { rabbit: 0, boar: 0, wolf: 0, skeleton: 0 }, cooked: 0, campfire: null, raftBuilt: false,
+  kills: { rabbit: 0, boar: 0, wolf: 0, skeleton: 0, deer: 0, stag: 0, fox: 0 }, cooked: 0, campfire: null, raftBuilt: false,
   timeScale: 1, running: false, paused: true, talkedNestor: false, sailing: false, questIdx: 0, deaths: 0, nightsAtStart: 0, started: 0,
 };
 const ICONS = { wood: '🪵', stone: '🪨', fiber: '🌾', berries: '🫐', rawmeat: '🥩', meat: '🍖', hide: '🟫', rope: '🧶', sail: '⛵', arrows: '➶' };
@@ -3218,7 +3317,7 @@ function doHit() {
   // Creatures first
   let hitAny = false;
   for (const c of creatures) {
-    if (c.dead || !inFront(c.obj.position, tool.reach + c.def.r)) continue;
+    if (c.dead || c.def.passive || !inFront(c.obj.position, tool.reach + c.def.r)) continue;
     const dmg = Math.round(tool.dmg * rr(0.85, 1.15));
     c.hp -= dmg; c.flash = 0.15; hitAny = true;
     floatText(dmg, c.obj.position.clone().setY(c.obj.position.y + 1.6), '#ffdf8a');
@@ -3278,7 +3377,9 @@ function updateCreature(c, dt) {
   const o = c.obj;
   if (!c.dead && c.type !== 'wolf' && !o.visible) return;          // far away: frozen until the player comes near
   if (c.dead) {
-    c.deadT += dt; o.rotation.z = Math.min(c.deadT * 4, Math.PI / 2); o.position.y -= dt * (c.deadT > 1.5 ? 0.6 : 0);
+    c.deadT += dt;
+    if (animateAnimal(c, 0, dt)) o.position.y -= dt * (c.deadT > 2 ? 0.4 : 0);     // animated: play Death, then sink
+    else { o.rotation.z = Math.min(c.deadT * 4, Math.PI / 2); o.position.y -= dt * (c.deadT > 1.5 ? 0.6 : 0); }
     if (c.deadT > 3) { scene.remove(o); c.gone = true; } return;
   }
   const d = c.def, pp = player.position; const dist = o.position.distanceTo(pp);
@@ -3293,11 +3394,11 @@ function updateCreature(c, dt) {
     if (playerSafe && c.state === 'chase' && c.type !== 'skeleton') c.state = 'prowl';            // circle at the edge of the light
   } else if (d.flee && dist < 7) c.state = 'flee';
   else if (c.state === 'flee' && dist > 16) c.state = 'wander';
-  if (c.type === 'boar' && c.state === 'chase' && dist > 18) c.state = 'wander';
+  if (d.retaliate && c.state === 'chase' && dist > 18) c.state = 'wander';
 
   let speed = 0; const goal = tmp;
   if (c.state === 'wander') {
-    if (c.t <= 0) { c.t = rr(2, 6); c.target.set(c.home.x + rr(-10, 10), 0, c.home.z + rr(-10, 10)); c.idle = rand() < 0.4; }
+    if (c.t <= 0) { c.t = rr(2, 6); { const R = d.roam || 10; c.target.set(c.home.x + rr(-R, R), 0, c.home.z + rr(-R, R)); } c.idle = rand() < 0.4; }
     goal.copy(c.target); speed = c.idle ? 0 : d.speed * 0.3;
   } else if (c.state === 'flee') {
     goal.copy(o.position).multiplyScalar(2).sub(pp); speed = d.speed;
@@ -3334,7 +3435,9 @@ function updateCreature(c, dt) {
   o.position.y = gy;
   // Animation
   c.anim = (c.anim || 0) + dt * (speed > 0 ? speed * 1.6 : 0);
-  if (c.type === 'rabbit') o.children[0].position.y = 0.3 + Math.abs(Math.sin(c.anim * 1.5)) * (speed > 0 ? 0.25 : 0);
+  if (animateAnimal(c, speed, dt)) { /* skinned model */ }
+  else if (!o.userData.legs && c.type !== 'rabbit' && c.type !== 'skeleton') { /* model still loading */ }
+  else if (c.type === 'rabbit') o.children[0].position.y = 0.3 + Math.abs(Math.sin(c.anim * 1.5)) * (speed > 0 ? 0.25 : 0);
   else if (c.type === 'skeleton') animateHumanoid(o, speed, c.anim / 3.4, c.lunge > 0 ? c.lunge / 0.3 : 0);
   else o.userData.legs.forEach((l, i) => (l.rotation.x = Math.sin(c.anim * 2.5 + (i % 3 ? Math.PI : 0)) * 0.6));
   if (c.lunge > 0) c.lunge -= dt;
@@ -4052,4 +4155,4 @@ $('startBtn').onclick = () => {
   S.running = true; setPause(false); canvas.requestPointerLock();
 };
 renderer.info.autoReset = false;
-window.ARG = { gp: () => ({ PROPS, PROP_CHUNKS, LO_GROUPS, renderer, composer, sun, GFX, scene, leafMat, propMat, camera }), prof: () => { const T = {}, time = (k, f, n = 20) => { const t0 = performance.now(); for (let i = 0; i < n; i++) f(); T[k] = +((performance.now() - t0) / n).toFixed(3); }; time("updateWorld", () => updateWorld(0.016, performance.now() / 1000)); time("creatures", () => { for (const c of creatures) updateCreature(c, 0.016); }); time("lightPool", updateLightPool); time("propLOD", updatePropLOD); time("minimap", () => drawMinimap(null)); time("hud", renderHUD); time("quest", renderQuest); time("interact", getInteractable); time("player", () => updatePlayer(0.016)); return T; }, sleep: (h) => sleep(h), backAxe, BENCH_: null, OLIVE, HEARTH, moonDir, sky: skyDome, fire: () => placeCampfire(), setTime: (v) => { S.time = v; }, talkT: (v) => { talkCam.t = v; }, THREE, pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); updateLightPool(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, BENCH, START, WRECK, DOCK, SEA_OUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, HA, animateHero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); if (GFX.post) composer.render(); else renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
+window.ARG = { gp: () => ({ PROPS, PROP_CHUNKS, LO_GROUPS, renderer, composer, sun, GFX, scene, leafMat, propMat, camera }), prof: () => { const T = {}, time = (k, f, n = 20) => { const t0 = performance.now(); for (let i = 0; i < n; i++) f(); T[k] = +((performance.now() - t0) / n).toFixed(3); }; time("updateWorld", () => updateWorld(0.016, performance.now() / 1000)); time("creatures", () => { for (const c of creatures) updateCreature(c, 0.016); }); time("lightPool", updateLightPool); time("propLOD", updatePropLOD); time("minimap", () => drawMinimap(null)); time("hud", renderHUD); time("quest", renderQuest); time("interact", getInteractable); time("player", () => updatePlayer(0.016)); return T; }, sleep: (h) => sleep(h), backAxe, BENCH_: null, OLIVE, HEARTH, moonDir, sky: skyDome, fire: () => placeCampfire(), setTime: (v) => { S.time = v; }, talkT: (v) => { talkCam.t = v; }, THREE, pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), Q, skeletons, creatures, PROPS, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); updateLightPool(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, BENCH, START, WRECK, DOCK, SEA_OUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, HA, animateHero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); if (GFX.post) composer.render(); else renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
