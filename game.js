@@ -52,8 +52,11 @@ function baseHeight(x, z) {
   const d = Math.hypot(x, z * 1.05) / ISLAND_R;
   let h = (1 - d * d) * 14 + (fbm(x * 0.012 + 10, z * 0.012) - 0.5) * 20 + (fbm(x * 0.05, z * 0.05) - 0.5) * 4 - 1.5;
   const dm = Math.hypot(x - MOUNT.x, z - MOUNT.z);                       // the mountain: broad base, rugged ridges
-  h += 100 * Math.exp(-(dm * dm) / (2 * 60 * 60)) * (0.8 + 0.4 * fbm(x * 0.035, z * 0.035));
-  h += 20 * Math.exp(-(dm * dm) / (2 * 108 * 108));
+  h += 128 * Math.exp(-(dm * dm) / (2 * 58 * 58)) * (0.8 + 0.4 * fbm(x * 0.035, z * 0.035));
+  h += 22 * Math.exp(-(dm * dm) / (2 * 108 * 108));
+  // crags: ridged noise makes sharp ridgelines and buttresses on the upper slopes
+  const rg = 1 - Math.abs(2 * fbm(x * 0.03 + 5, z * 0.03 - 3) - 1), rg2 = 1 - Math.abs(2 * fbm(x * 0.075 - 2, z * 0.075 + 8) - 1);
+  h += (rg * rg * 24 + rg2 * rg2 * 7) * Math.exp(-(dm * dm) / (2 * 72 * 72)) * clamp((dm - 30) / 25, 0, 1);
   const dw = Math.hypot(x - TOWER.x, z - TOWER.z); h += 24 * Math.exp(-(dw * dw) / (2 * 42 * 42));   // cliff headland
   const dp = Math.hypot(x - TEMPLE.x, z - TEMPLE.z); h += 12 * Math.exp(-(dp * dp) / (2 * 45 * 45)); // temple hill
   const ds = Math.hypot(x - SWAMP.x, z - SWAMP.z), sw = clamp(1 - (ds - 55) / 40, 0, 1);        // swamp basin
@@ -391,9 +394,9 @@ pathDist = (x, z) => sampleGrid(PGRID, x, z);
     if (h >= 1.1) { const pd = pathDist(x, z);
       c = c.clone().lerp(C(0x6d5a3a), clamp((2.9 - pd) / 0.7, 0, 1) * 0.55);                                     // worn, darker rim
       c.lerp(cDirt.clone().lerp(C(0xcbb892), fbm(x * 0.6, z * 0.6)), clamp((1.9 - pd) / 0.5, 0, 1)); }            // gravel core
-    const rocky = clamp((slope - 0.22) * 4, 0, 1) + clamp((h - 34) / 10, 0, 1);
+    const rocky = clamp((slope - 0.24) * 4, 0, 1) + clamp((h - 46 - fbm(x * 0.05, z * 0.05) * 12) / 14, 0, 1);   // alpine meadow below, bare rock above
     c = c.clone().lerp(cRock.clone().lerp(cRock2, fbm(x * 0.15, z * 0.15)), clamp(rocky, 0, 1));
-    const snow = clamp((h - 56 - fbm(x * 0.06, z * 0.06) * 10) / 5, 0, 1) * clamp(1 - slope * 1.5, 0.35, 1);
+    const snow = clamp((h - 78 - fbm(x * 0.06, z * 0.06) * 14) / 6, 0, 1) * clamp(1.4 - slope * 1.5, 0.5, 1);   // snow cap, thinning on steep faces
     c.lerp(cSnow, snow);
     if (Math.hypot(x - TEMPLE.x, z - TEMPLE.z) < 24) c.lerp(cMarble, 0.25);
     { const cd = caveDist(x, z); if (cd.foot < 4) c = c.clone().lerp(C(0x5a544c).lerp(cMud, fbm(x * 0.3, z * 0.3) * 0.6), clamp(1 - cd.foot / 4, 0, 1)); }
@@ -1709,7 +1712,7 @@ const snow = (() => {
   const inForest = () => { const a = rand() * 6.28, d = Math.sqrt(rand()) * 100, x = FOREST.x + Math.cos(a) * d, z = FOREST.z + Math.sin(a) * d, h = heightAt(x, z); return h > 1.5 && h < 40 && pathDist(x, z) > 2.5 ? new THREE.Vector3(x, h - 0.05, z) : null; };
   place(fernGeo, fernMat, 2600, inForest);
   place(fernGeo, fernMat, 500, () => { const a = rand() * 6.28, d = Math.sqrt(rand()) * 90, x = SWAMP.x + Math.cos(a) * d, z = SWAMP.z + Math.sin(a) * d, h = heightAt(x, z); return h > 0.5 ? new THREE.Vector3(x, h, z) : null; });
-  const shrubs = place(cardBushGeo(9, 0.65, 1.0), qLeafMat('q_tree_leaves.png', 0x86a86c), 1400, () => { const x = rr(-ISLAND_R, ISLAND_R), z = rr(-ISLAND_R, ISLAND_R), h = heightAt(x, z); const R = regionAt(x, z, h); return h > 1.6 && h < 38 && pathDist(x, z) > 3 && (R.key === 'forest' || R.key === 'meadow' || R.key === 'lake') && fbm(x * 0.04, z * 0.04) > 0.45 ? new THREE.Vector3(x, h - 0.1, z) : null; });
+  const shrubs = place(cardBushGeo(9, 0.65, 1.0), qLeafMat('q_tree_leaves.png', 0x6f9454), 1400, () => { const x = rr(-ISLAND_R, ISLAND_R), z = rr(-ISLAND_R, ISLAND_R), h = heightAt(x, z); const R = regionAt(x, z, h); return h > 1.6 && h < 38 && pathDist(x, z) > 3 && (R.key === 'forest' || R.key === 'meadow' || R.key === 'lake') && fbm(x * 0.04, z * 0.04) > 0.45 ? new THREE.Vector3(x, h - 0.1, z) : null; });
   shrubs.castShadow = false;
 }
 
@@ -2091,41 +2094,107 @@ const dockGroup = new THREE.Group();
 // --- Your boat: wrecked on the cove shore at the start, mended later (main quest) and sailed out through the channel ---
 const RAFT_SITE = WRECK.clone();
 const boatYaw = Math.atan2(SEA_OUT.x - WRECK.x, SEA_OUT.z - WRECK.z);            // bow toward the open sea
+// Lofted clinker hull: cross-sections along the length (fine ends, full midships, sheer rising to bow and stern),
+// each strake a band of overlapping planks in alternating tones. broken: a stove-in hole on the starboard side
+// with ragged plank ends. Bow at +z. Returns the plank material.
+function hullGeo(broken) {
+  const L = 2.95, B = 1.18, D = 0.82, NS = 7, NZ = 34, NSUB = 3;
+  const pos = [], col = [], tones = [0x8f5e36, 0x7d4f2c, 0x9a6a3f, 0x86572f];
+  const pt = (t, s, side) => {
+    const b = B * Math.pow(Math.max(0, 1 - t * t), 0.55), d = D * (1 - 0.22 * t * t), sheer = 0.42 * Math.pow(Math.abs(t), 3.2);
+    const th = s * Math.PI / 2, step = 1 + 0.03 * ((s * NS) % 1);                    // clinker: each strake laps over the one below
+    return [side * b * Math.pow(Math.sin(th), 0.85) * step, -d * Math.cos(th) * (1 - 0.15 * s) + sheer * s + (1 - s) * sheer * 0.6, t * L * (1 + 0.04 * s)];
+  };
+  const hole = (t, s, side) => broken && side > 0 && t > -0.05 && t < 0.42 && s > 0.28 + Math.sin(t * 40) * 0.06 && s < 0.78 + Math.cos(t * 33) * 0.05;
+  for (const side of [-1, 1]) for (let k = 0; k < NS; k++) {
+    const c = new THREE.Color(tones[(k + (side > 0 ? 1 : 0)) % 4]);
+    for (let j = 0; j < NSUB; j++) {
+      const s0 = (k + j / NSUB) / NS, s1 = (k + (j + 1) / NSUB) / NS;
+      for (let i = 0; i < NZ; i++) {
+        const t0 = -1 + 2 * i / NZ, t1 = -1 + 2 * (i + 1) / NZ;
+        if (hole((t0 + t1) / 2, (s0 + s1) / 2, side)) continue;
+        const a = pt(t0, s0, side), b2 = pt(t1, s0, side), c2 = pt(t1, s1, side), d2 = pt(t0, s1, side);
+        const quad = side > 0 ? [a, b2, c2, a, c2, d2] : [a, c2, b2, a, d2, c2];
+        const shade = 0.9 + ((i * 7 + k * 3) % 5) * 0.035;                       // plank-to-plank variation along the strake
+        for (const v of quad) { pos.push(...v); col.push(c.r * shade, c.g * shade, c.b * shade); }
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals();
+  return { geo: g, pt, L, hole };
+}
 function boatHull(g, broken) {
-  const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a32, roughness: 0.85, side: THREE.DoubleSide, flatShading: true }), dark = flat(0x5a3a22), paint = flat(0x2f4f86), white = flat(0xefe6d2), black = flat(0x151515);
-  // planked hull: a half-ellipsoid shell with plank bands in alternating tones; the wreck is missing a chunk of its side
-  const hull = new THREE.SphereGeometry(1, 28, 10, broken ? 0.9 : 0, broken ? Math.PI * 2 - 1.5 : Math.PI * 2, Math.PI / 2, Math.PI / 2);
-  { const a = hull.attributes.position, c = []; for (let i = 0; i < a.count; i++) { const band = Math.floor(-a.getY(i) * 6) % 2, col = new THREE.Color(band ? 0x7a4e2c : 0x93623a); c.push(col.r, col.g, col.b); } hull.setAttribute('color', new THREE.Float32BufferAttribute(c, 3)); }
-  const hm = new THREE.Mesh(hull, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, side: THREE.DoubleSide, flatShading: true })); hm.scale.set(1.15, 0.8, 2.9); hm.userData.keep = true; hm.castShadow = true; g.add(hm);
-  const gun = mesh(new THREE.TorusGeometry(1, 0.07, 5, 40, broken ? Math.PI * 1.4 : Math.PI * 2), dark, 0, 0, 0, g); gun.rotation.x = Math.PI / 2; gun.scale.set(1.15, 2.9, 1);
-  mesh(new THREE.TorusGeometry(1.01, 0.05, 4, 40, broken ? Math.PI * 1.3 : Math.PI * 2), paint, 0, -0.14, 0, g).rotation.x = Math.PI / 2;   // painted strake
-  g.children[g.children.length - 1].scale.set(1.13, 2.87, 1);
-  for (let i = -2; i <= 2; i++) { if (broken && i === 1) continue; const rib = mesh(new THREE.TorusGeometry(1, 0.05, 4, 12, Math.PI), dark, 0, 0, i * 0.95, g); rib.rotation.z = Math.PI; rib.scale.set(1.1 * Math.sqrt(1 - (i * 0.95 / 2.9) ** 2), 0.76 * Math.sqrt(1 - (i * 0.95 / 2.9) ** 2), 1); }
-  for (let i = -1; i <= 1; i++) mesh(new THREE.BoxGeometry(2.1 * Math.sqrt(1 - (i * 1.2 / 2.9) ** 2), 0.08, 0.35), wood, 0, -0.12, i * 1.2, g);   // thwarts
-  // stem post curling up at the bow, stern post, and the painted eyes (oculi) that let a Greek ship see its way
-  const stem = new THREE.CatmullRomCurve3([new THREE.Vector3(0, -0.6, 2.7), new THREE.Vector3(0, 0.1, 3.05), new THREE.Vector3(0, 0.8, 3.1), new THREE.Vector3(0, 1.2, 2.85)]);
-  mesh(new THREE.TubeGeometry(stem, 12, 0.09, 6), dark, 0, 0, 0, g);
-  const stern = new THREE.CatmullRomCurve3([new THREE.Vector3(0, -0.6, -2.7), new THREE.Vector3(0, 0.2, -3.0), new THREE.Vector3(0, 0.9, -2.8), new THREE.Vector3(0, 1.3, -2.4)]);
-  if (!broken) mesh(new THREE.TubeGeometry(stern, 12, 0.08, 6), dark, 0, 0, 0, g);
-  for (const sx of [-1, 1]) { if (broken && sx > 0) continue; const e = mesh(new THREE.CircleGeometry(0.16, 14), white, sx * 0.62, -0.12, 2.45, g); e.rotation.y = sx * 1.25; const pu = mesh(new THREE.CircleGeometry(0.08, 10), black, sx * 0.63, -0.12, 2.46, g); pu.rotation.y = sx * 1.25; pu.position.x += sx * 0.005; }
+  const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a32, roughness: 0.85, side: THREE.DoubleSide, flatShading: true }), dark = flat(0x4e321e), paint = flat(0x2f4f86), white = flat(0xefe6d2), black = flat(0x151515), red = flat(0xa3392c);
+  const H = hullGeo(broken);
+  const hm = new THREE.Mesh(H.geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, side: THREE.DoubleSide, flatShading: true })); hm.userData.keep = true; hm.castShadow = true; hm.receiveShadow = true; g.add(hm);
+  const curve = (s, side, t0 = -1, t1 = 1, n = 24) => new THREE.CatmullRomCurve3(Array.from({ length: n + 1 }, (_, i) => new THREE.Vector3(...H.pt(t0 + (t1 - t0) * i / n, s, side))));
+  // gunwale rails, a painted blue sheer strake with a red line, keel
+  for (const side of [-1, 1]) {
+    if (broken && side > 0) { mesh(new THREE.TubeGeometry(curve(1, side, -1, -0.05), 20, 0.07, 5), dark, 0, 0, 0, g); mesh(new THREE.TubeGeometry(curve(1, side, 0.42, 1), 12, 0.07, 5), dark, 0, 0, 0, g); }
+    else mesh(new THREE.TubeGeometry(curve(1, side), 40, 0.07, 5), dark, 0, 0, 0, g);
+    if (!(broken && side > 0)) { mesh(new THREE.TubeGeometry(curve(0.9, side, -0.92, 0.92), 36, 0.05, 4), paint, 0, 0, 0, g); mesh(new THREE.TubeGeometry(curve(0.83, side, -0.9, 0.9), 36, 0.025, 4), red, 0, 0, 0, g); }
+  }
+  mesh(new THREE.TubeGeometry(curve(0, 1, -1, 1), 30, 0.08, 5), dark, 0, -0.03, 0, g);     // keel
+  // ribs (frames) inside the hull
+  for (let i = -5; i <= 5; i++) { const t = i / 6.2; if (broken && i === 2) continue;
+    const pts = []; for (let k = 0; k <= 10; k++) { const s2 = k / 10; pts.push(new THREE.Vector3(...H.pt(t, Math.abs(1 - 2 * s2) * 0.97, s2 < 0.5 ? -1 : 1)).multiplyScalar(0.96)); }
+    mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 14, 0.035, 4), dark, 0, 0.02, 0, g); }
+  for (const t of [-0.45, 0, 0.45]) { const [bx, by] = H.pt(t, 0.85, 1); const th = mesh(new THREE.BoxGeometry(bx * 2 * 0.95, 0.07, 0.32), wood, 0, by - 0.02, t * H.L, g); if (broken && t === 0) th.rotation.z = 0.25; }   // thwarts
+  // stem curling up at the bow, stern post, oculi (painted eyes) on both bows
+  const bowTop = H.pt(1, 1, 1), sternTop = H.pt(-1, 1, 1);
+  mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0, -0.75, H.L * 0.92), new THREE.Vector3(0, bowTop[1] - 0.1, H.L * 1.03), new THREE.Vector3(0, bowTop[1] + 0.45, H.L * 1.02), new THREE.Vector3(0, bowTop[1] + 0.7, H.L * 0.9)]), 14, 0.09, 6), dark, 0, 0, 0, g);
+  if (!broken) mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0, -0.75, -H.L * 0.92), new THREE.Vector3(0, sternTop[1], -H.L * 1.04), new THREE.Vector3(0, sternTop[1] + 0.55, -H.L * 0.98), new THREE.Vector3(0, sternTop[1] + 0.85, -H.L * 0.8)]), 14, 0.08, 6), dark, 0, 0, 0, g);
+  else { const sp = mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.7, 5), dark, 0, sternTop[1] - 0.1, -H.L * 1.0, g); sp.rotation.x = 0.5; }   // stern post snapped off
+  for (const sx of [-1, 1]) { if (broken && sx > 0) continue; const [ex, ey, ez] = H.pt(0.86, 0.82, sx);
+    const e = mesh(new THREE.CircleGeometry(0.15, 14), white, ex * 1.02, ey, ez, g); e.rotation.y = sx * 1.05; const pu = mesh(new THREE.CircleGeometry(0.075, 10), black, ex * 1.03, ey, ez + 0.01, g); pu.rotation.y = sx * 1.05; }
+  if (broken) {                                     // sprung planks curling out of the hole
+    for (let i = 0; i < 5; i++) { const t = rr(0.02, 0.38), s2 = rr(0.3, 0.75), [x, y, z] = H.pt(t, s2, 1); const pl = mesh(new THREE.BoxGeometry(0.06, 0.16, rr(0.5, 1.0)), wood, x + 0.08, y, z, g); pl.rotation.set(rr(-0.3, 0.3), rr(0.2, 0.7), rr(-0.2, 0.2)); }
+  }
   return wood;
 }
 // the wreck
 const wreckGroup = new THREE.Group();
 {
+  // The wreck: the boat heeled over on the sand at the waterline, stove in on the starboard side. Around it, laid on the
+  // real ground: the snapped mast with the torn sail tangled over it, a broken oar, spilled amphorae, a crate, rope.
   const g = wreckGroup; boatHull(g, true);
-  const wood = flat(0x8a5a32), cloth = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.95, side: THREE.DoubleSide, flatShading: true });
-  mesh(new THREE.CylinderGeometry(0.11, 0.13, 1.4, 6), wood, 0, 0.3, 0.6, g).rotation.z = 0.2;                                   // snapped mast stump
-  const mast = mesh(new THREE.CylinderGeometry(0.1, 0.12, 4.2, 6), wood, 0, 0, 0, g); mast.position.set(2.6, -0.2, 0.5); mast.rotation.set(0.1, 0.3, Math.PI / 2 - 0.08);
-  // torn sail draped over the sand
-  const sg = new THREE.PlaneGeometry(3, 2.4, 10, 8); { const a = sg.attributes.position; for (let i = 0; i < a.count; i++) { const x = a.getX(i), y = a.getY(i); a.setZ(i, Math.sin(x * 2.2) * 0.12 + Math.cos(y * 3 + x) * 0.08 + (x > 1.2 && y > 0.6 ? -0.4 : 0)); } sg.computeVertexNormals(); }
-  const sail = mesh(sg, cloth, 2.9, -0.45, -1.2, g); sail.rotation.set(-Math.PI / 2 + 0.08, 0, 0.4); sail.userData.keep = true;
-  for (let i = 0; i < 7; i++) { const pl = mesh(new THREE.BoxGeometry(rr(1.2, 2.2), 0.07, 0.28), wood, rr(-3.5, 3.5), -0.5, rr(-3, 3.5), g); pl.rotation.set(rr(-0.2, 0.2), rand() * 3, rr(-0.15, 0.15)); }
-  for (let i = 0; i < 3; i++) { const am = new THREE.Group(); am.position.set(rr(-3, -1.8), -0.45, rr(-2.5, 1.5)); am.rotation.set(Math.PI / 2 - 0.2, rand() * 3, 0); g.add(am);    // amphorae
-    mesh(new THREE.LatheGeometry([[0.001, 0], [0.16, 0.05], [0.28, 0.35], [0.26, 0.7], [0.1, 0.95], [0.08, 1.15], [0.11, 1.2]].map(([r, y]) => new THREE.Vector2(r, y)), 12), flat(0xb2663a), 0, 0, 0, am); }
-  mesh(new THREE.TorusGeometry(0.35, 0.08, 6, 14), flat(0xb89a64), -1.6, -0.5, 2.2, g).rotation.x = Math.PI / 2;                   // rope coil
-  g.position.copy(WRECK); g.position.y = Math.max(heightAt(WRECK.x, WRECK.z), -0.4) + 0.8; g.rotation.set(0.06, boatYaw + 0.5, 0.3);
+  const wood = flat(0x7d5230), woodL = flat(0x9a6c40), cloth = new THREE.MeshStandardMaterial({ color: 0xcfc0a2, roughness: 0.95, side: THREE.DoubleSide, flatShading: true }), clothR = new THREE.MeshStandardMaterial({ color: 0xa3392c, roughness: 0.95, side: THREE.DoubleSide });
+  mesh(new THREE.CylinderGeometry(0.11, 0.13, 1.1, 7), wood, 0, 0.05, 0.6, g);                                                   // snapped mast stump
+  for (let i = 0; i < 5; i++) { const sp = mesh(new THREE.ConeGeometry(0.035, rr(0.2, 0.4), 4), woodL, rr(-0.07, 0.07), 0.62, 0.6 + rr(-0.07, 0.07), g); sp.rotation.set(rr(-0.4, 0.4), 0, rr(-0.4, 0.4)); }   // splinters
+  g.position.copy(WRECK); g.position.y = Math.max(heightAt(WRECK.x, WRECK.z), -0.45) + 0.55; g.rotation.set(0.04, boatYaw + 0.5, 0.42);   // heeled over to port
   bakeGroup(g); scene.add(g); colliders.push({ x: WRECK.x, z: WRECK.z, r: 2.4 });
+  // debris on the ground, in world space so every piece rests on the sand
+  const D = new THREE.Group(); scene.add(D);
+  // frame for the debris: 'r' points inland (towards where you wake up, always dry sand), 'f' runs along the beach
+  const inl = new THREE.Vector3(START.x - WRECK.x, 0, START.z - WRECK.z).normalize(), yaw = Math.atan2(inl.z, -inl.x);
+  const fx = -inl.z, fz = inl.x, rx = -inl.x, rz = -inl.z;
+  const at = (f, r) => { let x = WRECK.x + fx * f + rx * r, z = WRECK.z + fz * f + rz * r;
+    for (let k = 0; k < 8 && heightAt(x, z) < 0.15; k++) { x += inl.x * 0.8; z += inl.z * 0.8; }      // walk inland until it's dry
+    return new THREE.Vector3(x, heightAt(x, z), z); };
+  // mast lying across the sand, its yard still lashed on, the sail tangled over it and trailing into the water
+  const m0 = at(1.2, -2.2), m1 = at(4.8, -3.6), mid = m0.clone().lerp(m1, 0.5), len = m0.distanceTo(m1) + 0.6;
+  const mast = mesh(new THREE.CylinderGeometry(0.1, 0.13, len, 7), wood, mid.x, mid.y + 0.12, mid.z, D); mast.rotation.order = 'YXZ'; mast.rotation.set(Math.PI / 2, Math.atan2(m1.x - m0.x, m1.z - m0.z), 0);
+  const yd = mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.2, 6), wood, mid.x + rx * 0.4, mid.y + 0.2, mid.z + rz * 0.4, D); yd.rotation.order = 'YXZ'; yd.rotation.set(Math.PI / 2, Math.atan2(m1.x - m0.x, m1.z - m0.z) + 1.4, 0);
+  { const sg = new THREE.PlaneGeometry(2.8, 2.2, 16, 12); sg.rotateX(-Math.PI / 2); const a = sg.attributes.position;
+    const cx = mid.x + rx * 0.9, cz = mid.z + rz * 0.9, cs = Math.cos(yaw + 0.3), sn = Math.sin(yaw + 0.3);
+    for (let i = 0; i < a.count; i++) { const lx = a.getX(i), lz = a.getZ(i), wx = cx + lx * cs + lz * sn, wz = cz - lx * sn + lz * cs;
+      const dm = Math.abs((wx - m0.x) * (m1.z - m0.z) - (wz - m0.z) * (m1.x - m0.x)) / len;            // distance to the mast line: the cloth drapes over it
+      const y = Math.max(heightAt(wx, wz), 0.05) + 0.05 + Math.max(0, 0.32 - dm * 0.5) + Math.sin(lx * 3.1 + lz * 1.7) * 0.05;
+      a.setXYZ(i, wx, y, wz); }
+    // torn edge: drop a ragged corner
+    const idx = []; const gi = sg.index.array; for (let i = 0; i < gi.length; i += 3) { const v = gi[i]; const lx = (v % 17) / 16, lz = Math.floor(v / 17) / 12; if (!(lx > 0.7 && lz < 0.35 + Math.sin(lx * 30) * 0.08)) idx.push(gi[i], gi[i + 1], gi[i + 2]); }
+    sg.setIndex(idx); sg.computeVertexNormals(); const sl = new THREE.Mesh(sg, cloth); sl.receiveShadow = true; D.add(sl);
+  }
+  // broken oar, amphorae (one cracked), a crate, a rope coil, loose planks half buried
+  { const p = at(-2.4, 2.6); const o = mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.2, 5), woodL, p.x, p.y + 0.06, p.z, D); o.rotation.set(Math.PI / 2, 0, 0.7); const bl = mesh(new THREE.BoxGeometry(0.22, 0.03, 0.6), woodL, p.x + 0.7, p.y + 0.06, p.z + 0.75, D); bl.rotation.y = 0.7; }
+  for (const [f, r, rot] of [[-1.5, 2.8, 0.4], [-2.8, 1.8, 2.1], [0.4, 3.1, 1.2]]) { const p = at(f, r); const am = new THREE.Group(); am.position.set(p.x, p.y + 0.22, p.z); am.rotation.set(Math.PI / 2 - 0.15, rot, 0); D.add(am);
+    mesh(new THREE.LatheGeometry([[0.001, 0], [0.16, 0.05], [0.28, 0.35], [0.26, 0.7], [0.1, 0.95], [0.08, 1.15], [0.11, 1.2]].map(([r2, y]) => new THREE.Vector2(r2, y)), 12), flat(0xb2663a), 0, 0, 0, am);
+    for (const sx of [-1, 1]) { const h2 = mesh(new THREE.TorusGeometry(0.1, 0.025, 4, 8, Math.PI), flat(0xb2663a), sx * 0.12, 1.0, 0, am); h2.rotation.z = sx * 1.2; } }
+  { const p = at(2.6, 2.4); const cr = mesh(new THREE.BoxGeometry(0.7, 0.55, 0.6), woodL, p.x, p.y + 0.22, p.z, D); cr.rotation.set(0.15, 0.5, 0.1); for (const y of [-0.15, 0.15]) { const b2 = mesh(new THREE.BoxGeometry(0.72, 0.07, 0.62), wood, 0, y, 0, cr); } }
+  { const p = at(-0.6, -2.4); const rc = mesh(new THREE.TorusGeometry(0.32, 0.06, 6, 16), flat(0xb89a64), p.x, p.y + 0.06, p.z, D); rc.rotation.x = Math.PI / 2; const rc2 = mesh(new THREE.TorusGeometry(0.24, 0.055, 6, 14), flat(0xb89a64), p.x + 0.1, p.y + 0.14, p.z, D); rc2.rotation.x = Math.PI / 2; }
+  for (let i = 0; i < 6; i++) { const p = at(rr(-4, 5), rr(-4.5, 4.5)); if (p.distanceTo(WRECK) < 2.6) continue; const pl = mesh(new THREE.BoxGeometry(rr(0.9, 1.8), 0.06, 0.24), [wood, woodL][i % 2], p.x, p.y + 0.02, p.z, D); pl.rotation.set(rr(-0.15, 0.15), rand() * 3, rr(-0.1, 0.1)); }
+  D.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+  bakeGroup(D); wreckGroup.userData.debris = D;
 }
 // the mended boat (hidden until you repair it); sailing moves this group
 const raftGroup = new THREE.Group(); raftGroup.position.set(RAFT_SITE.x, -0.05, RAFT_SITE.z); raftGroup.rotation.y = boatYaw; scene.add(raftGroup);
@@ -3359,7 +3428,7 @@ function buildRaft() {
   const need = { wood: 12, rope: 4, sail: 1, meat: 3 };
   if (!canAfford(need)) { toast('Missing materials. Check <b>Mend Your Boat</b> in the quest panel.'); return; }
   for (const [k, v] of Object.entries(need)) S.inv[k] -= v;
-  S.raftBuilt = true; wreckGroup.visible = false; colliders.forEach((c) => { if (c.x === WRECK.x && c.z === WRECK.z) c.r = 0; });
+  S.raftBuilt = true; wreckGroup.visible = false; wreckGroup.userData.debris.visible = false; colliders.forEach((c) => { if (c.x === WRECK.x && c.z === WRECK.z) c.r = 0; });
   raftParts.forEach((p, i) => setTimeout(() => { p.visible = true; burst(raftGroup.position.clone().add(new THREE.Vector3(0, 0.8, 0)), 0x9b6e3f, 6); snd.hitWood(); }, i * 220));
   setTimeout(() => { toast('Your boat is whole again.', true); snd.questDone(); }, raftParts.length * 220);
 }
@@ -4079,7 +4148,7 @@ function loadGame(d) {
   resources.forEach((r, i) => { if (d.res[i] === '0' && r.alive) { r.alive = false; updateProp(r.item, true); } });
   creatures.slice(0, INIT_CREATURES).forEach((c, i) => { if (d.dead[i] === '1' && !c.dead) { c.dead = true; c.gone = true; scene.remove(c.obj); } });
   if (d.fire) { const fp = new THREE.Vector3().fromArray(d.fire); const save = player.position.clone(), sy = P.yaw; player.position.copy(fp).add(new THREE.Vector3(0, 0, -2)); P.yaw = 0; placeCampfire(); player.position.copy(save); P.yaw = sy; }
-  if (S.raftBuilt) { wreckGroup.visible = false; raftParts.forEach((p) => (p.visible = true)); }
+  if (S.raftBuilt) { wreckGroup.visible = false; wreckGroup.userData.debris.visible = false; raftParts.forEach((p) => (p.visible = true)); }
   if (d.fog) { const im = new Image(); im.onload = () => { const c = mmFog.getContext('2d'); c.clearRect(0, 0, MAPN, MAPN); c.drawImage(im, 0, 0); }; im.src = d.fog; }
   player.position.fromArray(d.pos); P.yaw = d.yaw || 0; player.rotation.y = P.yaw; camYaw = P.yaw + Math.PI; camTgtInit = false;
   S.wasNight = isNight(); S.region = null; questSig = '';

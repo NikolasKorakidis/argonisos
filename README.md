@@ -149,3 +149,12 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
   - Nestor's dog stays by the porch.
   - New stone well by the path.
 - **Saves:** the save key is now `argonisos.save.v2`, because the world layout changed.
+
+## v17: wreck, mountain, foliage fringes
+- **Boat:** a lofted clinker hull used by both the wreck and the mended boat:
+  - shaped cross-sections with a rising sheer;
+  - overlapping plank strakes in alternating tones;
+  - keel, ribs, thwarts, painted sheer strake, curled stem post and oculi.
+- **Wreck:** stove in on the starboard side, with sprung planks. All debris sits on dry sand: the snapped mast with the torn sail draped over it, a broken oar, amphorae, a crate, rope coils and planks.
+- **Mount Olympos:** about 30 % taller, with ridged-noise crags and buttresses. Alpine meadow lower down, bare rock higher up, and a proper snow cap.
+- **Foliage textures:** the transparent pixels of the leaf textures were recoloured leaf green, so distant shrubs and trees no longer bleach to white specks on the hills.
