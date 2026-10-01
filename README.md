@@ -97,3 +97,11 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
 - Autosave after every completed quest and after sleeping; **Save Game** in the pause menu (Esc) for a manual save. **Continue** on the title screen resumes (shows day and current quest).
 - Saved: quest progress and flags, inventory, tools, stats, day/time, position, your campfire, which pickups/trees/rocks are gone, which creatures are dead, and the explored map. Stored in browser storage on this device.
 - Minimap resource icons now only show within 30 m.
+
+## v13: Greek trees, walls, house details, cutscene framing
+- Native Greek species, each with its own shape and region: **Aleppo pine** (crooked coastal pine, airy crown), **Oriental plane** (huge pale-trunked shade tree, lake and marsh), **holm oak** (dense evergreen, dark crown; Hylaea woods), **carob** (low glossy dome with pods; meadows), **strawberry tree** (multi-stem, red-brown bark, red/orange berries; woods and lake), **fig** (low grey limbs, big leaves; meadows), alongside olive, Mediterranean cypress, stone pine, Greek fir (mountain), valonia oak and chestnut. Birch removed.
+- Regions: Hylaea Woods = holm oak + Aleppo pine forest with strawberry trees; Lake Kastalia = plane grove; mountain = fir; meadows = olive/carob/valonia oak/fig/cypress mix.
+- Shared dry-stone wall builder (rough base course, top course, wedge stones, capstones, fallen stones); Nestor's courtyard walls get a whitewashed lime coping.
+- All baked buildings get procedural plaster/stone/marble grain in the shader (no textures).
+- Nestor's house: rafter ends under the eaves, geranium window boxes, stone door steps, bougainvillea on the pergola, strings of garlic and peppers, a paved path across the yard.
+- Conversation camera frames both speakers in full (heads no longer cut by the letterbox). Daytime firelight toned down.

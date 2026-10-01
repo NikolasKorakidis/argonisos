@@ -567,7 +567,7 @@ function mergeParts(parts) {            // parts: [geometry(already placed), hex
   const pos = [], nor = [], col = [];
   for (const [g0, c] of parts) {
     const g = g0.index ? g0.toNonIndexed() : g0; if (!g.attributes.normal) g.computeVertexNormals();
-    const cl = new THREE.Color(c).offsetHSL(rr(-0.012, 0.012), rr(-0.04, 0.04), rr(-0.035, 0.035)), a = g.attributes.position, n = g.attributes.normal;
+    const cl = new THREE.Color(c).offsetHSL(rr(-0.008, 0.008), rr(-0.02, 0.02), rr(-0.012, 0.012)), a = g.attributes.position, n = g.attributes.normal;
     for (let i = 0; i < a.count; i++) {
       pos.push(a.getX(i), a.getY(i), a.getZ(i)); nor.push(n.getX(i), n.getY(i), n.getZ(i));
       const j = 0.74 + (n.getY(i) * 0.5 + 0.5) * 0.4;           // darker underside, sun-kissed tops (cheap fake AO)
@@ -702,6 +702,62 @@ const TREE_BUILDERS = {
     if (!PROP_LO) for (let i = 0; i < 6; i++) { const y = rr(0.4, 3.6), r = lerp(0.24, 0.16, y / 5) + 0.012; P.push([limb(r, r, rr(0.04, 0.08), 0, y, 0, 0, 0, 8), 0x55504a]); }   // bark marks
     return P;
   },
+  // ---- Native trees of Greece ----
+  aleppo(v) {
+    // Aleppo pine (Pinus halepensis): the pine of the Greek coast. A crooked, leaning trunk with reddish-grey bark,
+    // an open, uneven crown of light grey-green tufts you can see the sky through.
+    const P = [], leaf = [0x6f8f4a, 0x7a9650, 0x67884a][v % 3];
+    growTree(P, { bark: 0x7a6656, leaf, trunkH: rr(4.6, 6), trunkR: rr(0.3, 0.38), trunkSteps: 5, depth: 2, taper: 0.55, gnarl: 0.3, rise: 0.05, lean: [0.35, 0.2, 0.45][v % 3], roots: 3,
+      kids: (d) => (d === 2 ? 3 : 2), spread: (d) => (d === 2 ? 1.05 : 0.8), lenF: 0.6, rF: 0.55, midKids: true, clusterR: 1.25, flat: 0.45, cards: 10, card0: 1.1, card1: 1.7 });
+    return P;
+  },
+  plane(v) {
+    // Oriental plane (Platanus orientalis): the great shade tree of Greek springs and village squares. Massive pale
+    // trunk, wide limbs and a huge domed crown of big bright leaves.
+    const P = [], leaf = [0x5f9a3a, 0x6aa040, 0x568f36][v % 3];
+    growTree(P, { bark: 0x9c9682, leaf, trunkH: rr(3.6, 4.4), trunkR: rr(0.7, 0.85), trunkSteps: 4, depth: 3, taper: 0.62, gnarl: 0.14, rise: 0.12, lean: 0.06, roots: 6, knot: 1.12,
+      kids: (d) => (d === 3 ? 3 : 2), spread: (d) => (d === 3 ? 0.85 : 0.7), lenF: 0.72, rF: 0.62, clusterR: 1.65, flat: 0.75, cards: 12, card0: 1.5, card1: 2.3 });
+    return P;
+  },
+  holm(v) {
+    // Holm / kermes oak (Quercus ilex): evergreen, dense, almost black-green rounded crowns on a short dark trunk.
+    const P = [], leaf = [0x3f5a2e, 0x46623a, 0x3a5430][v % 3];
+    growTree(P, { bark: 0x4a3e32, leaf, trunkH: rr(2.4, 3.2), trunkR: rr(0.42, 0.52), trunkSteps: 3, depth: 2, taper: 0.6, gnarl: 0.2, rise: 0.08, lean: 0.08, roots: 5,
+      kids: (d) => (d === 2 ? 4 : 3), spread: (d) => (d === 2 ? 0.8 : 0.65), lenF: 0.65, rF: 0.6, clusterR: 1.45, flat: 0.85, cards: 13, card0: 1.0, card1: 1.5, core: 0.72 });
+    return P;
+  },
+  carob(v) {
+    // Carob (Ceratonia siliqua): a broad, low dome of glossy dark leaves on a thick, gnarled trunk; pods hang below.
+    const P = [], leaf = [0x3e6a2c, 0x467232, 0x3a6228][v % 3];
+    const tips = growTree(P, { bark: 0x6a5a4a, leaf, trunkH: rr(1.8, 2.3), trunkR: rr(0.5, 0.6), trunkSteps: 3, depth: 2, taper: 0.6, gnarl: 0.35, rise: 0.02, lean: 0.12, roots: 5, knot: 1.2,
+      kids: (d) => (d === 2 ? 4 : 2), spread: (d) => (d === 2 ? 1.15 : 0.8), lenF: 0.75, rF: 0.6, clusterR: 1.4, flat: 0.6, cards: 12, card0: 1.1, card1: 1.6, core: 0.55 });
+    if (!PROP_LO) tips.forEach((t, i) => { if (i % 2) return; for (let k = 0; k < 3; k++) P.push([new THREE.CylinderGeometry(0.03, 0.02, 0.45, 4).translate(t.p.x + rr(-0.6, 0.6), t.p.y - 0.9, t.p.z + rr(-0.6, 0.6)), 0x4a2e1a]); });
+    return P;
+  },
+  arbutus(v) {
+    // Strawberry tree (Arbutus): several smooth stems with red-orange peeling bark, glossy dark leaves and red berries.
+    const P = [], leaf = [0x47703a, 0x4f7a40, 0x426a36][v % 3];
+    for (let s2 = 0; s2 < 2 + (v % 2); s2++) {
+      const sub = [], cs = CARD_PARTS.length, a = s2 * 2.4 + v;
+      const tips = growTree(sub, { bark: 0x8e5038, leaf, trunkH: rr(2.2, 3), trunkR: 0.17, trunkSteps: 3, depth: 2, taper: 0.6, gnarl: 0.22, rise: 0.15, roots: 0,
+        dir: new THREE.Vector3(Math.cos(a) * 0.35, 1, Math.sin(a) * 0.35), start: new THREE.Vector3(Math.cos(a) * 0.15, -0.2, Math.sin(a) * 0.15),
+        kids: (d) => 2, spread: (d) => 0.7, lenF: 0.6, rF: 0.6, clusterR: 0.95, flat: 0.8, cards: 9, card0: 0.8, card1: 1.2, core: 0.6 });
+      P.push(...sub);
+      if (!PROP_LO) tips.forEach((t) => { for (let k = 0; k < 4; k++) P.push([new THREE.IcosahedronGeometry(0.07, 0).translate(t.p.x + rr(-0.7, 0.7), t.p.y + rr(-0.5, 0.2), t.p.z + rr(-0.7, 0.7)), k % 2 ? 0xd2401e : 0xe8902a]); });
+    }
+    return P;
+  },
+  fig(v) {
+    // Fig (Ficus carica): smooth grey limbs branching low from the ground, sparse crown of very large leaves.
+    const P = [], leaf = [0x7aa848, 0x82b04c, 0x709e42][v % 3];
+    for (let s2 = 0; s2 < 3; s2++) {
+      const a = s2 * 2.1 + v * 0.7;
+      growTree(P, { bark: 0x9a958a, leaf, trunkH: rr(1.4, 2), trunkR: 0.2, trunkSteps: 3, depth: 2, taper: 0.6, gnarl: 0.25, rise: 0.05, roots: 0,
+        dir: new THREE.Vector3(Math.cos(a) * 0.8, 1, Math.sin(a) * 0.8), start: new THREE.Vector3(0, -0.2, 0),
+        kids: (d) => 2, spread: (d) => 0.8, lenF: 0.65, rF: 0.6, clusterR: 1.05, flat: 0.7, cards: 7, card0: 1.6, card1: 2.4, core: 0.45 });
+    }
+    return P;
+  },
   cypress(v) {
     const P = [[limb(0.3, 0.14, 6.5, 0, -0.2, 0, rr(-0.04, 0.04), rr(-0.04, 0.04), 6), 0x5e3f28]], c = new THREE.Vector3(0, 4.5, 0), col = [0x345c2c, 0x3d6630, 0x2e5528][v % 3];
     const H = [7.5, 9, 6.5][v % 3], tw = rr(-0.6, 0.6);
@@ -822,6 +878,34 @@ function updateProp(it, hidden = false) {
 }
 // Bake a static building into ONE mesh (vertex colours): hundreds of draw calls become one
 const bakedMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, flatShading: true });
+// Surface detail for every baked building: world-space grain and blotches (plaster, stone, marble, timber) so walls
+// read as material instead of flat colour. A few ALU ops per pixel, no textures.
+bakedMat.onBeforeCompile = (sh) => {
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vSW;').replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvSW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+    varying vec3 vSW;
+    float bh(vec3 p){ return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+    float bn(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(mix(bh(i), bh(i + vec3(1,0,0)), f.x), mix(bh(i + vec3(0,1,0)), bh(i + vec3(1,1,0)), f.x), f.y),
+                 mix(mix(bh(i + vec3(0,0,1)), bh(i + vec3(1,0,1)), f.x), mix(bh(i + vec3(0,1,1)), bh(i + vec3(1,1,1)), f.x), f.y), f.z); }`)
+    .replace('#include <color_fragment>', `#include <color_fragment>
+      float blot = bn(vSW * 0.9) * 0.6 + bn(vSW * 3.1) * 0.4, grain = bn(vSW * 14.0);
+      diffuseColor.rgb *= 0.88 + blot * 0.16 + (grain - 0.5) * 0.07;`);
+};
+// Dry-stone wall: rough base blocks, a smaller top course, wedge stones, capstones and fallen stones at the foot.
+// coping = 'plaster' gives the whitewashed Greek courtyard cap instead of capstones.
+const ROUGH = []; for (let v = 0; v < 6; v++) { const q = new THREE.BoxGeometry(1, 1, 1, 2, 2, 2), a = q.attributes.position; for (let i = 0; i < a.count; i++) a.setXYZ(i, a.getX(i) * rr(0.86, 1.08), a.getY(i) * rr(0.85, 1.1), a.getZ(i) * rr(0.86, 1.08)); q.computeVertexNormals(); ROUGH.push(q); }
+const WALL_MATS = [0xb5ab98, 0xa89e8a, 0xc2b9a6, 0x9c9282].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 1, flatShading: true })), WALL_MOSS = new THREE.MeshStandardMaterial({ color: 0x7d8a52, roughness: 1, flatShading: true }), WALL_LIME = new THREE.MeshStandardMaterial({ color: 0xf2ece0, roughness: 0.9 });
+function dryStone(g, px, y, pz, yaw, w, opt = {}) {
+  const R = () => ROUGH[Math.floor(rand() * 6)], M = () => WALL_MATS[Math.floor(rand() * 4)], hb = opt.h || 0.55;
+  const b = mesh(R(), M(), px, y + hb * 0.42, pz, g); b.scale.set(w, hb * rr(0.88, 1.1), opt.d || rr(0.75, 0.9)); b.rotation.set(rr(-0.04, 0.04), -yaw + rr(-0.05, 0.05), rr(-0.04, 0.04));
+  for (let j = 0; j < 2; j++) { if (rand() < 0.15) continue; const t2 = mesh(R(), rand() < 0.1 ? WALL_MOSS : M(), px + Math.cos(yaw) * (j - 0.5) * w * 0.48, y + hb + 0.15, pz + Math.sin(yaw) * (j - 0.5) * w * 0.48, g);
+    t2.scale.set(w * rr(0.4, 0.52), rr(0.28, 0.38), (opt.d || 0.8) * rr(0.7, 0.85)); t2.rotation.set(0, -yaw + rr(-0.15, 0.15), rr(-0.08, 0.08)); }
+  if (rand() < 0.35) { const wd = mesh(R(), M(), px + Math.cos(yaw) * w * 0.5, y + hb * 0.9, pz + Math.sin(yaw) * w * 0.5, g); wd.scale.set(0.16, 0.14, 0.5); wd.rotation.y = -yaw; }   // wedge stone in the joint
+  if (opt.coping === 'plaster') { const c = mesh(ROUGH[0], WALL_LIME, px, y + hb + 0.42, pz, g); c.scale.set(w + 0.06, 0.16, (opt.d || 0.8) + 0.08); c.rotation.y = -yaw; }
+  else if (rand() < 0.25) { const cap = mesh(ROUGH[0], WALL_MATS[2], px, y + hb + 0.36, pz, g); cap.scale.set(w * 0.9, 0.14, 0.8); cap.rotation.y = -yaw; }
+  if (!opt.noRubble && rand() < 0.3) { const rb = mesh(R(), M(), px + rr(-0.3, 0.3), y + 0.06, pz + (rand() < 0.5 ? 1 : -1) * rr(0.6, 0.9), g); rb.scale.setScalar(rr(0.18, 0.3)); rb.rotation.set(rand(), rand(), rand()); }
+}
 function bakeGroup(g) {
   g.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(g.matrixWorld).invert(), parts = [], drop = [];
@@ -838,22 +922,22 @@ function bakeGroup(g) {
 }
 
 // Scatter by region: density per square metre + species mix, like a hand-dressed open world
-const FLORA = {
-  meadow: { d: 0.004, mix: [['oak', 4], ['olive', 3], ['autumn', 1], ['birch', 1], ['cypress', 2], ['pine', 1]] },
-  ruins: { d: 0.002, mix: [['cypress', 2], ['olive', 3]] },
-  forest: { d: 0.034, mix: [['oak', 5], ['pine', 5], ['birch', 2], ['autumn', 1]] },
-  mountain: { d: 0.01, mix: [['pine', 8], ['birch', 1]] },
-  swamp: { d: 0.006, mix: [['dead', 6], ['birch', 1]] },
+const FLORA = {   // native Greek mixes per region (birch removed: not a tree of the Aegean)
+  meadow: { d: 0.004, mix: [['oak', 3], ['olive', 3], ['carob', 2], ['cypress', 2], ['pine', 1], ['fig', 1], ['autumn', 1]] },
+  ruins: { d: 0.002, mix: [['cypress', 2], ['olive', 3], ['carob', 1]] },
+  forest: { d: 0.029, mix: [['holm', 5], ['aleppo', 4], ['oak', 2], ['arbutus', 2], ['autumn', 1]] },   // Hylaea: evergreen oak and pine woods
+  mountain: { d: 0.01, mix: [['fir', 6], ['aleppo', 2], ['holm', 1]] },
+  swamp: { d: 0.006, mix: [['dead', 5], ['plane', 2]] },
   olive: { d: 0.003, mix: [['olive', 3], ['cypress', 1]] },
   temple: { d: 0.002, mix: [['cypress', 3], ['olive', 3], ['pine', 1]] },
-  lake: { d: 0.006, mix: [['birch', 3], ['pine', 2]] },
-  tower: { d: 0.005, mix: [['pine', 3], ['cypress', 1]] },
+  lake: { d: 0.007, mix: [['plane', 4], ['aleppo', 1], ['arbutus', 1]] },          // great planes by the water
+  tower: { d: 0.005, mix: [['aleppo', 3], ['cypress', 1]] },
   cave: { d: 0, mix: [] },
 };
 function pickSpecies(mix) { let t = rand() * mix.reduce((a, m) => a + m[1], 0); for (const [s2, w] of mix) if ((t -= w) <= 0) return s2; return mix[0][0]; }
 function addTree(species, pos, scale) {
   const it = placeProp(species, Math.floor(rand() * 3), pos, rr(0, 6.28), scale);
-  const TR = { oak: 0.55, autumn: 0.55, olive: 0.42, pine: 0.38, birch: 0.24, cypress: 0.3, dead: 0.38 }[species] || 0.45;
+  const TR = { oak: 0.55, autumn: 0.55, olive: 0.42, pine: 0.38, birch: 0.24, cypress: 0.3, dead: 0.38, aleppo: 0.34, plane: 0.78, holm: 0.48, carob: 0.55, arbutus: 0.35, fig: 0.4, fir: 0.42 }[species] || 0.45;
   const res = { type: 'tree', item: it, hp: 8, max: 8, alive: true, pos, r: TR * scale + 0.15, fall: 0 };
   resources.push(res); colliders.push({ x: pos.x, z: pos.z, r: res.r, ref: res }); return res;
 }
@@ -1503,10 +1587,7 @@ const fireflies = (() => {
       const w = rr(0.8, 1.35), px = OLIVE.x + x + w / 2, pz = zAt(x + w / 2); x += w + 0.04;
       if (pathDist(px, pz) < 2.6 || Math.hypot(px - OLIVE.x, pz - OLIVE.z) < 19 || treeNear(px, pz, 0.9)) continue;
       const h = heightAt(px, pz), yaw = Math.atan2(zAt(x) - zAt(x - w), w);
-      const b = mesh(rough[Math.floor(rand() * 6)], sm[Math.floor(rand() * 4)], px, h + 0.22, pz, og); b.scale.set(w, rr(0.48, 0.6), rr(0.75, 0.9)); b.rotation.set(rr(-0.04, 0.04), -yaw + rr(-0.05, 0.05), rr(-0.04, 0.04));
-      for (let j = 0; j < 2; j++) { if (rand() < 0.2) continue; const t2 = mesh(rough[Math.floor(rand() * 6)], rand() < 0.12 ? moss : sm[Math.floor(rand() * 4)], px + (j - 0.5) * w * 0.48, h + 0.62, pz + rr(-0.06, 0.06), og);
-        t2.scale.set(w * rr(0.4, 0.52), rr(0.3, 0.4), rr(0.55, 0.7)); t2.rotation.set(0, -yaw + rr(-0.15, 0.15), rr(-0.08, 0.08)); }
-      if (rand() < 0.25) { const cap = mesh(rough[0], sm[2], px, h + 0.86, pz, og); cap.scale.set(w * 0.9, 0.14, 0.8); cap.rotation.y = -yaw; }
+      dryStone(og, px, h - 0.05, pz, yaw, w);
       colliders.push({ x: px, z: pz, r: 0.55, h: 0.95 });
     }
   }
@@ -1731,7 +1812,7 @@ const forgeGlow = new THREE.MeshStandardMaterial({ color: 0xff6a20, emissive: 0x
   for (const x of [-4.2, 4.2]) { mesh(new THREE.CylinderGeometry(0.3, 0.22, 0.5, 10), M(0xb4613a), x, 0.97, 5.9, g); mesh(new THREE.IcosahedronGeometry(0.4, 1), M(0x4f7f2e), x, 1.45, 5.9, g); }
   // courtyard wall with a gate gap on the path side
   const wallSeg = (x0, z0, x1, z1) => { const L = Math.hypot(x1 - x0, z1 - z0), n = Math.round(L / 0.9);
-    for (let k = 0; k < n; k++) { const t2 = (k + 0.5) / n; const b = mesh(new THREE.BoxGeometry(0.95, rr(0.9, 1.15), 0.6), k % 3 ? stoneM : stoneD, lerp(x0, x1, t2), 0.5, lerp(z0, z1, t2), g); b.rotation.y = Math.atan2(x1 - x0, z1 - z0) + Math.PI / 2; }
+    for (let k = 0; k < n; k++) { const t2 = (k + 0.5) / n; dryStone(g, lerp(x0, x1, t2), 0, lerp(z0, z1, t2), Math.atan2(z1 - z0, x1 - x0), L / n + 0.02, { h: 0.6, d: 0.62, coping: 'plaster', noRubble: true }); }
     const a = hutW(x0, z0), b2 = hutW(x1, z1); wallColliders(a.x, a.z, b2.x, b2.z, 0.5, 1.05); };
   wallSeg(9, 7, 9, 10); wallSeg(9, 10, 5.5, 10); wallSeg(-1, 10, -9.5, 10); wallSeg(-9.5, 10, -9.5, 4.5);
   // vine pergola in the courtyard
@@ -1766,6 +1847,15 @@ const forgeGlow = new THREE.MeshStandardMaterial({ color: 0xff6a20, emissive: 0x
   // tool rack on the back wall
   mesh(new THREE.BoxGeometry(2.2, 0.1, 0.1), timber, -6.8, 2.2, -2.25, g);
   for (let i = 0; i < 4; i++) { mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 5), timber, -7.6 + i * 0.55, 1.7, -2.2, g); mesh(new THREE.BoxGeometry(0.25, 0.18, 0.06), iron, -7.6 + i * 0.55, 1.2, -2.18, g); }
+  // ---- lived-in details: rafter ends under the eaves, geranium boxes, door steps, bougainvillea, garlic and peppers, a paved yard
+  for (let x = -4.6; x <= 4.6; x += 0.75) for (const z of [3.42, -3.42]) mesh(new THREE.BoxGeometry(0.16, 0.16, 0.5), timber, x, 3.95, z + Math.sign(z) * 0.1, g);
+  for (const x of [-3, 1.6, 3.4]) { mesh(new THREE.BoxGeometry(1.0, 0.22, 0.3), M(0x8a5a34), x, 1.82, 3.42, g);
+    for (let i = 0; i < 6; i++) { mesh(new THREE.IcosahedronGeometry(0.09, 0), M(0x3f6f2a), x - 0.4 + i * 0.16, 1.98, 3.44, g); if (i % 2 === 0) mesh(new THREE.IcosahedronGeometry(0.07, 0), M([0xd8283a, 0xe0507a, 0xf2f2f2][i % 3]), x - 0.38 + i * 0.16, 2.08, 3.48, g); } }
+  for (let k = 0; k < 2; k++) mesh(new THREE.BoxGeometry(1.9 - k * 0.3, 0.16, 0.45), M(0xd9d2c2), -0.6, 0.66 + k * 0.16, 3.55 - k * 0.12 + 0.35, g);
+  for (let i = 0; i < 26; i++) mesh(new THREE.IcosahedronGeometry(rr(0.09, 0.15), 0), M([0xc0287a, 0xd23a8c, 0xa81e68][i % 3]), rr(5.4, 8.6), 3.05 + rr(-0.15, 0.3), rr(4.3, 8.8), g);   // bougainvillea
+  for (const [x, c] of [[-1.75, 0xf0ead8], [0.55, 0xc8281e]]) { mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.9, 3), M(0x8a7a5a), x, 2.65, 3.38, g);
+    for (let i = 0; i < 6; i++) { const b = mesh(c === 0xc8281e ? new THREE.ConeGeometry(0.045, 0.16, 5) : new THREE.IcosahedronGeometry(0.06, 0), M(c), x + rr(-0.04, 0.04), 2.95 - i * 0.12, 3.42, g); if (c === 0xc8281e) b.rotation.x = Math.PI; } }
+  for (let i = 0; i < 9; i++) { const sl = mesh(ROUGH[i % 6], M([0xcfc6b4, 0xbfb6a2, 0xd8d0be][i % 3]), 0.5 + Math.sin(i * 0.7) * 0.3, 0.05, 5.6 + i * 0.5, g); sl.scale.set(rr(0.7, 1.0), 0.1, rr(0.45, 0.6)); sl.rotation.y = rr(-0.3, 0.3); }
   // lantern by the door
   const lan = mesh(new THREE.BoxGeometry(0.2, 0.3, 0.2), new THREE.MeshStandardMaterial({ color: 0xffd28a, emissive: 0xffa040, emissiveIntensity: 1.5 }), 0.5, 2.7, 3.4, g); lan.userData.keep = true;
   const LL = new THREE.PointLight(0xffb060, 10, 12, 1.6); LL.position.set(0.5, 2.6, 4); g.add(LL);
@@ -2621,9 +2711,9 @@ function updateTalkCam(dt) {
     talkCam.shot = { mid, side, from: camera.position.clone(), fromLook: talkCam.look.clone() };
   }
   const sh = talkCam.shot, pull = Math.min(1, talkCam.t / 24), e = pull * (2 - pull);                 // ease-out over ~24 s
-  const want = sh.mid.clone().addScaledVector(sh.side, 2.6 + e * 2.6).addScaledVector(ax, -0.4 - e * 0.6); want.y = sh.mid.y + 1.25 + e * 0.8;
+  const want = sh.mid.clone().addScaledVector(sh.side, 3.9 + e * 2.4).addScaledVector(ax, -0.5 - e * 0.6); want.y = sh.mid.y + 1.45 + e * 0.5;
   want.y = Math.max(want.y, heightAt(want.x, want.z) + 0.8);
-  const look = sh.mid.clone().setY(sh.mid.y + 0.55);   // aim low so the speakers sit above the dialogue box
+  const look = sh.mid.clone().setY(sh.mid.y + 0.7);    // full figures, heads well inside the letterbox, feet behind the dialogue box
   const gl = Math.min(1, talkCam.t / 1.4), gk = gl * gl * (3 - 2 * gl);                                  // glide in from where the camera was
   camera.position.copy(sh.from).lerp(want, gk); talkCam.look.copy(sh.fromLook).lerp(look, gk); camera.lookAt(talkCam.look);
 }
@@ -3401,7 +3491,7 @@ function updateWorld(dt, t) {
   FIRES.forEach((C, fi) => {
     const fl = Math.sin(t * 17 + fi) * 0.5 + Math.sin(t * 23.3 + fi * 2) * 0.3 + Math.sin(t * 7.1) * 0.2;
     C.flames.forEach((f, i) => { f.scale.y = 1 + Math.sin(t * 13 + i * 2 + fi) * 0.22; f.scale.x = f.scale.z = 1 + Math.sin(t * 9 + i) * 0.08; f.rotation.y = t * (i + 1); });
-    C.light.intensity = (night ? 120 : 60) + fl * 18; C.glow.material.opacity = 0.7 + fl * 0.15;
+    C.light.intensity = (night ? 110 : 18) + fl * (night ? 16 : 4);   // firelight matters at night; by day it's a warm accent C.glow.material.opacity = 0.7 + fl * 0.15;
     if (Math.abs(C.pos.x - player.position.x) + Math.abs(C.pos.z - player.position.z) < 80) { const a = C.embers.geometry.attributes.position; C.seeds.forEach(([an, ph, sp], i) => { const k = (t * 0.35 * sp + ph) % 1; a.setXYZ(i, Math.cos(an + k * 3) * (0.2 + k * 0.6), 0.5 + k * 4.5, Math.sin(an + k * 3) * (0.2 + k * 0.6)); }); a.needsUpdate = true; }
   });
   // energy: drains while awake (~4.5 per in-game hour), recovers resting by a fire
