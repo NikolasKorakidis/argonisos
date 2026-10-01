@@ -127,3 +127,11 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
   - Leaf clusters use their own alpha-cut textures, tinted to the island palette.
   - Mixed into the regional flora: meadow, forest, mountain, swamp (dead trees), lake and tower.
   - Birch was left out because it isn't an Aegean tree.
+- v15b: the rest of the uploads went in.
+  - Wild animals: a herd of 3 wild bulls that fight back.
+  - Farm and temple animals:
+    - Nestor has an alpaca and a Shiba (his dog).
+    - Athena's white mare grazes on the temple plateau.
+  - Companion: a stray husky in the forest. It joins you when you walk up to it, follows you, and attacks wolves and boars that come close.
+  - Trees: birches added sparingly on the mountain and by the lake (4 variants).
+  - Wolf sculpt: the realistic wolf (static) is a bronze-tinted monument on a rock at the ravine before the Cave of Echoes. It loads after start-up.

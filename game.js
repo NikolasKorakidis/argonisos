@@ -824,11 +824,11 @@ function qLeafMat(file, tint) {
   const m = new THREE.MeshStandardMaterial({ map: t, color: tint, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85 });   // tinted down to the island palette
   m.onBeforeCompile = leafMat.onBeforeCompile; return m;
 }
-const Q_SRC = { qtree: 'qtree', qpine: 'qpine', qdead: 'qtree' };
-const Q_TINT = { qtree: [0.72, 0.62, 0.52], qpine: [0.68, 0.58, 0.5], qdead: [0.62, 0.6, 0.57] };
+const Q_SRC = { qtree: 'qtree', qpine: 'qpine', qdead: 'qtree', qbirch: 'qbirch' };
+const Q_TINT = { qbirch: [0.85, 0.83, 0.8], qtree: [0.72, 0.62, 0.52], qpine: [0.68, 0.58, 0.5], qdead: [0.62, 0.6, 0.57] };
 let Q_LEAF_MATS = null;
 function qBuild(species, v) {
-  Q_LEAF_MATS ||= { qtree: qLeafMat('q_tree_leaves.png', 0x9ab884), qpine: qLeafMat('q_pine_leaves.png', 0x6f8f62) };
+  Q_LEAF_MATS ||= { qbirch: qLeafMat('q_birch_leaves.png', 0x9cb27a), qtree: qLeafMat('q_tree_leaves.png', 0x9ab884), qpine: qLeafMat('q_pine_leaves.png', 0x6f8f62) };
   const src = QTREES[Q_SRC[species]][v % QTREES[Q_SRC[species]].length];
   const geo = qGeo(src.bark, Q_TINT[species]);
   const cards = species !== 'qdead' && src.leaves ? qGeo(src.leaves) : null;
@@ -958,18 +958,18 @@ const FLORA = {   // native Greek mixes per region (birch removed: not a tree of
   meadow: { d: 0.004, mix: [['oak', 3], ['olive', 3], ['carob', 2], ['cypress', 2], ['pine', 1], ['fig', 1], ['autumn', 1], ['qtree', 2]] },
   ruins: { d: 0.002, mix: [['cypress', 2], ['olive', 3], ['carob', 1]] },
   forest: { d: 0.029, mix: [['holm', 5], ['aleppo', 4], ['oak', 2], ['arbutus', 2], ['autumn', 1], ['qtree', 3], ['qpine', 2]] },   // Hylaea: evergreen oak and pine woods
-  mountain: { d: 0.01, mix: [['fir', 6], ['aleppo', 2], ['holm', 1], ['qpine', 4]] },
+  mountain: { d: 0.01, mix: [['fir', 6], ['aleppo', 2], ['holm', 1], ['qpine', 4], ['qbirch', 1]] },
   swamp: { d: 0.006, mix: [['dead', 5], ['plane', 2], ['qdead', 4]] },
   olive: { d: 0.003, mix: [['olive', 3], ['cypress', 1]] },
   temple: { d: 0.002, mix: [['cypress', 3], ['olive', 3], ['pine', 1]] },
-  lake: { d: 0.007, mix: [['plane', 4], ['aleppo', 1], ['arbutus', 1], ['qtree', 2]] },          // great planes by the water
+  lake: { d: 0.007, mix: [['plane', 4], ['aleppo', 1], ['arbutus', 1], ['qtree', 2], ['qbirch', 1]] },          // great planes by the water
   tower: { d: 0.005, mix: [['aleppo', 3], ['cypress', 1], ['qpine', 1]] },
   cave: { d: 0, mix: [] },
 };
 function pickSpecies(mix) { let t = rand() * mix.reduce((a, m) => a + m[1], 0); for (const [s2, w] of mix) if ((t -= w) <= 0) return s2; return mix[0][0]; }
 function addTree(species, pos, scale) {
   const it = placeProp(species, Math.floor(rand() * (Q_SRC[species] ? QTREES[Q_SRC[species]].length : 3)), pos, rr(0, 6.28), scale);
-  const TR = { oak: 0.55, autumn: 0.55, olive: 0.42, pine: 0.38, birch: 0.24, cypress: 0.3, dead: 0.38, aleppo: 0.34, plane: 0.78, holm: 0.48, carob: 0.55, arbutus: 0.35, fig: 0.4, fir: 0.42, qtree: 0.4, qpine: 0.34, qdead: 0.36 }[species] || 0.45;
+  const TR = { oak: 0.55, autumn: 0.55, olive: 0.42, pine: 0.38, birch: 0.24, cypress: 0.3, dead: 0.38, aleppo: 0.34, plane: 0.78, holm: 0.48, carob: 0.55, arbutus: 0.35, fig: 0.4, fir: 0.42, qtree: 0.4, qpine: 0.34, qdead: 0.36, qbirch: 0.26 }[species] || 0.45;
   const res = { type: 'tree', item: it, hp: 8, max: 8, alive: true, pos, r: TR * scale + 0.15, fall: 0 };
   resources.push(res); colliders.push({ x: pos.x, z: pos.z, r: res.r, ref: res }); return res;
 }
@@ -2631,12 +2631,19 @@ const TYPES = {
   donkey: { hp: 1, speed: 1.4, dmg: 0, passive: true, drops: {}, r: 0.8, reach: 0, roam: 5 },
   cow: { hp: 1, speed: 1.2, dmg: 0, passive: true, drops: {}, r: 0.9, reach: 0, roam: 5 },
   horse: { hp: 1, speed: 1.6, dmg: 0, passive: true, drops: {}, r: 0.9, reach: 0, roam: 6 },
+  alpaca: { hp: 1, speed: 1.3, dmg: 0, passive: true, drops: {}, r: 0.7, reach: 0, roam: 5 },
+  shibainu: { hp: 1, speed: 2.2, dmg: 0, passive: true, drops: {}, r: 0.4, reach: 0, roam: 4 },          // Nestor's dog
+  horse_white: { hp: 1, speed: 1.4, dmg: 0, passive: true, drops: {}, r: 0.9, reach: 0, roam: 8 },     // Athena's sacred mare
+  bull: { hp: 90, speed: 6, dmg: 18, flee: false, retaliate: true, drops: { rawmeat: 4, hide: 2 }, r: 1.0, reach: 2.4 },   // wild bulls of the plain
+  // A stray husky in the woods: walk up to it and it joins you, follows you around and goes for wolves and boars that come close
+  husky: { hp: 1, speed: 7.5, dmg: 0, passive: true, companion: true, drops: {}, r: 0.5, reach: 1.6, roam: 6 },
 };
 // ---- Animated animal models (the uploaded low-poly pack: ~2k triangles, rigged, with Idle/Walk/Gallop/Attack/Hit/Death/Eating).
 // One template per species is loaded lazily; each creature gets a skeleton clone and its own mixer.
 // len: nose-to-tail length in metres the model is scaled to.
 const ANIMALS = { wolf: { file: 'wolf', len: 1.45 }, deer: { file: 'deer', len: 1.6 }, stag: { file: 'stag', len: 1.9 }, fox: { file: 'fox', len: 0.95 },
-  donkey: { file: 'donkey', len: 1.7 }, cow: { file: 'cow', len: 2.2 }, horse: { file: 'horse', len: 2.3 } };
+  donkey: { file: 'donkey', len: 1.7 }, cow: { file: 'cow', len: 2.2 }, horse: { file: 'horse', len: 2.3 },
+  alpaca: { file: 'alpaca', len: 1.5 }, shibainu: { file: 'shibainu', len: 0.85 }, horse_white: { file: 'horse_white', len: 2.3 }, bull: { file: 'bull', len: 2.4 }, husky: { file: 'husky', len: 1.15 } };
 const ANIM_TPL = {};
 async function loadGlb(name) {
   try { const r = await fetch(`models/${name}.glb`); if (r.ok) return await r.arrayBuffer(); } catch { /* fall through */ }
@@ -2703,8 +2710,32 @@ for (let i = 0; i < 10; i++) { const p = landSpot(3, 30, AVOID); if (p) spawnCre
 for (let i = 0; i < 8; i++) { const p = landSpot(3, 40, AVOID); if (p) spawnCreature('deer', p); }
 for (let i = 0; i < 3; i++) { const p = landSpot(6, 45, AVOID); if (p) spawnCreature('stag', p); }
 for (let i = 0; i < 6; i++) { const p = landSpot(2, 35, AVOID); if (p) spawnCreature('fox', p); }
+// A small herd of wild bulls on the open plain
+{ const p0 = landSpot(3, 20, AVOID); if (p0) for (let i = 0; i < 3; i++) { const p = p0.clone().add(new THREE.Vector3(rr(-6, 6), 0, rr(-6, 6))); p.y = heightAt(p.x, p.z); if (p.y > 1) spawnCreature('bull', p); } }
+// Athena's white mare grazes on the temple plateau
+{ const p = TEMPLE.clone().add(new THREE.Vector3(-14, 0, 10)); p.y = heightAt(p.x, p.z); spawnCreature('horse_white', p); }
+// The stray husky waits in the forest
+const HUSKY = (() => { for (let k = 0; k < 400; k++) { const p = landSpot(4, 30, AVOID); if (p && regionAt(p.x, p.z).key === 'forest') return spawnCreature('husky', p); } const p = landSpot(4, 30, AVOID); return p && spawnCreature('husky', p); })();
+// The Wolf of the Cave: a bronze wolf crouched on a rock at the ravine before the Cave of Echoes (the uploaded sculpt).
+// Static and detailed, so it's a monument rather than a creature; it streams in after start-up.
+{
+  const side = new THREE.Vector3(-CAVE_DIR.z, 0, CAVE_DIR.x), p = CAVE_MOUTH.clone().addScaledVector(CAVE_DIR, -7).addScaledVector(side, 4.2);
+  p.y = heightAt(p.x, p.z);
+  const g = new THREE.Group(); g.position.copy(p); g.rotation.y = Math.atan2(-CAVE_DIR.x, -CAVE_DIR.z) + 0.5; scene.add(g);   // looks down the ravine at whoever comes
+  const plinth = new THREE.Mesh(new THREE.DodecahedronGeometry(1.25, 1), rockMat); plinth.scale.set(1.5, 0.75, 1.9); plinth.position.y = 0.35; plinth.castShadow = plinth.receiveShadow = true; g.add(plinth);
+  colliders.push({ x: p.x, z: p.z, r: 2.1, h: 2.2 });
+  import('./models/wolfstatue.js').then(({ default: W }) => {
+    const geo = new THREE.BufferGeometry(), P = b64arr(W.p, Int16Array), N = b64arr(W.nr, Int8Array), U = b64arr(W.uv, Uint16Array);
+    geo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(P, (v) => v / 10000), 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(N, (v) => v / 127), 3));
+    geo.setAttribute('uv', new THREE.BufferAttribute(Float32Array.from(U, (v) => v / 65535), 2));
+    const map = new THREE.TextureLoader().load('models/wolfstatue.jpg'); map.colorSpace = THREE.SRGBColorSpace;
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map, color: 0xb59a74, metalness: 0.55, roughness: 0.45 }));   // weathered bronze over the fur sculpt
+    m.scale.setScalar(1.6); m.position.y = 0.95; m.castShadow = m.receiveShadow = true; g.add(m);
+  }).catch((e) => console.warn('wolf statue failed', e));
+}
 // Nestor's livestock in the meadow beside the farmhouse
-for (const [type, lx, lz] of [['donkey', -15, 6], ['cow', -17, 12], ['horse', -13, 15]]) { const p = hutW(lx, lz); p.y = heightAt(p.x, p.z); spawnCreature(type, p); }
+for (const [type, lx, lz] of [['donkey', -15, 6], ['cow', -17, 12], ['horse', -13, 15], ['alpaca', -19, 8], ['shibainu', 3, 9]]) { const p = hutW(lx, lz); p.y = heightAt(p.x, p.z); spawnCreature(type, p); }
 const skeletons = [];
 for (let i = 0; i < 3; i++) { const a = i * 2.1 + 0.4; const p = new THREE.Vector3(CAVE.x + Math.cos(a) * 5, CAVE_Y, CAVE.z + Math.sin(a) * 5); const sk = spawnCreature('skeleton', p); sk.home.copy(p); skeletons.push(sk); }
 
@@ -2716,7 +2747,7 @@ const S = {
   hp: 100, food: 100, sta: 100, time: 0.3, day: 1, nights: 0, wasNight: false,
   inv: { wood: 0, stone: 0, fiber: 0, berries: 0, rawmeat: 0, meat: 0, hide: 0, rope: 0, sail: 0, arrows: 0 },
   tools: { axe: false, spear: false, bow: false }, slot: 0, energy: 100,
-  kills: { rabbit: 0, boar: 0, wolf: 0, skeleton: 0, deer: 0, stag: 0, fox: 0 }, cooked: 0, campfire: null, raftBuilt: false,
+  kills: { rabbit: 0, boar: 0, wolf: 0, skeleton: 0, deer: 0, stag: 0, fox: 0, bull: 0 }, cooked: 0, campfire: null, raftBuilt: false,
   timeScale: 1, running: false, paused: true, talkedNestor: false, sailing: false, questIdx: 0, deaths: 0, nightsAtStart: 0, started: 0,
 };
 const ICONS = { wood: '🪵', stone: '🪨', fiber: '🌾', berries: '🫐', rawmeat: '🥩', meat: '🍖', hide: '🟫', rope: '🧶', sail: '⛵', arrows: '➶' };
@@ -3375,7 +3406,7 @@ function die() {
 const tmp = new THREE.Vector3();
 function updateCreature(c, dt) {
   const o = c.obj;
-  if (!c.dead && c.type !== 'wolf' && !o.visible) return;          // far away: frozen until the player comes near
+  if (!c.dead && c.type !== 'wolf' && !c.tamed && !o.visible) return;          // far away: frozen until the player comes near
   if (c.dead) {
     c.deadT += dt;
     if (animateAnimal(c, 0, dt)) o.position.y -= dt * (c.deadT > 2 ? 0.4 : 0);     // animated: play Death, then sink
@@ -3397,7 +3428,21 @@ function updateCreature(c, dt) {
   if (d.retaliate && c.state === 'chase' && dist > 18) c.state = 'wander';
 
   let speed = 0; const goal = tmp;
-  if (c.state === 'wander') {
+  if (d.companion) {                                   // the husky: waits until you come close, then sticks with you
+    if (!c.tamed && dist < 4 && !S.explore) { c.tamed = true; toast('A <b>husky</b> sniffs your hand and decides to follow you.', true); }
+    if (c.tamed) {
+      const foe = creatures.find((e) => !e.dead && !e.gone && (e.def.hostile || e.type === 'boar') && e.type !== 'skeleton' && e.obj.position.distanceTo(o.position) < 12 && e.obj.position.distanceTo(pp) < 20);
+      if (foe) {
+        const fd = foe.obj.position.distanceTo(o.position); goal.copy(foe.obj.position); speed = fd > 1.8 ? d.speed : 0;
+        if (fd <= 2 && c.atkCd <= 0) { c.atkCd = 1.2; c.lunge = 0.35; foe.hp -= 8; foe.flash = 0.15; if (foe.def.flee) foe.state = 'flee'; floatText(8, foe.obj.position.clone().setY(foe.obj.position.y + 1.4), '#ffdf8a'); if (foe.hp <= 0) killCreature(foe); }
+        if (fd <= 2.2) { const yaw = Math.atan2(foe.obj.position.x - o.position.x, foe.obj.position.z - o.position.z); o.rotation.y = yaw; }
+      } else if (dist > 4) { goal.copy(pp); speed = dist > 10 ? d.speed : Math.min(d.speed, 4.8); }
+      if (dist > 60) o.position.copy(pp).add(new THREE.Vector3(2, 0, 2));   // never lose it
+      c.state = 'companion';
+    }
+  }
+  if (c.state === 'companion') { /* handled above */ }
+  else if (c.state === 'wander') {
     if (c.t <= 0) { c.t = rr(2, 6); { const R = d.roam || 10; c.target.set(c.home.x + rr(-R, R), 0, c.home.z + rr(-R, R)); } c.idle = rand() < 0.4; }
     goal.copy(c.target); speed = c.idle ? 0 : d.speed * 0.3;
   } else if (c.state === 'flee') {
