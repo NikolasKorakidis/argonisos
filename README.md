@@ -158,3 +158,18 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
 - **Wreck:** stove in on the starboard side, with sprung planks. All debris sits on dry sand: the snapped mast with the torn sail draped over it, a broken oar, amphorae, a crate, rope coils and planks.
 - **Mount Olympos:** about 30 % taller, with ridged-noise crags and buttresses. Alpine meadow lower down, bare rock higher up, and a proper snow cap.
 - **Foliage textures:** the transparent pixels of the leaf textures were recoloured leaf green, so distant shrubs and trees no longer bleach to white specks on the hills.
+
+## v18: temple, olive, bow, papyrus UI
+- **Temple of Athena:**
+  - The reflecting pool is gone. A red woven runner with a gold meander border now leads to the offering table, lined with bronze lamp stands.
+  - Kraters holding olive sprigs stand between the columns, with a meander frieze and painted shields on the walls.
+  - The owls outside are now sculpted bronze owls perched on olive branches, on carved plinths.
+- **Sacred Olive:** the branch no longer lies on the ground. Four axe blows bring it down, then you pick it up. The tree never falls.
+- **Bow replaces the spear:**
+  - The spear is removed completely.
+  - Nestor teaches recipes as the story goes: rope and fire from the start, the axe at the First Tool, the bow and arrows at Arms of the Chosen.
+  - Unknown recipes show as locked in the crafting menu.
+  - Hunting Bow: made at the workbench; costs 4 wood, 3 fiber, 1 rope. Arrows ×6: cost 1 wood, 1 stone, 1 fiber.
+  - Archer stance is procedural on the rig: bow arm out, draw to the cheek, re-draw after each shot. The hero turns to face where you aim.
+- **Papyrus UI:** every panel, tooltip, quest tracker, dialog and card is a papyrus sheet with an inline SVG fibre texture (no image downloads). Ink text, red-ochre and black-figure buttons, meander borders, a rolled top edge on modals.
+- **Minimap:** round papyrus disc with a bronze and meander rim, retina resolution, redrawn every frame.

@@ -3999,6 +3999,7 @@ function updateWorld(dt, t) {
 // ============================================================
 // Minimap & waypoint
 // ============================================================
+const MM_RES = Math.round(172 * Math.min(2, window.devicePixelRatio || 1)); $('minimap').width = $('minimap').height = MM_RES;   // crisp on retina screens
 const mm = $('minimap').getContext('2d');
 const MAPN = 512, MAPW = 640;                               // map canvas covers 640 m
 const mmBase = document.createElement('canvas'); mmBase.width = mmBase.height = MAPN;
@@ -4078,15 +4079,20 @@ function updateQuestMarkers(t) {
 function drawMinimap(target) {
   const view = 180, sc = 160 / (view / MAPW * MAPN);                        // minimap shows 180 m around the player
   const [cx, cy] = toMapPx(player.position), src = view / MAPW * MAPN;
-  mm.save(); mm.clearRect(0, 0, 160, 160); mm.beginPath(); mm.rect(0, 0, 160, 160); mm.clip();
-  mm.fillStyle = '#1b2330'; mm.fillRect(0, 0, 160, 160);
+  // Drawn every frame (smooth at 60 fps) in 160-unit coordinates scaled to the canvas; round, papyrus-tinted, north up
+  mm.setTransform(MM_RES / 160, 0, 0, MM_RES / 160, 0, 0);
+  mm.save(); mm.clearRect(0, 0, 160, 160); mm.beginPath(); mm.arc(80, 80, 80, 0, Math.PI * 2); mm.clip();
+  mm.fillStyle = '#1f3a4a'; mm.fillRect(0, 0, 160, 160);
   mm.drawImage(mmBase, cx - src / 2, cy - src / 2, src, src, 0, 0, 160, 160);
   mm.drawImage(mmFog, cx - src / 2, cy - src / 2, src, src, 0, 0, 160, 160);
+  mm.globalCompositeOperation = 'multiply'; mm.fillStyle = '#e6cf9a'; mm.fillRect(0, 0, 160, 160); mm.globalCompositeOperation = 'source-over';   // papyrus tint
+  { const vg = mm.createRadialGradient(80, 80, 50, 80, 80, 82); vg.addColorStop(0, 'rgba(60,35,10,0)'); vg.addColorStop(1, 'rgba(60,35,10,.55)'); mm.fillStyle = vg; mm.fillRect(0, 0, 160, 160); }   // burnt edge
   const tf = (p) => { const [x, y] = toMapPx(p); return [80 + (x - cx) * sc, 80 + (y - cy) * sc]; };
-  let tgt = target; if (tgt) { const [x, y] = tf(tgt), d = Math.hypot(x - 80, y - 80); if (d > 72) tgt = null, mm.fillStyle = '#e8c27a', mm.beginPath(), mm.arc(80 + (x - 80) / d * 72, 80 + (y - 80) / d * 72, 4, 0, 6.28), mm.fill(); }
+  let tgt = target; if (tgt) { const [x, y] = tf(tgt), d = Math.hypot(x - 80, y - 80); if (d > 70) tgt = null, mm.fillStyle = '#9a3420', mm.beginPath(), mm.arc(80 + (x - 80) / d * 70, 80 + (y - 80) / d * 70, 4.5, 0, 6.28), mm.fill(); }
   drawMapMarkers(mm, tf, tgt, false);
   mm.restore();
-  mm.fillStyle = '#e8c27a'; mm.font = 'bold 11px Cinzel, serif'; mm.fillText('N', 76, 12);
+  // north mark on the rim, ochre with an ink outline
+  mm.font = '700 12px Cinzel, serif'; mm.textAlign = 'center'; mm.textBaseline = 'middle'; mm.lineWidth = 3; mm.strokeStyle = '#2a1a0a'; mm.strokeText('N', 80, 9); mm.fillStyle = '#f3dfae'; mm.fillText('N', 80, 9);
 }
 // Full map (M), BotW style: the island as you've explored it
 function drawBigMap() {
@@ -4207,7 +4213,8 @@ function loop() {
     const qm = updateQuestMarkers(t);
     waypoint.visible = !!target && !S.sailing && !qm.some((m) => m.pos.distanceTo(target) < 3);
     if (target) { waypoint.position.set(target.x, target.y + 3.2 + Math.sin(t * 3) * 0.2, target.z); waypoint.rotation.y = t * 2; }
-    hudT -= dt; if (hudT <= 0) { hudT = 0.1; renderHUD(); renderQuest(); drawMinimap(target); }
+    hudT -= dt; if (hudT <= 0) { hudT = 0.1; renderHUD(); renderQuest(); }
+    drawMinimap(target);   // every frame: the map glides with you instead of stepping 10× a second
   } else if (!S.running) {
     // Title screen flyover
     const a = t * 0.025 + 0.6; camera.position.set(Math.sin(a) * (300 + Math.sin(t * 0.05) * 40), 95 + Math.sin(t * 0.07) * 25, Math.cos(a) * (300 + Math.sin(t * 0.05) * 40)); camera.lookAt(30, 22, -50);
