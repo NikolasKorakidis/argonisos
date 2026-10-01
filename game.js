@@ -1889,7 +1889,7 @@ const RAFT_SITE_EARLY = DOCK.clone().add(new THREE.Vector3(3.6, 0, 1));
 
 // --- Nestor's house: a proper island farmhouse. Whitewashed stone, an upper room, a tiled porch on wooden columns,
 //     a walled courtyard with a vine pergola, storage jars and a garden, and on the west side the smithy:
-//     workbench, anvil and a glowing forge. Tools (axe, spear) can only be made here.
+//     workbench, anvil and a glowing forge. Tools (axe, bow) can only be made here.
 const HUT_ROT = 0.3, hutW = (lx, lz) => new THREE.Vector3(HUT.x + lx * Math.cos(HUT_ROT) + lz * Math.sin(HUT_ROT), 0, HUT.z - lx * Math.sin(HUT_ROT) + lz * Math.cos(HUT_ROT));
 const BENCH = hutW(-6.6, 1.4); BENCH.y = heightAt(BENCH.x, BENCH.z);
 const hutGlow = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, emissive: 0xffa24a, emissiveIntensity: 0, roughness: 0.6 });
@@ -2318,11 +2318,8 @@ function makeTools() {
   const axe = new THREE.Group();
   mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.8, 6), trunkMat, 0, 0, 0, axe);
   mesh(new THREE.BoxGeometry(0.08, 0.2, 0.25), rockMat, 0, 0.3, 0.1, axe);
-  const spear = new THREE.Group();
-  mesh(new THREE.CylinderGeometry(0.03, 0.03, 2, 6), trunkMat, 0, 0.3, 0, spear);
-  mesh(new THREE.ConeGeometry(0.07, 0.3, 4), rockMat, 0, 1.4, 0, spear);
-  for (const t of [axe, spear]) { t.rotation.x = Math.PI / 2; t.position.set(0, -0.62, 0.15); t.visible = false; }
-  return { axe, spear };
+  axe.rotation.x = Math.PI / 2; axe.position.set(0, -0.62, 0.15); axe.visible = false;
+  return { axe };
 }
 
 // ============================================================
@@ -2330,10 +2327,10 @@ function makeTools() {
 // ============================================================
 const player = makeHumanoid({ tunic: 0xf1ead9, belt: 0x7a4f2c, hair: 0x3a2412 });
 player.position.copy(START); player.rotation.order = "YXZ"; scene.add(player);
-const tools = makeTools(); player.userData.arms[1].add(tools.axe, tools.spear);
-const backAxe = new THREE.Group(), backSpear = new THREE.Group();
+const tools = makeTools(); player.userData.arms[1].add(tools.axe);
+const backAxe = new THREE.Group(), backBow = new THREE.Group();
 backAxe.position.set(0.02, 0.28, -0.2); backAxe.rotation.set(0.1, 0, 2.45); backAxe.visible = false;
-backSpear.position.set(-0.04, 0.2, -0.24); backSpear.rotation.set(0.05, 0, -0.5); backSpear.visible = false;
+backBow.visible = false;
 // Hero model (static FBX, no rig): replaces the procedural body once loaded and gets procedural animation.
 const hero = { wrap: new THREE.Group(), model: null, rig: null };
 player.add(hero.wrap);
@@ -2477,7 +2474,7 @@ function poseHero(speed, ph, sw, t) {
   B.shinL.rotation.x = Math.max(0, s) * 0.9 * run; B.shinR.rotation.x = Math.max(0, -s) * 0.9 * run;
   B.hips.position.y = B.hips.userData.wp.y + Math.abs(Math.cos(ph)) * 0.05 * run - (1 - Math.abs(Math.cos(ph))) * 0.02 * run;
   B.head.rotation.set(-0.04 * run, -s * 0.06 * run, 0);
-  if (S.slot === 3 && S.tools.bow && sw <= 0) {          // archer stance: bow arm out front, draw hand at the cheek
+  if (S.slot === 2 && S.tools.bow && sw <= 0) {          // archer stance: bow arm out front, draw hand at the cheek
     const pull = P.drawT > 0 ? P.drawT / 0.35 : 1;
     B.armL.rotation.set(-1.45, 0, -0.15); B.foreL.rotation.set(0, 0, 0);
     B.armR.rotation.set(-1.35, 0, 0.4 * pull + 0.1); B.foreR.rotation.set(0, 1.2 * pull + 0.4, 0);
@@ -2628,8 +2625,8 @@ const loadStaticHero = () => loadModelBuffer('hero').then((buf) => new FBXLoader
   player.userData.body.visible = false;
   const rf = hero.rig.bones.foreR;   // tools go in the right fist (end of the right forearm)
   hero.rig.bones.foreL.add(bowHeld); bowHeld.position.copy(hero.rig.handOffset).multiply(new THREE.Vector3(-1, 1, 1)); bowHeld.rotation.set(0, 0, 1.25, 'ZYX');
-  for (const t of [tools.axe, tools.spear]) { rf.add(t); t.position.copy(hero.rig.handOffset); t.rotation.set(0.7, 0, -1.25, 'ZYX'); }   // undo the arm's T-pose drop so the tool points forward-up
-  hero.rig.bones.spine.add(backAxe, backSpear);                  // stowed: axe slung diagonally across the back, spear behind it
+  for (const t of [tools.axe]) { rf.add(t); t.position.copy(hero.rig.handOffset); t.rotation.set(0.7, 0, -1.25, 'ZYX'); }   // undo the arm's T-pose drop so the tool points forward-up
+  hero.rig.bones.spine.add(backAxe, backBow);                  // stowed: axe slung diagonally across the back, bow behind it
 }).catch((e) => console.warn('Hero model failed to load, keeping placeholder', e));
 
 // ---- Native Mixamo hero ----
@@ -2681,10 +2678,10 @@ loadModelBuffer('hero_rig').then((buf) => new FBXLoader().parse(buf, '')).then((
   player.userData.body.visible = false;
   // Tools in the right palm; stowed tools on the upper back. Bones are in cm, so undo the model scale.
   const hand = HA.bones.mixamorigRightHand, back = HA.bones.mixamorigSpine2, inv = 1 / HA.s;
-  for (const t of [tools.axe, tools.spear]) { hand.add(t); t.scale.setScalar(inv); t.position.set(0, 9, 3); t.rotation.set(0, 0, -1.4); }   // handle across the palm, head out past the thumb
-  hand.add(bowHeld); bowHeld.scale.setScalar(inv);
-  for (const g of [backAxe, backSpear]) { back.add(g); g.scale.setScalar(inv); }
-  backAxe.position.set(2, 8, -16); backSpear.position.set(-4, 4, -18);
+  for (const t of [tools.axe]) { hand.add(t); t.scale.setScalar(inv); t.position.set(0, 9, 3); t.rotation.set(0, 0, -1.4); }   // handle across the palm, head out past the thumb
+  HA.bones.mixamorigLeftHand.add(bowHeld); bowHeld.scale.setScalar(inv); bowHeld.position.set(0, 8, 2.5); bowHeld.rotation.set(0, 0, Math.PI / 2);   // bow gripped in the left fist, limbs vertical
+  for (const g of [backAxe, backBow]) { back.add(g); g.scale.setScalar(inv); }
+  backAxe.position.set(2, 8, -16); backBow.position.set(-2, 2, -17); backBow.rotation.set(0, 0, 0.6);
 }).catch((e) => { console.warn('Rigged hero failed to load, using the static model', e); loadStaticHero(); });
 
 // Drive the hero every frame. speed in m/s.
@@ -2725,6 +2722,32 @@ function animateHero(dt, speed) {
   }
   const AC = S.slot === 0 ? PUNCH : ATTACK;
   if (P.swing > 0) heroOverlay(AC, 1 - P.swing, Math.min(1, P.swing * 6, (1 - P.swing) * 8 + 0.2), moving || !P.onGround);
+  // Archer stance (procedural, on the real skeleton): bow arm straight out, draw hand pulled back to the cheek.
+  // After a shot the string hand snaps forward and draws again. While sprinting the bow is held low.
+  P.aimW = lerp(P.aimW || 0, S.slot === 2 && S.tools.bow && !P.sprinting && !P.dead ? 1 : 0, Math.min(1, dt * 8));
+  if (P.aimW > 0.02) archerPose(P.aimW, P.drawT > 0 ? clamp(1 - P.drawT / 0.55, 0, 1) ** 1.6 : 1);
+}
+const _ap = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()], _aq = [new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()];
+// rotate bone so that its child points at target (world space), blended by w
+function aimBone(bone, child, target, w) {
+  const bp = bone.getWorldPosition(_ap[0]), cp = child.getWorldPosition(_ap[1]);
+  const cur = cp.sub(bp).normalize(), want = _ap[2].copy(target).sub(bp).normalize();
+  const delta = _aq[0].setFromUnitVectors(cur, want), wq = bone.getWorldQuaternion(_aq[1]);
+  const pq = bone.parent.getWorldQuaternion(_aq[2]).invert();
+  bone.quaternion.slerp(pq.multiply(delta.multiply(wq)), w); bone.updateMatrixWorld(true);
+}
+function archerPose(w, pull) {
+  const B = HA.bones; if (!B.mixamorigLeftArm) return;
+  const yaw = P.yaw, f = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)), left = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)), up = new THREE.Vector3(0, 1, 0);
+  // torso turns a little side-on, as archers stand
+  B.mixamorigSpine2.rotateY(0.35 * w); B.mixamorigSpine2.updateMatrixWorld(true);
+  const ls = B.mixamorigLeftArm.getWorldPosition(new THREE.Vector3()), rs = B.mixamorigRightArm.getWorldPosition(new THREE.Vector3()), head = B.mixamorigHead.getWorldPosition(new THREE.Vector3());
+  const grip = ls.clone().addScaledVector(f, 0.6).addScaledVector(left, -0.08).addScaledVector(up, 0.04);
+  aimBone(B.mixamorigLeftArm, B.mixamorigLeftForeArm, grip, w); aimBone(B.mixamorigLeftForeArm, B.mixamorigLeftHand, grip, w);
+  const anchor = head.clone().addScaledVector(f, 0.12).addScaledVector(left, -0.06).addScaledVector(up, -0.12);   // full draw: string hand at the cheek
+  const hand = grip.clone().addScaledVector(f, -0.1).lerp(anchor, pull);
+  const elbow = rs.clone().addScaledVector(f, lerp(0.25, -0.22, pull)).addScaledVector(left, -0.12).addScaledVector(up, lerp(-0.05, 0.08, pull));
+  aimBone(B.mixamorigRightArm, B.mixamorigRightForeArm, elbow, w); aimBone(B.mixamorigRightForeArm, B.mixamorigRightHand, hand, w);
 }
 const P = { vel: new THREE.Vector3(), yaw: Math.PI, onGround: true, swing: 0, swingHit: false, hurtT: 0, animT: 0, dead: false };
 
@@ -2934,7 +2957,7 @@ const DAY_LEN = 900;  // seconds per in-game day (15 min: ~10 of daylight)
 const S = {
   hp: 100, food: 100, sta: 100, time: 0.3, day: 1, nights: 0, wasNight: false,
   inv: { wood: 0, stone: 0, fiber: 0, berries: 0, rawmeat: 0, meat: 0, hide: 0, rope: 0, sail: 0, arrows: 0 },
-  tools: { axe: false, spear: false, bow: false }, slot: 0, energy: 100,
+  tools: { axe: false, bow: false }, slot: 0, energy: 100,
   kills: { rabbit: 0, boar: 0, wolf: 0, skeleton: 0, deer: 0, stag: 0, fox: 0, bull: 0 }, cooked: 0, campfire: null, raftBuilt: false,
   timeScale: 1, running: false, paused: true, talkedNestor: false, sailing: false, questIdx: 0, deaths: 0, nightsAtStart: 0, started: 0,
 };
@@ -2990,7 +3013,7 @@ function burst(pos, color, n = 8) {
 }
 
 // Hotbar
-const SLOTS = [{ k: 'hands', ic: '✊', n: 'Hands' }, { k: 'axe', ic: '🪓', n: 'Axe' }, { k: 'spear', ic: '🔱', n: 'Spear' }];
+const SLOTS = [{ k: 'hands', ic: '✊', n: 'Hands' }, { k: 'axe', ic: '🪓', n: 'Axe' }, { k: 'bow', ic: '🏹', n: 'Bow' }];
 function renderHUD() {
   $('hpB').style.width = S.hp + '%'; $('foodB').style.width = S.food + '%'; $('staB').style.width = S.sta + '%';
   $('enB').style.width = S.energy + '%'; $('enN').textContent = Math.ceil(S.energy); $('hpN').textContent = Math.ceil(S.hp); $('staN').textContent = Math.ceil(S.sta); $('foodN').textContent = Math.ceil(S.food);
@@ -3024,14 +3047,27 @@ function renderHUD() {
 const RECIPES = [
   { id: 'rope', ic: '🧶', name: 'Rope', desc: 'Twisted fiber. Holds a raft together.', cost: { fiber: 3 }, make: () => give('rope', 1) },
   { id: 'axe', bench: true, ic: '🪓', name: 'Stone Axe', desc: 'Fells trees and splits rocks. Made at Nestor\'s workbench.', cost: { wood: 3, stone: 2, fiber: 1 }, once: () => S.tools.axe, make: () => { S.tools.axe = true; S.slot = 1; } },
-  { id: 'spear', bench: true, ic: '🔱', name: 'Spear', desc: 'Long reach, heavy damage. For hunting and fights. Made at Nestor\'s workbench.', cost: { wood: 4, stone: 1, fiber: 2 }, once: () => S.tools.spear, make: () => { S.tools.spear = true; S.slot = 2; } },
+  { id: 'bow', bench: true, ic: '🏹', name: 'Hunting Bow', desc: 'A bent olive stave strung with twisted fiber. Kills at range: the only way to bring down deer before they bolt. Made at Nestor\'s workbench.', cost: { wood: 4, fiber: 3, rope: 1 }, once: () => S.tools.bow, make: () => { S.tools.bow = true; S.slot = 2; P.equip = null; } },
+  { id: 'arrows', ic: '➶', name: 'Arrows ×6', desc: 'Straight shafts, knapped stone heads and feather fletching. Six per bundle.', cost: { wood: 1, stone: 1, fiber: 1 }, make: () => give('arrows', 6) },
   { id: 'fire', ic: '🔥', name: 'Campfire', desc: 'Light, warmth, cooking. Wolves keep their distance. Placed in front of you.', cost: { wood: 5, stone: 3 }, make: placeCampfire },
 ];
+// Recipes are taught by Nestor as the story goes: rope and fire from the start, the axe when he sets the First Tool,
+// the bow and arrows when he sends you to arm yourself.
+const TEACH = [[0, ['rope', 'fire']], [1, ['axe']], [5, ['bow', 'arrows']]];
+function syncRecipes() {
+  S.recipes ||= [];
+  for (const [qi, ids] of TEACH) if (S.questIdx >= qi || S.explore) for (const id of ids) if (!S.recipes.includes(id)) {
+    S.recipes.push(id); if (S.running && qi > 0 && !S.explore) toast(`Nestor taught you a recipe: <b>${RECIPES.find((r) => r.id === id).name}</b> (C)`, true);
+  }
+}
+const known = (r) => (S.recipes || []).includes(r.id);
 const nearBench = () => Math.hypot(player.position.x - BENCH.x, player.position.z - BENCH.z) < 4.5;
 const canAfford = (cost) => Object.entries(cost).every(([k, v]) => S.inv[k] >= v);
 let craftSel = 'axe';
 function renderCraft() {
-  $('recipes').innerHTML = RECIPES.map((r) => `<button class="rrow ${r.id === craftSel ? 'on' : ''} ${canAfford(r.cost) ? '' : 'no'}" data-sel="${r.id}"><i>${r.ic}</i>${r.name}</button>`).join('');
+  syncRecipes(); if (!known(RECIPES.find((x) => x.id === craftSel))) craftSel = RECIPES.find(known)?.id || 'rope';
+  $('recipes').innerHTML = RECIPES.map((r) => known(r) ? `<button class="rrow ${r.id === craftSel ? 'on' : ''} ${canAfford(r.cost) ? '' : 'no'}" data-sel="${r.id}"><i>${r.ic}</i>${r.name}</button>`
+    : `<button class="rrow locked" disabled><i>📜</i>Unknown recipe<small>Nestor will teach you</small></button>`).join('');
   const r = RECIPES.find((x) => x.id === craftSel), owned = r.once && r.once(), away = r.bench && !nearBench();
   const cost = Object.entries(r.cost).map(([k, v]) => `<div class="slot ${S.inv[k] >= v ? '' : 'no'}" title="${NAMES[k]}">${ICONS[k]}<em>${v}</em></div>`).join('');
   $('rdetail').innerHTML = `<h3>${r.name}</h3><div class="big">${r.ic}</div><div class="desc">${r.desc}</div><div class="cost">${cost}</div>
@@ -3040,7 +3076,7 @@ function renderCraft() {
 $('recipes').addEventListener('click', (e) => { const b = e.target.closest('[data-sel]'); if (b) { craftSel = b.dataset.sel; renderCraft(); } });
 $('rdetail').addEventListener('click', (e) => {
   const id = e.target.dataset?.r; if (!id) return;
-  const r = RECIPES.find((x) => x.id === id); if (!canAfford(r.cost) || (r.bench && !nearBench())) return;
+  const r = RECIPES.find((x) => x.id === id); if (!known(r) || !canAfford(r.cost) || (r.bench && !nearBench())) return;
   for (const [k, v] of Object.entries(r.cost)) S.inv[k] -= v;
   r.make(); toast(`Crafted <b>${r.name}</b>`); snd.craft(); renderCraft();
 });
@@ -3148,14 +3184,14 @@ const Q = [
     obj: () => [['Place the offering at the statue (E)', !!S.offered]], target: () => ATHENA_OFFER },
   { title: 'Return to Nestor', desc: 'The goddess answered. Go back to Nestor and tell him what you saw.',
     obj: () => [['Report to Nestor', !!S.reported]], target: () => nestor.position },
-  { title: 'Arms of the Chosen', desc: 'An axe works wood. A spear keeps beasts at a distance. Craft one at the workbench in Nestor\'s smithy.',
-    obj: () => [['Craft a Spear at the workbench', S.tools.spear]], target: () => BENCH },
+  { title: 'Arms of the Chosen', desc: 'An axe works wood, but deer do not wait for you to walk up to them. Nestor has taught you to make a hunting bow and arrows: craft them at the workbench in his smithy.',
+    obj: () => [['Craft a Hunting Bow at the workbench', S.tools.bow], [`Arrows ${Math.min(S.inv.arrows, 12)}/12`, S.inv.arrows >= 12]], target: () => BENCH },
   { title: 'Fire Before Dark', desc: 'Nights on Nisos are long and the wolves come out. Build a campfire. Resting at it with R makes time pass faster.',
     obj: () => [['Build a Campfire (C)', !!S.campfire]], target: () => null },
   { title: 'The Hunt', desc: 'Berries alone will not keep you alive. Hunt two deer, then a stag or a wild bull (they fight back), and cook the meat at your fire with E.',
     obj: () => [[`Deer ${Math.min(S.kills.deer, 2)}/2`, S.kills.deer >= 2], [`Stag or wild bull ${Math.min(S.kills.stag + S.kills.bull, 1)}/1`, S.kills.stag + S.kills.bull >= 1], [`Cook meat ${Math.min(S.cooked, 3)}/3`, S.cooked >= 3]],
     target: () => (S.kills.deer < 2 ? nearestCreature('deer') : S.kills.stag + S.kills.bull < 1 ? nearestCreature('stag', 'bull') : null) },
-  { title: 'The Long Night', desc: 'Survive until dawn. Stay near the fire, keep your spear ready and eat when you are hungry.',
+  { title: 'The Long Night', desc: 'Survive until dawn. Stay near the fire, keep your bow strung and eat when you are hungry.',
     obj: () => [[`Survive a night (${S.nights - S.nightsAtStart}/1)`, S.nights - S.nightsAtStart >= 1]], target: () => S.campfire?.pos, start: () => { S.nightsAtStart = S.nights; } },
   { title: 'The Cave of Echoes', desc: 'Zeus left a sail in the cave on the mountain\'s flank for the chosen. Chosen who failed now guard it. Clear the skeletons and open the chest.',
     obj: () => { const k = skeletons.filter((s) => s.dead).length; return [[`Skeletons ${k}/3`, k >= 3], ['Loot the old chest', !chest.alive]]; }, target: () => chestPos },
@@ -3199,7 +3235,7 @@ function checkQuest() {
     toast(`Quest complete: ${q.title}`, true); snd.questDone(); setTimeout(() => saveGame(false), 2500);
     S.questIdx++; const n = Q[S.questIdx]; if (n?.start) n.start();
     if (n) setTimeout(() => questCard(n), 900);
-    if (S.questIdx === 9) setTimeout(() => say([['Nestor', 'You lived through the night. Good. Now listen: Zeus left a sail in the Cave of Echoes, up on the flank of the mountain, in a bronze-bound chest.'], ['Nestor', 'Chosen ones who failed guard it now. They do not sleep. Take your spear, and a full belly.']]), 1500);
+    if (S.questIdx === 9) setTimeout(() => say([['Nestor', 'You lived through the night. Good. Now listen: Zeus left a sail in the Cave of Echoes, up on the flank of the mountain, in a bronze-bound chest.'], ['Nestor', 'Chosen ones who failed guard it now. They do not sleep. Take your bow, plenty of arrows, and a full belly.']]), 1500);
   }
 }
 
@@ -3216,15 +3252,15 @@ function talkNestor() {
   if (i === 4) return say([
     ['Nestor', 'A column of gold over the temple. I saw it from here. So did half of Olympos, I think.'],
     ['Nestor', 'Athena does not answer everyone. Good. Very good.'],
-    ['Nestor', 'Now the real work. The nights here are long and the beasts are real. You will need a spear, a fire and a full belly.'],
+    ['Nestor', 'Now the real work. The nights here are long and the beasts are real. You will need a bow, a fire and a full belly.'],
   ], () => { S.reported = true; });
   const lines = {
     1: 'Three wood, two stone, one fiber, all from the ground. Then make the axe at my workbench in the smithy, round the west side.',
     2: 'Berries grow on the bushes all over the island. The Sacred Olive stands at the heart of the terraces to the south-east, older than anyone remembers. Cut one branch, no more.',
     3: 'The temple is east, past the lake. Place the offering at Athena\'s feet. Kneel if you want to, she likes that.',
-    5: 'An axe first, now a spear. Use the workbench in the smithy. Trust me on the spear.',
+    5: 'An axe first, now a bow. Bend an olive stave, string it with twisted fiber, and fletch your arrows well. Use the workbench in the smithy.',
     6: 'The sun falls fast here. When it is gone the wolves come out of the pines. Build a fire.',
-    7: 'Deer run, but stags and wild bulls fight back. Keep the spear pointed at the horns. Cook the meat, raw meat will make you sick.',
+    7: 'Deer run, but stags and wild bulls fight back. Shoot from a distance and keep moving. Cook the meat, raw meat will make you sick.',
     8: 'Stay close to the fire tonight. The wolves are cowards, but hungry ones.',
     9: 'The cave is north, where the trail climbs the mountain. Bring courage. Or do not come back at all, ha.',
     10: 'Your boat is still in the cove. Twelve logs, four ropes, the sail from the cave, and food for the crossing.',
@@ -3244,7 +3280,7 @@ const STORY = [
 ];
 const TUTORIAL = [
   { kicker: 'Nestor teaches · 1/5', title: 'Gather', body: 'Walk up to branches, pebbles, bushes and reeds and press <b>E</b> to pick them up. Bushes give berries and grow back.', keys: [['E', 'Interact / pick up'], ['WASD', 'Move'], ['Shift', 'Sprint'], ['Space', 'Jump']] },
-  { kicker: 'Nestor teaches · 2/5', title: 'Fight', body: 'Your fists are for beasts, not trees: <b>Left Click</b> to strike. Wood and stone come from branches and pebbles on the ground; once you have an axe you can fell trees and split rocks.', keys: [['LMB', 'Swing / attack'], ['1–3', 'Hands · Axe · Spear']] },
+  { kicker: 'Nestor teaches · 2/5', title: 'Fight', body: 'Your fists are for beasts, not trees: <b>Left Click</b> to strike. Wood and stone come from branches and pebbles on the ground; once you have an axe you can fell trees and split rocks.', keys: [['LMB', 'Swing / attack'], ['1–3', 'Hands · Axe · Bow']] },
   { kicker: 'Nestor teaches · 3/5', title: 'Craft', body: 'Tools are made at the <b>workbench</b> in my smithy, beside the house: walk up and press <b>E</b>. A Stone Axe needs 3 wood, 2 stone and 1 fiber. Simple things like rope and a campfire you can make anywhere with <b>C</b>. Your bag is on <b>Tab</b>.', keys: [['C', 'Crafting'], ['Tab', 'Inventory']] },
   { kicker: 'Nestor teaches · 4/5', title: 'Stay Alive', body: 'Watch your bars: <b>health</b>, <b>stamina</b>, <b>hunger</b> and <b>energy</b>. Press <b>F</b> to eat. Energy drains through the day; when you tire, <b>sleep</b> by a fire or at my hearth (walk up and press <b>E</b>), and choose how long. You wake rested, but hungrier. Nothing hunts near my house.', keys: [['F', 'Eat'], ['E', 'Sleep at a fire'], ['R', 'Rest at a fire']] },
   { kicker: 'Nestor teaches · 5/5', title: 'Find Your Way', body: 'Follow the gold <b>◆</b> marker on the compass to your current objective. <b>M</b> opens the map. Climbing the watchtower in the north-west reveals the whole island.', keys: [['M', 'Map'], ['◆', 'Objective marker']] },
@@ -3351,11 +3387,11 @@ function openMenu(id) {                      // one panel at a time; frees the m
 document.querySelectorAll('[data-close]').forEach((b) => b.onclick = () => openMenu(b.dataset.close));
 function renderInv() {
   const items = [];
-  if (S.tools.axe) items.push(['🪓', 1, 'Axe']); if (S.tools.spear) items.push(['🔱', 1, 'Spear']);
+  if (S.tools.axe) items.push(['🪓', 1, 'Axe']); if (S.tools.bow) items.push(['🏹', 1, 'Hunting Bow']);
   for (const k of Object.keys(S.inv)) if (S.inv[k] > 0) items.push([ICONS[k], S.inv[k], NAMES[k]]);
   let html = ''; for (let i = 0; i < 20; i++) { const it = items[i]; html += it ? `<div class="slot" title="${it[2]}">${it[0]}<em>${it[1]}</em></div>` : '<div class="slot"></div>'; }
   $('invGrid').innerHTML = html;
-  const wt = Object.values(S.inv).reduce((a, b) => a + b, 0) * 2 + (S.tools.axe ? 6 : 0) + (S.tools.spear ? 5 : 0);
+  const wt = Object.values(S.inv).reduce((a, b) => a + b, 0) * 2 + (S.tools.axe ? 6 : 0) + (S.tools.bow ? 4 : 0);
   $('invWt').style.width = Math.min(100, wt / 3) + '%'; $('invWtN').textContent = `${wt} / 300`;
 }
 function toggleCraft() { openMenu('craft'); }
@@ -3371,7 +3407,7 @@ function debugSkipQuest() {
   if (i === 2) { S.inv.berries += 3; S.oliveBranch = true; }
   if (i === 3) S.offered = true;
   if (i === 4) S.reported = true;
-  if (i === 5) S.tools.spear = true;
+  if (i === 5) { S.tools.bow = true; S.inv.arrows = Math.max(S.inv.arrows, 12); }
   if (i === 6) placeCampfire();
   if (i === 7) { S.kills.deer = Math.max(2, S.kills.deer); S.kills.stag = Math.max(1, S.kills.stag); S.cooked = Math.max(3, S.cooked); S.inv.meat += 3; }
   if (i === 8) S.nights++;
@@ -3496,14 +3532,15 @@ function eat() {
 // ============================================================
 // Combat & gathering (left click)
 // ============================================================
-const TOOL_STATS = { hands: { dmg: 5, wood: 1, stone: 1, reach: 2.3 }, axe: { dmg: 11, wood: 4, stone: 4, reach: 2.6 }, spear: { dmg: 24, wood: 1, stone: 1, reach: 3.4 } };
+const TOOL_STATS = { hands: { dmg: 5, wood: 1, stone: 1, reach: 2.3 }, axe: { dmg: 11, wood: 4, stone: 4, reach: 2.6 }, bow: { dmg: 4, wood: 1, stone: 1, reach: 2.2 } };
 // ---- Bow & arrows: models from the user's asset pack
 const bowHeld = new THREE.Group(), arrowProto = { obj: null }, arrows = [];
-// (bow disabled for the prologue: no ranged weapon on Nisos)
+// the hunting bow: one model in the left hand, a copy slung across the back when it's put away
+loadTexturedFBX('bow', 1.35, (obj) => { const c = new THREE.Group(); c.add(obj); obj.position.y -= 0.675; bowHeld.add(c); const b = c.clone(); backBow.add(b); });
 loadTexturedFBX('arrow', 0.9, (obj) => { obj.position.y -= 0.45; const g = new THREE.Group(); g.add(obj); g.rotation.x = Math.PI / 2; const w = new THREE.Group(); w.add(g); arrowProto.obj = w; });
 function shootArrow() {
   if (S.inv.arrows <= 0) { toast('No arrows. Craft some (C)'); return; }
-  S.inv.arrows--; P.drawT = 0.35; snd.bow();
+  S.inv.arrows--; P.drawT = 0.55; snd.bow(); P.yaw = camYaw + Math.PI; player.rotation.y = P.yaw;   // turn to face where you aim
   const dir = new THREE.Vector3(-Math.sin(camYaw) * Math.cos(camPitch - 0.18), -Math.sin(camPitch - 0.18), -Math.cos(camYaw) * Math.cos(camPitch - 0.18)).normalize();
   const o = arrowProto.obj ? arrowProto.obj.clone() : mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.9, 4), trunkMat, 0, 0, 0);
   o.position.copy(player.position).add(new THREE.Vector3(0, 1.5, 0)).addScaledVector(dir, 0.8); scene.add(o);
@@ -3524,7 +3561,7 @@ function updateArrows(dt) {
   }
 }
 function startSwing() {
-  if (S.slot === 3 && S.tools.bow) { if (!(P.drawT > 0)) shootArrow(); return; }
+  if (S.slot === 2 && S.tools.bow) { if (!(P.drawT > 0) && !P.dead && !S.paused) shootArrow(); return; }
   if (P.swing > 0 || P.dead || S.paused) return;
   if (S.sta < 6) { toast('Too tired'); return; }
   S.sta -= 8; P.swing = 1; P.swingHit = false; setTimeout(() => snd.swing(S.slot !== 0), 120);
@@ -3559,7 +3596,7 @@ function doHit() {
     const pk = addPickup('olivebranch', to, oliveBranch); pk.obj.position.y += 3; pk.fallT = 0.6;
     toast('A branch cracks and falls from the <b>Sacred Olive</b>. Pick it up.', true); return;
   }
-  if (SLOTS[S.slot].k !== 'axe') {   // bare hands and the spear are for fighting; gather wood and stone from the ground
+  if (SLOTS[S.slot].k !== 'axe') {   // bare hands and the bow are for fighting; gather wood and stone from the ground
     if (resources.some((r) => r.alive && inFront(r.pos, tool.reach + r.r)) && !(P.hintT > 0)) { toast('You can\'t break that by hand. Pick up branches and stones from the ground, or use an axe.'); P.hintT = 6; setTimeout(() => (P.hintT = 0), 6000); }
     return;
   }
@@ -3803,9 +3840,9 @@ function updatePlayer(dt) {
   }
   let axeVis = S.slot === 1;
   if (P.equip && (P.equip.kind === 'equip' ? EQUIP : DISARM).ready) axeVis = P.equip.kind === 'equip' ? P.equip.t > 0.5 : P.equip.t < 0.6;
-  tools.axe.visible = axeVis; tools.spear.visible = S.slot === 2;
-  backAxe.visible = S.tools.axe && !axeVis; backSpear.visible = S.tools.spear && S.slot !== 2;
-  if (backSpear.visible && !backSpear.children.length) { const sp = tools.spear.clone(); sp.visible = true; sp.scale.setScalar(1); sp.position.set(0, -0.6, 0); sp.rotation.set(0, 0, 0); backSpear.add(sp); } bowHeld.visible = S.slot === 3 && S.tools.bow;
+  tools.axe.visible = axeVis; bowHeld.visible = S.slot === 2 && S.tools.bow;
+  backAxe.visible = S.tools.axe && !axeVis; backBow.visible = S.tools.bow && S.slot !== 2;
+  // (bow visibility handled above)
   if (P.drawT > 0) P.drawT -= dt; updateArrows(dt);
   if (P.hurtT > 0) P.hurtT -= dt;
 }
@@ -4165,7 +4202,7 @@ function loop() {
       else if (it) $('prompt').innerHTML = `<kbd>E</kbd> ${it.label}`;
       else if (nearestFire(player.position, 4)) { $('prompt').classList.remove('hidden'); $('prompt').innerHTML = '<kbd>R</kbd> Hold to rest by the fire'; }
     }
-    checkQuest();
+    checkQuest(); syncRecipes();
     const q = Q[S.questIdx], target = q && q.target();
     const qm = updateQuestMarkers(t);
     waypoint.visible = !!target && !S.sailing && !qm.some((m) => m.pos.distanceTo(target) < 3);
@@ -4192,7 +4229,7 @@ let cullFrame = 0, shadowTick = 0;
 // ---- Save / load (browser storage). The world is generated from a fixed seed, so pickups, trees, rocks and
 //      creatures are saved by index: what you picked up, felled or killed stays that way.
 const SAVE_KEY = 'argonisos.save.v2'   // v2: new world layout (animal pack, paddock); v1 saves no longer line up, INIT_CREATURES = creatures.length;
-const SAVE_FIELDS = ['questIdx', 'inv', 'tools', 'slot', 'day', 'time', 'hp', 'food', 'sta', 'energy', 'talkedNestor', 'oliveBranch', 'offered', 'reported', 'raftBuilt', 'kills', 'cooked', 'nights', 'nightsAtStart', 'warnedOnce', 'warnDay'];
+const SAVE_FIELDS = ['recipes', 'questIdx', 'inv', 'tools', 'slot', 'day', 'time', 'hp', 'food', 'sta', 'energy', 'talkedNestor', 'oliveBranch', 'offered', 'reported', 'raftBuilt', 'kills', 'cooked', 'nights', 'nightsAtStart', 'warnedOnce', 'warnDay'];
 function saveGame(manual) {
   if (!S.running || S.explore || S.sailing) { if (manual) toast('Nothing to save here.'); return; }
   try {
@@ -4336,7 +4373,7 @@ function syncExplore() {
 }
 $('exploreBtn').onclick = () => {
   initAudio();
-  S.explore = true; Object.assign(S.tools, { axe: true, spear: true });
+  S.explore = true; Object.assign(S.tools, { axe: true, bow: true }); S.inv.arrows = Math.max(S.inv.arrows, 30);
   $('quest').classList.add('hidden'); $('hints').innerHTML = '<span>Fly / walk</span><span class="kbd">V</span><span>Travel &amp; time</span><span class="kbd">O</span><span>Time of day</span><span class="kbd">[ ]</span><span>Hide HUD</span><span class="kbd">H</span><span>Map</span><span class="kbd">M</span><span>Fast</span><span class="kbd">SHIFT</span>';
   $('title').classList.add('hidden'); $('hud').classList.remove('hidden');
   S.running = true; S.started = performance.now(); setPause(false); canvas.requestPointerLock();
