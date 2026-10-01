@@ -2480,14 +2480,20 @@ function animateHero(dt, speed) {
   }
   if (idle) idle.setEffectiveWeight(Math.max(1 - moveW, run ? 0 : 1));
   HA.mixer.update(dt);
-  // Breathing on top of the held idle frame
+  // The mixer only writes a bone when its clip value changed since last frame. The idle is a held frame, so without this
+  // the breathing and one-shot overlays below would pile up frame after frame (the hero slowly rocked and then snapped).
+  const off = (HA.mixer._accuIndex + 1);
+  for (const b of HA.mixer._bindings) b.binding.setValue(b.buffer, off * b.valueSize);
+  // Gentle breathing on top of the held idle frame
   HA.t += dt;
-  const sp = HA.bones.mixamorigSpine2; if (sp) sp.rotateX(Math.sin(HA.t * 1.9) * 0.025 * (1 - moveW));
+  const sp = HA.bones.mixamorigSpine2; if (sp) sp.rotateX(Math.sin(HA.t * 1.9) * 0.02 * (1 - moveW));
   const moving = speed > 0.5;
   // Jump: skip the wind-up crouch, map airtime onto the rise/fall, then a short landing settle
-  if (!P.onGround) P.jumpT = (P.jumpT || 0) + dt; else if (P.jumpT) { P.landT = 0.25; P.jumpT = 0; }
+  // Only a real jump or a real fall plays it: a one-frame ground-contact flicker on uneven ground must not twitch the body
+  if (!P.onGround) P.airT = (P.airT || 0) + dt; else { if (P.airT > 0.3) P.landT = 0.25; P.airT = 0; P.jumped = false; }
+  P.jumpT = P.jumped || P.airT > 0.25 ? P.airT : 0;
   if (P.landT > 0) P.landT -= dt;
-  if (P.jumpT > 0) heroOverlay(JUMP, 0.28 + P.jumpT / 0.7 * 0.5, 1, false);
+  if (P.jumpT > 0) heroOverlay(JUMP, 0.28 + P.jumpT / 0.7 * 0.5, Math.min(1, P.jumpT * 8), false);
   else if (P.landT > 0) heroOverlay(JUMP, 0.8 + (0.25 - P.landT) * 0.6, P.landT / 0.25, false);
   if (P.equip) {
     P.equip.t += dt / 0.9;
@@ -3415,7 +3421,7 @@ function updatePlayer(dt) {
   player.rotation.y = P.yaw;
   // Jump / gravity
   if (P.jumpBuf > 0) P.jumpBuf -= dt;
-  if (P.jumpBuf > 0 && P.onGround && S.sta > 10 && !swimming) { P.jumpBuf = 0; P.vel.y = 7.4; P.onGround = false; S.sta -= 10; snd.jump(); }
+  if (P.jumpBuf > 0 && P.onGround && S.sta > 10 && !swimming) { P.jumpBuf = 0; P.vel.y = 7.4; P.onGround = false; P.jumped = true; S.sta -= 10; snd.jump(); }
   const wasAir = !P.onGround && P.vel.y < -4;
   P.vel.y -= 20 * dt; player.position.y += P.vel.y * dt;
   const floor = Math.max(heightAt(player.position.x, player.position.z), swimming ? -1.2 : -99);
@@ -3453,7 +3459,7 @@ function updatePlayer(dt) {
   if (P.equip && (P.equip.kind === 'equip' ? EQUIP : DISARM).ready) axeVis = P.equip.kind === 'equip' ? P.equip.t > 0.5 : P.equip.t < 0.6;
   tools.axe.visible = axeVis; tools.spear.visible = S.slot === 2;
   backAxe.visible = S.tools.axe && !axeVis; backSpear.visible = S.tools.spear && S.slot !== 2;
-  if (backSpear.visible && !backSpear.children.length) { const sp = tools.spear.clone(); sp.visible = true; sp.position.set(0, -0.6, 0); sp.rotation.set(0, 0, 0); backSpear.add(sp); } bowHeld.visible = S.slot === 3 && S.tools.bow;
+  if (backSpear.visible && !backSpear.children.length) { const sp = tools.spear.clone(); sp.visible = true; sp.scale.setScalar(1); sp.position.set(0, -0.6, 0); sp.rotation.set(0, 0, 0); backSpear.add(sp); } bowHeld.visible = S.slot === 3 && S.tools.bow;
   if (P.drawT > 0) P.drawT -= dt; updateArrows(dt);
   if (P.hurtT > 0) P.hurtT -= dt;
 }
