@@ -4024,7 +4024,13 @@ function endIntro() {
 $('cineSkip').onclick = () => endIntro();
 $('startBtn').onclick = () => {
   const first = !S.running;
-  if (first && readSave() && !confirm('Start a new game? Your saved game will be replaced at the next save.')) return;
+  // confirm() is blocked inside the sandboxed artifact frame, so confirm with a second click instead
+  const btn = $('startBtn');
+  if (first && readSave() && !btn.dataset.armed) {
+    btn.dataset.armed = '1'; btn.innerHTML = 'Start over? <small style="display:block;font-size:12px;opacity:.75">Click again. Your save is replaced at the next save.</small>';
+    setTimeout(() => { delete btn.dataset.armed; if (!S.running) btn.textContent = 'New Game'; }, 8000); return;
+  }
+  delete btn.dataset.armed;
   if (first) {
     initAudio(); $('title').classList.add('fading'); setTimeout(() => { $('title').classList.add('hidden'); $('title').classList.remove('fading'); }, 1600);
     S.running = true; S.started = performance.now(); setPause(false); playIntro(); return;
