@@ -1322,12 +1322,47 @@ var ATHENA_OFFER;
   const inner = []; for (let z = -cd + 1.4; z < cd - 3; z += 2.3) inner.push([-3.9, z], [3.9, z]);
   for (const [x, z] of inner) { mesh(icol, marble, x, top + 2.05, z, g); mesh(new THREE.BoxGeometry(0.9, 0.2, 0.9), marble, x, top + 4.2, z, g); mesh(icol2, marble, x, top + 4.3 + 1.65, z, g); mesh(new THREE.BoxGeometry(0.7, 0.18, 0.7), marble, x, top + 7.7, z, g); colliders.push({ x: TEMPLE.x + x, z: TEMPLE.z + z, r: 0.45 }); }
   for (const sx of [-1, 1]) { mesh(new THREE.BoxGeometry(0.6, 0.35, cd * 2 - 4.4), marble, sx * 3.9, top + 4.4, -1.6, g); mesh(new THREE.BoxGeometry(0.5, 0.3, cd * 2 - 4.4), marble, sx * 3.9, top + 7.9, -1.6, g); }
-  const poolZ0 = -4.6, poolZ1 = -0.6, poolX = 2.1;
-  for (const [w, d, x, z] of [[poolX * 2 + 0.5, 0.35, 0, poolZ0], [poolX * 2 + 0.5, 0.35, 0, poolZ1], [0.35, poolZ1 - poolZ0, -poolX, (poolZ0 + poolZ1) / 2], [0.35, poolZ1 - poolZ0, poolX, (poolZ0 + poolZ1) / 2]]) mesh(new THREE.BoxGeometry(w, 0.32, d), marbleDark, x, top + 0.16, z, g);
-  const pool = mesh(new THREE.PlaneGeometry(poolX * 2 - 0.3, poolZ1 - poolZ0 - 0.3), new THREE.MeshStandardMaterial({ color: 0x0b1a22, roughness: 0.04, metalness: 0.9, envMapIntensity: 1.4 }), 0, top + 0.22, (poolZ0 + poolZ1) / 2, g); pool.rotation.x = -Math.PI / 2; pool.userData.keep = true;
-  wallColliders(TEMPLE.x - poolX, TEMPLE.z + poolZ0, TEMPLE.x + poolX, TEMPLE.z + poolZ0, 0.35); wallColliders(TEMPLE.x - poolX, TEMPLE.z + poolZ1, TEMPLE.x + poolX, TEMPLE.z + poolZ1, 0.35);
-  wallColliders(TEMPLE.x - poolX, TEMPLE.z + poolZ0, TEMPLE.x - poolX, TEMPLE.z + poolZ1, 0.35); wallColliders(TEMPLE.x + poolX, TEMPLE.z + poolZ0, TEMPLE.x + poolX, TEMPLE.z + poolZ1, 0.35);
-  // Offering table between the pool and the pedestal
+  // Processional aisle (the old reflecting pool is gone): a woven red runner with a gold meander border leads from
+  // the doors to the offering table; bronze lamp stands (lychnoi) line it, votive kraters with olive branches stand
+  // between the columns, and painted shields hang on the walls above a red-and-blue meander frieze.
+  { const c = document.createElement('canvas'); c.width = 64; c.height = 256; const x2 = c.getContext('2d');
+    x2.fillStyle = '#8a2420'; x2.fillRect(0, 0, 64, 256); x2.fillStyle = '#6e1a18'; for (let y = 0; y < 256; y += 4) x2.fillRect(0, y, 64, 1);
+    x2.fillStyle = '#d9a640'; x2.fillRect(0, 0, 6, 256); x2.fillRect(58, 0, 6, 256);
+    x2.strokeStyle = '#d9a640'; x2.lineWidth = 2; for (let y = 0; y < 256; y += 16) { x2.beginPath(); x2.moveTo(10, y); x2.lineTo(10, y + 12); x2.lineTo(18, y + 12); x2.lineTo(18, y + 4); x2.lineTo(14, y + 4); x2.stroke(); x2.beginPath(); x2.moveTo(54, y); x2.lineTo(54, y + 12); x2.lineTo(46, y + 12); x2.lineTo(46, y + 4); x2.lineTo(50, y + 4); x2.stroke(); }
+    for (let y = 24; y < 256; y += 64) { x2.fillStyle = '#d9a640'; x2.beginPath(); x2.arc(32, y, 8, 0, 7); x2.fill(); x2.fillStyle = '#8a2420'; x2.beginPath(); x2.arc(32, y, 4, 0, 7); x2.fill(); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 3);
+    const run = mesh(new THREE.PlaneGeometry(2.2, cd * 2 - 6.5), new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 }), 0, top + 0.035, (cd - 6.5 + 0.5) / 2 - 0.4, g); run.rotation.x = -Math.PI / 2; run.receiveShadow = true; run.userData.keep = true; }
+  const bronze = new THREE.MeshStandardMaterial({ color: 0x8a6a38, metalness: 0.75, roughness: 0.38 });
+  for (const sx of [-1, 1]) for (let z = cd - 2.5; z > -5; z -= 3.2) {                       // lamp stands with flames
+    const L = new THREE.Group(); L.position.set(sx * 1.75, top, z); g.add(L);
+    mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.12, 10), bronze, 0, 0.06, 0, L); mesh(new THREE.CylinderGeometry(0.035, 0.045, 1.9, 6), bronze, 0, 1.0, 0, L);
+    mesh(new THREE.CylinderGeometry(0.2, 0.08, 0.14, 10), bronze, 0, 1.98, 0, L);
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.26, 6), new THREE.MeshBasicMaterial({ color: 0xffb040 })); fl.position.y = 2.18; L.add(fl); braziers.push(fl);
+    colliders.push({ x: TEMPLE.x + sx * 1.75, z: TEMPLE.z + z, r: 0.25 });
+  }
+  const clay = new THREE.MeshStandardMaterial({ color: 0xb4602e, roughness: 0.7 }), blackG = new THREE.MeshStandardMaterial({ color: 0x1c1610, roughness: 0.5 });
+  for (const [x, z] of inner.filter((_, i) => i % 2 === 0).map(([x, z]) => [x * 0.82, z + 1.15])) {   // kraters between the columns, olive sprigs in them
+    const k = new THREE.Group(); k.position.set(x, top, z); g.add(k);
+    mesh(new THREE.LatheGeometry([[0.001, 0], [0.18, 0], [0.12, 0.12], [0.16, 0.25], [0.38, 0.55], [0.42, 0.8], [0.36, 0.86]].map(([r, y]) => new THREE.Vector2(r, y)), 16), clay, 0, 0, 0, k);
+    mesh(new THREE.CylinderGeometry(0.405, 0.4, 0.14, 16, 1, true), blackG, 0, 0.66, 0, k);
+    for (let i = 0; i < 5; i++) { const br = mesh(new THREE.CylinderGeometry(0.012, 0.016, 0.8, 4), trunkMat, rr(-0.1, 0.1), 1.1, rr(-0.1, 0.1), k); br.rotation.set(rr(-0.4, 0.4), 0, rr(-0.4, 0.4));
+      for (let j = 0; j < 4; j++) { const lf = mesh(new THREE.SphereGeometry(0.05, 5, 3), flat(0x6e8a46), br.position.x + rr(-0.15, 0.15), 1.2 + j * 0.1, br.position.z + rr(-0.15, 0.15), k); lf.scale.set(0.5, 0.35, 1.8); lf.rotation.y = rr(0, 3); } }
+    colliders.push({ x: TEMPLE.x + x, z: TEMPLE.z + z, r: 0.45 });
+  }
+  { // meander frieze band on the inner walls, and painted bronze shields hung above it
+    const c = document.createElement('canvas'); c.width = 128; c.height = 32; const x2 = c.getContext('2d');
+    x2.fillStyle = '#25466e'; x2.fillRect(0, 0, 128, 32); x2.fillStyle = '#a3392c'; x2.fillRect(0, 0, 128, 4); x2.fillRect(0, 28, 128, 4);
+    x2.strokeStyle = '#e9dcc0'; x2.lineWidth = 3; for (let x = 0; x < 128; x += 32) { x2.beginPath(); x2.moveTo(x + 2, 24); x2.lineTo(x + 2, 8); x2.lineTo(x + 22, 8); x2.lineTo(x + 22, 20); x2.lineTo(x + 10, 20); x2.lineTo(x + 10, 14); x2.lineTo(x + 16, 14); x2.moveTo(x + 2, 24); x2.lineTo(x + 30, 24); x2.stroke(); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping;
+    for (const sx of [-1, 1]) { const tt = t.clone(); tt.repeat.set(cd * 2 / 2.2, 1); tt.needsUpdate = true;
+      const fr = mesh(new THREE.PlaneGeometry(cd * 2 - 1, 0.7), new THREE.MeshStandardMaterial({ map: tt, roughness: 0.8 }), sx * (cw - 0.42), top + 3.1, 0, g); fr.rotation.y = -sx * Math.PI / 2; fr.userData.keep = true; }
+    const tb = t.clone(); tb.repeat.set(cw * 2 / 2.2, 1); tb.needsUpdate = true;
+    const fb = mesh(new THREE.PlaneGeometry(cw * 2 - 1, 0.7), new THREE.MeshStandardMaterial({ map: tb, roughness: 0.8 }), 0, top + 3.1, -cd + 0.42, g); fb.userData.keep = true;
+    for (const sx of [-1, 1]) for (let z = cd - 3; z > -cd + 3; z -= 3.4) { const sh = new THREE.Group(); sh.position.set(sx * (cw - 0.48), top + 4.4, z); sh.rotation.y = -sx * Math.PI / 2; g.add(sh);
+      mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.06, 24).rotateX(Math.PI / 2), bronze, 0, 0, 0, sh); mesh(new THREE.TorusGeometry(0.55, 0.04, 5, 24), bronze, 0, 0, 0.03, sh);
+      mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.02, 20).rotateX(Math.PI / 2), paint([0xa3392c, 0x1c1610, 0x25466e][Math.abs(Math.round(z)) % 3], 0.4), 0, 0, 0.05, sh); }
+  }
+  // Offering table before the pedestal, on two marble steps
   mesh(new THREE.BoxGeometry(1.6, 0.9, 0.7), marble, 0, top + 0.45, -5.6, g); mesh(new THREE.BoxGeometry(1.9, 0.12, 0.9), ochre, 0, top + 0.95, -5.6, g);
   colliders.push({ x: TEMPLE.x, z: TEMPLE.z - 5.6, r: 0.8 });
   ATHENA_OFFER = new THREE.Vector3(TEMPLE.x, TY - 0.2 + top + 1.02, TEMPLE.z - 5.6);
@@ -1395,11 +1430,29 @@ var ATHENA_OFFER;
     const fl = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.9, 7), new THREE.MeshBasicMaterial({ color: 0xffa030 })); fl.position.y = 1.85; b.add(fl);
     const L = new THREE.PointLight(0xff9a40, 25, 14, 1.6); L.position.y = 2.2; b.add(L); braziers.push(fl);
     const ow = new THREE.Group(); ow.position.set(sgn * 5.6, 0, D + 4.4); g.add(ow);
-    mesh(new THREE.BoxGeometry(1.1, 1.3, 1.1), marble, 0, 0.65, 0, ow); const owl = new THREE.Group(); owl.position.y = 1.3; ow.add(owl);
-    const bd = mesh(new THREE.SphereGeometry(0.38, 14, 10), marbleDark, 0, 0.42, 0, owl); bd.scale.set(0.9, 1.15, 0.85);
-    mesh(new THREE.SphereGeometry(0.3, 14, 10), marbleDark, 0, 0.92, 0.04, owl);
-    for (const ex of [-1, 1]) { mesh(new THREE.SphereGeometry(0.1, 10, 8), ochre, ex * 0.12, 0.95, 0.26, owl); mesh(new THREE.SphereGeometry(0.045, 6, 4), paint(0x1a1410), ex * 0.12, 0.95, 0.35, owl); const ear = mesh(new THREE.ConeGeometry(0.07, 0.2, 4), marbleDark, ex * 0.18, 1.2, 0, owl); ear.rotation.z = -ex * 0.3; }
-    mesh(new THREE.ConeGeometry(0.05, 0.12, 4), ochre, 0, 0.86, 0.33, owl).rotation.x = Math.PI;
+    // plinth: moulded base, shaft with a carved olive wreath, cornice
+    mesh(new THREE.BoxGeometry(1.25, 0.22, 1.25), marbleDark, 0, 0.11, 0, ow); mesh(new THREE.BoxGeometry(1.0, 1.0, 1.0), marble, 0, 0.72, 0, ow); mesh(new THREE.BoxGeometry(1.2, 0.16, 1.2), marbleDark, 0, 1.3, 0, ow);
+    { const wr = mesh(new THREE.TorusGeometry(0.28, 0.035, 5, 18), marbleDark, 0, 0.75, 0.51, ow); for (let i = 0; i < 12; i++) { const an = i / 12 * Math.PI * 2; const lf = mesh(new THREE.SphereGeometry(0.05, 5, 3), marbleDark, Math.cos(an) * 0.28, 0.75 + Math.sin(an) * 0.28, 0.54, ow); lf.scale.set(0.5, 1.6, 0.4); lf.rotation.z = an; } }
+    // the owl: weathered bronze, perched on a gnarled olive branch, turning its head toward the stair
+    const ob = new THREE.MeshStandardMaterial({ color: 0x5f6e4e, metalness: 0.55, roughness: 0.5 }), obL = new THREE.MeshStandardMaterial({ color: 0x8a9a6a, metalness: 0.5, roughness: 0.45 });
+    const owl = new THREE.Group(); owl.position.y = 1.38; owl.rotation.y = sgn * -0.35; ow.add(owl);
+    const br = mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.95, 7), ob, 0, 0.1, 0.05, owl); br.rotation.z = Math.PI / 2 + 0.12;
+    const body = mesh(new THREE.LatheGeometry([[0.001, 0.05], [0.2, 0.08], [0.31, 0.25], [0.33, 0.45], [0.29, 0.65], [0.22, 0.78], [0.001, 0.82]].map(([r, y]) => new THREE.Vector2(r, y)), 18), ob, 0, 0.1, 0, owl); body.scale.z = 0.9;
+    for (let k = 0; k < 4; k++) { const row = mesh(new THREE.TorusGeometry(0.23 - k * 0.025, 0.018, 4, 14, Math.PI * 0.8), obL, 0, 0.28 + k * 0.1, 0.12, owl); row.rotation.set(0.2, 0, Math.PI * 1.1); }   // breast feathers
+    for (const sx of [-1, 1]) {                                                       // folded wings with primary feathers
+      const w = mesh(new THREE.SphereGeometry(0.26, 12, 8), ob, sx * 0.24, 0.48, -0.04, owl); w.scale.set(0.35, 1.25, 0.9); w.rotation.z = sx * 0.12;
+      for (let f = 0; f < 4; f++) { const fe = mesh(new THREE.BoxGeometry(0.04, 0.32, 0.1), ob, sx * (0.26 - f * 0.02), 0.2 - f * 0.03, -0.14 - f * 0.05, owl); fe.rotation.set(-0.3 - f * 0.08, 0, sx * 0.1); }
+      for (let t = 0; t < 3; t++) { const tl = mesh(new THREE.ConeGeometry(0.018, 0.1, 4), obL, sx * 0.08 + (t - 1) * 0.03 * sx, 0.06, 0.14, owl); tl.rotation.x = Math.PI / 2 + 0.6; }   // talons over the branch
+    }
+    const tail = mesh(new THREE.BoxGeometry(0.2, 0.25, 0.05), ob, 0, 0.1, -0.24, owl); tail.rotation.x = 0.45;
+    const hd = new THREE.Group(); hd.position.y = 0.9; hd.rotation.y = sgn * 0.45; owl.add(hd);
+    const sk = mesh(new THREE.SphereGeometry(0.25, 16, 12), ob, 0, 0, 0, hd); sk.scale.set(1.08, 0.92, 0.95);
+    for (const sx of [-1, 1]) {
+      const disc = mesh(new THREE.CylinderGeometry(0.12, 0.13, 0.04, 16).rotateX(Math.PI / 2), obL, sx * 0.1, 0.01, 0.19, hd); disc.rotation.y = sx * 0.3;   // facial disc
+      mesh(new THREE.SphereGeometry(0.065, 12, 10), new THREE.MeshStandardMaterial({ color: 0xd9a640, metalness: 0.8, roughness: 0.25, emissive: 0x3a2400 }), sx * 0.1, 0.02, 0.215, hd);   // gilded eyes
+      mesh(new THREE.SphereGeometry(0.03, 8, 6), paint(0x0e0b08, 0.3), sx * 0.1, 0.02, 0.27, hd);
+      const tuft = mesh(new THREE.ConeGeometry(0.05, 0.16, 5), ob, sx * 0.17, 0.2, 0.02, hd); tuft.rotation.z = sx * -0.45; }
+    const bk = mesh(new THREE.ConeGeometry(0.035, 0.1, 5), new THREE.MeshStandardMaterial({ color: 0xd9a640, metalness: 0.8, roughness: 0.3 }), 0, -0.07, 0.24, hd); bk.rotation.x = Math.PI + 0.5;
     colliders.push({ x: TEMPLE.x + sgn * 5.6, z: TEMPLE.z + D + 4.4, r: 0.8 });
   }
   g.position.copy(TEMPLE); g.position.y = TY - 0.2; bakeGroup(g);
