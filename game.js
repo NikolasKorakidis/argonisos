@@ -10,6 +10,7 @@ import { ShaderPass } from './jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from './jsm/postprocessing/OutputPass.js';
 import { VignetteShader } from './jsm/shaders/VignetteShader.js';
 import { GLTFLoader } from './jsm/loaders/GLTFLoader.js';
+import { icon, iconImg } from './icons.js';
 import { clone as cloneSkinned } from './jsm/utils/SkeletonUtils.js';
 import QTREES from './models/qtrees.js';
 import { initAudio, snd, updateAmbience, setVolume, VOL } from './audio.js';
@@ -37,11 +38,7 @@ function fbm(x, z) { let a = 0.5, f = 1, s = 0; for (let i = 0; i < 4; i++) { s 
 const ISLAND_R = 290;
 const RUINS = new THREE.Vector3(40, 0, 150);        // old hill clearing (now just a trail junction)
 const MOUNT = new THREE.Vector3(60, 0, -150);       // Mount Olympos
-const CAVE_MOUTH = new THREE.Vector3(-4, 0, -96);  // Cave of Echoes: a ravine leads to a mouth in the mountain's flank,
-const CAVE_DIR = new THREE.Vector3(64, 0, -54).normalize();   // a tunnel runs inward to a chamber
-const CH_R = 13, TUN_W = 2.6, TUN_LEN = 12;
-const CAVE = CAVE_MOUTH.clone().addScaledVector(CAVE_DIR, TUN_LEN + CH_R * 0.85);   // chamber centre
-const CAVE_APPROACH = CAVE_MOUTH.clone().addScaledVector(CAVE_DIR, -16);
+const WRECK_SITE = new THREE.Vector3(-196, 0, 136);  // the Drowned Ship: a merchant ship run aground in the Stymphalian Marsh
 const LAKE = new THREE.Vector3(140, 0, -60);        // Lake Kastalia (+ waterfall)
 const TEMPLE = new THREE.Vector3(205, 0, 60);       // Temple of Athena plateau
 const SWAMP = new THREE.Vector3(-175, 0, 115);      // Stymphalian Marsh
@@ -65,15 +62,10 @@ function baseHeight(x, z) {
   return h;
 }
 function segDist(x, z, a, b) { const dx = b.x - a.x, dz = b.z - a.z, t = clamp(((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz), 0, 1); return Math.hypot(x - a.x - dx * t, z - a.z - dz * t); }
-// foot: distance outside the walkable cave (≤0 inside: ravine, tunnel, chamber); over: distance from the roofed part
-function caveDist(x, z) {
-  const ch = Math.hypot(x - CAVE.x, z - CAVE.z) - CH_R, tun = segDist(x, z, CAVE_MOUTH, CAVE) - TUN_W, rav = segDist(x, z, CAVE_APPROACH, CAVE_MOUTH) - 3.2;
-  return { foot: Math.min(ch, tun, rav), over: Math.min(ch, tun) - 2, roofed: Math.min(ch, tun) < 0 && ((x - CAVE_MOUTH.x) * CAVE_DIR.x + (z - CAVE_MOUTH.z) * CAVE_DIR.z) > -0.5 };
-}
 const flatten = (h, x, z, c, r0, r1, target) => { const t = clamp((Math.hypot(x - c.x, z - c.z) - r0) / (r1 - r0), 0, 1); return lerp(target, h, t * t * (3 - 2 * t)); };
-const RUINS_Y = baseHeight(RUINS.x, RUINS.z) + 3, CAVE_Y = baseHeight(CAVE_MOUTH.x, CAVE_MOUTH.z) - 2.5, TEMPLE_Y = baseHeight(TEMPLE.x, TEMPLE.z) + 1.5, LAKE_Y = baseHeight(LAKE.x, LAKE.z) - 1;
+const RUINS_Y = baseHeight(RUINS.x, RUINS.z) + 3, TEMPLE_Y = baseHeight(TEMPLE.x, TEMPLE.z) + 1.5, LAKE_Y = baseHeight(LAKE.x, LAKE.z) - 1;
 const SUMMIT = MOUNT.clone(), SUMMIT_Y = baseHeight(MOUNT.x, MOUNT.z) - 14; const ARENA_R = 38; SUMMIT.y = SUMMIT_Y;   // boss arena on the peak
-RUINS.y = RUINS_Y; CAVE.y = CAVE_Y; TEMPLE.y = TEMPLE_Y; LAKE.y = LAKE_Y;
+RUINS.y = RUINS_Y; TEMPLE.y = TEMPLE_Y; LAKE.y = LAKE_Y;
 let CHAN = null;   // sea channel into Nestor's cove, set once the cove is found
 let CAUSEWAY = null;
 let HUT_PAD = null;   // flat ground under Nestor's farmhouse, smithy and paddock, set once the hut is placed   // the marsh trail, raised a little above the water
@@ -81,10 +73,6 @@ function heightAt(x, z) {
   let h = baseHeight(x, z);
   h = flatten(h, x, z, RUINS, 10, 22, RUINS_Y);
   h = flatten(h, x, z, SUMMIT, ARENA_R, ARENA_R + 28, SUMMIT_Y);
-  // Cave: the mountain is kept tall over the chamber, then the footprint is carved down to the cave floor
-  const cd = caveDist(x, z);
-  if (cd.over < 10) h = Math.max(h, lerp(CAVE_Y + 13, h, clamp(cd.over / 10, 0, 1)));
-  if (cd.foot < 6) { const t = clamp(cd.foot / 6, 0, 1); h = Math.min(h, lerp(CAVE_Y, h, t * t * (3 - 2 * t))); }
   h = flatten(h, x, z, TEMPLE, 26, 40, TEMPLE_Y);
   const dl = Math.hypot(x - LAKE.x, z - LAKE.z) * (0.85 + fbm(x * 0.045 + 3, z * 0.045 - 7) * 0.4);   // lake bowl, irregular shore
   h = flatten(h, x, z, LAKE, 22, 40, LAKE_Y + 0.6);
@@ -95,6 +83,7 @@ function heightAt(x, z) {
     if (d < 5) { const k = clamp((d - 1.9) / 3, 0, 1); h = Math.max(h, lerp(0.85, h, k * k * (3 - 2 * k))); }
   }
   if (HUT_PAD) h = flatten(h, x, z, HUT_PAD, 17, 25, HUT_PAD.y);
+  { const dw = Math.hypot(x - WRECK_SITE.x, z - WRECK_SITE.z); if (dw < 30) h = flatten(h, x, z, WRECK_SITE, 15 + fbm(x * 0.15, z * 0.15) * 5, 26, 0.95); }   // the mud bank the ship drove onto
   if (CHAN) {                                                                  // cove + channel out to the open sea
     const w = (fbm(x * 0.07, z * 0.07) - 0.5) * 5, dc = segDist(x, z, CHAN.a, CHAN.b) + w, db = Math.hypot(x - CHAN.a.x, z - CHAN.a.z) + w;
     const k1 = clamp((dc - 4.5) / 9, 0, 1), k2 = clamp((db - 7) / 9, 0, 1);
@@ -103,7 +92,7 @@ function heightAt(x, z) {
   return h;
 }
 const REGIONS = [
-  { key: 'cave', name: 'Cave of Echoes', sub: 'Something old sleeps in the dark', c: CAVE, r: 0 },
+  { key: 'wreck', name: 'The Drowned Ship', sub: 'Her crew never left her', c: WRECK_SITE, r: 26 },
   { key: 'temple', name: 'Temple of Athena', sub: 'Marble that remembers the gods', c: TEMPLE, r: 42 },
   { key: 'lake', name: 'Lake Kastalia', sub: 'Snowmelt from the high peaks', c: LAKE, r: 38 },
   { key: 'summit', name: 'Throne of Olympos', sub: 'A champion waits above the clouds', c: SUMMIT, r: ARENA_R + 12 },
@@ -115,7 +104,6 @@ const REGIONS = [
 ];
 const MEADOW = { key: 'meadow', name: "Nestor's Cove", sub: 'Where the sea left you' };
 function regionAt(x, z, h = heightAt(x, z)) {
-  if (caveDist(x, z).roofed) return REGIONS[0];
   for (const R of REGIONS) if (Math.hypot(x - R.c.x, z - R.c.z) < R.r && (!R.minH || h > R.minH)) return R;
   return MEADOW;
 }
@@ -295,34 +283,73 @@ const WRECK = DOCK.clone().add(new THREE.Vector3(-7, 0, 2));
 for (let dx = -2; dx > -22; dx -= 0.5) { const h = heightAt(DOCK.x + dx, DOCK.z + 2); if (h > -0.35 && h < 0.25) { WRECK.set(DOCK.x + dx, 0, DOCK.z + 2); break; } }
 const START = WRECK.clone().add(new THREE.Vector3(3.8, 0, -3.2)); START.y = heightAt(START.x, START.z);
 const HUT = new THREE.Vector3(-12, 0, DOCK.z - 26);
+// Nestor's farmstead is laid out in its own frame (x along the house front, +z out of the front door, towards the sea)
+const HUT_ROT = 0.3, hutW = (lx, lz) => new THREE.Vector3(HUT.x + lx * Math.cos(HUT_ROT) + lz * Math.sin(HUT_ROT), 0, HUT.z - lx * Math.sin(HUT_ROT) + lz * Math.cos(HUT_ROT));
+const HUT_GATE = 2.25;   // courtyard gate: the gap in the front wall, x from -1 to 5.5 at z = 10
 // Level a pad for the house, the smithy and the paddock so nothing sits on a slope or floats
 { const c = new THREE.Vector3(HUT.x - 6 * Math.cos(0.3) - Math.sin(0.3), 0, HUT.z + 6 * Math.sin(0.3) - Math.cos(0.3)); c.y = heightAt(HUT.x, HUT.z) + 0.05; HUT_PAD = c; }
 HUT.y = heightAt(HUT.x, HUT.z);
 // Dirt paths: dock → start → Nestor's hut → winding up to the ruins
 // A trail network like a real island: every landmark is reachable on foot
 const PATHS = [
-  [[DOCK.x, DOCK.z - 3], [START.x - 2, START.z + 2], [HUT.x + 3, HUT.z + 7], [HUT.x + 11.5, HUT.z + 1.7], [HUT.x + 16, HUT.z - 20], [RUINS.x - 6, RUINS.z + 12]],
-  [[RUINS.x, RUINS.z - 10], [30, 90], [10, 20], [-4, -40], [CAVE_APPROACH.x, CAVE_APPROACH.z], [CAVE_MOUTH.x, CAVE_MOUTH.z]],
+  // up from the cove to Nestor's gate, then round the outside of his courtyard wall and on north
+  [[DOCK.x, DOCK.z - 3], [START.x - 2, START.z + 2], ...[[HUT_GATE, 18], [HUT_GATE + 1, 14.5], [11, 14.5], [14.5, 9], [15, 1]].map(([x, z]) => { const v = hutW(x, z); return [v.x, v.z]; }), [HUT.x + 17, HUT.z - 20], [RUINS.x - 6, RUINS.z + 12]],
+  [[RUINS.x, RUINS.z - 10], [30, 90], [10, 20], [6, 2]],      // the mountain road: its switchbacks are laid out below (MOUNTAIN_ROAD)
   [[10, 20], [80, 30], [150, 45], [TEMPLE.x - 26, TEMPLE.z]],
   [[80, 30], [120, -10], [LAKE.x - 14, LAKE.z + 18]],
   [[RUINS.x + 10, RUINS.z], [OLIVE.x - 30, OLIVE.z - 10]],
   [[10, 20], [-60, 30], [-110, -20], [-150, -120], [TOWER.x + 8, TOWER.z + 20]],
-  [[-60, 30], [-110, 80], [SWAMP.x + 30, SWAMP.z - 10]],
+  [[-60, 30], [-110, 80], [SWAMP.x + 30, SWAMP.z - 10], [SWAMP.x + 6, SWAMP.z + 12], [WRECK_SITE.x + 15, WRECK_SITE.z - 1]],   // the marsh causeway, out to the drowned ship
+  // through Nestor's gate to his porch: flagstones
+  [[HUT_GATE + 0.6, 14.5], [HUT_GATE, 10], [HUT_GATE - 0.4, 6.4]].map(([x, z]) => { const v = hutW(x, z); return [v.x, v.z]; }),
 ];
-// The Ascent: a switchback road that spirals up Mount Olympos from the cave junction to the summit arena.
+// The Mountain Road: switchbacks from the foot of Mount Olympos up its flank to where the Ascent begins. Laid out by walking it
+// down from a high point on the flank: descending at a steady 12% across the slope, each step taking the heading that keeps it
+// closest to the natural ground, with 7 m hairpins at the ends of each leg, until it reaches the valley floor. Reversed, that's
+// the road up; it is then cut off at the Ascent's foot. Its own height profile (MOUNTAIN_ROAD_H) is cut into the slope below.
+const MOUNTAIN_ROAD = [], MOUNTAIN_ROAD_H = [];
+{
+  const TG = 0.12, ST = 2, floor = heightAt(6, 2) + 1.5;
+  const TOP = [-9, -91], TOP_Y = heightAt(-9, -91), out = Math.atan2(0.64, -0.76);           // a shoulder of the flank, facing south-west
+  const pts = [[-6, -95], TOP], hs = [TOP_Y, TOP_Y];
+  let [x, z] = pts[1], hr = TOP_Y, th = out, sg = Math.sign(Math.cos(th)) || -1;
+  const clear = (xx, zz) => { for (let i = 0; i < pts.length - 16; i++) if (Math.hypot(pts[i][0] - xx, pts[i][1] - zz) < 11) return false; return true; };   // never back onto an earlier leg
+  for (let it = 0; it < 600 && hr > floor; it++) {
+    const xmin = hr > 42 ? -2 : -26, xmax = 36;                                    // high up, stay east of the Ascent
+    let best = null;
+    for (let k = -4; k <= 4; k++) { const t2 = th + k * 0.09, dx = Math.cos(t2), dz = Math.sin(t2);
+      if (Math.abs(dx) < 0.5 || dx * sg < 0 || !clear(x + dx * ST * 3, z + dz * ST * 3)) continue;   // across the slope, clear of the legs above
+      const c = Math.abs(heightAt(x + dx * ST, z + dz * ST) - (hr - TG * ST)) + Math.abs(k) * 0.06;
+      if (!best || c < best[0]) best = [c, t2]; }
+    if (!best || (sg < 0 && x < xmin) || (sg > 0 && x > xmax)) {                    // hairpin, turning downhill
+      const turn = (d) => { let t2 = th, xx = x, zz = z; for (let k = 0; k < 11; k++) { t2 += d; xx += Math.cos(t2) * ST; zz += Math.sin(t2) * ST; } return heightAt(xx, zz); };
+      const dth = turn(Math.PI / 11) < turn(-Math.PI / 11) ? Math.PI / 11 : -Math.PI / 11;
+      for (let k = 0; k < 11; k++) { th += dth; x += Math.cos(th) * ST; z += Math.sin(th) * ST; hr -= 0.08 * ST; pts.push([x, z]); hs.push(hr); }
+      sg = -sg; continue;
+    }
+    th = best[1];
+    x += Math.cos(th) * ST; z += Math.sin(th) * ST; hr -= TG * ST; pts.push([x, z]); hs.push(hr);
+  }
+  MOUNTAIN_ROAD.push(...pts.reverse()); MOUNTAIN_ROAD_H.push(...hs.reverse());
+  PATHS[1][PATHS[1].length - 1] = MOUNTAIN_ROAD[0].slice();                           // the lowland trail runs to the foot of the road
+}
+// The Ascent: a switchback road that spirals up Mount Olympos from the Mountain Road to the summit arena.
 // Its bed is cut into the slope as a level shelf (see heightAt below), so it reads as a built road, not a scribble.
 const ASCENT = [];
 {
-  const S0 = [-9, -60];   // branches off the cave trail ~30 m before the ravine
+  let S0 = MOUNTAIN_ROAD[0], sb = 1e9, si = 0;               // the Mountain Road ends where the Ascent begins: about 48 m up, on its western side
+  MOUNTAIN_ROAD.forEach((p, i) => { const c = Math.abs(MOUNTAIN_ROAD_H[i] - 48) * 3 + p[0]; if (c < sb) { sb = c; S0 = p; si = i; } });
+  MOUNTAIN_ROAD.length = si + 1; MOUNTAIN_ROAD_H.length = si + 1;
   const a0 = Math.atan2(S0[1] - MOUNT.z, S0[0] - MOUNT.x), r0 = Math.hypot(S0[0] - MOUNT.x, S0[1] - MOUNT.z), sweep = Math.PI * 2.3, n = 96;
   for (let i = 0; i <= n; i++) { const t = i / n, a = a0 + sweep * t, r = lerp(r0, ARENA_R + 1, Math.pow(t, 0.85)) + Math.sin(t * 40) * 2.5 * (1 - t);
     ASCENT.push([MOUNT.x + Math.cos(a) * r, MOUNT.z + Math.sin(a) * r]); }
 }
 // Smooth every trail with a centripetal Catmull-Rom so corners become curves (sampled every ~3 m)
-const PATH_KIND = PATHS.map((_, i) => (i === 2 ? 'paved' : 'dirt'));   // the Sacred Way to the temple is paved
+const PATH_KIND = PATHS.map((_, i) => (i === 2 || i === 7 ? 'paved' : 'dirt'));   // the Sacred Way to the temple and Nestor's courtyard are paved
 PATHS.push(ASCENT); PATH_KIND.push('ascent');
+PATHS.push(MOUNTAIN_ROAD); PATH_KIND.push('dirt');
 for (let k = 0; k < PATHS.length; k++) {
-  if (PATHS[k] === ASCENT) continue;
+  if (PATHS[k] === ASCENT || PATHS[k] === MOUNTAIN_ROAD) continue;                      // laid out step by step already
   const c = new THREE.CatmullRomCurve3(PATHS[k].map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'centripetal');
   const n = Math.max(2, Math.ceil(c.getLength() / 3)); PATHS[k] = c.getSpacedPoints(n).map((v) => [v.x, v.z]);
 }
@@ -362,6 +389,29 @@ function pathDist(x, z) {
     return lerp(bh, h, s);
   };
 }
+// Cut the Mountain Road into the slope the same way: its steady 12% profile, blended into the slope on both sides
+// (a shelf on the uphill side, a shoulder on the downhill side)
+{
+  const R = MOUNTAIN_ROAD, sm = MOUNTAIN_ROAD_H;
+  const h0 = heightAt, minX = Math.min(...R.map((p) => p[0])) - 10, maxX = Math.max(...R.map((p) => p[0])) + 10, minZ = Math.min(...R.map((p) => p[1])) - 10, maxZ = Math.max(...R.map((p) => p[1])) + 10;
+  heightAt = (x, z) => {
+    const h = h0(x, z); if (x < minX || x > maxX || z < minZ || z > maxZ) return h;
+    // every stretch of road within reach pulls the ground to its own level; overlapping pulls average out, so the slope
+    // between two hairpin legs runs from one to the other instead of stepping
+    let wsum = 0, hsum = 0, wmax = 0;
+    for (let i = 0; i < R.length - 1; i++) {
+      const [ax, az] = R[i], [bx, bz] = R[i + 1];
+      if (x < Math.min(ax, bx) - 8 || x > Math.max(ax, bx) + 8 || z < Math.min(az, bz) - 8 || z > Math.max(az, bz) + 8) continue;
+      const dx = bx - ax, dz = bz - az, t = clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz), 0, 1), d = Math.hypot(x - ax - dx * t, z - az - dz * t);
+      if (d >= 7.7) continue;
+      const k = clamp((d - 2.2) / 5.5, 0, 1), w = 1 - k * k * (3 - 2 * k);
+      if (w > 0.999) return lerp(sm[i], sm[i + 1], t);                 // on the road bed itself
+      const w2 = w * w; wsum += w2; hsum += w2 * lerp(sm[i], sm[i + 1], t); wmax = Math.max(wmax, w);
+    }
+    if (!wsum) return h;
+    return lerp(h, hsum / wsum, wmax);
+  };
+}
 // Bake height + trail distance into a 1.25 m grid once; everything else samples it (fast world generation)
 const GN = 513, GW = 640, GSTEP = GW / (GN - 1), HGRID = new Float32Array(GN * GN), PGRID = new Float32Array(GN * GN);
 for (let j = 0; j < GN; j++) for (let i = 0; i < GN; i++) { const x = -GW / 2 + i * GSTEP, z = -GW / 2 + j * GSTEP; HGRID[j * GN + i] = heightAt(x, z); PGRID[j * GN + i] = pathDist(x, z); }
@@ -399,7 +449,6 @@ pathDist = (x, z) => sampleGrid(PGRID, x, z);
     const snow = clamp((h - 78 - fbm(x * 0.06, z * 0.06) * 14) / 6, 0, 1) * clamp(1.4 - slope * 1.5, 0.5, 1);   // snow cap, thinning on steep faces
     c.lerp(cSnow, snow);
     if (Math.hypot(x - TEMPLE.x, z - TEMPLE.z) < 24) c.lerp(cMarble, 0.25);
-    { const cd = caveDist(x, z); if (cd.foot < 4) c = c.clone().lerp(C(0x5a544c).lerp(cMud, fbm(x * 0.3, z * 0.3) * 0.6), clamp(1 - cd.foot / 4, 0, 1)); }
     const j = 0.93 + hash(x, z) * 0.1; cols.push(c.r * j, c.g * j, c.b * j);
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
@@ -507,6 +556,13 @@ for (let i = 0; i < 38; i++) {
   const a2 = rr(0, 6.28), d = rr(200, 1300), w = rr(110, 240);
   sp.scale.set(w, w * 0.5, 1); sp.position.set(Math.cos(a2) * d, rr(190, 280), Math.sin(a2) * d); scene.add(sp); clouds.push(sp);
 }
+// Storm deck: low, heavy rain clouds over the island, invisible until the storm (WEATHER.k) brings them in
+const stormClouds = [];
+for (let i = 0; i < 70; i++) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, fog: false, transparent: true, depthWrite: false, opacity: 0, color: new THREE.Color(0.42, 0.45, 0.5) }));
+  const a2 = rr(0, 6.28), d = Math.sqrt(rand()) * 900, w = rr(260, 520);
+  sp.scale.set(w, w * rr(0.38, 0.55), 1); sp.position.set(Math.cos(a2) * d, rr(110, 175), Math.sin(a2) * d); sp.visible = false; sp.userData.o = rr(0.75, 1); scene.add(sp); stormClouds.push(sp);
+}
 
 
 // ============================================================
@@ -526,7 +582,7 @@ function landSpot(minH, maxH, avoid = []) {
 }
 
 const AVOID = [{ x: HUT.x, z: HUT.z, r: 16 }, { x: OLIVE.x, z: OLIVE.z, r: 19 }, { x: SUMMIT.x, z: SUMMIT.z, r: ARENA_R + 8 }, { x: DOCK.x, z: DOCK.z, r: 12 }, { x: START.x, z: START.z, r: 5 }, { x: WRECK.x, z: WRECK.z, r: 8 },
-  { x: CAVE.x, z: CAVE.z, r: CH_R + 8 }, { x: CAVE_MOUTH.x, z: CAVE_MOUTH.z, r: 12 }, { x: CAVE_APPROACH.x, z: CAVE_APPROACH.z, r: 8 }, { x: TEMPLE.x, z: TEMPLE.z, r: 30 }, { x: LAKE.x, z: LAKE.z, r: 26 }, { x: TOWER.x, z: TOWER.z, r: 10 }];
+  { x: WRECK_SITE.x, z: WRECK_SITE.z, r: 22 }, { x: TEMPLE.x, z: TEMPLE.z, r: 30 }, { x: LAKE.x, z: LAKE.z, r: 26 }, { x: TOWER.x, z: TOWER.z, r: 10 }];
 
 const windUniformEarly = { value: 0 };
 // --- Props: every tree/rock species is one merged geometry, drawn with InstancedMesh per 100 m chunk
@@ -932,19 +988,69 @@ bakedMat.onBeforeCompile = (sh) => {
       float blot = bn(vSW * 0.9) * 0.6 + bn(vSW * 3.1) * 0.4, grain = bn(vSW * 14.0);
       diffuseColor.rgb *= 0.88 + blot * 0.16 + (grain - 0.5) * 0.07;`);
 };
-// Dry-stone wall: rough base blocks, a smaller top course, wedge stones, capstones and fallen stones at the foot.
-// coping = 'plaster' gives the whitewashed Greek courtyard cap instead of capstones.
-const ROUGH = []; for (let v = 0; v < 6; v++) { const q = new THREE.BoxGeometry(1, 1, 1, 2, 2, 2), a = q.attributes.position; for (let i = 0; i < a.count; i++) a.setXYZ(i, a.getX(i) * rr(0.86, 1.08), a.getY(i) * rr(0.85, 1.1), a.getZ(i) * rr(0.86, 1.08)); q.computeVertexNormals(); ROUGH.push(q); }
-const WALL_MATS = [0xb5ab98, 0xa89e8a, 0xc2b9a6, 0x9c9282].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 1, flatShading: true })), WALL_MOSS = new THREE.MeshStandardMaterial({ color: 0x7d8a52, roughness: 1, flatShading: true }), WALL_LIME = new THREE.MeshStandardMaterial({ color: 0xf2ece0, roughness: 0.9 });
+// ---- Stone walls, built course by course like the real thing: a footing of big stones, a middle course of smaller ones
+// with staggered joints, and a coping of stones set on edge (or whitewash, or a broken ruin top). Every stone is a
+// low-poly block with jittered corners and its own limestone tint; a dark core fills the joints so gaps read as shadow.
+// Walls go into a group that is baked into one mesh, so thousands of stones cost one draw call.
+const STONE_GEO = []; for (let v = 0; v < 10; v++) {
+  const q = new THREE.BoxGeometry(1, 1, 1), a = q.attributes.position, jit = {};
+  for (let i = 0; i < a.count; i++) { const k = `${Math.sign(a.getX(i))}${Math.sign(a.getY(i))}${Math.sign(a.getZ(i))}`; jit[k] ||= [rr(-0.1, 0.1), rr(-0.08, 0.06), rr(-0.1, 0.1)];
+    a.setXYZ(i, a.getX(i) * 0.94 + jit[k][0], a.getY(i) * 0.94 + jit[k][1], a.getZ(i) * 0.94 + jit[k][2]); }
+  q.computeVertexNormals(); STONE_GEO.push(q);
+}
+const WALL_MATS = [0xa99d85, 0x998d76, 0xb4a991, 0x8b816d, 0xa1937a, 0xad9f83].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 1, flatShading: true }));
+const WALL_MOSS = new THREE.MeshStandardMaterial({ color: 0x7a8a4e, roughness: 1, flatShading: true }), WALL_CORE = new THREE.MeshStandardMaterial({ color: 0x5f574b, roughness: 1, flatShading: true });
+const WALL_LIME = new THREE.MeshStandardMaterial({ color: 0xf3eee3, roughness: 0.9 }), WALL_LIME2 = new THREE.MeshStandardMaterial({ color: 0xe6ddcb, roughness: 0.95 });
+const stoneMat = () => (rand() < 0.06 ? WALL_MOSS : WALL_MATS[Math.floor(rand() * WALL_MATS.length)]);
+// One stone: centre (local to the wall), size along / up / across, laid into group g by the wall's frame
+function layStone(g, F, along, up, across, len, ht, dep, mat, tilt = 0) {
+  const s = mesh(STONE_GEO[Math.floor(rand() * STONE_GEO.length)], mat || stoneMat(), F.x + F.tx * along + F.nx * across, F.y + up, F.z + F.tz * along + F.nz * across, g);
+  s.scale.set(len, ht, dep); s.rotation.set(rr(-0.03, 0.03), F.yaw + rr(-0.05, 0.05), tilt + rr(-0.04, 0.04));
+  return s;
+}
+// A straight run of wall from (x0,z0) to (x1,z1) in g's space. opt: y (base height, number or (x,z)=>h), h (height), t (thickness),
+// top: 'edge' (stones on edge) | 'flat' (capstones) | 'ruin' (ragged, broken) | 'none'; stone: size scale; batter: lean of the faces
+function stoneWall(g, x0, z0, x1, z1, opt = {}) {
+  const L = Math.hypot(x1 - x0, z1 - z0); if (L < 0.05) return;
+  const H = opt.h ?? 0.95, T = opt.t ?? 0.7, sc = opt.stone ?? 1, top = opt.top ?? 'edge', yAt = typeof opt.y === 'function' ? opt.y : () => opt.y ?? 0;
+  const tx = (x1 - x0) / L, tz = (z1 - z0) / L, frame = (along) => { const x = x0 + tx * along, z = z0 + tz * along; return { x, z, y: yAt(x, z), tx, tz, nx: -tz, nz: tx, yaw: -Math.atan2(tz, tx) }; };
+  // follow the ground in short sections so long walls on slopes don't float or sink
+  const SEG = typeof opt.y === 'function' ? 1.6 : L;
+  for (let s0 = 0; s0 < L - 0.01; s0 += SEG) {
+    const sl = Math.min(SEG, L - s0), F = frame(s0), mid = frame(s0 + sl / 2), baseY = Math.min(F.y, frame(s0 + sl).y) - 0.12;
+    const Hs = top === 'ruin' ? H * (0.45 + 0.55 * fbm((x0 + mid.x) * 0.35, (z0 + mid.z) * 0.35)) : H;
+    const core = mesh(STONE_GEO[0], WALL_CORE, mid.x, baseY + Hs * 0.46, mid.z, g); core.scale.set(sl + 0.02, Hs * 0.92, T * 0.72); core.rotation.y = F.yaw;
+    let y = 0, course = 0;
+    while (y < Hs - 0.12) {
+      const ch = Math.min(Hs - y, (course === 0 ? rr(0.34, 0.42) : rr(0.24, 0.32)) * sc), lean = (opt.batter ?? 0.04) * (1 - y / Math.max(H, 0.1));
+      let a = course % 2 ? -rr(0.1, 0.3) * sc : 0;
+      while (a < sl) { const ln = Math.min(sl - Math.max(a, 0), (course === 0 ? rr(0.55, 0.95) : rr(0.35, 0.7)) * sc); if (ln < 0.08) break;
+        const c = Math.max(a, 0) + ln / 2;
+        for (const side of T > 0.5 ? [-1, 1] : [0]) layStone(g, { ...F, y: baseY }, s0 + c, y + ch / 2, side * (T / 4 + lean), ln * 0.97, ch * 0.95, (side ? T * 0.52 : T) * rr(0.92, 1.04));
+        a = Math.max(a, 0) + ln + rr(0.01, 0.03); }
+      y += ch; course++;
+    }
+    if (top === 'edge') {                                 // coping: stones on edge, leaning a little like a row of books
+      for (let a = 0.08; a < sl - 0.05; a += rr(0.2, 0.3) * sc) layStone(g, { ...F, y: baseY }, s0 + a, Hs + 0.13 * sc, 0, rr(0.13, 0.19) * sc, rr(0.24, 0.32) * sc, T * rr(0.8, 0.95), rand() < 0.12 ? WALL_MOSS : null, 0);
+    } else if (top === 'flat') {
+      for (let a = 0; a < sl - 0.05;) { const ln = Math.min(sl - a, rr(0.6, 1.1) * sc); layStone(g, { ...F, y: baseY }, s0 + a + ln / 2, Hs + 0.07, 0, ln, 0.14, T * 1.12, rand() < 0.15 ? WALL_MOSS : WALL_MATS[2]); a += ln + 0.02; }
+    }
+    if (!opt.noRubble && rand() < 0.35) { const rb = layStone(g, { ...F, y: baseY }, s0 + rr(0, sl), 0.18, (rand() < 0.5 ? -1 : 1) * (T / 2 + rr(0.25, 0.6)), rr(0.25, 0.4), rr(0.18, 0.26), rr(0.25, 0.4)); rb.rotation.set(rand(), rand(), rand()); }
+  }
+}
+// Cycladic courtyard wall: whitewashed rubble on a stone footing, a rounded lime cap, a few stones showing where the wash has worn off
+function plasterWall(g, x0, z0, x1, z1, opt = {}) {
+  const L = Math.hypot(x1 - x0, z1 - z0), H = opt.h ?? 1.25, T = opt.t ?? 0.55, y = opt.y ?? 0, tx = (x1 - x0) / L, tz = (z1 - z0) / L, yaw = -Math.atan2(tz, tx), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  stoneWall(g, x0, z0, x1, z1, { y: y - 0.05, h: 0.38, t: T + 0.14, top: 'none', noRubble: true, stone: 0.9 });          // footing
+  const body = mesh(new THREE.BoxGeometry(L, H - 0.5, T), WALL_LIME, cx, y + 0.33 + (H - 0.5) / 2, cz, g); body.rotation.y = yaw;
+  const cap = mesh(new THREE.CylinderGeometry(T / 2 + 0.03, T / 2 + 0.03, L + 0.04, 10), WALL_LIME, cx, y + H - 0.17, cz, g); cap.rotation.set(0, yaw, Math.PI / 2);   // axis along the wall
+  const band = mesh(new THREE.BoxGeometry(L + 0.02, 0.06, T + 0.04), WALL_LIME2, cx, y + H - 0.19, cz, g); band.rotation.y = yaw;
+  for (let i = 0; i < Math.floor(L / 2.5); i++) { const a = rr(0.4, L - 0.4) - L / 2, side = rand() < 0.5 ? -1 : 1, st = layStone(g, { x: cx, z: cz, y, tx, tz, nx: -tz, nz: tx, yaw }, a, rr(0.5, H - 0.5), side * (T / 2 - 0.02), rr(0.25, 0.4), rr(0.16, 0.24), 0.08); }
+}
+// Compatibility: one cell of rural dry-stone wall (used by the terraces): width w centred at (px,pz), facing yaw
 function dryStone(g, px, y, pz, yaw, w, opt = {}) {
-  const R = () => ROUGH[Math.floor(rand() * 6)], M = () => WALL_MATS[Math.floor(rand() * 4)], hb = opt.h || 0.55;
-  const b = mesh(R(), M(), px, y + hb * 0.42, pz, g); b.scale.set(w, hb * rr(0.88, 1.1), opt.d || rr(0.75, 0.9)); b.rotation.set(rr(-0.04, 0.04), -yaw + rr(-0.05, 0.05), rr(-0.04, 0.04));
-  for (let j = 0; j < 2; j++) { if (rand() < 0.15) continue; const t2 = mesh(R(), rand() < 0.1 ? WALL_MOSS : M(), px + Math.cos(yaw) * (j - 0.5) * w * 0.48, y + hb + 0.15, pz + Math.sin(yaw) * (j - 0.5) * w * 0.48, g);
-    t2.scale.set(w * rr(0.4, 0.52), rr(0.28, 0.38), (opt.d || 0.8) * rr(0.7, 0.85)); t2.rotation.set(0, -yaw + rr(-0.15, 0.15), rr(-0.08, 0.08)); }
-  if (rand() < 0.35) { const wd = mesh(R(), M(), px + Math.cos(yaw) * w * 0.5, y + hb * 0.9, pz + Math.sin(yaw) * w * 0.5, g); wd.scale.set(0.16, 0.14, 0.5); wd.rotation.y = -yaw; }   // wedge stone in the joint
-  if (opt.coping === 'plaster') { const c = mesh(ROUGH[0], WALL_LIME, px, y + hb + 0.42, pz, g); c.scale.set(w + 0.06, 0.16, (opt.d || 0.8) + 0.08); c.rotation.y = -yaw; }
-  else if (rand() < 0.25) { const cap = mesh(ROUGH[0], WALL_MATS[2], px, y + hb + 0.36, pz, g); cap.scale.set(w * 0.9, 0.14, 0.8); cap.rotation.y = -yaw; }
-  if (!opt.noRubble && rand() < 0.3) { const rb = mesh(R(), M(), px + rr(-0.3, 0.3), y + 0.06, pz + (rand() < 0.5 ? 1 : -1) * rr(0.6, 0.9), g); rb.scale.setScalar(rr(0.18, 0.3)); rb.rotation.set(rand(), rand(), rand()); }
+  const c = Math.cos(yaw) * w / 2, s2 = Math.sin(yaw) * w / 2;
+  stoneWall(g, px - c, pz - s2, px + c, pz + s2, { y, h: (opt.h || 0.55) + 0.35, t: opt.d || 0.75, top: rand() < 0.75 ? 'edge' : 'flat', noRubble: opt.noRubble });
 }
 function bakeGroup(g) {
   g.updateMatrixWorld(true);
@@ -1007,7 +1113,7 @@ function addRock(pos, scale, choppable) {
 for (let i = 0; i < 170; i++) { const p = landSpot(0.8, 40, AVOID); if (p) addRock(p, rr(0.8, 1.4), true); }
 for (let i = 0; i < 220; i++) {
   const a = rand() * 6.28, d = rr(20, 110), px = MOUNT.x + Math.cos(a) * d, pz = MOUNT.z + Math.sin(a) * d, h = heightAt(px, pz);
-  if (h > 8 && caveDist(px, pz).foot > 6 && Math.hypot(px - LAKE.x, pz - LAKE.z) > 28 && d > ARENA_R + 10) addRock(new THREE.Vector3(px, h - 0.4, pz), rr(1.5, 4), false);
+  if (h > 8 && Math.hypot(px - LAKE.x, pz - LAKE.z) > 28 && d > ARENA_R + 10) addRock(new THREE.Vector3(px, h - 0.4, pz), rr(1.5, 4), false);
 }
 for (let i = 0; i < 40; i++) { const a = rand() * 6.28, d = rr(10, 45), px = TOWER.x + Math.cos(a) * d, pz = TOWER.z + Math.sin(a) * d, h = heightAt(px, pz); if (h > 2 && d > 8) addRock(new THREE.Vector3(px, h - 0.3, pz), rr(1.2, 3), false); }
 // --- Ground pickups ---
@@ -1103,7 +1209,7 @@ const grassU = { uWind: windUniform, uCenter: { value: new THREE.Vector2() }, uT
     const R = regionAt(x, z, h), sl = Math.hypot(heightAt(x + 1, z) - h, heightAt(x, z + 1) - h);
     let mask = clamp((h - 1.3) / 0.6, 0, 1) * clamp((44 - h) / 6, 0, 1) * clamp((1.1 - sl) / 0.4, 0, 1);
     mask *= clamp((Math.hypot(x - SUMMIT.x, z - SUMMIT.z) - ARENA_R) / 3, 0, 1) * clamp((Math.hypot(x - HUT.x, z - HUT.z) - 4) / 1.5, 0, 1);
-    mask *= clamp((caveDist(x, z).foot - 1) / 3, 0, 1) * clamp((Math.hypot(x - LAKE.x, z - LAKE.z) - 24) / 3, 0, 1);
+    mask *= clamp((Math.hypot(x - LAKE.x, z - LAKE.z) - 24) / 3, 0, 1);
     if (Math.abs(x - TEMPLE.x) < 14 && Math.abs(z - TEMPLE.z) < 20) mask = 0;
     if (R.key === 'swamp') mask *= 0.35; if (R.key === 'forest') mask *= 0.55;
     mask *= clamp((fbm(x * 0.05 + 3, z * 0.05) - 0.22) / 0.08, 0, 1) * clamp((pathDist(x, z) - 1.2) / 1.0, 0, 1);
@@ -1466,125 +1572,9 @@ var ATHENA_OFFER;
   FLOORS.push({ rect: true, x: TEMPLE.x, z: TEMPLE.z, w: W + 1.8, d: D + 1.8, y: TY + 0.3 });
 }
 
-// ---- Cave of Echoes: a rock dome in the mountain flank, entrance facing south, crystals inside
-const CAVE_R = CH_R;
-const crystals = [], caveTorches = [], caveInner = [], CAVE_VEILS = { mat: null };
-const bouldMatEarly = () => new THREE.MeshStandardMaterial({ color: 0x575049, roughness: 1, flatShading: true });
+// Soft round glow sprite texture (fires, torches, lamps)
 let _glowTex; function glowTex() { if (_glowTex) return _glowTex; const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
   gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.3, 'rgba(255,255,255,.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return (_glowTex = new THREE.CanvasTexture(c)); }
-{
-  const g = new THREE.Group(), rockIn = new THREE.MeshStandardMaterial({ color: 0x5d564e, roughness: 1, flatShading: true, side: THREE.DoubleSide });
-  const lumpy = (geo, amp, seedOff) => { const a = geo.attributes.position, v = new THREE.Vector3();
-    for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i); const f = 1 + (fbm(v.x * 0.35 + seedOff, v.z * 0.35 + v.y * 0.3) - 0.5) * amp; a.setXYZ(i, v.x * f, v.y * f, v.z * f); } geo.computeVertexNormals(); return geo; };
-  // Chamber ceiling: an irregular rock vault resting on the carved walls
-  const vault = lumpy(new THREE.SphereGeometry(CH_R + 1.2, 40, 16, 0, Math.PI * 2, 0, Math.PI / 2), 0.4, 3); vault.scale(1, 0.62, 1);
-  const vm = new THREE.Mesh(vault, rockIn); vm.position.set(CAVE.x, CAVE_Y - 0.5, CAVE.z); vm.castShadow = vm.receiveShadow = true; vm.userData.keep = true; g.add(vm);
-  // Mountain cap: the heightfield has to be carved down to the cave floor, which left an open pit on the flank.
-  // This skin restores the mountain surface over the chamber and tunnel (the vault and tube stay inside it).
-  { const cx0 = Math.min(CAVE.x, CAVE_MOUTH.x) - CH_R - 10, cx1 = Math.max(CAVE.x, CAVE_MOUTH.x) + CH_R + 10, cz0 = Math.min(CAVE.z, CAVE_MOUTH.z) - CH_R - 10, cz1 = Math.max(CAVE.z, CAVE_MOUTH.z) + CH_R + 10, N = 48;
-    const geo = new THREE.PlaneGeometry(cx1 - cx0, cz1 - cz0, N, N); geo.rotateX(-Math.PI / 2); geo.translate((cx0 + cx1) / 2, 0, (cz0 + cz1) / 2);
-    const a = geo.attributes.position, col = [], rockC = new THREE.Color(0x8a8178), mossC = new THREE.Color(0x6d665f);
-    const orig = (x, z) => { let h = baseHeight(x, z); h = flatten(h, x, z, SUMMIT, ARENA_R, ARENA_R + 28, SUMMIT_Y); return Math.max(h, CAVE_Y + 13); };
-    for (let i = 0; i < a.count; i++) { const x = a.getX(i), z = a.getZ(i), ch = Math.hypot(x - CAVE.x, z - CAVE.z) - CH_R, tn = segDist(x, z, CAVE_MOUTH, CAVE) - TUN_W,
-        along = (x - CAVE_MOUTH.x) * CAVE_DIR.x + (z - CAVE_MOUTH.z) * CAVE_DIR.z, inside = Math.min(ch, tn) < 7 && along > 2.5;
-      const w = clamp((7 - Math.min(ch, tn)) / 5, 0, 1) * clamp((along - 2.5) / 4, 0, 1), y = lerp(heightAt(x, z) - 1.5, orig(x, z), w);
-      a.setY(i, y); const c = rockC.clone().lerp(mossC, fbm(x * 0.2, z * 0.2) * 0.7).multiplyScalar(0.85 + hash(x, z) * 0.15); col.push(c.r, c.g, c.b); }
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals();
-    const cap = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true })); cap.receiveShadow = cap.castShadow = true; cap.userData.keep = true; g.add(cap); }
-  // Tunnel: an arched rock tube from the mouth to the chamber
-  const tube = lumpy(new THREE.CylinderGeometry(TUN_W + 0.9, TUN_W + 0.9, TUN_LEN + 4, 18, 8, true, -Math.PI / 2, Math.PI), 0.35, 7);
-  tube.rotateZ(Math.PI / 2); tube.rotateX(-Math.PI / 2); tube.rotateY(-Math.atan2(CAVE_DIR.z, CAVE_DIR.x));
-  const tm = new THREE.Mesh(tube, rockIn); tm.position.copy(CAVE_MOUTH).addScaledVector(CAVE_DIR, (TUN_LEN + 4) / 2 - 0.5); tm.position.y = CAVE_Y - 0.3; tm.castShadow = tm.receiveShadow = true; tm.userData.keep = true; g.add(tm);
-  // The mouth: stone lintel on two pillars framed by boulders, with hanging vines
-  const side = new THREE.Vector3(-CAVE_DIR.z, 0, CAVE_DIR.x), yaw = Math.atan2(CAVE_DIR.x, CAVE_DIR.z);
-  const lintelM = new THREE.MeshStandardMaterial({ color: 0x847b6e, roughness: 1, flatShading: true });
-  // A natural rock arch frames the mouth: a lumpy half-torus, thick at the base, with a keystone overhang
-  const archR = TUN_W + 1.25, arch = lumpy(new THREE.TorusGeometry(archR, 1.35, 9, 22, Math.PI), 0.5, 11); arch.scale(1, 1.25, 1);
-  const am = mesh(arch, new THREE.MeshStandardMaterial({ color: 0x6a625a, roughness: 1, flatShading: true }), 0, 0, 0, g); am.position.copy(CAVE_MOUTH); am.position.y = CAVE_Y - 0.4; am.rotation.y = yaw;
-  const arch2 = lumpy(new THREE.TorusGeometry(archR + 1.6, 1.6, 7, 16, Math.PI), 0.6, 13); arch2.scale(1, 1.3, 1.3);
-  const am2 = mesh(arch2, bouldMatEarly(), 0, 0, 0, g); am2.position.copy(CAVE_MOUTH).addScaledVector(CAVE_DIR, 1.4); am2.position.y = CAVE_Y - 0.6; am2.rotation.y = yaw;
-  for (const sg of [-1, 1]) { const foot = mesh(lumpy(new THREE.IcosahedronGeometry(1.7, 1), 0.4, 20 + sg), lintelM, 0, 0, 0, g); foot.position.copy(CAVE_MOUTH).addScaledVector(side, sg * (archR + 0.4)).addScaledVector(CAVE_DIR, -0.6); foot.position.y = CAVE_Y + 0.4; foot.scale.set(1, 0.8, 1.2); }
-  // Darkness: two soft black veils inside the mouth sell the depth; they fade away once you step in
-  const veilMat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { uO: { value: 1 } },
-    vertexShader: 'varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
-    fragmentShader: 'uniform float uO; varying vec2 vU; void main(){ float e = smoothstep(0.,.22,vU.x)*smoothstep(1.,.78,vU.x)*smoothstep(1.,.7,vU.y); gl_FragColor = vec4(0.012,0.01,0.008, e*uO);\n#include <colorspace_fragment>\n}' });
-  CAVE_VEILS.mat = veilMat;
-  for (const [dd, sc] of [[1.2, 1], [3.8, 0.92], [7, 0.85]]) { const v = new THREE.Mesh(new THREE.PlaneGeometry(archR * 2.1 * sc, 7 * sc), veilMat); v.position.copy(CAVE_MOUTH).addScaledVector(CAVE_DIR, dd); v.position.y = CAVE_Y + 3.3 * sc; v.rotation.y = yaw + Math.PI; v.renderOrder = 2; g.add(v); }
-  // Entrance torches in iron sconces: the mouth reads from far away, day or night
-  for (const sg of [-1, 1]) {
-    const tp = CAVE_MOUTH.clone().addScaledVector(side, sg * (archR - 0.3)).addScaledVector(CAVE_DIR, -1.3); tp.y = CAVE_Y + 2.6;
-    mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.9, 6), new THREE.MeshStandardMaterial({ color: 0x3a3028, roughness: 0.8 }), tp.x, tp.y - 0.3, tp.z, g).userData.keep = true;
-    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.55, 7), new THREE.MeshBasicMaterial({ color: 0xffa640 })); fl.position.copy(tp).setY(tp.y + 0.35); g.add(fl);
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0xff9a40, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(2.6); glow.position.copy(fl.position); g.add(glow);
-    caveTorches.push({ fl, L: glow.material, glow: true });
-  }
-  const bould = new THREE.MeshStandardMaterial({ color: 0x575049, roughness: 1, flatShading: true });
-  for (let i = 0; i < 22; i++) { const sg = i % 2 ? 1 : -1, b = mesh(lumpy(new THREE.IcosahedronGeometry(rr(1.2, 2.6), 1), 0.45, i), bould, 0, 0, 0, g);
-    b.position.copy(CAVE_MOUTH).addScaledVector(side, sg * rr(TUN_W + 2, TUN_W + 7)).addScaledVector(CAVE_DIR, rr(-6, 3)); b.position.y = heightAt(b.position.x, b.position.z) + rr(-0.5, 1.5); b.rotation.set(rand(), rand(), rand()); }
-  for (let i = 0; i < 8; i++) { const b = mesh(lumpy(new THREE.IcosahedronGeometry(rr(1.2, 2.2), 1), 0.45, i + 40), bould, 0, 0, 0, g); b.position.copy(CAVE_MOUTH).addScaledVector(side, rr(-5, 5)).addScaledVector(CAVE_DIR, rr(1, 6)); b.position.y = CAVE_Y + rr(7, 9); }
-  const vineM = new THREE.MeshStandardMaterial({ color: 0x4f7a30, roughness: 0.9 });
-  for (let i = 0; i < 14; i++) { const v = mesh(new THREE.CylinderGeometry(0.03, 0.02, rr(1.2, 3), 3), vineM, 0, 0, 0, g); const sx = rr(-TUN_W, TUN_W); v.position.copy(CAVE_MOUTH).addScaledVector(side, sx).addScaledVector(CAVE_DIR, -0.9); v.position.y = CAVE_Y - 0.4 + Math.sqrt(Math.max(0, (TUN_W + 1.25) ** 2 - sx * sx)) * 1.25 - 1.2 - rr(0, 0.8); }
-  // Interior dressing: stalactites + stalagmites, rubble, bones, crystals, glowing mushrooms, wall torches, altar
-  const dark = new THREE.MeshStandardMaterial({ color: 0x4d4741, roughness: 1, flatShading: true });
-  for (let i = 0; i < 46; i++) { const an = rand() * 6.28, d = Math.sqrt(rand()) * CH_R * 0.85, x = CAVE.x + Math.cos(an) * d, z = CAVE.z + Math.sin(an) * d;
-    const ceil = CAVE_Y - 0.5 + (CH_R + 1.2) * 0.62 * Math.sqrt(Math.max(0, 1 - (d / (CH_R + 1.2)) ** 2));
-    const st = mesh(new THREE.ConeGeometry(rr(0.15, 0.5), rr(0.8, 2.8), 6), dark, x, ceil - 0.8, z, g); st.rotation.x = Math.PI;
-    if (i % 3 === 0 && d > 4) mesh(new THREE.ConeGeometry(rr(0.25, 0.6), rr(0.6, 1.8), 6), dark, x + rr(-1, 1), CAVE_Y + 0.5, z + rr(-1, 1), g); }
-  for (let i = 0; i < 30; i++) { const an = rand() * 6.28, d = rr(3, CH_R - 1); mesh(new THREE.DodecahedronGeometry(rr(0.2, 0.7), 0), dark, CAVE.x + Math.cos(an) * d, CAVE_Y + 0.15, CAVE.z + Math.sin(an) * d, g); }
-  const bone = new THREE.MeshStandardMaterial({ color: 0xe6dcc4, roughness: 0.7 });
-  for (let i = 0; i < 12; i++) { const an = rand() * 6.28, d = rr(2, CH_R - 2), b = mesh(new THREE.CapsuleGeometry(0.05, rr(0.35, 0.6), 2, 5), bone, CAVE.x + Math.cos(an) * d, CAVE_Y + 0.08, CAVE.z + Math.sin(an) * d, g); b.rotation.set(Math.PI / 2, rand() * 3, 0);
-    if (i % 4 === 0) mesh(new THREE.SphereGeometry(0.16, 8, 6), bone, b.position.x + 0.3, CAVE_Y + 0.14, b.position.z, g); }
-  const cryMat = [new THREE.MeshStandardMaterial({ color: 0x5fe0ff, emissive: 0x2ab8e8, emissiveIntensity: 1.6, roughness: 0.2 }), new THREE.MeshStandardMaterial({ color: 0xc08bff, emissive: 0x8a4ae0, emissiveIntensity: 1.4, roughness: 0.2 })];
-  for (let i = 0; i < 12; i++) {
-    const an = i / 12 * 6.28 + rr(-0.2, 0.2), d = CH_R - rr(1.2, 2.5), cl = new THREE.Group(); cl.position.set(CAVE.x + Math.cos(an) * d, CAVE_Y, CAVE.z + Math.sin(an) * d); g.add(cl);
-    if (Math.abs(Math.atan2(Math.sin(an - Math.atan2(-CAVE_DIR.z, -CAVE_DIR.x)), Math.cos(an - Math.atan2(-CAVE_DIR.z, -CAVE_DIR.x)))) < 0.5) continue;   // keep the tunnel entrance clear
-    for (let k = 0; k < 5; k++) { const c = mesh(new THREE.OctahedronGeometry(rr(0.25, 0.65), 0), cryMat[i % 2], rr(-0.5, 0.5), 0.4, rr(-0.5, 0.5), cl); c.scale.y = rr(2, 3.8); c.rotation.set(rr(-0.5, 0.5), 0, rr(-0.5, 0.5)); c.castShadow = false; }
-    collapseGroup(cl); cl.children.forEach((c) => { c.castShadow = false; crystals.push(c); }); caveInner.push(cl);
-  }
-  const shroom = new THREE.MeshStandardMaterial({ color: 0x9fffd0, emissive: 0x3fd09a, emissiveIntensity: 1.2 }), shG = new THREE.Group(); g.add(shG); caveInner.push(shG);
-  for (let i = 0; i < 24; i++) { const an = rand() * 6.28, d = rr(CH_R * 0.6, CH_R - 1), x = CAVE.x + Math.cos(an) * d, z = CAVE.z + Math.sin(an) * d;
-    mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.2, 5), shroom, x, CAVE_Y + 0.1, z, shG); mesh(new THREE.SphereGeometry(0.1, 8, 4, 0, 6.28, 0, 1.6), shroom, x, CAVE_Y + 0.2, z, shG); }
-  collapseGroup(shG);
-  const torchWood = new THREE.MeshStandardMaterial({ color: 0x5a3c22, roughness: 0.9 });
-  for (const an of [0.7, 2.2, 3.8, 5.3].map((a) => a + Math.atan2(CAVE_DIR.z, CAVE_DIR.x))) {
-    const x = CAVE.x + Math.cos(an) * (CH_R - 0.6), z = CAVE.z + Math.sin(an) * (CH_R - 0.6);
-    const tw = mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.9, 5), torchWood, x, CAVE_Y + 2.4, z, g); tw.rotation.set(Math.sin(an) * 0.5, 0, -Math.cos(an) * 0.5); tw.userData.keep = true;
-    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.45, 6), new THREE.MeshBasicMaterial({ color: 0xffa030 })); fl.position.set(x - Math.cos(an) * 0.25, CAVE_Y + 3.05, z - Math.sin(an) * 0.25); g.add(fl);
-    const L = new THREE.PointLight(0xff9a40, 14, 13, 1.6); L.position.copy(fl.position); g.add(L); caveTorches.push({ fl, L });
-  }
-  for (const [c, k] of [[0x40c8ff, 0.4], [0xa060ff, -0.4]]) { const L = new THREE.PointLight(c, 22, 18, 1.5); L.position.set(CAVE.x + Math.cos(k) * 5, CAVE_Y + 3, CAVE.z + Math.sin(k) * 5); g.add(L); }
-  // Altar at the back wall, facing the tunnel
-  const altar = new THREE.Group(); altar.position.copy(CAVE).addScaledVector(CAVE_DIR, CH_R * 0.6); altar.position.y = CAVE_Y; altar.rotation.y = yaw; g.add(altar);
-  mesh(new THREE.BoxGeometry(2.6, 1.1, 1.5), lintelM, 0, 0.55, 0, altar); mesh(new THREE.BoxGeometry(3, 0.2, 1.9), lintelM, 0, 1.2, 0, altar);
-  for (const sx of [-1.7, 1.7]) mesh(new THREE.CylinderGeometry(0.28, 0.32, 2.6, 10), lintelM, sx, 1.3, -0.3, altar);
-  const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 2), new THREE.MeshBasicMaterial({ color: 0xbfefff, transparent: true, opacity: 0.55 })); orb.position.y = 1.7; altar.add(orb); crystals.push(orb);
-  bakeGroup(g); scene.add(g);
-  colliders.push({ x: altar.position.x, z: altar.position.z, r: 1.5 });
-  var CAVE_ALTAR = altar.position.clone();
-}
-// Is a point inside the walkable cave (ravine + tunnel + chamber)? Used for collision, ground, camera and lighting
-function inCaveInterior(x, z) { const cd = caveDist(x, z); return cd.roofed; }
-function caveCollide(pos) {
-  // Inside at cave level: stay within the chamber / tunnel. Above (on the mountain): stay off the roof.
-  const ch = Math.hypot(pos.x - CAVE.x, pos.z - CAVE.z), tun = segDist(pos.x, pos.z, CAVE_MOUTH, CAVE);
-  const along = (pos.x - CAVE_MOUTH.x) * CAVE_DIR.x + (pos.z - CAVE_MOUTH.z) * CAVE_DIR.z;
-  const inZone = (ch < CH_R + 3.5 || (tun < TUN_W + 3 && along > -0.3));
-  if (!inZone) return;
-  const low = pos.y < CAVE_Y + 4.5;
-  if (low) {
-    if (ch < CH_R - 0.9 || (tun < TUN_W - 0.5)) return;
-    // pull back to the nearest walkable point
-    const a = new THREE.Vector3(CAVE.x - pos.x, 0, CAVE.z - pos.z), toC = CAVE.clone().addScaledVector(a.normalize(), -(CH_R - 0.9)); toC.set(CAVE.x + (pos.x - CAVE.x) / ch * (CH_R - 0.9), pos.y, CAVE.z + (pos.z - CAVE.z) / ch * (CH_R - 0.9));
-    const dx = CAVE.x - CAVE_MOUTH.x, dz = CAVE.z - CAVE_MOUTH.z, t = clamp(((pos.x - CAVE_MOUTH.x) * dx + (pos.z - CAVE_MOUTH.z) * dz) / (dx * dx + dz * dz), 0, 1);
-    const cx = CAVE_MOUTH.x + dx * t, cz = CAVE_MOUTH.z + dz * t, dd = Math.hypot(pos.x - cx, pos.z - cz) || 1, toT = new THREE.Vector3(cx + (pos.x - cx) / dd * (TUN_W - 0.5), pos.y, cz + (pos.z - cz) / dd * (TUN_W - 0.5));
-    const pick = toC.distanceTo(pos) < toT.distanceTo(pos) ? toC : toT; if (along > -0.3 || ch < CH_R) { pos.x = pick.x; pos.z = pick.z; }
-  } else {
-    const d = Math.min(ch - (CH_R + 3.5), tun - (TUN_W + 3));
-    if (d < 0) { if (ch - (CH_R + 3.5) > tun - (TUN_W + 3)) { const dx = CAVE.x - CAVE_MOUTH.x, dz = CAVE.z - CAVE_MOUTH.z, t = clamp(((pos.x - CAVE_MOUTH.x) * dx + (pos.z - CAVE_MOUTH.z) * dz) / (dx * dx + dz * dz), 0, 1), cx = CAVE_MOUTH.x + dx * t, cz = CAVE_MOUTH.z + dz * t, dd = Math.hypot(pos.x - cx, pos.z - cz) || 1; pos.x = cx + (pos.x - cx) / dd * (TUN_W + 3); pos.z = cz + (pos.z - cz) / dd * (TUN_W + 3); }
-      else { pos.x = CAVE.x + (pos.x - CAVE.x) / ch * (CH_R + 3.5); pos.z = CAVE.z + (pos.z - CAVE.z) / ch * (CH_R + 3.5); } }
-  }
-
-}
 
 // ---- Watchtower of Aeolus (from the buildings sheet): climb it to reveal the map
 const TOWER_TOP = new THREE.Vector3(TOWER.x, heightAt(TOWER.x, TOWER.z) + 13.4, TOWER.z);
@@ -1698,13 +1688,17 @@ const fireflies = (() => {
   const treeNear = (x, z, pad) => resources.some((t) => t.type === 'tree' && Math.abs(t.pos.x - x) < 6 && Math.abs(t.pos.z - z) < 6 && Math.hypot(t.pos.x - x, t.pos.z - z) < t.r + pad);
   for (let k = -2; k <= 2; k++) {
     const len = 80 - Math.abs(k) * 12, zAt = (x) => OLIVE.z + k * 16 + Math.sin(x * 0.045 + k) * 1.4;
-    for (let x = -len / 2; x < len / 2;) {
-      const w = rr(0.8, 1.35), px = OLIVE.x + x + w / 2, pz = zAt(x + w / 2); x += w + 0.04;
-      if (pathDist(px, pz) < 2.6 || Math.hypot(px - OLIVE.x, pz - OLIVE.z) < 19 || treeNear(px, pz, 0.9)) continue;
-      const h = heightAt(px, pz), yaw = Math.atan2(zAt(x) - zAt(x - w), w);
-      dryStone(og, px, h - 0.05, pz, yaw, w);
-      colliders.push({ x: px, z: pz, r: 0.55, h: 0.95 });
+    // walk the row in 1 m steps; build each unbroken run as continuous wall in ~3 m straight pieces, so the courses run on
+    let run = [];
+    const flush = () => { for (let i = 0; i + 1 < run.length; i += 3) { const a = run[i], b2 = run[Math.min(i + 3, run.length - 1)];
+        stoneWall(og, a[0], a[1], b2[0], b2[1], { y: (x, z) => heightAt(x, z), h: rr(0.85, 1.0), t: 0.75 }); }
+      run = []; };
+    for (let x = -len / 2; x <= len / 2; x += 1) {
+      const px = OLIVE.x + x, pz = zAt(x);
+      if (pathDist(px, pz) < 2.6 || Math.hypot(px - OLIVE.x, pz - OLIVE.z) < 19 || treeNear(px, pz, 0.9)) { flush(); continue; }
+      run.push([px, pz]); colliders.push({ x: px, z: pz, r: 0.55, h: 0.95 });
     }
+    flush();
   }
   const vine = new THREE.MeshStandardMaterial({ color: 0x4f7a2e, roughness: 0.9 }), grape = new THREE.MeshStandardMaterial({ color: 0x5a2d6a, roughness: 0.4 });
   for (let r = 0; r < 6; r++) {                        // vineyard east of the olives
@@ -1713,9 +1707,11 @@ const fireflies = (() => {
       mesh(new THREE.BoxGeometry(1.9, 1.1, 0.7), vine, px, h + 0.55, z, og); if (rand() < 0.6) mesh(new THREE.SphereGeometry(0.16, 6, 5), grape, px + rr(-0.6, 0.6), h + 0.6, z + 0.4, og); }
   }
   bakeGroup(og); scene.add(og);
-  const fh = new THREE.Group(), wallM = new THREE.MeshStandardMaterial({ color: 0xe8dcc4, roughness: 0.9 });
-  mesh(new THREE.BoxGeometry(8, 3, 0.5), wallM, 0, 1.5, -3, fh); mesh(new THREE.BoxGeometry(0.5, 3, 6), wallM, -4, 1.5, 0, fh); mesh(new THREE.BoxGeometry(0.5, 2, 6), wallM, 4, 1, 0, fh);
-  mesh(new THREE.BoxGeometry(3, 2.4, 0.5), wallM, -2.5, 1.2, 3, fh);
+  // the roofless farmhouse: rubble walls broken off at uneven heights, a fallen lintel, a doorway on the south side
+  const fh = new THREE.Group();
+  stoneWall(fh, -4, -3, 4, -3, { h: 3, t: 0.55, top: 'ruin' }); stoneWall(fh, -4, -3, -4, 3, { h: 2.8, t: 0.55, top: 'ruin' }); stoneWall(fh, 4, -3, 4, 3, { h: 2, t: 0.55, top: 'ruin' });
+  stoneWall(fh, -4, 3, -1, 3, { h: 2.4, t: 0.55, top: 'ruin' }); stoneWall(fh, 1.2, 3, 4, 3, { h: 1.1, t: 0.55, top: 'ruin' });
+  { const l = mesh(STONE_GEO[3], WALL_MATS[2], 0.2, 0.3, 4, fh); l.scale.set(2.6, 0.38, 0.5); l.rotation.set(0.1, 0.25, 0.08); }
   mesh(new THREE.CylinderGeometry(0.6, 0.5, 1.2, 10), terracotta, 2, 0.6, 1, fh); mesh(new THREE.CylinderGeometry(0.5, 0.45, 1, 10), terracotta, 2.8, 0.5, -1.5, fh);   // amphorae
   const fp = new THREE.Vector3(OLIVE.x + 30, 0, OLIVE.z + 30); fh.position.set(fp.x, heightAt(fp.x, fp.z) - 0.1, fp.z); fh.rotation.y = 0.4; bakeGroup(fh); scene.add(fh);
   colliders.push({ x: fp.x, z: fp.z, r: 4 });
@@ -1770,7 +1766,7 @@ const snow = (() => {
 }
 
 const RAFT_SITE_EARLY = DOCK.clone().add(new THREE.Vector3(3.6, 0, 1));
-// --- Roads: gravel core, darker worn edges (terrain colour), border stones, flagstones near buildings, signposts ---
+// --- Roads: gravel core, darker worn edges (terrain colour), border stones, flagstones near buildings (no signposts: you find your way) ---
 {
   // Path ribbons: a textured strip draped on the terrain per trail, with ragged alpha-cut edges. One draw call per surface type.
   const pathTex = (kind) => {
@@ -1822,42 +1818,47 @@ const RAFT_SITE_EARLY = DOCK.clone().add(new THREE.Vector3(3.6, 0, 1));
     const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: pathTex(kind), alphaTest: 0.5, roughness: kind === 'dirt' ? 0.95 : 0.8, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
     m.receiveShadow = true; m.name = 'paths'; scene.add(m);
   }
-  // The Ascent: retaining wall on the downhill side, rope posts, stone steps where it climbs, torches at intervals, a gate at its foot
-  const asc = new THREE.Group(), wallM = new THREE.MeshStandardMaterial({ color: 0x8e8577, roughness: 1, flatShading: true }), wood = new THREE.MeshStandardMaterial({ color: 0x5e4128, roughness: 0.9 }),
-    rope = new THREE.MeshStandardMaterial({ color: 0xa88e5e, roughness: 1 }), stepM = new THREE.MeshStandardMaterial({ color: 0xa79d8b, roughness: 1 });
+  // The Ascent: a dry-stone parapet along the drop, the rock it was cut from on the uphill side, braziers on the parapet,
+  // and a marble gate at its foot. The parapet breaks for the gate and where the road meets the summit arena.
+  const asc = new THREE.Group(), wood = new THREE.MeshStandardMaterial({ color: 0x5e4128, roughness: 0.9 }), bronze = new THREE.MeshStandardMaterial({ color: 0x7a5a32, roughness: 0.6 });
   const flames = [];
-  let prevPost = null, walked = 0;
-  for (let i = 1; i < ASCENT.length - 1; i++) {
+  for (let i = 1; i < ASCENT.length - 3; i++) {
     const [ax, az] = ASCENT[i], [bx, bz] = ASCENT[i + 1], L = Math.hypot(bx - ax, bz - az), tx = (bx - ax) / L, tz = (bz - az) / L, nx = -tz, nz = tx;
-    const down = heightAt(ax + nx * 8, az + nz * 8) < heightAt(ax - nx * 8, az - nz * 8) ? 1 : -1, yaw = Math.atan2(tx, tz);
-    const grade = (ASCENT_H[i + 1] - ASCENT_H[i]) / L;
-    for (let d = 0; d < L; d += 1.3) {
-      const x = ax + tx * d, z = az + tz * d, h = heightAt(x, z), wx = x + nx * down * 2.4, wz = z + nz * down * 2.4;
-      const blk = mesh(new THREE.BoxGeometry(0.7, rr(0.55, 0.8), 1.25), wallM, wx, heightAt(wx, wz) + 0.12, wz, asc); blk.rotation.y = yaw + rr(-0.06, 0.06);
-      if (grade > 0.11 && ((walked + d) % 2.6) < 1.3) { const st = mesh(new THREE.BoxGeometry(3.6, 0.22, 0.55), stepM, x, h + 0.04, z, asc); st.rotation.y = yaw; }
+    const down = heightAt(ax + nx * 8, az + nz * 8) < heightAt(ax - nx * 8, az - nz * 8) ? 1 : -1, off = 2.55 * down;
+    if (i > 6) stoneWall(asc, ax + nx * off - tx * 0.3, az + nz * off - tz * 0.3, bx + nx * off + tx * 0.3, bz + nz * off + tz * 0.3,
+      { y: (x, z) => heightAt(x - nx * off * 0.15, z - nz * off * 0.15), h: 0.8, t: 0.6, top: i % 7 === 3 ? 'flat' : 'edge', noRubble: true });
+    for (let d = rr(1, 4); d < L; d += rr(4, 7)) {    // the cut: rock shoulders on the uphill side
+      const x = ax + tx * d - nx * down * rr(3.6, 4.6), z = az + tz * d - nz * down * rr(3.6, 4.6);
+      placeProp('rock', Math.floor(rand() * 3), new THREE.Vector3(x, heightAt(x, z) - rr(0.3, 0.7), z), rr(0, 6.28), rr(0.7, 1.4));
     }
-    walked += L;
-    if (walked % 6 < L) {   // rope post on the drop side
-      const px = ax + nx * down * 2.7, pz = az + nz * down * 2.7, ph = heightAt(px, pz) + 0.3;
-      mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.3, 5), wood, px, ph + 0.65, pz, asc);
-      if (prevPost && Math.hypot(px - prevPost.x, pz - prevPost.z) < 9) {
-        const a = new THREE.Vector3(px, ph + 1.1, pz), mid = a.clone().add(prevPost).multiplyScalar(0.5), len = a.distanceTo(prevPost);
-        const r = mesh(new THREE.CylinderGeometry(0.025, 0.025, len, 4), rope, mid.x, mid.y - 0.12, mid.z, asc); r.lookAt(a.x, a.y - 0.12, a.z); r.rotateX(Math.PI / 2);
-      }
-      prevPost = new THREE.Vector3(px, ph + 1.1, pz);
-    }
-    if (i % 9 === 0) {   // bronze torch stand on the uphill side
-      const px = ax - nx * down * 2.6, pz = az - nz * down * 2.6, ph = heightAt(px, pz);
-      mesh(new THREE.CylinderGeometry(0.06, 0.1, 1.9, 6), wood, px, ph + 0.95, pz, asc);
-      mesh(new THREE.CylinderGeometry(0.28, 0.14, 0.25, 8), wallM, px, ph + 1.95, pz, asc);
-      flames.push(new THREE.ConeGeometry(0.2, 0.55, 6).translate(px, ph + 2.3, pz));
+    if (i % 6 === 0 && i > 6) {                       // bronze brazier on a post, standing on the parapet
+      const px = ax + nx * off, pz = az + nz * off, ph = heightAt(ax, az) + 0.95;
+      mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.2, 6), wood, px, ph + 0.6, pz, asc);
+      mesh(new THREE.CylinderGeometry(0.32, 0.16, 0.26, 8), bronze, px, ph + 1.3, pz, asc).userData.keep = true;
+      flames.push(new THREE.ConeGeometry(0.22, 0.55, 6).translate(px, ph + 1.68, pz));
     }
   }
-  // Gate at the foot of the Ascent: two marble pillars and a lintel
-  { const [x0, z0] = ASCENT[3], [x1, z1] = ASCENT[5], L = Math.hypot(x1 - x0, z1 - z0), nx = -(z1 - z0) / L, nz = (x1 - x0) / L, h = heightAt(x0, z0), yaw = Math.atan2(x1 - x0, z1 - z0);
-    for (const sg of [-1, 1]) { mesh(new THREE.BoxGeometry(0.9, 4.2, 0.9), marble, x0 + nx * sg * 2.8, h + 2.1, z0 + nz * sg * 2.8, asc); colliders.push({ x: x0 + nx * sg * 2.8, z: z0 + nz * sg * 2.8, r: 0.6 }); }
-    const lin = mesh(new THREE.BoxGeometry(7.2, 0.7, 1.1), marble, x0, h + 4.55, z0, asc); lin.rotation.y = yaw + Math.PI / 2;
-    const cap = mesh(new THREE.BoxGeometry(7.8, 0.25, 1.4), marbleDark, x0, h + 5.0, z0, asc); cap.rotation.y = yaw + Math.PI / 2; }
+  // Gate at the foot of the Ascent: two marble pillars on plinths and a lintel across the road
+  { const [x0, z0] = ASCENT[3], [x1, z1] = ASCENT[5], L = Math.hypot(x1 - x0, z1 - z0), tx = (x1 - x0) / L, tz = (z1 - z0) / L, nx = -tz, nz = tx, h = heightAt(x0, z0), yaw = Math.atan2(tx, tz);
+    for (const sg of [-1, 1]) { const px = x0 + nx * sg * 2.9, pz = z0 + nz * sg * 2.9;
+      mesh(new THREE.BoxGeometry(1.2, 0.5, 1.2), marbleDark, px, h + 0.25, pz, asc); mesh(new THREE.CylinderGeometry(0.42, 0.48, 4, 12), marble, px, h + 2.5, pz, asc);
+      mesh(new THREE.BoxGeometry(1.05, 0.3, 1.05), marbleDark, px, h + 4.62, pz, asc); colliders.push({ x: px, z: pz, r: 0.6 }); }
+    const lin = mesh(new THREE.BoxGeometry(7.4, 0.62, 1.0), marble, x0, h + 5.08, z0, asc); lin.rotation.y = yaw;        // spans the road (local x = across)
+    const cap = mesh(new THREE.BoxGeometry(7.9, 0.2, 1.3), marbleDark, x0, h + 5.48, z0, asc); cap.rotation.y = yaw;
+    const tri = new THREE.Shape([new THREE.Vector2(-3.7, 0), new THREE.Vector2(3.7, 0), new THREE.Vector2(0, 1.15)]);   // a low pediment over the lintel
+    const ped = mesh(new THREE.ExtrudeGeometry(tri, { depth: 0.8, bevelEnabled: false }).translate(0, 0, -0.4), marble, x0, h + 5.58, z0, asc); ped.rotation.y = yaw; }
+  // The Mountain Road: a low dry-stone parapet wherever the edge drops away, and rock shoulders where it's cut into the slope
+  {
+    const R = MOUNTAIN_ROAD; let run = [];
+    const flush = () => { for (let i = 0; i + 1 < run.length; i += 3) { const a = run[i], b2 = run[Math.min(i + 3, run.length - 1)]; stoneWall(asc, a[0], a[1], b2[0], b2[1], { y: (x, z) => heightAt(x - a[2] * 0.4, z - a[3] * 0.4), h: 0.62, t: 0.55, top: i % 9 === 3 ? 'flat' : 'edge', noRubble: true, stone: 0.85 }); } run = []; };
+    for (let i = 1; i < R.length - 4; i++) {
+      const [ax, az] = R[i - 1], [bx, bz] = R[i + 1], L = Math.hypot(bx - ax, bz - az) || 1, nx = -(bz - az) / L, nz = (bx - ax) / L, [x, z] = R[i], h = MOUNTAIN_ROAD_H[i];
+      const dl = h - heightAt(x + nx * 6, z + nz * 6), dr = h - heightAt(x - nx * 6, z - nz * 6), side = dl > dr ? 1 : -1, drop = Math.max(dl, dr);
+      if (drop > 1.4) run.push([x + nx * side * 2.35, z + nz * side * 2.35, nx * side, nz * side]); else flush();
+      if (i % 4 === 0 && Math.min(dl, dr) < -1.2) { const ox = x - nx * side * rr(3.4, 4.2), oz = z - nz * side * rr(3.4, 4.2); placeProp('rock', Math.floor(rand() * 3), new THREE.Vector3(ox, heightAt(ox, oz) - rr(0.4, 0.8), oz), rr(0, 6.28), rr(0.5, 1.0)); }
+    }
+    flush();
+  }
   bakeGroup(asc); scene.add(asc);
   const fm = new THREE.Mesh(mergeGeometries(flames), new THREE.MeshBasicMaterial({ color: 0xffa640 })); fm.name = 'ascentFlames'; scene.add(fm);
   // border stones on the dirt trails only (the stone roads have their own kerb)
@@ -1867,30 +1868,11 @@ const RAFT_SITE_EARLY = DOCK.clone().add(new THREE.Vector3(3.6, 0, 1));
     const sgn = rand() < 0.5 ? -1 : 1, w = 2.5 + rand() * 0.5, x = ax + nx * w * sgn, z = az + nz * w * sgn, h = heightAt(x, z);
     if (h > 0.6) placeProp('rock', Math.floor(rand() * 3), new THREE.Vector3(x, h - 0.12, z), rr(0, 6.28), rr(0.14, 0.26));
   } });
-  // Signposts at trail junctions, each board names where it leads (BotW / RDR2 wayfinding)
-  const signTex = (txt) => { const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d');
-    g.fillStyle = '#8a6440'; g.fillRect(0, 0, 256, 64); g.strokeStyle = '#5a3f26'; g.lineWidth = 6; g.strokeRect(3, 3, 250, 58);
-    g.fillStyle = '#f3e6c8'; g.font = 'bold 26px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(txt, 128, 34);
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
-  const post = new THREE.MeshStandardMaterial({ color: 0x6a4a2e, roughness: 0.9 });
-  const sign = (x, z, boards) => {
-    const g = new THREE.Group(), h = heightAt(x, z); g.position.set(x, h, z); scene.add(g);
-    mesh(new THREE.CylinderGeometry(0.09, 0.11, 2.6, 6), post, 0, 1.3, 0, g);
-    boards.forEach(([txt, tx, tz], i) => { const b = mesh(new THREE.BoxGeometry(1.6, 0.36, 0.06), [post, post, post, post, new THREE.MeshStandardMaterial({ map: signTex(txt) }), new THREE.MeshStandardMaterial({ map: signTex(txt) })], 0, 2.2 - i * 0.45, 0, g);
-      b.rotation.y = Math.atan2(tx - x, tz - z) - Math.PI / 2; b.position.x = Math.sin(b.rotation.y + Math.PI / 2) * 0.7; b.position.z = Math.cos(b.rotation.y + Math.PI / 2) * 0.7; });
-    colliders.push({ x, z, r: 0.3 });
-  };
-  sign(12, 24, [['Temple', TEMPLE.x, TEMPLE.z], ['Cave · Summit', CAVE.x, CAVE.z], ['Hylaea Woods', -60, 30]]);
-  sign(82, 34, [['Lake Kastalia', LAKE.x, LAKE.z], ['Temple', TEMPLE.x, TEMPLE.z]]);
-  sign(-58, 34, [['Marsh', SWAMP.x, SWAMP.z], ['Watchtower', TOWER.x, TOWER.z]]);
-  sign(RUINS.x + 4, RUINS.z - 4, [['Olive Terraces', OLIVE.x, OLIVE.z], ["Nestor's Cove", HUT.x, HUT.z], ['Mountain', 10, 20]]);
-  sign(-14, -56, [['Cave of Echoes', CAVE_MOUTH.x, CAVE_MOUTH.z], ['The Ascent · Summit', ASCENT[6][0], ASCENT[6][1]]]);
 }
 
 // --- Nestor's house: a proper island farmhouse. Whitewashed stone, an upper room, a tiled porch on wooden columns,
 //     a walled courtyard with a vine pergola, storage jars and a garden, and on the west side the smithy:
 //     workbench, anvil and a glowing forge. Tools (axe, bow) can only be made here.
-const HUT_ROT = 0.3, hutW = (lx, lz) => new THREE.Vector3(HUT.x + lx * Math.cos(HUT_ROT) + lz * Math.sin(HUT_ROT), 0, HUT.z - lx * Math.sin(HUT_ROT) + lz * Math.cos(HUT_ROT));
 const BENCH = hutW(-6.6, 1.4); BENCH.y = heightAt(BENCH.x, BENCH.z);
 const hutGlow = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, emissive: 0xffa24a, emissiveIntensity: 0, roughness: 0.6 });
 const forgeGlow = new THREE.MeshStandardMaterial({ color: 0xff6a20, emissive: 0xff5a10, emissiveIntensity: 2.2 });
@@ -1925,11 +1907,22 @@ const forgeGlow = new THREE.MeshStandardMaterial({ color: 0xff6a20, emissive: 0x
   mesh(new THREE.BoxGeometry(9, 0.2, 2.2), stoneM, 0, 0.62, 4.3, g);
   mesh(new THREE.BoxGeometry(2, 0.12, 0.5), timber, -3, 1.2, 3.6, g); for (const x of [-3.8, -2.2]) mesh(new THREE.BoxGeometry(0.12, 0.5, 0.45), timber, x, 0.95, 3.6, g);
   for (const x of [-4.2, 4.2]) { mesh(new THREE.CylinderGeometry(0.3, 0.22, 0.5, 10), M(0xb4613a), x, 0.97, 5.9, g); mesh(new THREE.IcosahedronGeometry(0.4, 1), M(0x4f7f2e), x, 1.45, 5.9, g); }
-  // courtyard wall with a gate gap on the path side
-  const wallSeg = (x0, z0, x1, z1) => { const L = Math.hypot(x1 - x0, z1 - z0), n = Math.round(L / 0.9);
-    for (let k = 0; k < n; k++) { const t2 = (k + 0.5) / n; dryStone(g, lerp(x0, x1, t2), 0, lerp(z0, z1, t2), Math.atan2(z1 - z0, x1 - x0), L / n + 0.02, { h: 0.6, d: 0.62, coping: 'plaster', noRubble: true }); }
-    const a = hutW(x0, z0), b2 = hutW(x1, z1); wallColliders(a.x, a.z, b2.x, b2.z, 0.5, 1.05); };
-  wallSeg(9, 7, 9, 10); wallSeg(9, 10, 5.5, 10); wallSeg(-1, 10, -9.5, 10); wallSeg(-9.5, 10, -9.5, 4.5);
+  // Courtyard wall: whitewashed, on a stone footing, with a proper gate where the path comes up from the cove
+  const wallSeg = (x0, z0, x1, z1) => { plasterWall(g, x0, z0, x1, z1, { h: 1.2, t: 0.5 });
+    const a = hutW(x0, z0), b2 = hutW(x1, z1); wallColliders(a.x, a.z, b2.x, b2.z, 0.45, 1.25); };
+  wallSeg(9, 6.6, 9, 10); wallSeg(9, 10, 6.1, 10); wallSeg(-1.6, 10, -9.5, 10); wallSeg(-9.5, 10, -9.5, 4.5);
+  for (const x of [-1.25, 5.75]) {                    // gate piers, capped, with a pot of geraniums on each
+    mesh(new THREE.BoxGeometry(0.75, 1.75, 0.75), WALL_LIME, x, 0.88, 10, g); mesh(new THREE.BoxGeometry(0.92, 0.14, 0.92), WALL_LIME2, x, 1.82, 10, g);
+    stoneWall(g, x - 0.42, 10, x + 0.42, 10, { y: -0.05, h: 0.36, t: 0.92, top: 'none', noRubble: true, stone: 0.8 });
+    mesh(new THREE.CylinderGeometry(0.22, 0.16, 0.3, 10), M(0xb4613a), x, 2.04, 10, g); mesh(new THREE.IcosahedronGeometry(0.28, 1), M(0x4f7f2e), x, 2.32, 10, g);
+    for (let i = 0; i < 4; i++) mesh(new THREE.SphereGeometry(0.07, 6, 4), M(0xd8443a), x + rr(-0.2, 0.2), 2.45, 10 + rr(-0.2, 0.2), g);
+    const p = hutW(x, 10); colliders.push({ x: p.x, z: p.z, r: 0.5 });
+  }
+  for (const [x, sg] of [[-0.85, 1], [5.35, -1]]) {   // two blue gate leaves, swung open into the courtyard
+    const leaf = new THREE.Group(); leaf.position.set(x, 0, 10); leaf.rotation.y = sg * 1.35; g.add(leaf);
+    for (let k = 0; k < 6; k++) mesh(new THREE.BoxGeometry(0.5, 1.3, 0.06), blue, sg * (0.27 + k * 0.52), 0.85, 0, leaf);
+    for (const yy of [0.45, 1.25]) mesh(new THREE.BoxGeometry(3.1, 0.12, 0.08), timber, sg * 1.56, yy, 0.05, leaf);
+  }
   // vine pergola in the courtyard
   for (const [x, z] of [[5.6, 4.5], [8.4, 4.5], [5.6, 8.6], [8.4, 8.6]]) mesh(new THREE.CylinderGeometry(0.1, 0.12, 2.8, 6), timber, x, 1.4, z, g);
   for (const z of [4.5, 8.6]) mesh(new THREE.BoxGeometry(3.4, 0.14, 0.14), timber, 7, 2.85, z, g);
@@ -1970,7 +1963,7 @@ const forgeGlow = new THREE.MeshStandardMaterial({ color: 0xff6a20, emissive: 0x
   for (let i = 0; i < 26; i++) mesh(new THREE.IcosahedronGeometry(rr(0.09, 0.15), 0), M([0xc0287a, 0xd23a8c, 0xa81e68][i % 3]), rr(5.4, 8.6), 3.05 + rr(-0.15, 0.3), rr(4.3, 8.8), g);   // bougainvillea
   for (const [x, c] of [[-1.75, 0xf0ead8], [0.55, 0xc8281e]]) { mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.9, 3), M(0x8a7a5a), x, 2.65, 3.38, g);
     for (let i = 0; i < 6; i++) { const b = mesh(c === 0xc8281e ? new THREE.ConeGeometry(0.045, 0.16, 5) : new THREE.IcosahedronGeometry(0.06, 0), M(c), x + rr(-0.04, 0.04), 2.95 - i * 0.12, 3.42, g); if (c === 0xc8281e) b.rotation.x = Math.PI; } }
-  for (let i = 0; i < 9; i++) { const sl = mesh(ROUGH[i % 6], M([0xcfc6b4, 0xbfb6a2, 0xd8d0be][i % 3]), 0.5 + Math.sin(i * 0.7) * 0.3, 0.05, 5.6 + i * 0.5, g); sl.scale.set(rr(0.7, 1.0), 0.1, rr(0.45, 0.6)); sl.rotation.y = rr(-0.3, 0.3); }
+  for (let i = 0; i < 9; i++) { const sl = mesh(STONE_GEO[i % 10], M([0xcfc6b4, 0xbfb6a2, 0xd8d0be][i % 3]), 0.5 + Math.sin(i * 0.7) * 0.3, 0.05, 5.6 + i * 0.5, g); sl.scale.set(rr(0.7, 1.0), 0.1, rr(0.45, 0.6)); sl.rotation.y = rr(-0.3, 0.3); }
   // lantern by the door
   const lan = mesh(new THREE.BoxGeometry(0.2, 0.3, 0.2), new THREE.MeshStandardMaterial({ color: 0xffd28a, emissive: 0xffa040, emissiveIntensity: 1.5 }), 0.5, 2.7, 3.4, g); lan.userData.keep = true;
   const LL = new THREE.PointLight(0xffb060, 10, 12, 1.6); LL.position.set(0.5, 2.6, 4); g.add(LL);
@@ -2129,11 +2122,113 @@ const ruinsGroup = new THREE.Group();
   }
   ruinsGroup.position.set(SUMMIT.x, SUMMIT_Y - 0.3, SUMMIT.z); bakeGroup(ruinsGroup); scene.add(ruinsGroup);
 }
+// ---- The Drowned Ship: a merchant ship that came to Nisos long before you, driven onto a mud bank in the Stymphalian Marsh
+// and heeled over on her port side. Her starboard planking is stove in towards the causeway, and her strongbox has slid
+// out through the breach. The mast snapped and lies across the mud with the yard and the torn sail; amphorae, crates,
+// stone anchors and oars are strewn round her. Her dead crew camp beside her: shields against the hull, spears in the mud,
+// a tattered standard, and two fire-bowls burning a cold green that you can see from the causeway at night.
+const WRECK_FIRES = [];
+const WRECK_CHEST = new THREE.Vector3();
+{
+  const site = new THREE.Group(); site.position.set(WRECK_SITE.x, 0.95, WRECK_SITE.z); site.rotation.y = 0.15; scene.add(site);
+  const wood = new THREE.MeshStandardMaterial({ color: 0x6a4a30, roughness: 0.95, flatShading: true }), woodD = new THREE.MeshStandardMaterial({ color: 0x3e2a1c, roughness: 1, flatShading: true }),
+    weed = new THREE.MeshStandardMaterial({ color: 0x4d5a2c, roughness: 1, flatShading: true }), clay = new THREE.MeshStandardMaterial({ color: 0xa8582f, roughness: 0.85 }),
+    bronze = new THREE.MeshStandardMaterial({ color: 0x8a6232, roughness: 0.4, metalness: 0.7 }), stone = new THREE.MeshStandardMaterial({ color: 0x77736a, roughness: 1, flatShading: true }),
+    boneM = new THREE.MeshStandardMaterial({ color: 0xd9cfb6, roughness: 0.7 }), rope = new THREE.MeshStandardMaterial({ color: 0x8d7650, roughness: 1 });
+  const at = (x, z, lift = 0) => new THREE.Vector3(x, lift, z);                    // site-local helpers (the bank is level at y = 0)
+  // the hull: the clinker hull of your own boat, built at merchant-ship scale, heeled 24° and settled into the mud
+  const hull = new THREE.Group(); hull.scale.setScalar(3.3); hull.position.set(-3, 1.25, 0); hull.rotation.set(-0.06, 0, 0.42); site.add(hull);
+  boatHull(hull, true);
+  hull.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+  // weed and mud line on the planking where the marsh water stood
+  for (let i = 0; i < 18; i++) { const w = mesh(new THREE.BoxGeometry(rr(0.4, 1.2), 0.08, 0.06), weed, rr(1.6, 2.6), rr(0.2, 0.9), rr(-6.5, 6.5), site); w.rotation.set(0, 0, rr(-0.5, 0.5)); }
+  // the mast: a stump in the hull, the rest snapped and lying over the gunwale into the mud, the yard across it
+  { const stump = mesh(new THREE.CylinderGeometry(0.22, 0.26, 2.6, 8), woodD, -0.4, 2.6, 0.4, site); stump.rotation.z = 0.42;
+    const mast = mesh(new THREE.CylinderGeometry(0.17, 0.23, 9.5, 8), wood, 4.2, 1.15, 2.6, site); mast.rotation.set(0.35, 0, 1.38);
+    const yard = mesh(new THREE.CylinderGeometry(0.1, 0.12, 8, 6), wood, 7.6, 0.75, 3.9, site); yard.rotation.set(Math.PI / 2, 0, 0.12); yard.rotateX(0.25);
+    for (const r of [[-0.4, 3.6, 0.4, 7.9, 0.1, 6.5], [-0.4, 3.4, 0.4, 7.3, 0.1, -1.4], [-0.6, 3.5, 0.6, -5.5, 0.1, 5]]) {     // fallen stays
+      const a = new THREE.Vector3(r[0], r[1], r[2]), b = new THREE.Vector3(r[3], r[4], r[5]), mid = a.clone().lerp(b, 0.5).add(new THREE.Vector3(0, -0.6, 0));
+      mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(a, mid, b), 18, 0.035, 4), rope, 0, 0, 0, site); } }
+  // the sail: torn, sagging over the yard and spilling across the mud (red-ochre linen with a painted black eye)
+  { const W = 6.5, H = 4.6, geo = new THREE.PlaneGeometry(W, H, 26, 18), a = geo.attributes.position, col = [], c1 = new THREE.Color(0x9a4a2c), c2 = new THREE.Color(0x6e3420), ink = new THREE.Color(0x1b1410);
+    for (let i = 0; i < a.count; i++) { const x = a.getX(i), y = a.getY(i), u = (x / W + 0.5), v = (y / H + 0.5);
+      const drape = Math.sin(u * Math.PI) * 0.6 * (1 - v) + Math.sin(u * 9 + v * 4) * 0.12 + fbm(x * 0.6, y * 0.6) * 0.5;
+      a.setXYZ(i, x, -v * v * 1.6 + 0.2, (1 - v) * 2.4 + drape);                     // hangs from the yard (v = 1), slumps onto the ground
+      const eye = Math.hypot(x + 0.6, y - 0.3), c = c1.clone().lerp(c2, fbm(x * 1.4, y * 1.4)); if (eye < 0.75 && eye > 0.5 || eye < 0.25) c.lerp(ink, 0.85); col.push(c.r, c.g, c.b); }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    const idx = geo.index.array, keep = []; for (let t = 0; t < idx.length; t += 3) { let cx = 0, cy = 0; for (let k = 0; k < 3; k++) { cx += a.getX(idx[t + k]) / 3; cy += a.getY(idx[t + k]) / 3; }
+      if (fbm(cx * 0.7 + 3, cy * 0.7) < 0.36 || (cx > 1.6 && cy < -0.4 + fbm(cx, cy) * 1.5)) continue; keep.push(idx[t], idx[t + 1], idx[t + 2]); }   // rips and a torn-away corner
+    geo.setIndex(keep); geo.computeVertexNormals();
+    const sail = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide, flatShading: true }));
+    sail.position.set(7.4, 1.3, 3.7); sail.rotation.y = -Math.PI / 2 + 0.12; sail.castShadow = sail.receiveShadow = true; site.add(sail); }
+  // spilled cargo: amphorae (some broken), crates, coiled rope, oars, stone anchors
+  const amph = (x, z, tilt, yaw, broken) => { const pts = [[0.001, 0], [0.09, 0.02], [0.2, 0.25], [0.26, 0.55], [0.24, 0.8], [0.11, 0.98], [0.08, 1.15], [0.11, 1.2]].map(([r, y]) => new THREE.Vector2(r, y));
+    const g = new THREE.Group(); g.position.set(x, -0.15, z); g.rotation.set(tilt, yaw, 0); site.add(g);
+    mesh(new THREE.LatheGeometry(broken ? pts.slice(0, 5) : pts, 12, 0, broken ? Math.PI * 1.3 : Math.PI * 2), clay, 0, 0, 0, g).material.side = THREE.DoubleSide;
+    if (!broken) for (const sx of [-1, 1]) { const h = mesh(new THREE.TorusGeometry(0.1, 0.025, 4, 8, Math.PI), clay, sx * 0.12, 1.0, 0, g); h.rotation.z = sx * 1.2; } };
+  [[4.5, -3.5, 1.4, 0.3], [5.4, -2.2, 1.2, 2.2, 1], [3.6, -5.6, 0.3, 1], [6.2, -4.8, 1.5, 4], [2.8, 6.4, 1.3, 5.5, 1], [3.4, 7.6, 0.2, 0], [-6.5, 4.5, 1.45, 2.5], [-5.6, -6, 1.3, 1.1, 1], [8.4, -1, 1.5, 0.6]].forEach((a) => amph(...a));
+  for (const [x, z, ry, tilt] of [[5.6, 0.6, 0.4, 0.15], [6.6, 1.6, 1.2, -0.25], [4.4, -7.2, 0.2, 0.35]]) { const cr = new THREE.Group(); cr.position.set(x, 0.25, z); cr.rotation.set(tilt, ry, rr(-0.1, 0.1)); site.add(cr);
+    mesh(new THREE.BoxGeometry(1.1, 0.75, 0.8), wood, 0, 0.1, 0, cr); for (const k of [-0.3, 0.3]) mesh(new THREE.BoxGeometry(1.14, 0.08, 0.84), woodD, 0, 0.1 + k, 0, cr); }
+  for (const [x, z, ry] of [[6.8, -6.2, 0.9], [-4.2, 7.5, 2.2], [9.2, 2.6, 0.3]]) { const o = mesh(new THREE.CylinderGeometry(0.05, 0.05, 5.5, 5), wood, x, 0.12, z, site); o.rotation.set(Math.PI / 2, ry, 0);
+    const bl = mesh(new THREE.BoxGeometry(0.06, 0.55, 0.9), wood, x + Math.sin(ry) * 2.6, 0.12, z + Math.cos(ry) * 2.6, site); bl.rotation.set(Math.PI / 2, ry, 0); }
+  for (const [x, z, ry] of [[7.6, -2.6, 0.5], [-3.2, -8.2, 1.9]]) { const an = new THREE.Group(); an.position.set(x, 0.2, z); an.rotation.set(rr(-0.3, 0.3), ry, 1.25); site.add(an);   // Greek stone anchors
+    const sh = new THREE.Shape([new THREE.Vector2(-0.35, 0), new THREE.Vector2(0.35, 0), new THREE.Vector2(0.25, 1), new THREE.Vector2(-0.25, 1)]); sh.holes.push(new THREE.Path().absarc(0, 0.78, 0.08, 0, Math.PI * 2));
+    mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.2, bevelEnabled: false }), stone, 0, 0, -0.1, an); }
+  { const coil = mesh(new THREE.TorusGeometry(0.42, 0.07, 6, 18), rope, 5.2, 0.05, 3.2, site); coil.rotation.x = Math.PI / 2; const c2 = mesh(new THREE.TorusGeometry(0.3, 0.07, 6, 16), rope, 5.2, 0.15, 3.2, site); c2.rotation.x = Math.PI / 2; }
+  // the dead crew's camp: shields against the hull, spears in the mud, a tattered standard, bones, two fire-bowls of cold green flame
+  const aspis = (x, y, z, ry, tilt, emblem) => { const sg = new THREE.Group(); sg.position.set(x, y, z); sg.rotation.set(tilt, ry, 0); site.add(sg);
+    const face = mesh(new THREE.CylinderGeometry(0.48, 0.48, 0.08, 20), bronze, 0, 0, 0, sg); face.rotation.x = Math.PI / 2;
+    mesh(new THREE.TorusGeometry(0.47, 0.035, 5, 24), woodD, 0, 0, 0.04, sg);
+    const em = mesh(emblem === 'owl' ? new THREE.CircleGeometry(0.22, 3) : new THREE.CircleGeometry(0.2, 12), new THREE.MeshStandardMaterial({ color: emblem === 'owl' ? 0x1b1410 : 0x8a2a1c, roughness: 0.8 }), 0, 0, 0.045, sg); return sg; };
+  aspis(3.2, 0.55, -2.2, 1.2, -0.3, 'owl'); aspis(3.0, 0.5, -0.6, 1.4, -0.35, 'disc'); aspis(-4.4, 0.25, 3.2, -0.6, -1.3, 'disc');
+  for (const [x, z, tx, tz] of [[4.8, -1.2, 0.25, 0.1], [5.2, 1.6, -0.2, 0.25], [-5.2, 2.2, 0.3, -0.2], [2.2, 8.6, 0.15, 0.3]]) { const sp = new THREE.Group(); sp.position.set(x, 0, z); sp.rotation.set(tx, 0, tz); site.add(sp);
+    mesh(new THREE.CylinderGeometry(0.03, 0.035, 2.6, 5), wood, 0, 1.1, 0, sp); mesh(new THREE.ConeGeometry(0.06, 0.32, 5), bronze, 0, 2.55, 0, sp); }
+  { const pole = mesh(new THREE.CylinderGeometry(0.05, 0.06, 4.2, 6), woodD, 6.4, 2.1, -1.6, site); pole.rotation.z = -0.12;
+    const fg = new THREE.PlaneGeometry(1.1, 1.5, 6, 8), fa = fg.attributes.position; for (let i = 0; i < fa.count; i++) fa.setZ(i, Math.sin(fa.getX(i) * 3 + fa.getY(i)) * 0.08);
+    const fl = mesh(fg, new THREE.MeshStandardMaterial({ color: 0x7a2418, roughness: 0.95, side: THREE.DoubleSide }), 6.95, 3.4, -1.6, site); fl.rotation.y = 0.3;
+    mesh(new THREE.BoxGeometry(1.1, 0.08, 0.02), new THREE.MeshStandardMaterial({ color: 0x1b1410 }), 6.95, 3.95, -1.58, site).rotation.y = 0.3; }
+  for (let i = 0; i < 14; i++) { const b = mesh(new THREE.CapsuleGeometry(0.04, rr(0.3, 0.55), 2, 5), boneM, rr(2.6, 7.5), 0.03, rr(-4, 4), site); b.rotation.set(Math.PI / 2, rr(0, 6.28), 0); }
+  for (const [x, z] of [[5.8, -0.4], [3.6, 3.4]]) mesh(new THREE.SphereGeometry(0.15, 8, 6), boneM, x, 0.08, z, site);
+  for (const [x, z] of [[4.6, -4.4], [4.8, 4.8]]) {
+    const b = new THREE.Group(); b.position.set(x, 0, z); site.add(b);
+    for (let k = 0; k < 3; k++) { const leg = mesh(new THREE.CylinderGeometry(0.05, 0.07, 1.4, 5), bronze, Math.cos(k * 2.1) * 0.32, 0.65, Math.sin(k * 2.1) * 0.32, b); leg.rotation.set(Math.sin(k * 2.1) * 0.25, 0, -Math.cos(k * 2.1) * 0.25); }
+    mesh(new THREE.CylinderGeometry(0.55, 0.28, 0.35, 12), bronze, 0, 1.45, 0, b);
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.1, 8), new THREE.MeshBasicMaterial({ color: 0x1f9a52, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false })); fl.position.y = 2.1; b.add(fl);
+    const fl2 = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.7, 7), new THREE.MeshBasicMaterial({ color: 0x5cd68e, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false })); fl2.position.y = 1.95; b.add(fl2);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color: 0x1d8a4c, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); glow.scale.setScalar(3.2); glow.position.y = 2; b.add(glow);
+    const L = new THREE.PointLight(0x3dd37e, 30, 20, 1.5); L.position.y = 2.4; b.add(L);
+    WRECK_FIRES.push({ fl, L, glow });
+  }
+  // wet mud: dark glossy puddles round the hull, and a duckboard walk from the causeway to the camp
+  const mud = new THREE.MeshStandardMaterial({ color: 0x2e2a1e, roughness: 0.18, metalness: 0.1 }), mud2 = new THREE.MeshStandardMaterial({ color: 0x4a3f2a, roughness: 0.9 });
+  for (let i = 0; i < 16; i++) { const r = rr(0.8, 2.6), g = new THREE.CircleGeometry(r, 14), a = g.attributes.position; for (let k = 1; k < a.count; k++) a.setXY(k, a.getX(k) * rr(0.75, 1.15), a.getY(k) * rr(0.6, 1.1));
+    const pud = mesh(g.rotateX(-Math.PI / 2), i % 3 ? mud : mud2, rr(-9, 11), 0.03 + i * 0.001, rr(-11, 11), site); pud.rotation.y = rr(0, 6.28); pud.receiveShadow = true; pud.userData.keep = true; }
+  for (let k = 0; k < 9; k++) { const x = 15 - k * 1.25, z = -1 + Math.sin(k * 0.7) * 0.4; for (const dz of [-0.45, 0, 0.45]) { const pl = mesh(new THREE.BoxGeometry(1.1, 0.07, 0.38), k % 2 ? wood : woodD, x, 0.06 + rr(0, 0.04), z + dz, site); pl.rotation.set(rr(-0.04, 0.04), rr(-0.08, 0.08), rr(-0.04, 0.04)); }
+    mesh(new THREE.BoxGeometry(0.12, 0.12, 1.5), woodD, x - 0.5, 0.02, z, site); }
+  // reeds crowding the bank, and the odd dead tree
+  for (let i = 0; i < 70; i++) { const an = rand() * 6.28, d = rr(13, 22), x = Math.cos(an) * d, z = Math.sin(an) * d; if (Math.abs(an - 0.05) < 0.25) continue;   // keep the causeway open
+    const r = mesh(new THREE.CylinderGeometry(0.015, 0.025, rr(1.2, 2.2), 3), weed, x, 0.6, z, site); r.rotation.set(rr(-0.2, 0.2), 0, rr(-0.2, 0.2)); }
+  // the strongbox, slid out through the breach: oak bound in bronze, studded, with a heavy lock
+  site.updateMatrixWorld(true);
+  WRECK_CHEST.copy(site.localToWorld(at(3.9, 1.4, 0.05))); WRECK_CHEST.y = heightAt(WRECK_CHEST.x, WRECK_CHEST.z);
+  bakeGroup(site);
+  // hull blocks movement; the breach side is open ground
+  for (let k = -4; k <= 4; k++) { const p = site.localToWorld(at(-3.6, k * 2.4)); colliders.push({ x: p.x, z: p.z, r: Math.abs(k) >= 4 ? 1.6 : 3.2 }); }
+  for (const [x, z, r] of [[4.6, -4.4, 0.6], [4.8, 4.8, 0.6], [5.6, 0.6, 0.6], [6.6, 1.6, 0.6], [6.4, -1.6, 0.25]]) { const p = site.localToWorld(at(x, z)); colliders.push({ x: p.x, z: p.z, r }); }
+}
 const chestObj = new THREE.Group();
-mesh(new THREE.BoxGeometry(1.2, 0.7, 0.8), flat(0x7a4f2c), 0, 0.35, 0, chestObj);
-const chestLid = mesh(new THREE.BoxGeometry(1.25, 0.25, 0.85), flat(0xb08a3a), 0, 0.8, 0, chestObj);
-const chestPos = CAVE.clone().addScaledVector(CAVE_DIR, CH_R * 0.45).addScaledVector(new THREE.Vector3(-CAVE_DIR.z, 0, CAVE_DIR.x), 3.4).setY(CAVE_Y);
+{ const oak = flat(0x5a3a22), band = new THREE.MeshStandardMaterial({ color: 0x8a6232, roughness: 0.4, metalness: 0.7 });
+  mesh(new THREE.BoxGeometry(1.25, 0.66, 0.82), oak, 0, 0.33, 0, chestObj);
+  for (const x of [-0.45, 0, 0.45]) mesh(new THREE.BoxGeometry(0.08, 0.68, 0.86), band, x, 0.33, 0, chestObj);
+  for (const [x, z] of [[-0.6, -0.39], [0.6, -0.39], [-0.6, 0.39], [0.6, 0.39]]) mesh(new THREE.BoxGeometry(0.1, 0.7, 0.1), band, x, 0.34, z, chestObj);
+  mesh(new THREE.BoxGeometry(0.2, 0.24, 0.06), band, 0, 0.5, 0.43, chestObj); }
+const chestLid = new THREE.Group(); chestLid.position.set(0, 0.66, -0.41); chestObj.add(chestLid);
+{ const oak = flat(0x684428), band = new THREE.MeshStandardMaterial({ color: 0x9a7038, roughness: 0.4, metalness: 0.7 });
+  const lid = mesh(new THREE.CylinderGeometry(0.41, 0.41, 1.25, 12, 1, false, 0, Math.PI), oak, 0, 0, 0.41, chestLid); lid.rotation.set(0, 0, Math.PI / 2);   // a barrel-top lid, hinged at the back
+  for (const x of [-0.45, 0, 0.45]) { const b = mesh(new THREE.TorusGeometry(0.42, 0.035, 4, 12, Math.PI), band, x, 0, 0.41, chestLid); b.rotation.y = Math.PI / 2; } }
+const chestPos = WRECK_CHEST.clone();
 const chest = addPickup('chest', chestPos, () => chestObj);
+chestObj.rotation.y = 0.15 + Math.PI / 2;
 colliders.push({ x: chestPos.x, z: chestPos.z, r: 0.8 });
 
 // --- Old dock & raft site ---
@@ -2427,6 +2522,8 @@ function loadClip(name) {
 const RUN = loadClip('run');        // Slow Run: normal movement
 const SPRINT = loadClip('sprint');  // Running: hold Shift
 const JUMP = loadClip('jump'), ATTACK = loadClip('attack'), PUNCH = loadClip('punch'), EQUIP = loadClip('equip'), DISARM = loadClip('disarm');   // one-shots, scrubbed by game time
+// bow: take it off the back, reach for an arrow + nock + draw, hold at full draw (slow overdraw), put it away
+const BOW_EQUIP = loadClip('bow_equip'), BOW_DRAW = loadClip('bow_draw'), BOW_AIM = loadClip('bow_aim'), BOW_DISARM = loadClip('bow_disarm');
 const LOWER = ['hips', 'thighL', 'shinL', 'thighR', 'shinR'];
 // Pose a one-shot clip at a normalised time t (0..1) and blend it in; `skip` lists bones to leave alone
 function applyClipAt(C, t, w, skip = []) {
@@ -2573,7 +2670,7 @@ const sacredMotes = [];
 loadModelBuffer('axe').then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
   fixMaterials(obj);
   const held = normalizeHandle(obj, 0.85);
-  held.position.y = -0.18;                                    // grip a little above the handle end
+  held.position.y = -0.09;                                    // grip just above the handle's end knob
   tools.axe.clear(); tools.axe.add(held); backAxe.clear(); const onBack = held.clone(); onBack.position.set(0, -0.3, 0); backAxe.add(onBack);
   const ground = held.clone(); ground.position.set(0, 0, 0); ground.rotation.set(0, 0.6, Math.PI / 2);
   ground.position.x = 0.4; groundAxe.add(ground);
@@ -2653,13 +2750,18 @@ function heroSampler(C) {
     const bone = HA.bones[tr.name.slice(0, -11)]; if (!bone) continue;
     S_.push({ bone, upper: UPPER.test(bone.name), interp: tr.createInterpolant() });
   }
+  const hp = C.action.getClip().tracks.find((tr) => tr.name === 'mixamorigHips.position');
+  if (hp && HA.bones.mixamorigHips) S_.hips = { bone: HA.bones.mixamorigHips, interp: hp.createInterpolant() };
   return (HA.samplers[C.dur + ':' + C.action.getClip().uuid] = S_);
 }
-// Blend clip C at normalised time t (0..1) over the current pose with weight w
-function heroOverlay(C, t, w, upperOnly) {
+// Blend clip C at normalised time t (0..1) over the current pose with weight w.
+// upper: true = upper body only, false = whole body, or a number 0..1 that fades the legs out (P.upperK while starting and
+// stopping, so nothing pops when you break into a run). hipsY: also take the clip's hip height (crouched stances).
+function heroOverlay(C, t, w, upper, hipsY) {
   const S_ = heroSampler(C); if (!S_ || w <= 0.001) return;
-  const time = clamp(t, 0, 0.999) * C.dur;
-  for (const s of S_) { if (upperOnly && !s.upper) continue; const v = s.interp.evaluate(time); _hq.fromArray(v); s.bone.quaternion.slerp(_hq, w); }
+  const time = clamp(t, 0, 0.999) * C.dur, lw = w * (upper === true ? 0 : upper ? 1 - upper : 1);
+  for (const s of S_) { const ww = s.upper ? w : lw; if (ww <= 0.001) continue; const v = s.interp.evaluate(time); _hq.fromArray(v); s.bone.quaternion.slerp(_hq, ww); }
+  if (hipsY && lw > 0.001 && S_.hips) S_.hips.bone.position.y = lerp(S_.hips.bone.position.y, S_.hips.interp.evaluate(time)[1], lw);
 }
 loadModelBuffer('hero_rig').then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
   const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
@@ -2678,7 +2780,9 @@ loadModelBuffer('hero_rig').then((buf) => new FBXLoader().parse(buf, '')).then((
   player.userData.body.visible = false;
   // Tools in the right palm; stowed tools on the upper back. Bones are in cm, so undo the model scale.
   const hand = HA.bones.mixamorigRightHand, back = HA.bones.mixamorigSpine2, inv = 1 / HA.s;
-  for (const t of [tools.axe]) { hand.add(t); t.scale.setScalar(inv); t.position.set(0, 9, 3); t.rotation.set(0, 0, -1.4); }   // handle across the palm, head out past the thumb
+  // Axe in the fist: the handle runs across the palm (bone +X is the thumb side, +Y the fingers, +Z the palm), held near its end,
+  // head up and forward over the thumb, blade facing the knuckles so a chop lands edge-first. The fingers close round it (animateHero).
+  for (const t of [tools.axe]) { hand.add(t); t.scale.setScalar(inv); t.position.set(0, 8, 3); t.rotation.set(0, Math.PI * 1.5, -2.1, 'ZYX'); }
   HA.bones.mixamorigLeftHand.add(bowHeld); bowHeld.scale.setScalar(inv); bowHeld.position.set(0, 8, 2.5); bowHeld.rotation.set(0, 0, Math.PI / 2);   // bow gripped in the left fist, limbs vertical
   for (const g of [backAxe, backBow]) { back.add(g); g.scale.setScalar(inv); }
   backAxe.position.set(2, 8, -16); backBow.position.set(-2, 2, -17); backBow.rotation.set(0, 0, 0.6);
@@ -2692,7 +2796,10 @@ function animateHero(dt, speed) {
   P.sprintW = lerp(P.sprintW || 0, P.sprinting && sprint ? 1 : 0, Math.min(1, dt * 6));
   // Play rate follows ground speed so feet don't skate (clip root speed if it has one, else a measured stride)
   const runV = RUN.rootSpeed > 50 ? RUN.rootSpeed * HA.s : 3.9, sprV = SPRINT.rootSpeed > 50 ? SPRINT.rootSpeed * HA.s : 7.2;
-  if (run) { run.setEffectiveWeight(moveW * (1 - P.sprintW)); run.timeScale = clamp(speed / runV, 0.55, 1.5); }
+  // Drawing the bow while you move: you face the target, the legs go where you walk. Backing up plays the run in reverse.
+  let rel = 0; if (bowAiming() && speed > 0.3) { rel = Math.atan2(P.hv.x, P.hv.z) - P.yaw; rel = Math.atan2(Math.sin(rel), Math.cos(rel)); }
+  const back = Math.abs(rel) > 1.95; P.strafeA = lerp(P.strafeA || 0, clamp(back ? Math.atan2(Math.sin(rel - Math.PI), Math.cos(rel - Math.PI)) : rel, -1.35, 1.35), Math.min(1, dt * 10));
+  if (run) { run.setEffectiveWeight(moveW * (1 - P.sprintW)); run.timeScale = (back ? -1 : 1) * clamp(speed / runV, 0.55, 1.5); }
   if (sprint) {
     sprint.setEffectiveWeight(moveW * P.sprintW); sprint.timeScale = clamp(speed / sprV, 0.7, 1.4);
     if (run) sprint.time = (run.time / RUN.dur) * SPRINT.dur;        // keep both gaits on the same foot
@@ -2707,6 +2814,8 @@ function animateHero(dt, speed) {
   HA.t += dt;
   const sp = HA.bones.mixamorigSpine2; if (sp) sp.rotateX(Math.sin(HA.t * 1.9) * 0.02 * (1 - moveW));
   const moving = speed > 0.5;
+  P.upperK = lerp(P.upperK || 0, moving || !P.onGround ? 1 : 0, Math.min(1, dt * 8));   // 0 standing → 1 moving: how much one-shots leave the legs alone
+  if (Math.abs(P.strafeA) > 0.01 && HA.bones.mixamorigHips) HA.bones.mixamorigHips.rotateOnWorldAxis(UPV, P.strafeA);   // hips turn to the walking direction (aimUpperBody re-aims the torso)
   // Jump: skip the wind-up crouch, map airtime onto the rise/fall, then a short landing settle
   // Only a real jump or a real fall plays it: a one-frame ground-contact flicker on uneven ground must not twitch the body
   if (!P.onGround) P.airT = (P.airT || 0) + dt; else { if (P.airT > 0.3) P.landT = 0.25; P.airT = 0; P.jumped = false; }
@@ -2717,37 +2826,90 @@ function animateHero(dt, speed) {
   if (P.equip) {
     P.equip.t += dt / 0.9;
     const C = P.equip.kind === 'equip' ? EQUIP : DISARM, w = Math.min(1, Math.sin(Math.min(P.equip.t, 1) * Math.PI) * 2.5);
-    heroOverlay(C, P.equip.t, w, moving);
+    heroOverlay(C, P.equip.t, w, P.upperK);
     if (P.equip.t >= 1) P.equip = null;
   }
   const AC = S.slot === 0 ? PUNCH : ATTACK;
-  if (P.swing > 0) heroOverlay(AC, 1 - P.swing, Math.min(1, P.swing * 6, (1 - P.swing) * 8 + 0.2), moving || !P.onGround);
-  // Archer stance (procedural, on the real skeleton): bow arm straight out, draw hand pulled back to the cheek.
-  // After a shot the string hand snaps forward and draws again. While sprinting the bow is held low.
-  P.aimW = lerp(P.aimW || 0, S.slot === 2 && S.tools.bow && !P.sprinting && !P.dead ? 1 : 0, Math.min(1, dt * 8));
-  if (P.aimW > 0.02) archerPose(P.aimW, P.drawT > 0 ? clamp(1 - P.drawT / 0.55, 0, 1) ** 1.6 : 1);
+  if (P.swing > 0) heroOverlay(AC, 1 - P.swing, Math.min(1, P.swing * 6, (1 - P.swing) * 8 + 0.2), P.upperK);
+  if (P.bow) poseBow(P.upperK);
+  // a closed fist round the axe handle (the clips leave the hand open)
+  if (tools.axe.visible) for (const f of ['Index', 'Middle', 'Ring', 'Pinky']) for (let k = 1; k <= 3; k++) { const b = HA.bones['mixamorigRightHand' + f + k]; if (b) b.rotation.x += 1.2; }
 }
-const _ap = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()], _aq = [new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()];
-// rotate bone so that its child points at target (world space), blended by w
-function aimBone(bone, child, target, w) {
-  const bp = bone.getWorldPosition(_ap[0]), cp = child.getWorldPosition(_ap[1]);
-  const cur = cp.sub(bp).normalize(), want = _ap[2].copy(target).sub(bp).normalize();
-  const delta = _aq[0].setFromUnitVectors(cur, want), wq = bone.getWorldQuaternion(_aq[1]);
-  const pq = bone.parent.getWorldQuaternion(_aq[2]).invert();
-  bone.quaternion.slerp(pq.multiply(delta.multiply(wq)), w); bone.updateMatrixWorld(true);
+// ---- Bow: the four Mixamo bow clips chained into one state machine
+//   equip  → take the bow off the back; it ends in the ready stance (bow low, side-on), which is the draw clip's first frame
+//   ready  → hold that stance
+//   draw   → hold RMB: reach back to the quiver, nock, raise and draw to the cheek
+//   aim    → full draw, held; the aim clip's slow overdraw creeps on while you hold
+//   lower  → let go of RMB: ease back to the ready stance (the arrow goes back in the quiver)
+//   disarm → put the bow away on the back
+// LMB at full draw looses the arrow; with RMB still held the hand goes straight back to the quiver for the next one.
+// While drawing, the upper body turns so the arrow lines up with the centre of the screen (aimUpperBody).
+const BOW_DUR = { equip: 0.88, draw: 0.8, lower: 0.3, disarm: 1.0, blend: 0.14 };   // seconds (draw: the whole clip)
+const BOW_REDRAW = 0.24;                              // draw-clip phase where the hand heads back to the quiver after a shot
+const aimPh = (t) => Math.min(t / BOW_AIM.dur, 1);    // the overdraw creeps on, then holds
+function setBow(st, extra) { P.bow = { st, t: 0, ph: 0, ...extra }; }
+const bowDrawn = () => !!P.bow && (P.bow.st === 'aim' || (P.bow.st === 'draw' && P.bow.ph > 0.62));   // the arrow is on the string at the bow
+const bowPower = () => !P.bow ? 0 : P.bow.st === 'aim' ? 0.8 + 0.2 * Math.min(1, P.bow.t / 0.45) : P.bow.st === 'draw' ? clamp((P.bow.ph - 0.62) / 0.38, 0, 1) * 0.8 : 0;
+const bowAiming = () => !!P.bow && (P.bow.st === 'draw' || P.bow.st === 'aim');
+function updateBow(dt, swimming) {
+  if (!P.bow) { if (S.slot === 2 && S.tools.bow) setBow('ready'); else return; }
+  const b = P.bow; b.t += dt;
+  const want = P.rmb && locked && !P.dead && !S.paused && !swimming;
+  if (b.st === 'equip') { if (b.t >= BOW_DUR.equip) setBow('ready'); }
+  else if (b.st === 'disarm') { if (b.t >= BOW_DUR.disarm) P.bow = null; }
+  else if (b.st === 'ready' || (b.st === 'lower' && b.t > 0.1)) {
+    if (want && S.inv.arrows > 0) setBow('draw', b.st === 'lower' ? { fromC: b.fromC, fromT: b.fromT } : {});
+    else if (b.st === 'lower' && b.t >= BOW_DUR.lower) setBow('ready');
+    if (want && S.inv.arrows <= 0 && !(P.hintT > 0)) { toast('No arrows. Craft some (C)'); P.hintT = 4; setTimeout(() => (P.hintT = 0), 4000); }
+  } else if (b.st === 'draw') {
+    b.ph = Math.min(1, (b.from || 0) + b.t / BOW_DUR.draw);
+    if (!want) setBow('lower', { fromC: BOW_DRAW, fromT: b.ph });
+    else if (b.ph >= 1) setBow('aim');
+  } else if (b.st === 'aim' && !want) setBow('lower', { fromC: BOW_AIM, fromT: aimPh(b.t) });
 }
-function archerPose(w, pull) {
-  const B = HA.bones; if (!B.mixamorigLeftArm) return;
-  const yaw = P.yaw, f = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)), left = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)), up = new THREE.Vector3(0, 1, 0);
-  // torso turns a little side-on, as archers stand
-  B.mixamorigSpine2.rotateY(0.35 * w); B.mixamorigSpine2.updateMatrixWorld(true);
-  const ls = B.mixamorigLeftArm.getWorldPosition(new THREE.Vector3()), rs = B.mixamorigRightArm.getWorldPosition(new THREE.Vector3()), head = B.mixamorigHead.getWorldPosition(new THREE.Vector3());
-  const grip = ls.clone().addScaledVector(f, 0.6).addScaledVector(left, -0.08).addScaledVector(up, 0.04);
-  aimBone(B.mixamorigLeftArm, B.mixamorigLeftForeArm, grip, w); aimBone(B.mixamorigLeftForeArm, B.mixamorigLeftHand, grip, w);
-  const anchor = head.clone().addScaledVector(f, 0.12).addScaledVector(left, -0.06).addScaledVector(up, -0.12);   // full draw: string hand at the cheek
-  const hand = grip.clone().addScaledVector(f, -0.1).lerp(anchor, pull);
-  const elbow = rs.clone().addScaledVector(f, lerp(0.25, -0.22, pull)).addScaledVector(left, -0.12).addScaledVector(up, lerp(-0.05, 0.08, pull));
-  aimBone(B.mixamorigRightArm, B.mixamorigRightForeArm, elbow, w); aimBone(B.mixamorigRightForeArm, B.mixamorigRightHand, hand, w);
+// LMB with the bow out: loose (any time the arrow is at the bow: the fuller the draw, the harder it hits), otherwise explain the controls
+function bowClick() {
+  if (bowDrawn()) {
+    const fromT = P.bow.st === 'aim' ? aimPh(P.bow.t) : 0, fromC = P.bow.st === 'aim' ? BOW_AIM : BOW_DRAW;
+    shootArrow(bowPower());
+    if (P.rmb && S.inv.arrows > 0) setBow('draw', { from: BOW_REDRAW, ph: BOW_REDRAW, fromC, fromT });
+    else setBow('lower', { fromC, fromT: P.bow.st === 'aim' ? fromT : P.bow.ph });
+  } else if (!P.rmb && !(P.hintT > 0)) { toast('Hold the <b>right mouse button</b> to draw and aim, then <b>left click</b> to shoot.'); P.hintT = 5; setTimeout(() => (P.hintT = 0), 5000); }
+}
+function poseBow(upper) {
+  const b = P.bow; if (b.t < 0) return;              // still waiting for the axe to be put away
+  const ss = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+  if (b.st === 'equip') heroOverlay(BOW_EQUIP, b.t / BOW_DUR.equip, Math.min(1, b.t * 6), upper, true);
+  else if (b.st === 'disarm') heroOverlay(BOW_DISARM, b.t / BOW_DUR.disarm, Math.min(1, (BOW_DUR.disarm - b.t) * 5), upper, true);
+  else if (b.st === 'ready') heroOverlay(BOW_DRAW, 0, lerp(1, P.sprinting ? 0.15 : 0.3, upper), upper, true);   // running: the bow is just carried
+  else if (b.st === 'draw') heroOverlay(BOW_DRAW, Math.max(b.ph, b.from || 0), 1, upper, true);
+  else if (b.st === 'aim') heroOverlay(BOW_AIM, aimPh(b.t), 1, upper, true);
+  else if (b.st === 'lower') heroOverlay(BOW_DRAW, 0, 1, upper, true);
+  // ease out of the previous pose (after a shot, or when lowering) instead of snapping
+  const fade = b.st === 'lower' ? 1 - ss(b.t / BOW_DUR.lower) : b.st === 'draw' ? 1 - ss(b.t / BOW_DUR.blend) : 0;
+  if (b.fromC && fade > 0) heroOverlay(b.fromC, b.fromT, fade, upper, true);
+  // turn the upper body so the arrow points where you aim (only once the arrow is up at the bow)
+  const aimW = b.st === 'aim' ? 1 : b.st === 'draw' ? ss((b.ph - 0.6) / 0.3) : b.st === 'lower' && b.fromC ? fade * (b.fromC === BOW_AIM ? 1 : ss((b.fromT - 0.6) / 0.3)) : 0;
+  if (aimW > 0.01 && P.aimPt) aimUpperBody(P.aimPt, aimW);
+}
+const _ab = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()];
+// Rotate the spine (split over two joints) so the line string hand → bow hand points at the target
+function aimUpperBody(target, w) {
+  const Bn = HA.bones, R = Bn.mixamorigRightHand, L = Bn.mixamorigLeftHand; if (!R || !L) return;
+  for (const [bone, part] of [[Bn.mixamorigSpine1, 0.5], [Bn.mixamorigSpine2, 1]]) {
+    const r = R.getWorldPosition(_ab[0]), cur = L.getWorldPosition(_ab[1]).sub(r).normalize(), want = _ab[2].copy(target).sub(r).normalize();
+    const d = _ab[3].identity().slerp(_ab[4].setFromUnitVectors(cur, want), w * part);
+    const pq = bone.parent.getWorldQuaternion(_ab[5]).invert(), wq = bone.getWorldQuaternion(_ab[4]);
+    bone.quaternion.copy(pq.multiply(d.multiply(wq)));
+  }
+}
+// The arrow on the string while drawing and aiming: from the string hand through the bow hand
+const nockArrow = new THREE.Group(); nockArrow.visible = false; scene.add(nockArrow);
+function placeNockArrow() {
+  const b = P.bow, on = !!b && hero.native && ((b.st === 'draw' && b.ph > 0.45) || b.st === 'aim');
+  nockArrow.visible = on && nockArrow.children.length > 0; if (!nockArrow.visible) return;
+  const r = HA.bones.mixamorigRightHand.getWorldPosition(_ab[0]), d = HA.bones.mixamorigLeftHand.getWorldPosition(_ab[1]).sub(r).normalize();
+  nockArrow.position.copy(r).addScaledVector(d, 0.4); nockArrow.lookAt(_ab[2].copy(nockArrow.position).add(d));
 }
 const P = { vel: new THREE.Vector3(), yaw: Math.PI, onGround: true, swing: 0, swingHit: false, hurtT: 0, animT: 0, dead: false };
 
@@ -2835,11 +2997,11 @@ const creatures = [];
 const TYPES = {
   rabbit: { hp: 10, speed: 5.5, dmg: 0, flee: true, drops: { rawmeat: 1 }, r: 0.4, reach: 0 },
   boar: { hp: 45, speed: 5, dmg: 12, flee: false, retaliate: true, drops: { rawmeat: 2, hide: 1 }, r: 0.8, reach: 1.8 },
-  wolf: { hp: 35, speed: 6.2, dmg: 9, hostile: true, drops: { hide: 1, rawmeat: 1 }, r: 0.7, reach: 1.8 },
+  wolf: { hp: 35, speed: 6.2, dmg: 9, hostile: true, drops: { hide: 1, rawmeat: 1, bone: 1 }, r: 0.7, reach: 1.8 },
   skeleton: { hp: 55, speed: 3.4, dmg: 12, hostile: true, drops: {}, r: 0.5, reach: 1.9, aggro: 13 },
-  deer: { hp: 30, speed: 7.5, dmg: 0, flee: true, drops: { rawmeat: 2, hide: 1 }, r: 0.6, reach: 0 },
-  stag: { hp: 60, speed: 6.8, dmg: 14, flee: false, retaliate: true, drops: { rawmeat: 3, hide: 2 }, r: 0.75, reach: 2.1 },
-  fox: { hp: 14, speed: 7, dmg: 0, flee: true, drops: { hide: 1 }, r: 0.4, reach: 0 },
+  deer: { hp: 30, speed: 7.5, dmg: 0, flee: true, drops: { rawmeat: 2, hide: 1, bone: 1 }, r: 0.6, reach: 0 },
+  stag: { hp: 60, speed: 6.8, dmg: 14, flee: false, retaliate: true, drops: { rawmeat: 3, hide: 2, bone: 2, horn: 2 }, r: 0.75, reach: 2.1, wary: true },
+  fox: { hp: 14, speed: 7, dmg: 0, flee: true, drops: { hide: 1, bone: 1 }, r: 0.4, reach: 0 },
   // Nestor's farm animals: they graze inside the courtyard and can't be hurt
   donkey: { hp: 1, speed: 1.4, dmg: 0, passive: true, drops: {}, r: 0.8, reach: 0, roam: 3 },
   cow: { hp: 1, speed: 1.2, dmg: 0, passive: true, drops: {}, r: 0.9, reach: 0, roam: 3 },
@@ -2847,7 +3009,9 @@ const TYPES = {
   alpaca: { hp: 1, speed: 1.3, dmg: 0, passive: true, drops: {}, r: 0.7, reach: 0, roam: 3 },
   shibainu: { hp: 1, speed: 2.2, dmg: 0, passive: true, drops: {}, r: 0.4, reach: 0, roam: 1.5 },          // Nestor's dog
   horse_white: { hp: 1, speed: 1.4, dmg: 0, passive: true, drops: {}, r: 0.9, reach: 0, roam: 8 },     // Athena's sacred mare
-  bull: { hp: 90, speed: 6, dmg: 18, flee: false, retaliate: true, drops: { rawmeat: 4, hide: 2 }, r: 1.0, reach: 2.4 },   // wild bulls of the plain
+  bull: { hp: 90, speed: 6, dmg: 18, flee: false, retaliate: true, drops: { rawmeat: 4, hide: 2, bone: 2, horn: 2 }, r: 1.0, reach: 2.4, wary: true },   // wild bulls of the plain
+  // The Windbinder: the boss on the Throne of Olympos (placeholder body until the real model and its animations arrive)
+  beast: { hp: 520, speed: 3.6, dmg: 24, hostile: true, boss: true, drops: {}, r: 1.7, reach: 4.2, aggro: 60, name: 'The Windbinder' },
   // A stray husky in the woods: walk up to it and it joins you, follows you around and goes for wolves and boars that come close
   husky: { hp: 1, speed: 7.5, dmg: 0, passive: true, companion: true, drops: {}, r: 0.5, reach: 1.6, roam: 6 },
 };
@@ -2908,6 +3072,7 @@ function animateAnimal(c, speed, dt) {
 function spawnCreature(type, pos) {
   let obj;
   if (type === 'skeleton') obj = makeSkeleton();
+  else if (type === 'beast') obj = makeWindbinder();
   else obj = new THREE.Group();                                    // model-only animals: empty until the model streams in
   obj.position.copy(pos); scene.add(obj);
   const c = { type, obj, def: TYPES[type], hp: TYPES[type].hp, state: 'wander', target: pos.clone(), t: rr(0, 5), atkCd: 0, flash: 0, dead: false, home: pos.clone(), vy: 0 };
@@ -2926,12 +3091,12 @@ for (let i = 0; i < 8; i++) { const p = landSpot(2, 35, AVOID); if (p) spawnCrea
 { const p = TEMPLE.clone().add(new THREE.Vector3(-14, 0, 10)); p.y = heightAt(p.x, p.z); spawnCreature('horse_white', p); }
 // The stray husky waits in the forest
 const HUSKY = (() => { for (let k = 0; k < 400; k++) { const p = landSpot(4, 30, AVOID); if (p && regionAt(p.x, p.z).key === 'forest') return spawnCreature('husky', p); } const p = landSpot(4, 30, AVOID); return p && spawnCreature('husky', p); })();
-// The Wolf of the Cave: a bronze wolf crouched on a rock at the ravine before the Cave of Echoes (the uploaded sculpt).
+// The Bronze Wolf: the drowned ship's figurehead, dragged onto a rock at the edge of the mud bank by her dead crew (the uploaded sculpt).
 // Static and detailed, so it's a monument rather than a creature; it streams in after start-up.
 {
-  const side = new THREE.Vector3(-CAVE_DIR.z, 0, CAVE_DIR.x), p = CAVE_MOUTH.clone().addScaledVector(CAVE_DIR, -7).addScaledVector(side, 4.2);
+  const p = WRECK_SITE.clone().add(new THREE.Vector3(13, 0, -7.5));
   p.y = heightAt(p.x, p.z);
-  const g = new THREE.Group(); g.position.copy(p); g.rotation.y = Math.atan2(-CAVE_DIR.x, -CAVE_DIR.z) + 0.5; scene.add(g);   // looks down the ravine at whoever comes
+  const g = new THREE.Group(); g.position.copy(p); g.rotation.y = Math.PI / 2 + 0.4; scene.add(g);   // looks down the ravine at whoever comes
   const plinth = new THREE.Mesh(new THREE.DodecahedronGeometry(1.25, 1), rockMat); plinth.scale.set(1.5, 0.75, 1.9); plinth.position.y = 0.35; plinth.castShadow = plinth.receiveShadow = true; g.add(plinth);
   colliders.push({ x: p.x, z: p.z, r: 2.1, h: 2.2 });
   import('./models/wolfstatue.js').then(({ default: W }) => {
@@ -2948,21 +3113,24 @@ const HUSKY = (() => { for (let k = 0; k < 400; k++) { const p = landSpot(4, 30,
 for (const [type, lx, lz] of [['donkey', -15, 2], ['cow', -19, -2], ['horse', -15.5, -3.5], ['alpaca', -19.5, 2.5]]) { const p = hutW(lx, lz); p.y = heightAt(p.x, p.z); spawnCreature(type, p).pen = true; }
 { const p = hutW(2.6, 6.2); p.y = heightAt(p.x, p.z); spawnCreature('shibainu', p); }   // Nestor's dog dozes by the porch
 const skeletons = [];
-for (let i = 0; i < 3; i++) { const a = i * 2.1 + 0.4; const p = new THREE.Vector3(CAVE.x + Math.cos(a) * 5, CAVE_Y, CAVE.z + Math.sin(a) * 5); const sk = spawnCreature('skeleton', p); sk.home.copy(p); skeletons.push(sk); }
+for (let i = 0; i < 4; i++) { const a = i * 1.57 + 0.5; const p = new THREE.Vector3(WRECK_SITE.x + 3 + Math.cos(a) * 7, 0, WRECK_SITE.z + Math.sin(a) * 7); p.y = heightAt(p.x, p.z); const sk = spawnCreature('skeleton', p); sk.home.copy(p); skeletons.push(sk); }
 
 // ============================================================
 // Game state
 // ============================================================
 const DAY_LEN = 900;  // seconds per in-game day (15 min: ~10 of daylight)
+const HP_MAX = 200;   // health pool (doubled: fights on Nisos are hard)
 const S = {
-  hp: 100, food: 100, sta: 100, time: 0.3, day: 1, nights: 0, wasNight: false,
-  inv: { wood: 0, stone: 0, fiber: 0, berries: 0, rawmeat: 0, meat: 0, hide: 0, rope: 0, sail: 0, arrows: 0 },
+  hp: 200, food: 100, sta: 100, time: 0.3, day: 1, nights: 0, wasNight: false,
+  inv: { wood: 0, stone: 0, fiber: 0, berries: 0, rawmeat: 0, meat: 0, hide: 0, bone: 0, horn: 0, bronze: 0, rope: 0, sail: 0, arrows: 0 },
   tools: { axe: false, bow: false }, slot: 0, energy: 100,
   kills: { rabbit: 0, boar: 0, wolf: 0, skeleton: 0, deer: 0, stag: 0, fox: 0, bull: 0 }, cooked: 0, campfire: null, raftBuilt: false,
+  hotbar: ['hands', 'axe', 'bow', 'meat', 'berries', null, null, null],   // quick slots 1-8, arranged from the inventory
   timeScale: 1, running: false, paused: true, talkedNestor: false, sailing: false, questIdx: 0, deaths: 0, nightsAtStart: 0, started: 0,
 };
-const ICONS = { wood: '🪵', stone: '🪨', fiber: '🌾', berries: '🫐', rawmeat: '🥩', meat: '🍖', hide: '🟫', rope: '🧶', sail: '⛵', arrows: '➶' };
-const NAMES = { wood: 'Wood', stone: 'Stone', fiber: 'Fiber', berries: 'Berries', rawmeat: 'Raw Meat', meat: 'Cooked Meat', hide: 'Hide', rope: 'Rope', sail: 'Sailcloth', arrows: 'Arrows' };
+const ICONS = new Proxy({}, { get: (_, k) => icon(k) });   // black-figure SVG icons (icons.js), one per item
+document.querySelectorAll('[data-ic]').forEach((el) => el.insertAdjacentHTML('afterbegin', icon(el.dataset.ic)));
+const NAMES = { wood: 'Wood', stone: 'Stone', fiber: 'Fiber', berries: 'Berries', rawmeat: 'Raw Meat', meat: 'Cooked Meat', hide: 'Hide', bone: 'Bone', horn: 'Horn', bronze: 'Bronze Ingot', rope: 'Rope', sail: 'Sailcloth', arrows: 'Arrows' };
 const isNight = () => S.time < 0.2 || S.time > 0.845;
 // daylight is stretched: sunrise ~05:00, sunset ~20:00; the sky/sun follow this warped clock
 const sunClock = (t) => { if (t >= 0.2 && t <= 0.84) return 0.23 + (t - 0.2) / 0.64 * 0.54; const u = t < 0.2 ? t + 1 : t; return (0.77 + (u - 0.84) / 0.36 * 0.46) % 1; };
@@ -2991,17 +3159,21 @@ function showRegion(R) {
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   clearTimeout(regionTimer); regionTimer = setTimeout(() => el.classList.remove('show'), 4200);
 }
+// A message already on screen is not shown again (it restarts instead), and at most four stack up
 function toast(msg, big = false) {
-  const d = document.createElement('div'); d.className = 'toast' + (big ? ' big' : ''); d.innerHTML = msg;
-  $('toasts').appendChild(d); setTimeout(() => d.remove(), 3300);
+  const box = $('toasts'), same = [...box.children].find((e) => e.dataset.msg === msg);
+  if (same) { same.style.animation = 'none'; void same.offsetWidth; same.style.animation = ''; clearTimeout(same._t); same._t = setTimeout(() => same.remove(), 3300); return; }
+  const d = document.createElement('div'); d.className = 'toast' + (big ? ' big' : ''); d.innerHTML = msg; d.dataset.msg = msg;
+  box.appendChild(d); d._t = setTimeout(() => d.remove(), 3300);
+  while (box.children.length > 4) box.firstChild.remove();
 }
 const dmgTexts = [];
-function floatText(text, pos, color = '#fff') {
-  const d = document.createElement('div'); d.className = 'dmg'; d.textContent = text; d.style.color = color;
+function floatText(text, pos, color = '#fff', html = false) {
+  const d = document.createElement('div'); d.className = 'dmg'; d[html ? 'innerHTML' : 'textContent'] = text; d.style.color = color;
   $('hud').appendChild(d); dmgTexts.push({ d, pos: pos.clone(), t: 0 });
 }
 function give(item, n, at) {
-  S.inv[item] += n; if (at) floatText(`+${n} ${ICONS[item]}`, at, '#f5e6b8'); snd.pickup();
+  S.inv[item] += n; if (at) floatText(`+${n} ${ICONS[item]}`, at, '#f5e6b8', true); snd.pickup();
 }
 // Hit particles
 const chips = [];
@@ -3012,52 +3184,67 @@ function burst(pos, color, n = 8) {
   }
 }
 
-// Hotbar
-const SLOTS = [{ k: 'hands', ic: '✊', n: 'Hands' }, { k: 'axe', ic: '🪓', n: 'Axe' }, { k: 'bow', ic: '🏹', n: 'Bow' }];
+// Hotbar: eight quick slots the player arranges from the inventory (tools, food, anything they carry)
+const SLOTS = [{ k: 'hands', n: 'Hands' }, { k: 'axe', n: 'Stone Axe' }, { k: 'bow', n: 'Hunting Bow' }];   // tools, by S.slot index
+const TOOL_IDX = { hands: 0, axe: 1, bow: 2 }, FOOD = { meat: 1, berries: 1, rawmeat: 1 };
+const itemName = (k) => (k in TOOL_IDX ? SLOTS[TOOL_IDX[k]].n : NAMES[k]);
+const itemHave = (k) => (k === 'hands' ? 1 : k in TOOL_IDX ? (S.tools[k] ? 1 : 0) : S.inv[k] || 0);
+function quickSlotHTML(k, i, sel) {
+  if (!k) return `<div class="slot empty" data-q="${i}"><b>${i + 1}</b></div>`;
+  const n = itemHave(k), tool = k in TOOL_IDX;
+  return `<div class="slot ${sel ? 'sel' : ''} ${n ? '' : 'locked'}" data-q="${i}" title="${itemName(k)}"><b>${i + 1}</b>${icon(k)}${!tool && n ? `<em>${n}</em>` : ''}</div>`;
+}
 function renderHUD() {
-  $('hpB').style.width = S.hp + '%'; $('foodB').style.width = S.food + '%'; $('staB').style.width = S.sta + '%';
+  $('hpB').style.width = (S.hp / HP_MAX * 100) + '%'; $('foodB').style.width = S.food + '%'; $('staB').style.width = S.sta + '%';
   $('enB').style.width = S.energy + '%'; $('enN').textContent = Math.ceil(S.energy); $('hpN').textContent = Math.ceil(S.hp); $('staN').textContent = Math.ceil(S.sta); $('foodN').textContent = Math.ceil(S.food);
-  const hb = SLOTS.map((s, i) => {
-    const locked = s.k !== 'hands' && !S.tools[s.k];
-    return `<div class="slot ${S.slot === i ? 'sel' : ''} ${locked ? 'locked' : ''}"><b>${i + 1}</b>${s.ic}<small>${s.n}</small></div>`;
-  }).join('') + `<div class="slot"><b>F</b>${S.inv.meat ? '🍖' : '🫐'}<em>${S.inv.meat || S.inv.berries}</em></div>` + ['wood', 'stone', 'fiber', 'rope'].map((k, i) => `<div class="slot"><b>${i + 5}</b>${S.inv[k] ? ICONS[k] : ''}<em>${S.inv[k] || ''}</em></div>`).join('');
+  const hb = S.hotbar.map((k, i) => quickSlotHTML(k, i, k in TOOL_IDX && TOOL_IDX[k] === S.slot)).join('');
   if (hb !== renderHUD.hb) { renderHUD.hb = hb; $('hotbar').innerHTML = hb; }
-  const iv = Object.keys(S.inv).filter((k) => S.inv[k] > 0).map((k) => `<span>${ICONS[k]} ${NAMES[k]}</span><b>${S.inv[k]}</b>`).join('') || '<span style="opacity:.6">Empty pouch</span>';
-  if (iv !== renderHUD.iv) { renderHUD.iv = iv; $('inv').innerHTML = iv; }
   const hours = Math.floor(S.time * 24), mins = Math.floor((S.time * 24 - hours) * 60);
-  $('clock').innerHTML = `<b class="cinzel">Day ${S.day}</b> · ${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')} ${isNight() ? '🌙' : '☀️'}${S.timeScale > 1 ? ` <span style="color:#e8c27a">×${S.timeScale}</span>` : ''} <span style="color:var(--dim);font-size:11px">· ${Math.round(FPS.fps)} fps</span>`;
-  // Compass bar: cardinal points, ticks and the quest target with distance
-  {
-    const W = $('compass').clientWidth || 500, head = Math.atan2(-Math.sin(camYaw), -Math.cos(camYaw)); // facing angle (atan2(x,z))
-    const pos = (ang) => { let d = ang - head; d = Math.atan2(Math.sin(d), Math.cos(d)); return Math.abs(d) < 1.3 ? W / 2 - (d / 1.3) * (W / 2) : null; };
-    let html = '';
-    const marks = [['S', 0], ['SE', Math.PI / 4], ['E', Math.PI / 2], ['NE', Math.PI * 0.75], ['N', Math.PI], ['NW', -Math.PI * 0.75], ['W', -Math.PI / 2], ['SW', -Math.PI / 4]];
-    for (const [l, ang] of marks) { const x = pos(ang); if (x !== null) html += `<span style="left:${x}px;${l.length > 1 ? 'font-size:11px;top:10px;opacity:.7' : ''}">${l}</span>`; }
-    for (let k = 0; k < 24; k++) { const x = pos(k / 24 * Math.PI * 2 + Math.PI / 24); if (x !== null) html += `<span class="tick" style="left:${x}px"></span>`; }
-    const tgt = Q[S.questIdx]?.target();
-    if (tgt) { const x = pos(Math.atan2(tgt.x - player.position.x, tgt.z - player.position.z)); if (x !== null) html += `<span class="goal" style="left:${x}px"><b>◆</b>${Math.round(Math.hypot(tgt.x - player.position.x, tgt.z - player.position.z))} m</span>`; }
-    $('compassInner').innerHTML = html;
+  const ck = `${icon(isNight() ? 'moon' : 'sun')}<b class="cinzel">Day ${S.day}</b> ${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}${S.timeScale > 1 ? ` <span style="color:var(--gold)">×${S.timeScale}</span>` : ''} <small>· ${Math.round(FPS.fps)} fps</small>`;
+  if (ck !== renderHUD.ck) { renderHUD.ck = ck; $('clock').innerHTML = ck; }
+  $('vignette').style.boxShadow = `inset 0 0 160px rgba(200,20,20,${P.hurtT > 0 ? 0.6 : S.hp < HP_MAX * 0.3 ? 0.35 : 0})`;
+}
+// Compass bar, updated every frame: the cardinal points and ticks are laid out once on a strip that slides with the camera;
+// the quest diamond is placed on its own. 1.3 rad either side of the view direction fits the bar.
+const COMPASS_SPAN = 1.3, compass = { w: 0, s: 0, goalD: -1 };
+function buildCompass() {
+  const W = $('compass').clientWidth || 440; compass.w = W; compass.s = W / 2 / COMPASS_SPAN;
+  const marks = [['S', 0], ['SE', Math.PI / 4], ['E', Math.PI / 2], ['NE', Math.PI * 0.75], ['N', Math.PI], ['NW', -Math.PI * 0.75], ['W', -Math.PI / 2], ['SW', -Math.PI / 4]];
+  let html = '';
+  for (let wrap = -1; wrap <= 1; wrap++) {
+    for (const [l, ang] of marks) html += `<span class="${l.length > 1 ? 'mid' : ''}" style="left:${(-(ang + wrap * Math.PI * 2) * compass.s).toFixed(1)}px">${l}</span>`;
+    for (let k = 0; k < 24; k++) html += `<span class="tick" style="left:${(-(k / 24 * Math.PI * 2 + Math.PI / 24 + wrap * Math.PI * 2) * compass.s).toFixed(1)}px"></span>`;
   }
-  $('vignette').style.boxShadow = `inset 0 0 160px rgba(200,20,20,${P.hurtT > 0 ? 0.6 : S.hp < 30 ? 0.35 : 0})`;
+  $('compassStrip').innerHTML = html;
+}
+function updateCompass() {
+  const W = $('compass').clientWidth; if (!W) return; if (W !== compass.w) buildCompass();
+  const head = Math.atan2(-Math.sin(camYaw), -Math.cos(camYaw));                       // facing angle, atan2(x, z)
+  $('compassStrip').style.transform = `translateX(${(W / 2 + head * compass.s).toFixed(1)}px)`;
+  const tgt = Q[S.questIdx]?.target(), g = $('compassGoal');
+  let d = tgt ? Math.atan2(tgt.x - player.position.x, tgt.z - player.position.z) - head : 9; d = Math.atan2(Math.sin(d), Math.cos(d));
+  const show = !!tgt && Math.abs(d) < COMPASS_SPAN; g.classList.toggle('hidden', !show); if (!show) return;
+  g.style.left = (W / 2 - d * compass.s).toFixed(1) + 'px';
+  const m = Math.round(Math.hypot(tgt.x - player.position.x, tgt.z - player.position.z)); if (m !== compass.goalD) { compass.goalD = m; g.querySelector('b').textContent = m + ' m'; }
 }
 
 // ============================================================
 // Crafting
 // ============================================================
 const RECIPES = [
-  { id: 'rope', ic: '🧶', name: 'Rope', desc: 'Twisted fiber. Holds a raft together.', cost: { fiber: 3 }, make: () => give('rope', 1) },
-  { id: 'axe', bench: true, ic: '🪓', name: 'Stone Axe', desc: 'Fells trees and splits rocks. Made at Nestor\'s workbench.', cost: { wood: 3, stone: 2, fiber: 1 }, once: () => S.tools.axe, make: () => { S.tools.axe = true; S.slot = 1; } },
-  { id: 'bow', bench: true, ic: '🏹', name: 'Hunting Bow', desc: 'A bent olive stave strung with twisted fiber. Kills at range: the only way to bring down deer before they bolt. Made at Nestor\'s workbench.', cost: { wood: 4, fiber: 3, rope: 1 }, once: () => S.tools.bow, make: () => { S.tools.bow = true; S.slot = 2; P.equip = null; } },
-  { id: 'arrows', ic: '➶', name: 'Arrows ×6', desc: 'Straight shafts, knapped stone heads and feather fletching. Six per bundle.', cost: { wood: 1, stone: 1, fiber: 1 }, make: () => give('arrows', 6) },
-  { id: 'fire', ic: '🔥', name: 'Campfire', desc: 'Light, warmth, cooking. Wolves keep their distance. Placed in front of you.', cost: { wood: 5, stone: 3 }, make: placeCampfire },
+  { id: 'rope', ic: 'rope', name: 'Rope', desc: 'Twisted fiber. Holds a raft together.', cost: { fiber: 3 }, make: () => give('rope', 1) },
+  { id: 'axe', bench: true, ic: 'axe', name: 'Stone Axe', desc: 'Fells trees and splits rocks. Made at Nestor\'s workbench.', cost: { wood: 3, stone: 2, fiber: 1 }, once: () => S.tools.axe, make: () => { S.tools.axe = true; S.slot = 1; } },
+  { id: 'bow', bench: true, ic: 'bow', name: 'Hunting Bow', desc: 'A bent olive stave strung with twisted fiber. Kills at range: the only way to bring down deer before they bolt. Made at Nestor\'s workbench.', cost: { wood: 4, fiber: 3, rope: 1 }, once: () => S.tools.bow, make: () => { S.tools.bow = true; S.slot = 2; P.equip = null; setBow('equip'); } },
+  { id: 'arrows', ic: 'arrows', name: 'Arrows ×6', desc: 'Straight shafts, knapped stone heads and feather fletching. Six per bundle.', cost: { wood: 1, stone: 1, fiber: 1 }, make: () => give('arrows', 6) },
+  { id: 'fire', ic: 'fire', name: 'Campfire', desc: 'Light, warmth, cooking. Wolves keep their distance. Placed in front of you.', cost: { wood: 5, stone: 3 }, make: placeCampfire },
 ];
 // Recipes are taught by Nestor as the story goes: rope and fire from the start, the axe when he sets the First Tool,
 // the bow and arrows when he sends you to arm yourself.
-const TEACH = [[0, ['rope', 'fire']], [1, ['axe']], [5, ['bow', 'arrows']]];
+const TEACH = [['meet', ['rope', 'fire']], ['axe', ['axe']], ['bow', ['bow', 'arrows']]];
 function syncRecipes() {
   S.recipes ||= [];
-  for (const [qi, ids] of TEACH) if (S.questIdx >= qi || S.explore) for (const id of ids) if (!S.recipes.includes(id)) {
-    S.recipes.push(id); if (S.running && qi > 0 && !S.explore) toast(`Nestor taught you a recipe: <b>${RECIPES.find((r) => r.id === id).name}</b> (C)`, true);
+  for (const [qid, ids] of TEACH) if (S.questIdx >= QI[qid] || S.explore) for (const id of ids) if (!S.recipes.includes(id)) {
+    S.recipes.push(id); if (S.running && QI[qid] > 0 && !S.explore) toast(`Nestor taught you a recipe: <b>${RECIPES.find((r) => r.id === id).name}</b> (C)`, true);
   }
 }
 const known = (r) => (S.recipes || []).includes(r.id);
@@ -3066,11 +3253,11 @@ const canAfford = (cost) => Object.entries(cost).every(([k, v]) => S.inv[k] >= v
 let craftSel = 'axe';
 function renderCraft() {
   syncRecipes(); if (!known(RECIPES.find((x) => x.id === craftSel))) craftSel = RECIPES.find(known)?.id || 'rope';
-  $('recipes').innerHTML = RECIPES.map((r) => known(r) ? `<button class="rrow ${r.id === craftSel ? 'on' : ''} ${canAfford(r.cost) ? '' : 'no'}" data-sel="${r.id}"><i>${r.ic}</i>${r.name}</button>`
-    : `<button class="rrow locked" disabled><i>📜</i>Unknown recipe<small>Nestor will teach you</small></button>`).join('');
+  $('recipes').innerHTML = RECIPES.map((r) => known(r) ? `<button class="rrow ${r.id === craftSel ? 'on' : ''} ${canAfford(r.cost) ? '' : 'no'}" data-sel="${r.id}"><i>${icon(r.ic)}</i>${r.name}</button>`
+    : `<button class="rrow locked" disabled><i>${icon('scroll')}</i>Unknown recipe<small>Nestor will teach you</small></button>`).join('');
   const r = RECIPES.find((x) => x.id === craftSel), owned = r.once && r.once(), away = r.bench && !nearBench();
   const cost = Object.entries(r.cost).map(([k, v]) => `<div class="slot ${S.inv[k] >= v ? '' : 'no'}" title="${NAMES[k]}">${ICONS[k]}<em>${v}</em></div>`).join('');
-  $('rdetail').innerHTML = `<h3>${r.name}</h3><div class="big">${r.ic}</div><div class="desc">${r.desc}</div><div class="cost">${cost}</div>
+  $('rdetail').innerHTML = `<h3>${r.name}</h3><div class="big">${icon(r.ic)}</div><div class="desc">${r.desc}</div><div class="cost">${cost}</div>
     <button class="btn primary" data-r="${r.id}" ${owned || away || !canAfford(r.cost) ? 'disabled' : ''}>${owned ? 'Owned' : away ? 'Needs the workbench' : 'Craft'}</button>`;
 }
 $('recipes').addEventListener('click', (e) => { const b = e.target.closest('[data-sel]'); if (b) { craftSel = b.dataset.sel; renderCraft(); } });
@@ -3174,33 +3361,47 @@ $('dialog').addEventListener('click', nextLine);
 // Quests
 // ============================================================
 const Q = [
-  { title: 'The Chosen One', desc: 'Your boat broke on the rocks of Nisos, the first island of Argonisos. An old man lives by the hut above the cove: Nestor, the guide Zeus set here for the chosen.',
+  { id: 'meet', title: 'The Chosen One', desc: 'Your boat broke on the rocks of Nisos, the first island of Argonisos. An old man lives by the hut above the cove: Nestor, the guide Zeus set here for the chosen.',
     obj: () => [['Meet Nestor by his hut', S.talkedNestor]], target: () => nestor.position },
-  { title: 'The First Tool', desc: 'Nestor wants to see you make something with your own hands. Pick up branches and pebbles from the ground and pull fiber from bushes and reeds, then craft a Stone Axe at the workbench in Nestor\'s smithy.',
+  { id: 'axe', title: 'The First Tool', desc: 'Nestor wants to see you make something with your own hands. Pick up branches and pebbles from the ground and pull fiber from bushes and reeds, then craft a Stone Axe at the workbench in Nestor\'s smithy.',
     obj: () => [[`Wood ${Math.min(S.inv.wood, 3)}/3`, S.inv.wood >= 3 || S.tools.axe], [`Stone ${Math.min(S.inv.stone, 2)}/2`, S.inv.stone >= 2 || S.tools.axe], [`Fiber ${Math.min(S.inv.fiber, 1)}/1`, S.inv.fiber >= 1 || S.tools.axe], ['Craft a Stone Axe at the workbench', S.tools.axe]], target: () => (S.inv.wood >= 3 && S.inv.stone >= 2 && S.inv.fiber >= 1 ? BENCH : null) },
-  { title: 'A Gift for Athena', desc: 'Every chosen one must honour Athena before the trial begins. Gather berries from the bushes, then strike the Sacred Olive with your axe until a branch falls, the ancient tree at the heart of the Olive Terraces.',
+  { id: 'showaxe', title: 'Show Nestor', desc: 'The axe is done. Take it to Nestor and let him judge your work.',
+    obj: () => [['Speak to Nestor', !!S.showedAxe]], target: () => nestor.position },
+  { id: 'gift', title: 'A Gift for Athena', desc: 'Every chosen one must honour Athena before the trial begins. Gather berries from the bushes, then strike the Sacred Olive with your axe until a branch falls, the ancient tree at the heart of the Olive Terraces.',
     obj: () => [[`Berries ${Math.min(S.inv.berries, 3)}/3`, S.inv.berries >= 3], ['A branch of the Sacred Olive', !!S.oliveBranch]], target: () => (S.oliveBranch ? null : OLIVE) },
-  { title: 'The Temple of Athena', desc: 'Carry the offering east to the Temple of Athena and place it before her statue in the cella.',
+  { id: 'temple', title: 'The Temple of Athena', desc: 'Carry the offering east to the Temple of Athena and place it before her statue in the cella.',
     obj: () => [['Place the offering at the statue (E)', !!S.offered]], target: () => ATHENA_OFFER },
-  { title: 'Return to Nestor', desc: 'The goddess answered. Go back to Nestor and tell him what you saw.',
+  { id: 'report', title: 'Return to Nestor', desc: 'The goddess answered. Go back to Nestor and tell him what you saw.',
     obj: () => [['Report to Nestor', !!S.reported]], target: () => nestor.position },
-  { title: 'Arms of the Chosen', desc: 'An axe works wood, but deer do not wait for you to walk up to them. Nestor has taught you to make a hunting bow and arrows: craft them at the workbench in his smithy.',
+  { id: 'bow', title: 'Arms of the Chosen', desc: 'An axe works wood, but deer do not wait for you to walk up to them. Nestor has taught you to make a hunting bow and arrows: craft them at the workbench in his smithy.',
     obj: () => [['Craft a Hunting Bow at the workbench', S.tools.bow], [`Arrows ${Math.min(S.inv.arrows, 12)}/12`, S.inv.arrows >= 12]], target: () => BENCH },
-  { title: 'Fire Before Dark', desc: 'Nights on Nisos are long and the wolves come out. Build a campfire. Resting at it with R makes time pass faster.',
-    obj: () => [['Build a Campfire (C)', !!S.campfire]], target: () => null },
-  { title: 'The Hunt', desc: 'Berries alone will not keep you alive. Hunt two deer, then a stag or a wild bull (they fight back), and cook the meat at your fire with E.',
-    obj: () => [[`Deer ${Math.min(S.kills.deer, 2)}/2`, S.kills.deer >= 2], [`Stag or wild bull ${Math.min(S.kills.stag + S.kills.bull, 1)}/1`, S.kills.stag + S.kills.bull >= 1], [`Cook meat ${Math.min(S.cooked, 3)}/3`, S.cooked >= 3]],
-    target: () => (S.kills.deer < 2 ? nearestCreature('deer') : S.kills.stag + S.kills.bull < 1 ? nearestCreature('stag', 'bull') : null) },
-  { title: 'The Long Night', desc: 'Survive until dawn. Stay near the fire, keep your bow strung and eat when you are hungry.',
-    obj: () => [[`Survive a night (${S.nights - S.nightsAtStart}/1)`, S.nights - S.nightsAtStart >= 1]], target: () => S.campfire?.pos, start: () => { S.nightsAtStart = S.nights; } },
-  { title: 'The Cave of Echoes', desc: 'Zeus left a sail in the cave on the mountain\'s flank for the chosen. Chosen who failed now guard it. Clear the skeletons and open the chest.',
-    obj: () => { const k = skeletons.filter((s) => s.dead).length; return [[`Skeletons ${k}/3`, k >= 3], ['Loot the old chest', !chest.alive]]; }, target: () => chestPos },
-  { title: 'Mend Your Boat', desc: 'Your boat lies broken in the cove. Patch the hull with timber, lash it with rope, rig the sail from the cave and stock food for the crossing to Pedias.',
+  { id: 'hunt', title: 'The Hunt', desc: 'Berries alone will not keep you alive. Take your bow and bring down a deer, and one other beast: a stag, a wild bull or a fox. Stags and bulls fight back.',
+    obj: () => [[`Deer ${Math.min(S.kills.deer, 1)}/1`, S.kills.deer >= 1], [`Stag, wild bull or fox ${Math.min(huntOther(), 1)}/1`, huntOther() >= 1]],
+    target: () => (S.kills.deer < 1 ? nearestCreature('deer') : huntOther() < 1 ? nearestCreature('stag', 'bull', 'fox') : null) },
+  { id: 'fire', title: 'Fire Before Dark', desc: 'Nights on Nisos are long and the wolves come out. Build a campfire, cook your meat on it with E and eat with F. Resting at it with R makes time pass faster.',
+    obj: () => [['Build a Campfire (C)', !!S.campfire], [`Cook meat ${Math.min(S.cooked, 2)}/2`, S.cooked >= 2], ['Eat a cooked meal (F)', !!S.ateMeal]], target: () => S.campfire?.pos || null },
+  { id: 'night', title: 'The Long Night', desc: 'Survive until dawn. Stay near the fire, keep your bow strung and eat when you are hungry. Sleeping by the fire until dawn counts too.',
+    obj: () => [[`Survive the night (${Math.min(S.nights - S.nightsAtStart, 1)}/1)`, S.nights - S.nightsAtStart >= 1]], target: () => S.campfire?.pos, start: () => { S.nightsAtStart = S.nights; } },
+  { id: 'dawn', title: 'Back to Nestor', desc: 'You made it through the night. Go back to Nestor and tell him.',
+    obj: () => [['Speak to Nestor', !!S.toldNight]], target: () => nestor.position },
+  { id: 'wreck', title: 'The Drowned Ship', desc: 'Long before you, a ship came to Nisos and ran aground in the Stymphalian Marsh. Her crew never left her: the dead keep watch over her still. Cross the causeway, put them back to rest, and take the sail from her strongbox.',
+    obj: () => { const k = skeletons.filter((s) => s.dead).length; return [[`Skeletons ${k}/${skeletons.length}`, k >= skeletons.length], ['Open the ship\'s strongbox', !chest.alive]]; }, target: () => chestPos },
+  { id: 'boat', title: 'Mend Your Boat', desc: 'Your boat lies broken in the cove. Patch the hull with timber, lash it with rope, rig the sail from the wreck and stock food for the crossing to Pedias.',
     obj: () => [[`Wood ${Math.min(S.inv.wood, 12)}/12`, S.inv.wood >= 12 || S.raftBuilt], [`Rope ${Math.min(S.inv.rope, 4)}/4`, S.inv.rope >= 4 || S.raftBuilt], [`Sailcloth ${S.inv.sail}/1`, S.inv.sail >= 1 || S.raftBuilt], [`Cooked meat ${Math.min(S.inv.meat, 3)}/3`, S.inv.meat >= 3 || S.raftBuilt], ['Mend the boat in the cove (E)', S.raftBuilt]],
     target: () => RAFT_SITE },
-  { title: 'To Pedias', desc: 'Your trial on Nisos is done. Say goodbye to Nestor, then board your boat and sail through the channel to the fertile fields of Pedias, the first of the nine biomes.',
+  { id: 'becalmed', title: 'Becalmed', desc: 'Your boat is whole again. Push her out and set sail for Pedias.',
+    obj: () => [['Try to set sail from the cove (E)', !!S.triedSail]], target: () => RAFT_SITE },
+  { id: 'nowind', title: 'Not a Breath of Wind', desc: 'The sea lies flat as oil and the sail hangs dead. No wind, no crossing. Nestor will know what is wrong.',
+    obj: () => [['Tell Nestor there is no wind', !!S.toldNoWind]], target: () => nestor.position },
+  { id: 'beast', title: 'The Beast of the Summit', desc: 'Something has climbed onto the Throne of Olympos and holds the island\'s winds captive. Take the Ascent to the top of the mountain and break its hold.',
+    obj: () => [['Climb to the Throne of Olympos', !!S.reachedSummit || !!S.bossDead], ['Defeat the Windbinder', !!S.bossDead]], target: () => (S.bossDead ? null : SUMMIT), start: () => spawnBoss() },
+  { id: 'storm', title: 'The Winds Return', desc: 'The beast is dead and the winds tear loose: clouds roll in off the sea and the rain comes down. Go back to Nestor.',
+    obj: () => [['Return to Nestor', !!S.toldStorm]], target: () => nestor.position },
+  { id: 'sail', title: 'To Pedias', desc: 'Your trial on Nisos is done. Say goodbye to Nestor, then board your boat and sail through the channel to the fertile fields of Pedias, the first of the nine biomes.',
     obj: () => [['Set sail from the cove (E)', S.sailing]], target: () => RAFT_SITE },
 ];
+const QI = Object.fromEntries(Q.map((q, i) => [q.id, i]));   // quest index by id, so quests can be inserted or reordered
+const huntOther = () => S.kills.stag + S.kills.bull + S.kills.fox;
 function nearestCreature(...types) {
   let best = null, bd = 1e9;
   for (const c of creatures) if (!c.dead && !c.gone && types.includes(c.type)) { const d = c.obj.position.distanceTo(player.position); if (d < bd) { bd = d; best = c.obj.position; } }
@@ -3211,21 +3412,21 @@ function nearestCreature(...types) {
 let questSig = '', questShownT = 0;
 function renderQuest() {
   const q = Q[S.questIdx]; $('quest').classList.toggle('hidden', !q || !!S.explore); if (!q) return;
-  const li = (list) => list.map(([t, d]) => `<li class="${d ? 'done' : ''}">${d ? '✔' : '○'} ${t}</li>`).join('');
+  const li = (list) => list.map(([t, d]) => `<li class="${d ? 'done' : ''}">${icon(d ? 'check' : 'ring')}<span>${t}</span></li>`).join('');
   const obj = q.obj(), sig = S.questIdx + '|' + obj.map((o) => o[1] ? 1 : 0).join('');
   if (sig !== questSig) { questSig = sig; questShownT = performance.now(); $('quest').classList.remove('compact'); }
   else if (performance.now() - questShownT > 9000) $('quest').classList.add('compact');
   let html = `<div class="step">Quest ${S.questIdx + 1} / ${Q.length}</div><h3 class="cinzel">${q.title}</h3><p>${q.desc}</p><ul>${li(obj)}</ul>`;
-  if (S.questIdx >= 1 && S.questIdx < 10 && !S.raftBuilt) html += `<div class="step" style="margin-top:10px">Main quest</div><h3 class="cinzel qmain" style="font-size:14px;margin-top:6px">Mend Your Boat</h3>`;
-  html += '<div class="qhint">L · Quest journal</div>';
+  if (S.questIdx >= QI.axe && S.questIdx < QI.boat && !S.raftBuilt) html += `<div class="qsep"></div><div class="step">Main quest</div><h3 class="qmain">Mend Your Boat</h3>`;
+  html += '<div class="qhint"><span class="kbd">L</span> Quest journal</div>';
   $('quest').innerHTML = html;
 }
 function renderJournal() {
-  const li = (list) => list.map(([t, d]) => `<li class="${d ? 'done' : ''}">${d ? '✔' : '○'} ${t}</li>`).join('');
+  const li = (list) => list.map(([t, d]) => `<li class="${d ? 'done' : ''}">${icon(d ? 'check' : 'ring')}<span>${t}</span></li>`).join('');
   const q = Q[S.questIdx]; let h = '<h4>Active</h4>';
   h += q ? `<div class="jq active"><h3>${q.title}</h3><p>${q.desc}</p><ul>${li(q.obj())}</ul></div>` : '<p class="jdone">Your trial on Nisos is complete.</p>';
-  if (S.questIdx < 10 && S.questIdx >= 1) h += `<h4>Main quest</h4><div class="jq"><h3>Mend Your Boat</h3><p>${Q[10].desc}</p><ul>${li(Q[10].obj())}</ul></div>`;
-  if (S.questIdx > 0) h += '<h4>Completed</h4>' + Q.slice(0, S.questIdx).map((x) => `<div class="jdone">${x.title}</div>`).join('');
+  if (S.questIdx < QI.boat && S.questIdx >= QI.axe) h += `<h4>Main quest</h4><div class="jq"><h3>Mend Your Boat</h3><p>${Q[QI.boat].desc}</p><ul>${li(Q[QI.boat].obj())}</ul></div>`;
+  if (S.questIdx > 0) h += '<h4>Completed</h4>' + Q.slice(0, S.questIdx).map((x) => `<div class="jdone">${icon('check')}${x.title}</div>`).join('');
   $('journalBody').innerHTML = h;
 }
 function checkQuest() {
@@ -3235,36 +3436,60 @@ function checkQuest() {
     toast(`Quest complete: ${q.title}`, true); snd.questDone(); setTimeout(() => saveGame(false), 2500);
     S.questIdx++; const n = Q[S.questIdx]; if (n?.start) n.start();
     if (n) setTimeout(() => questCard(n), 900);
-    if (S.questIdx === 9) setTimeout(() => say([['Nestor', 'You lived through the night. Good. Now listen: Zeus left a sail in the Cave of Echoes, up on the flank of the mountain, in a bronze-bound chest.'], ['Nestor', 'Chosen ones who failed guard it now. They do not sleep. Take your bow, plenty of arrows, and a full belly.']]), 1500);
   }
 }
 
 // Nestor's lines depend on quest progress
 function talkNestor() {
   const i = S.questIdx;
-  if (i === 0) return say([
+  if (i === QI.meet) return say([
     ['Nestor', 'So. Zeus chose you, and Poseidon broke your boat on the way in. He does that to all of them. Let me look at you... Thin arms, but steady eyes. It will do.'],
     ['Nestor', 'I am Nestor. Once a king of Pylos, now a teacher. The Father of the Gods set me on Nisos to prepare the chosen ones.'],
     ['Nestor', 'Hera killed Hercules. Zeus built Argonisos so that someone worthy can inherit his strength. Nine lands, nine Guardians, and Olympos at the end.'],
     ['Nestor', 'Your boat can be mended. Timber, rope, a sail and food, and she will carry you to Pedias. That is the road off this island.'],
     ['Nestor', 'But nobody mends a boat with bare hands. Your first task: make me a Stone Axe. Listen closely, I will only say this once.'],
   ], () => { S.talkedNestor = true; showCards(TUTORIAL); });
-  if (i === 4) return say([
+  if (i === QI.showaxe) return say([
+    ['Nestor', 'Let me see it. Hm. The head is bound tight, the edge is true. Hephaestus would not laugh at it. Much.'],
+    ['Nestor', 'Before the trial truly begins, every chosen one must honour Athena. She is the one who watches over the clever and the patient.'],
+    ['Nestor', 'Bring her a gift: berries from the bushes, and a branch of the Sacred Olive at the heart of the terraces to the south-east. Its wood is too hard for hands. That is what the axe is for.'],
+    ['Nestor', 'Then carry them east to her temple and lay them at her feet.'],
+  ], () => { S.showedAxe = true; });
+  if (i === QI.nowind) return say([
+    ['You', 'Nestor. The boat is mended, but I cannot leave. The sea is flat as oil. Not a breath of wind, not even out past the reef.'],
+    ['Nestor', 'No wind... Since when does the sea around Nisos sleep? Aeolus set the winds of this island to blow round the mountain. They should be howling.'],
+    ['Nestor', 'Unless something has taken them. At night I have seen a glow on the Throne of Olympos, up on the peak. I thought it was lightning.'],
+    ['Nestor', 'Something sits up there and holds the winds in its fists. A Windbinder. Climb the Ascent and break it, or you will grow old on this beach like me.'],
+  ], () => { S.toldNoWind = true; });
+  if (i === QI.storm) return say([
+    ['Nestor', 'Listen to that! The wind is back, and angry. You did it, then. The Windbinder is dead.'],
+    ['Nestor', 'The rain will pass. The winds will settle into their old roads, and one of those roads leads south, to Pedias.'],
+    ['Nestor', 'But you look troubled. Sit by the fire and tell me what you saw up there.'],
+  ], () => { S.toldStorm = true; });
+  if (i === QI.dawn) return say([
+    ['Nestor', 'Still breathing, I see. And the wolves still hungry. Good: that means you kept the fire going.'],
+    ['Nestor', 'Now listen. Your boat needs a sail, and there is one on Nisos. West, in the Stymphalian Marsh, lies a ship that came here long before you.'],
+    ['Nestor', 'She ran aground and her crew never left her. They are bones now, and they do not sleep. Her sail is in her strongbox. Take your bow, plenty of arrows, and a full belly.'],
+  ], () => { S.toldNight = true; });
+  if (i === QI.report) return say([
     ['Nestor', 'A column of gold over the temple. I saw it from here. So did half of Olympos, I think.'],
     ['Nestor', 'Athena does not answer everyone. Good. Very good.'],
-    ['Nestor', 'Now the real work. The nights here are long and the beasts are real. You will need a bow, a fire and a full belly.'],
+    ['Nestor', 'Now the real work. Berries will not keep you alive, and deer do not wait for you to walk up to them.'],
+    ['Nestor', 'Make a bow and arrows at my workbench, then go and hunt: a deer, and one more beast. Eat well, live through the night, and come back to me.'],
   ], () => { S.reported = true; });
   const lines = {
-    1: 'Three wood, two stone, one fiber, all from the ground. Then make the axe at my workbench in the smithy, round the west side.',
-    2: 'Berries grow on the bushes all over the island. The Sacred Olive stands at the heart of the terraces to the south-east, older than anyone remembers. Cut one branch, no more.',
-    3: 'The temple is east, past the lake. Place the offering at Athena\'s feet. Kneel if you want to, she likes that.',
-    5: 'An axe first, now a bow. Bend an olive stave, string it with twisted fiber, and fletch your arrows well. Use the workbench in the smithy.',
-    6: 'The sun falls fast here. When it is gone the wolves come out of the pines. Build a fire.',
-    7: 'Deer run, but stags and wild bulls fight back. Shoot from a distance and keep moving. Cook the meat, raw meat will make you sick.',
-    8: 'Stay close to the fire tonight. The wolves are cowards, but hungry ones.',
-    9: 'The cave is north, where the trail climbs the mountain. Bring courage. Or do not come back at all, ha.',
-    10: 'Your boat is still in the cove. Twelve logs, four ropes, the sail from the cave, and food for the crossing.',
-    11: 'Pedias waits across the water. When you face its Guardian, remember what old Nestor taught you.',
+    [QI.axe]: 'Three wood, two stone, one fiber, all from the ground. Then make the axe at my workbench in the smithy, round the west side.',
+    [QI.gift]: 'Berries grow on the bushes all over the island. The Sacred Olive stands at the heart of the terraces to the south-east, older than anyone remembers. Strike it with your axe and take one branch, no more.',
+    [QI.temple]: 'The temple is east, past the lake. Place the offering at Athena\'s feet. Kneel if you want to, she likes that.',
+    [QI.bow]: 'An axe first, now a bow. Bend an olive stave, string it with twisted fiber, and fletch your arrows well. Use the workbench in the smithy.',
+    [QI.hunt]: 'One deer, and one more beast: a stag, a bull or a fox. Deer run, but stags and wild bulls fight back. Hold your draw, breathe, then loose.',
+    [QI.fire]: 'The sun falls fast here. When it is gone the wolves come out of the pines. Build a fire, cook that meat and eat. Raw meat will make you sick.',
+    [QI.night]: 'Stay close to the fire tonight. The wolves are cowards, but hungry ones.',
+    [QI.wreck]: 'The marsh is west, past the woods. Keep to the causeway, the mud will swallow a man whole. And the dead do not like visitors.',
+    [QI.boat]: 'Your boat is still in the cove. Twelve logs, four ropes, the sail from the wreck, and food for the crossing.',
+    [QI.becalmed]: 'Your boat is mended? Then go, push her out. Let us see if she floats.',
+    [QI.beast]: 'Take the mountain road; the Ascent starts where it ends. Bring arrows, many arrows, and do not stand still when it raises its fists.',
+    [QI.sail]: 'Pedias waits across the water. When you face its Guardian, remember what old Nestor taught you.',
   };
   say([['Nestor', lines[i] || 'The gods are watching. Do not bore them.']]);
 }
@@ -3283,7 +3508,7 @@ const TUTORIAL = [
   { kicker: 'Nestor teaches · 2/5', title: 'Fight', body: 'Your fists are for beasts, not trees: <b>Left Click</b> to strike. Wood and stone come from branches and pebbles on the ground; once you have an axe you can fell trees and split rocks.', keys: [['LMB', 'Swing / attack'], ['1–3', 'Hands · Axe · Bow']] },
   { kicker: 'Nestor teaches · 3/5', title: 'Craft', body: 'Tools are made at the <b>workbench</b> in my smithy, beside the house: walk up and press <b>E</b>. A Stone Axe needs 3 wood, 2 stone and 1 fiber. Simple things like rope and a campfire you can make anywhere with <b>C</b>. Your bag is on <b>Tab</b>.', keys: [['C', 'Crafting'], ['Tab', 'Inventory']] },
   { kicker: 'Nestor teaches · 4/5', title: 'Stay Alive', body: 'Watch your bars: <b>health</b>, <b>stamina</b>, <b>hunger</b> and <b>energy</b>. Press <b>F</b> to eat. Energy drains through the day; when you tire, <b>sleep</b> by a fire or at my hearth (walk up and press <b>E</b>), and choose how long. You wake rested, but hungrier. Nothing hunts near my house.', keys: [['F', 'Eat'], ['E', 'Sleep at a fire'], ['R', 'Rest at a fire']] },
-  { kicker: 'Nestor teaches · 5/5', title: 'Find Your Way', body: 'Follow the gold <b>◆</b> marker on the compass to your current objective. <b>M</b> opens the map. Climbing the watchtower in the north-west reveals the whole island.', keys: [['M', 'Map'], ['◆', 'Objective marker']] },
+  { kicker: 'Nestor teaches · 5/5', title: 'Find Your Way', body: 'Follow the gold <b>diamond</b> on the compass to your current objective. <b>M</b> opens the map. Climbing the watchtower in the north-west reveals the whole island.', keys: [['M', 'Map'], ['L', 'Quest journal']] },
 ];
 let cardQueue = [], cardDone = null, curCard = null;
 // Cards queue up: a new batch waits until the one on screen has been read and closed (never replaces it)
@@ -3306,7 +3531,8 @@ function nextCard(fromKey) {
   if (!cardQueue.length) { curCard = null; $('card').classList.add('hidden'); if (S.running && !S.sailing && !talkCam.on) canvas.requestPointerLock(); return; }
   const c = cardQueue.shift(), el = $('card'); snd.page(); curCard = c; cardShownAt = performance.now(); el.dataset.btn = c.btn || '';
   el.querySelector('.ck').textContent = c.kicker || ''; el.querySelector('h2').textContent = c.title; el.querySelector('.cb').innerHTML = c.body;
-  el.querySelector('.ckeys').innerHTML = (c.keys || []).map(([k, t]) => `<span><span class="kbd">${k}</span>${t}</span>`).join('');
+  const ck = el.querySelector('.ckeys'); ck.className = 'ckeys' + (c.objs ? ' objs' : '');
+  ck.innerHTML = c.objs ? c.objs.map((t) => `<span>${icon('ring')}${t}</span>`).join('') : (c.keys || []).map(([k, t]) => `<span><span class="kbd">${k}</span>${t}</span>`).join('');
   el.querySelector('.cimg').style.backgroundImage = c.img ? `url(${c.img})` : ''; el.classList.toggle('noimg', !c.img);
   updateCardButtons();
   el.querySelector('.cin').classList.remove('anim'); void el.offsetWidth; el.querySelector('.cin').classList.add('anim');
@@ -3315,7 +3541,7 @@ const inCard = () => !$('card').classList.contains('hidden');
 $('card').querySelector('.cnext').onclick = () => nextCard();
 $('card').querySelector('.cskip').onclick = () => { const ds = cardQueue.filter((c) => c.__done).map((c) => c.__done); cardQueue = []; nextCard(); ds.forEach((d) => d()); };
 function questCard(q) {
-  showCards([{ kicker: `New quest · ${Q.indexOf(q) + 1} / ${Q.length}`, title: q.title, body: q.desc, keys: q.obj().map(([t]) => ['○', t]) }]);
+  showCards([{ kicker: `New quest · ${Q.indexOf(q) + 1} / ${Q.length}`, title: q.title, body: q.desc, objs: q.obj().map(([t]) => t) }]);
   snd.questNew();
 }
 
@@ -3327,42 +3553,37 @@ let locked = false;
 const canvas = renderer.domElement;
 canvas.addEventListener('click', () => { if (S.running && !S.sailing && !S.cine && !inDialog() && !menuOpen()) canvas.requestPointerLock(); });
 document.addEventListener('pointerlockchange', () => {
-  locked = document.pointerLockElement === canvas;
+  locked = document.pointerLockElement === canvas; if (!locked) P.rmb = false;
   if (locked && S.running && $('title').classList.contains('hidden')) setPause(false);
   if (!locked && S.running && !S.sailing && !S.cine && !talkCam.on && !menuOpen() && !inDialog()) setPause(true);
 });
 document.addEventListener('mousemove', (e) => {
   if (!locked) return;
-  camYaw -= e.movementX * 0.0025; camPitch = clamp(camPitch + e.movementY * 0.0022, -0.35, 1.1);
+  const sens = 1 - (P.aimK || 0) * 0.4;                 // finer while aiming over the shoulder
+  camYaw -= e.movementX * 0.0025 * sens; camPitch = clamp(camPitch + e.movementY * 0.0022 * sens, bowAiming() ? -0.75 : -0.35, 1.1);
 });
-document.addEventListener('mousedown', (e) => { if (locked && e.button === 0) startSwing(); });
+document.addEventListener('mousedown', (e) => { if (!locked) return; if (e.button === 0) startSwing(); if (e.button === 2) P.rmb = true; });
+document.addEventListener('mouseup', (e) => { if (e.button === 2) P.rmb = false; });
+document.addEventListener('contextmenu', (e) => { if (locked || S.running) e.preventDefault(); });
 addEventListener('keydown', (e) => {
   if (e.code === 'Space' && !e.repeat) P.jumpBuf = 0.15;
   keys[e.code] = true;
-  if (!S.running) return;
+  if (!S.running || titleUp()) return;   // the main menu can sit over a paused game
   if (S.cine) { if (e.code === 'Escape' || e.code === 'Space' || e.code === 'Enter') endIntro(); return; }
   if (inCard()) { if (!e.repeat && (e.code === 'KeyE' || e.code === 'Enter')) nextCard(true); return; }
   if (inDialog()) { if (!e.repeat && (e.code === 'KeyE' || e.code === 'Space' || e.code === 'Enter') && performance.now() - lineShownAt > 350) nextLine(); return; }
   // P: pause / resume / close a panel without Esc, which can't be held back from leaving fullscreen in every browser
-  if (e.code === 'KeyP' && !e.repeat) {
-    if (menuOpen()) { MENUS.forEach((m) => $(m).classList.add('hidden')); canvas.requestPointerLock(); }
-    else if (S.paused) { setPause(false); canvas.requestPointerLock(); }
-    else { setPause(true); document.exitPointerLock(); }
-    return;
-  }
+  if (e.code === 'Escape' && menuOpen()) { MENUS.forEach((m) => $(m).classList.add('hidden')); return; }   // Esc closes a panel; with the mouse captured it pauses
   if (S.sailing) return;
   if (e.code === 'KeyC') toggleCraft();
   if (e.code === 'KeyM') openMenu('mapPanel');
   if (e.code === 'KeyL') openMenu('journalPanel');
+  if (e.code === 'KeyP' && !e.repeat) openMenu('abilPanel');
   if (e.code === 'Tab' || e.code === 'KeyI') { e.preventDefault(); openMenu('invPanel'); }
   if (menuOpen()) return;
   if (e.code === 'KeyE') interact();
   if (e.code === 'KeyF') eat();
-  if (e.code.startsWith('Digit')) { const n = +e.code.slice(5) - 1; if (n >= 0 && n < SLOTS.length && (n === 0 || S.tools[SLOTS[n].k])) {
-    const prev = S.slot; S.slot = S.slot === n ? 0 : n;
-    if (prev !== 1 && S.slot === 1) P.equip = { kind: 'equip', t: 0 };        // draw the axe
-    else if (prev === 1 && S.slot !== 1) P.equip = { kind: 'disarm', t: 0 };  // put it away
-  } }
+  if (e.code.startsWith('Digit') && !e.repeat) { const n = +e.code.slice(5) - 1; if (n >= 0 && n < 8) useQuick(n); }
   if (S.explore) {
     if (e.code === 'KeyV') { P.fly = !P.fly; toast(P.fly ? 'Flying: WASD · Space up · Z down · Shift fast' : 'Walking'); }
     if (e.code === 'KeyO') openMenu('explorePanel');
@@ -3374,45 +3595,111 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyN') debugSkipQuest();
 });
 addEventListener('keyup', (e) => (keys[e.code] = false));
-const MENUS = ['craft', 'invPanel', 'mapPanel', 'explorePanel', 'journalPanel', 'sleepPanel'];
+const MENUS = ['craft', 'invPanel', 'mapPanel', 'explorePanel', 'journalPanel', 'sleepPanel', 'abilPanel'];
 document.querySelectorAll('#sleepPanel [data-h]').forEach((b) => (b.onclick = () => sleep(b.dataset.h === 'dawn' ? 'dawn' : +b.dataset.h)));
 const menuOpen = () => MENUS.some((m) => !$(m).classList.contains('hidden'));
 function openMenu(id) {                      // one panel at a time; frees the mouse while open
   const el = $(id), opening = el.classList.contains('hidden');
   MENUS.forEach((m) => $(m).classList.add('hidden'));
   snd.ui();
-  if (opening) { el.classList.remove('hidden'); document.exitPointerLock(); if (id === 'craft') renderCraft(); if (id === 'invPanel') renderInv(); if (id === 'mapPanel') drawBigMap(); if (id === 'journalPanel') renderJournal(); }
+  if (opening) { el.classList.remove('hidden'); document.exitPointerLock(); if (id === 'craft') renderCraft(); if (id === 'invPanel') renderInv(); if (id === 'mapPanel') drawBigMap(); if (id === 'journalPanel') renderJournal(); if (id === 'abilPanel') renderAbilities(); }
   else canvas.requestPointerLock();
 }
 document.querySelectorAll('[data-close]').forEach((b) => b.onclick = () => openMenu(b.dataset.close));
+// Inventory: everything you carry, and the eight quick slots. Drag an item onto a slot (or click it, then a slot);
+// drag between slots to swap them; right-click or drag a slot back into the pouch to clear it.
+let invPick = null;
+function invItems() { return [...Object.keys(TOOL_IDX).filter((k) => itemHave(k)), ...Object.keys(S.inv).filter((k) => S.inv[k] > 0)]; }
+function itemInfo(k) {
+  const d = { hands: 'Your fists. Weak, but always there.', axe: 'Fells trees, splits rocks. Strike with left click.', bow: 'Hold right click to draw, left click to loose.',
+    meat: 'Cooked meat: +35 hunger, +10 health.', berries: 'Berries: +10 hunger.', rawmeat: 'Raw meat: cook it at a fire first, or it makes you sick.',
+    bronze: 'An oxhide ingot of good bronze, from the drowned ship. A smith would pay well for it.',
+    bone: 'Bones from the hunt. Good for tools and charms.', horn: 'Horn and antler. Prized by craftsmen.',
+    wood: 'For tools, fires and the boat.', stone: 'For tools and fires.', fiber: 'Twist it into rope.', rope: 'Lashes timber together.', hide: 'Tough leather from the hunt.', sail: 'The sail for your boat.', arrows: 'Ammunition for the bow.' }[k] || '';
+  return `<b>${itemName(k)}</b><br>${d}`;
+}
 function renderInv() {
-  const items = [];
-  if (S.tools.axe) items.push(['🪓', 1, 'Axe']); if (S.tools.bow) items.push(['🏹', 1, 'Hunting Bow']);
-  for (const k of Object.keys(S.inv)) if (S.inv[k] > 0) items.push([ICONS[k], S.inv[k], NAMES[k]]);
-  let html = ''; for (let i = 0; i < 20; i++) { const it = items[i]; html += it ? `<div class="slot" title="${it[2]}">${it[0]}<em>${it[1]}</em></div>` : '<div class="slot"></div>'; }
+  const items = invItems();
+  $('quickRow').innerHTML = S.hotbar.map((k, i) => quickSlotHTML(k, i, false).replace('<div class="slot', `<div draggable="${k ? 'true' : 'false'}" class="slot`)).join('');
+  let html = ''; for (let i = 0; i < 24; i++) { const k = items[i]; html += k ? `<div class="slot ${invPick === k ? 'pick' : ''}" draggable="true" data-item="${k}" title="${itemName(k)}">${icon(k)}${k in TOOL_IDX ? '' : `<em>${itemHave(k)}</em>`}</div>` : '<div class="slot empty"></div>'; }
   $('invGrid').innerHTML = html;
   const wt = Object.values(S.inv).reduce((a, b) => a + b, 0) * 2 + (S.tools.axe ? 6 : 0) + (S.tools.bow ? 4 : 0);
   $('invWt').style.width = Math.min(100, wt / 3) + '%'; $('invWtN').textContent = `${wt} / 300`;
 }
+function setQuick(i, k) { const j = S.hotbar.indexOf(k); if (j >= 0 && j !== i) S.hotbar[j] = S.hotbar[i]; S.hotbar[i] = k; invPick = null; snd.ui(); renderInv(); renderHUD(); }
+$('invGrid').addEventListener('dragstart', (e) => { const el = e.target.closest('[data-item]'); if (el) e.dataTransfer.setData('text/plain', 'item:' + el.dataset.item); });
+$('quickRow').addEventListener('dragstart', (e) => { const el = e.target.closest('[data-q]'); if (el) e.dataTransfer.setData('text/plain', 'q:' + el.dataset.q); });
+for (const el of [$('quickRow'), $('invGrid')]) {
+  el.addEventListener('dragover', (e) => { e.preventDefault(); document.querySelectorAll('.slot.drop').forEach((x) => x.classList.remove('drop')); e.target.closest('[data-q]')?.classList.add('drop'); });
+  el.addEventListener('dragleave', () => document.querySelectorAll('.slot.drop').forEach((x) => x.classList.remove('drop')));
+}
+$('quickRow').addEventListener('drop', (e) => {
+  e.preventDefault(); const t = e.target.closest('[data-q]'); if (!t) return; const i = +t.dataset.q, [kind, v] = e.dataTransfer.getData('text/plain').split(':');
+  if (kind === 'item') setQuick(i, v); else if (kind === 'q') { const j = +v; [S.hotbar[i], S.hotbar[j]] = [S.hotbar[j], S.hotbar[i]]; snd.ui(); renderInv(); renderHUD(); }
+});
+$('invGrid').addEventListener('drop', (e) => { e.preventDefault(); const [kind, v] = e.dataTransfer.getData('text/plain').split(':'); if (kind === 'q') { S.hotbar[+v] = null; snd.ui(); renderInv(); renderHUD(); } });
+$('invGrid').addEventListener('click', (e) => { const el = e.target.closest('[data-item]'); if (!el) return; invPick = invPick === el.dataset.item ? null : el.dataset.item; renderInv(); });
+$('quickRow').addEventListener('click', (e) => { const el = e.target.closest('[data-q]'); if (el && invPick) setQuick(+el.dataset.q, invPick); });
+$('quickRow').addEventListener('contextmenu', (e) => { const el = e.target.closest('[data-q]'); e.preventDefault(); if (el) { S.hotbar[+el.dataset.q] = null; snd.ui(); renderInv(); renderHUD(); } });
+for (const el of [$('quickRow'), $('invGrid')]) el.addEventListener('mouseover', (e) => { const t = e.target.closest('[data-item],[data-q]'); const k = t && (t.dataset.item || S.hotbar[+t.dataset.q]); if (k) $('invInfo').innerHTML = itemInfo(k); });
 function toggleCraft() { openMenu('craft'); }
+// Quick slot n: a tool is taken out (press again to put it away), food is eaten
+function useQuick(n) {
+  const k = S.hotbar[n]; if (!k) return;
+  if (k in TOOL_IDX) { if (itemHave(k)) selectTool(TOOL_IDX[k]); else toast(`You have no ${itemName(k).toLowerCase()} yet`); return; }
+  if (FOOD[k]) { eat(k); return; }
+  toast(`<b>${itemName(k)}</b> can't be used from a quick slot`);
+}
+function selectTool(n) {
+  const prev = S.slot; S.slot = S.slot === n ? 0 : n;
+  if (prev !== 1 && S.slot === 1) P.equip = { kind: 'equip', t: prev === 2 ? -BOW_DUR.disarm / 0.9 : 0 };   // draw the axe (after the bow is away)
+  else if (prev === 1 && S.slot !== 1) P.equip = { kind: 'disarm', t: 0 };  // put it away
+  if (prev !== 2 && S.slot === 2) setBow('equip', { t: prev === 1 ? -0.9 : 0 });   // take the bow off the back (after the axe is away)
+  else if (prev === 2 && S.slot !== 2) setBow('disarm');
+}
+// ---- Abilities (P): every attack and move you have, and the skills page (empty until Nestor teaches some)
+let abilTab = 'actions';
+function renderAbilities() {
+  document.querySelectorAll('[data-abtab]').forEach((b) => b.classList.toggle('on', b.dataset.abtab === abilTab));
+  const row = (ic, name, desc, keys, stat, ok = true) => `<div class="ab ${ok ? '' : 'locked'}"><div class="slot">${icon(ic)}</div><div><h3>${name}</h3><p>${desc}</p></div>
+    <div class="keys">${stat ? `<span class="stat">${stat}</span>` : ''}<span>${keys.map((k) => `<span class="kbd">${k}</span>`).join(' ')}</span></div></div>`;
+  if (abilTab === 'skills') { $('abilBody').innerHTML = `<div class="emptystate">${icon('star')}<h3>No skills yet</h3>Nestor will teach you skills as your trial goes on.</div>`; return; }
+  const T = TOOL_STATS;
+  $('abilBody').innerHTML = '<div class="psub">Attacks</div>' +
+    row('hands', 'Punch', 'Fists for beasts, not trees. Quick, weak, always with you.', ['LMB'], `${T.hands.dmg} dmg`) +
+    row('axe', 'Axe Strike', 'An overhead chop. Fells trees and splits rocks, and hurts whatever stands in front of you.', ['LMB'], `${T.axe.dmg} dmg`, S.tools.axe) +
+    row('bow', 'Bow Shot', `Hold right click to draw, left click to loose. The longer the draw, the harder and farther it flies: a full draw hits for ${ARROW_DMG[1]} and flies straight for ~${Math.round(ARROW_V[1] * ARROW_FLAT[1])} m.`, ['RMB', 'LMB'], `${ARROW_DMG[0]}–${ARROW_DMG[1]} dmg`, S.tools.bow) +
+    '<div class="psub" style="margin-top:16px">Moves</div>' +
+    row('sprint', 'Sprint', 'Run hard. Costs stamina; you cannot sprint with the bow drawn.', ['Shift']) +
+    row('jump', 'Jump', 'Clear rocks, logs and low walls.', ['Space']) +
+    row('eat', 'Eat', 'Eat the best food you carry, or put a food on a quick slot.', ['F']) +
+    row('talk', 'Interact', 'Talk, pick up, open, cook at a fire, sleep at a hearth.', ['E']);
+}
+document.querySelectorAll('[data-abtab]').forEach((b) => b.onclick = () => { abilTab = b.dataset.abtab; snd.ui(); renderAbilities(); });
 $('closeCraft').onclick = toggleCraft; $('craftX').onclick = toggleCraft;
 function setPause(p) { S.paused = p; $('pause').classList.toggle('hidden', !p); }
 $('resume').onclick = () => { setPause(false); canvas.requestPointerLock(); };
-$('toTitle').onclick = () => { $('title').classList.remove('hidden'); $('pause').classList.add('hidden'); $('startBtn').textContent = 'Continue'; document.querySelector('.tabs button[data-tab="t-how"]').click(); };
+$('toTitle').onclick = () => openTitle();
 function debugSkipQuest() {
   const i = S.questIdx;
   if (inCard()) { const ds = cardQueue.filter((c) => c.__done).map((c) => c.__done); cardQueue = []; nextCard(); ds.forEach((d) => d()); }
-  if (i === 0) S.talkedNestor = true;
-  if (i === 1) S.tools.axe = true;
-  if (i === 2) { S.inv.berries += 3; S.oliveBranch = true; }
-  if (i === 3) S.offered = true;
-  if (i === 4) S.reported = true;
-  if (i === 5) { S.tools.bow = true; S.inv.arrows = Math.max(S.inv.arrows, 12); }
-  if (i === 6) placeCampfire();
-  if (i === 7) { S.kills.deer = Math.max(2, S.kills.deer); S.kills.stag = Math.max(1, S.kills.stag); S.cooked = Math.max(3, S.cooked); S.inv.meat += 3; }
-  if (i === 8) S.nights++;
-  if (i === 9) { skeletons.forEach((s) => { if (!s.dead) killCreature(s); }); openChest(); }
-  if (i === 10) { Object.assign(S.inv, { wood: S.inv.wood + 12, rope: S.inv.rope + 4, meat: S.inv.meat + 3, sail: Math.max(1, S.inv.sail) }); player.position.set(START.x, START.y + 0.5, START.z); }
+  if (i === QI.meet) S.talkedNestor = true;
+  if (i === QI.axe) S.tools.axe = true;
+  if (i === QI.showaxe) S.showedAxe = true;
+  if (i === QI.gift) { S.inv.berries += 3; S.oliveBranch = true; }
+  if (i === QI.temple) S.offered = true;
+  if (i === QI.report) S.reported = true;
+  if (i === QI.bow) { S.tools.bow = true; S.inv.arrows = Math.max(S.inv.arrows, 12); }
+  if (i === QI.hunt) { S.kills.deer = Math.max(1, S.kills.deer); S.kills.stag = Math.max(1, S.kills.stag); }
+  if (i === QI.fire) { if (!S.campfire) placeCampfire(); S.cooked = Math.max(2, S.cooked); S.inv.meat += 2; S.ateMeal = true; }
+  if (i === QI.night) S.nights++;
+  if (i === QI.dawn) S.toldNight = true;
+  if (i === QI.wreck) { skeletons.forEach((s) => { if (!s.dead) killCreature(s); }); openChest(); }
+  if (i === QI.becalmed) S.triedSail = true;
+  if (i === QI.nowind) S.toldNoWind = true;
+  if (i === QI.beast) { const b = creatures.find((c) => c.def.boss && !c.dead); if (b) killCreature(b); else { S.bossDead = true; startStorm(); } }
+  if (i === QI.storm) S.toldStorm = true;
+  if (i === QI.boat) { Object.assign(S.inv, { wood: S.inv.wood + 12, rope: S.inv.rope + 4, meat: S.inv.meat + 3, sail: Math.max(1, S.inv.sail) }); player.position.set(START.x, START.y + 0.5, START.z); }
   toast('Playtest: quest step skipped');
 }
 
@@ -3426,9 +3713,11 @@ function getInteractable() {
   consider(Math.hypot(pp.x - BENCH.x, pp.z - BENCH.z) + 0.3, { label: 'Use the workbench', act: () => openMenu('craft') });
   for (const pk of pickups) {
     if (!pk.alive || (pk.kind === 'bush' && pk.regrow > 0) || Math.abs(pk.pos.x - pp.x) > 3 || Math.abs(pk.pos.z - pp.z) > 3) continue;
-    const labels = { bowitem: 'Pick up the bow and arrows', axeitem: 'Pick up the axe', olivebranch: 'Cut a branch from the Sacred Olive', branch: 'Pick up branch', pebble: 'Pick up pebbles', bush: 'Harvest bush', reeds: 'Cut reeds', chest: 'Open the old chest' };
+    const labels = { bowitem: 'Pick up the bow and arrows', axeitem: 'Pick up the axe', olivebranch: 'Cut a branch from the Sacred Olive', branch: 'Pick up branch', pebble: 'Pick up pebbles', bush: 'Harvest bush', reeds: 'Cut reeds', chest: 'Open the strongbox' };
     consider(pp.distanceTo(pk.pos), { label: labels[pk.kind], act: () => harvest(pk) });
   }
+  for (const c of creatures) { if (!c.dead || !c.loot || c.gone) continue; const d = Math.hypot(c.obj.position.x - pp.x, c.obj.position.z - pp.z) - (c.def.r || 0.6);
+    if (d < 2.6) consider(Math.max(0, d), { label: `Skin the ${c.type === 'bull' ? 'wild bull' : c.type}`, act: () => skin(c) }); }
   const nf = nearestFire(pp, 3.5);
   if (nf) consider(Math.hypot(pp.x - nf.pos.x, pp.z - nf.pos.z) - 0.3, { label: nf.perm ? 'Sleep by Nestor\'s hearth' : 'Sleep by the fire', act: () => openMenu('sleepPanel') });
   if (nf && S.inv.rawmeat > 0) {
@@ -3438,12 +3727,11 @@ function getInteractable() {
   const dT = Math.hypot(pp.x - TOWER.x, pp.z - TOWER.z);
   if (dT < 5.5 && pp.y < TOWER_TOP.y - 2) consider(Math.max(0, dT - 3.5), { label: 'Climb the watchtower', act: climbTower });
   if (dT < 2.6 && pp.y > TOWER_TOP.y - 1) consider(0.5, { label: 'Climb down', act: () => { player.position.set(TOWER.x + 4.5, heightAt(TOWER.x + 4.5, TOWER.z) + 0.5, TOWER.z); } });
-  if (CAVE_ALTAR && pp.distanceTo(CAVE_ALTAR) < 3.4) consider(1, { label: 'Examine the altar', act: () => say([['You', 'An old altar, cold as snow. There is a hollow in the stone, as if something is meant to rest here.'], ['You', 'Not yet. But I will be back.']]) });
-  if (S.questIdx === 3 && Math.hypot(pp.x - ATHENA_OFFER.x, pp.z - ATHENA_OFFER.z) < 2.6) consider(0.8, { label: 'Place the offering before Athena', act: makeOffering });
+  if (S.questIdx === QI.temple && Math.hypot(pp.x - ATHENA_OFFER.x, pp.z - ATHENA_OFFER.z) < 2.6) consider(0.8, { label: 'Place the offering before Athena', act: makeOffering });
   const rd = Math.hypot(pp.x - RAFT_SITE.x, pp.z - RAFT_SITE.z);
   if (rd < 5.5) {
-    if (!S.raftBuilt) consider(Math.max(0, rd - 2.8), { label: S.questIdx >= 1 ? 'Mend your boat' : 'Your broken boat', act: buildRaft });
-    else consider(Math.max(0, rd - 2.5), { label: 'Set sail for Pedias', act: setSail });
+    if (!S.raftBuilt) consider(Math.max(0, rd - 2.8), { label: S.questIdx >= QI.axe ? 'Mend your boat' : 'Your broken boat', act: buildRaft });
+    else consider(Math.max(0, rd - 2.5), { label: S.questIdx >= QI.sail ? 'Set sail for Pedias' : 'Push the boat out', act: trySail });
   }
   return best;
 }
@@ -3492,8 +3780,10 @@ function harvest(pk) {
   pk.alive = false; scene.remove(pk.obj);
 }
 function openChest() {
-  if (!chest.alive) return; chest.alive = false; chestLid.rotation.x = -1.2; chestLid.position.z = -0.35;
-  give('sail', 1, chestPos); give('hide', 2); toast('Found <b>Sailcloth</b> with a faded red cross'); snd.chest();
+  if (!chest.alive) return; chest.alive = false; chestLid.rotation.x = -1.9;
+  const loot = { sail: 1, rope: 2, arrows: 12, bronze: 2 }; let i = 0;
+  for (const [k, v] of Object.entries(loot)) setTimeout(() => give(k, v, chestPos.clone().setY(chestPos.y + 1 + i++ * 0.35)), i * 180);
+  toast('The strongbox: a folded <b>sail</b>, coils of rope, a bundle of arrows and two bronze ingots', true); snd.chest();
 }
 function sleep(hours) {
   openMenu('sleepPanel');
@@ -3501,19 +3791,27 @@ function sleep(hours) {
   if (hours === 'dawn') { const tgt = 0.21; hours = Math.max(1, Math.round((((tgt - S.time) % 1) + 1) % 1 * 24)); }
   S.sleeping = true; document.exitPointerLock(); const fade = $('fade'); fade.style.transition = 'opacity 1.4s'; fade.style.opacity = 1;
   setTimeout(() => {
-    S.time += hours / 24; while (S.time >= 1) { S.time -= 1; S.day++; }
+    const t0 = S.time; S.time += hours / 24; while (S.time >= 1) { S.time -= 1; S.day++; }
+    S.nights += Math.floor(t0 + hours / 24 - 0.2) - Math.floor(t0 - 0.2); S.wasNight = isNight();   // every dawn slept through
     const food0 = S.food, en0 = S.energy;
-    S.food = Math.max(0, S.food - hours * 3.5); S.energy = Math.min(100, S.energy + hours * 13); S.hp = Math.min(100, S.hp + hours * 6); S.sta = 40 + S.energy * 0.6;
+    S.food = Math.max(0, S.food - hours * 3.5); S.energy = Math.min(100, S.energy + hours * 13); S.hp = Math.min(HP_MAX, S.hp + hours * 12); S.sta = 40 + S.energy * 0.6;
     if (!isNight()) creatures.forEach((c) => { if (c.type === 'wolf' && !c.dead) { scene.remove(c.obj); c.gone = true; } });
     setTimeout(() => { fade.style.opacity = 0; S.sleeping = false; toast(`Slept ${hours} h · Energy +${Math.round(S.energy - en0)} · Hunger −${Math.round(food0 - S.food)}`, true); saveGame(false); canvas.requestPointerLock(); }, 900);
   }, 1500);
 }
+// Skin a kill: hide, meat, bone and horn or antler go into the pouch, then the carcass is left to the crows
+function skin(c) {
+  const at = c.obj.position.clone().setY(c.obj.position.y + 1); let i = 0;
+  for (const [k, v] of Object.entries(c.loot)) setTimeout(() => give(k, v, at.clone().setY(at.y + i++ * 0.35)), i * 140);
+  toast(`Skinned the ${c.type === 'bull' ? 'wild bull' : c.type}: ` + Object.entries(c.loot).map(([k, v]) => `${v} ${NAMES[k].toLowerCase()}`).join(', '));
+  burst(at, 0x8a2a1c, 6); snd.hitFlesh(); c.loot = null; c.deadT = 1.6;
+}
 function cook() {
   const n = S.inv.rawmeat; S.inv.rawmeat = 0; S.inv.meat += n; S.cooked += n;
-  const nf = nearestFire(player.position, 4) || { pos: player.position }; floatText(`+${n} 🍖`, nf.pos.clone().setY(nf.pos.y + 1.5), '#ffcf7a'); snd.sizzle();
+  const nf = nearestFire(player.position, 4) || { pos: player.position }; floatText(`+${n} ${icon('meat')}`, nf.pos.clone().setY(nf.pos.y + 1.5), '#ffcf7a', true); snd.sizzle();
 }
 function buildRaft() {
-  if (S.questIdx < 1) { say([['You', 'My boat... Poseidon made kindling of it. I will need wood, rope, a new sail and food before she swims again.']]); return; }
+  if (S.questIdx < QI.axe) { say([['You', 'My boat... Poseidon made kindling of it. I will need wood, rope, a new sail and food before she swims again.']]); return; }
   const need = { wood: 12, rope: 4, sail: 1, meat: 3 };
   if (!canAfford(need)) { toast('Missing materials. Check <b>Mend Your Boat</b> in the quest panel.'); return; }
   for (const [k, v] of Object.entries(need)) S.inv[k] -= v;
@@ -3521,11 +3819,14 @@ function buildRaft() {
   raftParts.forEach((p, i) => setTimeout(() => { p.visible = true; burst(raftGroup.position.clone().add(new THREE.Vector3(0, 0.8, 0)), 0x9b6e3f, 6); snd.hitWood(); }, i * 220));
   setTimeout(() => { toast('Your boat is whole again.', true); snd.questDone(); }, raftParts.length * 220);
 }
-function eat() {
-  if (S.inv.meat > 0) { S.inv.meat--; S.food = clamp(S.food + 35, 0, 100); S.hp = clamp(S.hp + 10, 0, 100); toast('Ate cooked meat 🍖'); }
-  else if (S.inv.berries > 0) { S.inv.berries--; S.food = clamp(S.food + 10, 0, 100); toast('Ate berries 🫐'); }
-  else if (S.inv.rawmeat > 0) { S.inv.rawmeat--; S.food = clamp(S.food + 12, 0, 100); hurtPlayer(8, 'Raw meat made you sick'); }
-  else { toast('Nothing to eat'); return; }
+// F eats the best food you carry; a food on a quick slot eats exactly that
+function eat(only) {
+  const k = only || ['meat', 'berries', 'rawmeat'].find((f) => S.inv[f] > 0);
+  if (!k || !(S.inv[k] > 0)) { toast(only ? `No ${NAMES[only].toLowerCase()} left` : 'Nothing to eat'); return; }
+  S.inv[k]--;
+  if (k === 'meat') { S.ateMeal = true; S.food = clamp(S.food + 35, 0, 100); S.hp = clamp(S.hp + 20, 0, HP_MAX); toast('Ate <b>cooked meat</b>'); }
+  else if (k === 'berries') { S.food = clamp(S.food + 10, 0, 100); toast('Ate <b>berries</b>'); }
+  else { S.food = clamp(S.food + 12, 0, 100); hurtPlayer(8, 'Raw meat made you sick'); }
   snd.eat();
 }
 
@@ -3536,32 +3837,78 @@ const TOOL_STATS = { hands: { dmg: 5, wood: 1, stone: 1, reach: 2.3 }, axe: { dm
 // ---- Bow & arrows: models from the user's asset pack
 const bowHeld = new THREE.Group(), arrowProto = { obj: null }, arrows = [];
 // the hunting bow: one model in the left hand, a copy slung across the back when it's put away
-loadTexturedFBX('bow', 1.35, (obj) => { const c = new THREE.Group(); c.add(obj); obj.position.y -= 0.675; bowHeld.add(c); const b = c.clone(); backBow.add(b); });
-loadTexturedFBX('arrow', 0.9, (obj) => { obj.position.y -= 0.45; const g = new THREE.Group(); g.add(obj); g.rotation.x = Math.PI / 2; const w = new THREE.Group(); w.add(g); arrowProto.obj = w; });
-function shootArrow() {
+loadTexturedFBX('bow', 1.35, (obj) => { const c = new THREE.Group(); c.add(obj); obj.position.y -= 0.675; const b = c.clone(); backBow.add(b);
+  c.rotation.y = Math.PI; bowHeld.add(c); });   // in the hand: turned so the string faces the archer and the limbs curve away
+loadTexturedFBX('arrow', 0.9, (obj) => { obj.position.y -= 0.45; const g = new THREE.Group(); g.add(obj); g.rotation.x = Math.PI / 2; const w = new THREE.Group(); w.add(g); arrowProto.obj = w; nockArrow.add(w.clone()); });
+// Draw strength (0..1) sets an arrow's damage, speed and how long it flies flat before dropping. A full draw flies dead
+// straight for ~55 m (no sight needed: it goes to the centre of the screen); a snap shot is weak and falls short.
+const ARROW_V = [26, 74], ARROW_FLAT = [0.06, 0.75], ARROW_DMG = [6, 34];   // [weakest, full draw]: m/s, seconds of flat flight, damage
+const BODY_H = { fox: 0.55, wolf: 0.85, deer: 1.4, stag: 1.7, bull: 1.6, skeleton: 1.85, boar: 0.9, rabbit: 0.35, beast: 4.2 };   // creatures are hit as upright cylinders
+const _av = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+function creatureAt(p) {
+  for (const c of creatures) {
+    if (c.dead || c.gone || c.def.passive || !c.obj.visible) continue;
+    const cp = c.obj.position, R = c.def.r + 0.2, dx = p.x - cp.x, dz = p.z - cp.z;
+    if (dx * dx + dz * dz < R * R && p.y > cp.y - 0.1 && p.y < cp.y + (BODY_H[c.type] || 1.2)) return c;
+  }
+  return null;
+}
+function colliderAt(p) {
+  for (const cell of colCells(p.x, p.z)) for (const c of cell) {
+    if (c.ref && !c.ref.alive) continue;
+    const dx = p.x - c.x, dz = p.z - c.z; if (dx * dx + dz * dz < c.r * c.r && p.y < heightAt(c.x, c.z) + Math.min(c.h ?? 8, 12)) return true;
+  }
+  return false;
+}
+// Where the centre of the screen points: the first animal or ground along the view ray, else far away
+function aimPoint(out) {
+  const o = camera.position, dir = camera.getWorldDirection(_av[0]); let best = 200;
+  for (const c of creatures) {
+    if (c.dead || c.gone || c.def.passive || !c.obj.visible) continue;
+    const ctr = _av[1].copy(c.obj.position); ctr.y += (BODY_H[c.type] || 1.2) * 0.5;
+    const t = _av[2].copy(ctr).sub(o).dot(dir); if (t < 2 || t > best) continue;
+    if (_av[2].copy(o).addScaledVector(dir, t).distanceTo(ctr) < c.def.r + 0.25) best = t;
+  }
+  for (let t = 3, prev = 3; t < best; prev = t, t += t < 40 ? 1 : 3) {       // march the terrain, then refine the crossing
+    const p = _av[1].copy(o).addScaledVector(dir, t);
+    if (p.y < heightAt(p.x, p.z)) { let a = prev, b = t; for (let k = 0; k < 6; k++) { const m = (a + b) / 2; _av[2].copy(o).addScaledVector(dir, m); if (_av[2].y < heightAt(_av[2].x, _av[2].z)) b = m; else a = m; } best = b; break; }
+  }
+  return out.copy(o).addScaledVector(dir, best);
+}
+function shootArrow(power = 1) {
   if (S.inv.arrows <= 0) { toast('No arrows. Craft some (C)'); return; }
-  S.inv.arrows--; P.drawT = 0.55; snd.bow(); P.yaw = camYaw + Math.PI; player.rotation.y = P.yaw;   // turn to face where you aim
-  const dir = new THREE.Vector3(-Math.sin(camYaw) * Math.cos(camPitch - 0.18), -Math.sin(camPitch - 0.18), -Math.cos(camYaw) * Math.cos(camPitch - 0.18)).normalize();
+  S.inv.arrows--; P.drawT = 0.55; snd.bow();
+  const tgt = aimPoint(new THREE.Vector3());
+  const from = nockArrow.visible ? nockArrow.position.clone().add(nockArrow.getWorldDirection(new THREE.Vector3()).multiplyScalar(0.45))   // the arrowhead at the bow
+    : player.position.clone().add(new THREE.Vector3(0, 1.5, 0));
+  const dir = tgt.clone().sub(from).normalize();
   const o = arrowProto.obj ? arrowProto.obj.clone() : mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.9, 4), trunkMat, 0, 0, 0);
-  o.position.copy(player.position).add(new THREE.Vector3(0, 1.5, 0)).addScaledVector(dir, 0.8); scene.add(o);
-  arrows.push({ o, v: dir.multiplyScalar(48), t: 0, stuck: false });
+  o.position.copy(from); o.lookAt(from.clone().add(dir)); scene.add(o);
+  const k = power * power * (3 - 2 * power);             // soft at both ends: a half draw is clearly weaker than a full one
+  arrows.push({ o, v: dir.multiplyScalar(lerp(ARROW_V[0], ARROW_V[1], k)), flat: lerp(ARROW_FLAT[0], ARROW_FLAT[1], k), dmg: lerp(ARROW_DMG[0], ARROW_DMG[1], power), t: 0, stuck: false });
 }
 function updateArrows(dt) {
   for (let i = arrows.length - 1; i >= 0; i--) {
     const a = arrows[i]; a.t += dt;
     if (!a.stuck) {
-      a.v.y -= 9.8 * dt * 0.6; const step = a.v.clone().multiplyScalar(dt); a.o.position.add(step);
-      a.o.lookAt(a.o.position.clone().add(a.v));
-      for (const c of creatures) { if (c.dead || !c.obj.visible) continue; const cp = c.obj.position; if (Math.abs(cp.x - a.o.position.x) + Math.abs(cp.z - a.o.position.z) < 2 && a.o.position.y < cp.y + 2 && a.o.position.y > cp.y - 0.2) {
-        const dmg = Math.round(28 * rr(0.9, 1.15)); c.hp -= dmg; c.flash = 0.15; c.state = c.def.flee ? 'flee' : 'chase'; floatText(dmg, cp.clone().setY(cp.y + 1.6), '#ffdf8a'); snd.arrowHit(); (c.type === 'skeleton' ? snd.bones : snd.hitFlesh)();
-        if (c.hp <= 0) killCreature(c); a.stuck = true; a.t = 9; break; } }
-      if (!a.stuck && a.o.position.y < heightAt(a.o.position.x, a.o.position.z)) { a.stuck = true; a.t = Math.max(a.t, 0); }
+      if (a.t > a.flat) a.v.y -= 9.8 * dt;
+      const n = Math.max(1, Math.ceil(a.v.length() * dt / 0.3)), step = _av[0].copy(a.v).multiplyScalar(dt / n);   // sub-steps: never skip through a thin target
+      for (let k = 0; k < n && !a.stuck; k++) {
+        const p = a.o.position.add(step), c = creatureAt(p);
+        if (c) {
+          const cp = c.obj.position, dmg = Math.max(1, Math.round(a.dmg * rr(0.9, 1.1))); c.hp -= dmg; c.flash = 0.15; c.state = c.def.flee ? 'flee' : 'chase';
+          floatText(dmg, cp.clone().setY(cp.y + 1.6), '#ffdf8a'); snd.arrowHit(); (c.type === 'skeleton' ? snd.bones : snd.hitFlesh)();
+          if (c.hp <= 0) killCreature(c);
+          c.obj.attach(a.o); a.stuck = true; a.t = 9;                        // the arrow stays in the animal
+        } else if (p.y < heightAt(p.x, p.z) || (a.t > 0.012 && colliderAt(p))) { a.stuck = true; a.t = Math.max(a.t, 0); }   // (a trunk you stand against doesn't eat the shot)
+      }
+      if (!a.stuck) a.o.lookAt(_av[1].copy(a.o.position).add(a.v));
     }
-    if (a.t > 12) { scene.remove(a.o); arrows.splice(i, 1); }
+    if (a.t > 12) { a.o.removeFromParent(); arrows.splice(i, 1); }
   }
 }
 function startSwing() {
-  if (S.slot === 2 && S.tools.bow) { if (!(P.drawT > 0) && !P.dead && !S.paused) shootArrow(); return; }
+  if (S.slot === 2 && S.tools.bow) { if (!P.dead && !S.paused) bowClick(); return; }
   if (P.swing > 0 || P.dead || S.paused) return;
   if (S.sta < 6) { toast('Too tired'); return; }
   S.sta -= 8; P.swing = 1; P.swingHit = false; setTimeout(() => snd.swing(S.slot !== 0), 120);
@@ -3616,8 +3963,12 @@ function doHit() {
   }
 }
 function killCreature(c) {
-  c.dead = true; c.deadT = 0; S.kills[c.type]++;
-  for (const [k, v] of Object.entries(c.def.drops)) give(k, v, c.obj.position.clone().setY(c.obj.position.y + 1.2));
+  c.dead = true; c.deadT = 0; S.kills[c.type] = (S.kills[c.type] || 0) + 1;
+  if (c.def.boss) bossDown(c);
+  if (Object.keys(c.def.drops).length) {                    // the kill stays where it fell: walk up and skin it (E)
+    c.loot = { ...c.def.drops }; c.lootT = 240;
+    if (!S.lootTaught) { S.lootTaught = true; toast(`Go to the ${c.type} and press <b>E</b> to skin it`, true); }
+  }
   if (c.type === 'skeleton') burst(c.obj.position.clone().setY(c.obj.position.y + 1), 0xe9e0c9, 16);
 }
 function hurtPlayer(dmg, reason) {
@@ -3631,21 +3982,172 @@ function hurtPlayer(dmg, reason) {
 function die() {
   P.dead = true; S.deaths++; toast('You fell... Nestor drags you back to the hut.', true);
   setTimeout(() => {
-    S.hp = 60; S.food = Math.max(S.food, 40); S.inv.rawmeat = Math.floor(S.inv.rawmeat / 2);
+    S.hp = HP_MAX * 0.6; S.food = Math.max(S.food, 40); S.inv.rawmeat = Math.floor(S.inv.rawmeat / 2);
     player.position.copy(NESTOR_POS).add(new THREE.Vector3(0, 0, 2)); P.dead = false;
     creatures.filter((c) => c.type === 'wolf').forEach((c) => (c.state = 'flee'));
   }, 2200);
 }
 
 // ============================================================
+// The Windbinder: boss of the Throne of Olympos. A placeholder body (a hunched stone-and-bronze giant with the island's
+// winds spinning round it) with two attacks: a telegraphed two-fist slam up close, and a gust that hurls you back from range.
+// It wakes when you set foot on the summit, goes home and recovers if you leave, and its fall frees the winds.
+// ============================================================
+function makeWindbinder() {
+  const g = new THREE.Group(), stone = new THREE.MeshStandardMaterial({ color: 0x5d5850, roughness: 0.95, flatShading: true, emissive: 0x000000 }),
+    bronze = new THREE.MeshStandardMaterial({ color: 0x8a6232, roughness: 0.45, metalness: 0.6, emissive: 0x000000 }),
+    eyeM = new THREE.MeshBasicMaterial({ color: 0x9fe6ff }), windM = new THREE.MeshBasicMaterial({ color: 0xcfeeff, transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide });
+  const body = new THREE.Group(); body.position.y = 1.7; g.add(body);
+  const torso = mesh(new THREE.DodecahedronGeometry(1.25, 1), stone, 0, 0.9, 0, body); torso.scale.set(1.3, 1.15, 1);
+  mesh(new THREE.TorusGeometry(1.15, 0.16, 6, 16), bronze, 0, 0.5, 0, body).rotation.x = Math.PI / 2;   // a bronze girdle
+  const head = new THREE.Group(); head.position.set(0, 2.25, 0.45); body.add(head);
+  mesh(new THREE.DodecahedronGeometry(0.62, 0), stone, 0, 0, 0, head).scale.set(1, 0.9, 1.05);
+  for (const sx of [-1, 1]) { const h = mesh(new THREE.ConeGeometry(0.16, 1.1, 6), bronze, sx * 0.5, 0.55, -0.1, head); h.rotation.set(-0.5, 0, -sx * 0.6);   // horns
+    mesh(new THREE.SphereGeometry(0.11, 8, 6), eyeM, sx * 0.24, 0.05, 0.55, head); }
+  const arms = [];
+  for (const sx of [-1, 1]) { const sh = new THREE.Group(); sh.position.set(sx * 1.55, 1.35, 0); body.add(sh);
+    mesh(new THREE.DodecahedronGeometry(0.55, 0), stone, 0, 0, 0, sh);
+    const fore = mesh(new THREE.CylinderGeometry(0.34, 0.42, 1.9, 7), stone, 0, -1.1, 0.1, sh);
+    mesh(new THREE.TorusGeometry(0.42, 0.1, 5, 12), bronze, 0, -1.55, 0.1, sh).rotation.x = Math.PI / 2;   // bronze cuffs
+    mesh(new THREE.DodecahedronGeometry(0.62, 0), stone, 0, -2.2, 0.15, sh);   // fist
+    arms.push(sh); }
+  for (const sx of [-1, 1]) mesh(new THREE.CylinderGeometry(0.42, 0.5, 1.8, 7), stone, sx * 0.7, 0.9, 0, g);   // legs
+  const rings = []; for (let k = 0; k < 3; k++) { const r = new THREE.Mesh(new THREE.TorusGeometry(2.4 + k * 0.5, 0.05, 4, 40), windM); r.position.y = 1.4 + k * 1.1; r.rotation.x = Math.PI / 2 + rr(-0.3, 0.3); g.add(r); rings.push(r); }
+  g.userData = { body, head, arms, rings, eyeM, windM };
+  g.traverse((m) => { if (m.isMesh && m.material !== windM) m.castShadow = true; });
+  return g;
+}
+// world-space health bar over its head (the HUD bar is the main one)
+function bossBarSprite() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 24; const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true })); sp.scale.set(3.6, 0.34, 1); sp.renderOrder = 6;
+  sp.userData.draw = (k) => { const g = c.getContext('2d'); g.clearRect(0, 0, 256, 24); g.fillStyle = 'rgba(20,14,10,.85)'; g.fillRect(0, 0, 256, 24);
+    g.fillStyle = '#d4844a'; g.fillRect(2, 2, 252, 20); g.fillStyle = '#1f1610'; g.fillRect(4, 4, 248, 16); g.fillStyle = '#c8402c'; g.fillRect(4, 4, 248 * k, 16); tex.needsUpdate = true; };
+  sp.userData.draw(1); return sp;
+}
+function spawnBoss() {
+  if (creatures.some((c) => c.def.boss && !c.dead && !c.gone) || S.bossDead) return;
+  const p = SUMMIT.clone().add(new THREE.Vector3(0, 0, -6)); p.y = heightAt(p.x, p.z);
+  const c = spawnCreature('beast', p); c.home.copy(p); c.obj.rotation.y = 0;
+  c.bar = bossBarSprite(); c.bar.position.y = 6.2; c.obj.add(c.bar);
+  c.boss = { st: 'idle', t: 0, cd: 1.5, gustCd: 4, shown: -1 };
+}
+const _bv = new THREE.Vector3();
+function updateBoss(c, dt) {
+  const o = c.obj, B = c.boss, U = o.userData, d = c.def, pp = player.position;
+  const dx = pp.x - o.position.x, dz = pp.z - o.position.z, dist = Math.hypot(dx, dz), inArena = Math.hypot(pp.x - SUMMIT.x, pp.z - SUMMIT.z) < ARENA_R + 4 && !P.dead;
+  if (inArena && !S.reachedSummit) { S.reachedSummit = true; toast('<b>The Windbinder</b> rises from the Throne of Olympos', true); snd.thunder(); }
+  B.t += dt; B.cd -= dt; B.gustCd -= dt;
+  const face = (yaw, k = 6) => { o.rotation.y += Math.atan2(Math.sin(yaw - o.rotation.y), Math.cos(yaw - o.rotation.y)) * Math.min(1, dt * k); };
+  const to = (st) => { B.st = st; B.t = 0; };
+  let speed = 0;
+  if (!inArena && B.st !== 'idle' && B.st !== 'return') to('return');
+  switch (B.st) {
+    case 'idle': if (inArena) to('chase'); c.hp = Math.min(d.hp, c.hp + dt * 4); break;
+    case 'return': { const hx = c.home.x - o.position.x, hz = c.home.z - o.position.z; if (Math.hypot(hx, hz) < 1) { to('idle'); break; } speed = d.speed; face(Math.atan2(hx, hz)); c.hp = Math.min(d.hp, c.hp + dt * 25); if (inArena) to('chase'); break; }
+    case 'chase':
+      face(Math.atan2(dx, dz));
+      if (dist < d.reach && B.cd <= 0) { to('windup'); snd.grunt(); }
+      else if (dist > 9 && dist < 30 && B.gustCd <= 0) { to('gustWind'); snd.whoosh(); }
+      else if (dist > d.reach - 0.6) speed = d.speed * (c.hp < d.hp * 0.4 ? 1.3 : 1);          // angrier when hurt
+      break;
+    case 'windup': face(Math.atan2(dx, dz), 3); if (B.t > 0.85) {                         // both fists come down
+      to('recover'); B.cd = c.hp < d.hp * 0.4 ? 1.4 : 2.1;
+      const fx = o.position.x + Math.sin(o.rotation.y) * 2.4, fz = o.position.z + Math.cos(o.rotation.y) * 2.4;
+      burst(new THREE.Vector3(fx, heightAt(fx, fz) + 0.3, fz), 0x8a8072, 18); snd.land(); snd.hitStone();
+      if (Math.hypot(pp.x - fx, pp.z - fz) < 3.2 && !P.dead) { hurtPlayer(d.dmg); P.hv.x += dx / (dist || 1) * 9; P.hv.z += dz / (dist || 1) * 9; P.vel.y = 4; P.onGround = false; }
+    } break;
+    case 'gustWind': face(Math.atan2(dx, dz), 4); if (B.t > 0.9) {                        // it throws the winds at you
+      to('recover'); B.gustCd = rr(6, 9);
+      const fwdx = Math.sin(o.rotation.y), fwdz = Math.cos(o.rotation.y), dot = (dx * fwdx + dz * fwdz) / (dist || 1);
+      gustFx(o.position, o.rotation.y);
+      if (dot > 0.8 && dist < 32 && !P.dead) { hurtPlayer(10, 'The wind hurls you back!'); P.hv.x += fwdx * 16; P.hv.z += fwdz * 16; P.vel.y = 5.5; P.onGround = false; }
+    } break;
+    case 'recover': if (B.t > 0.6) to('chase'); break;
+  }
+  if (speed > 0) { const yaw = o.rotation.y, nx = o.position.x + Math.sin(yaw) * speed * dt, nz = o.position.z + Math.cos(yaw) * speed * dt;
+    if (Math.hypot(nx - SUMMIT.x, nz - SUMMIT.z) < ARENA_R - 2) { o.position.x = nx; o.position.z = nz; } }
+  o.position.y = heightAt(o.position.x, o.position.z);
+  // pose: a heavy rolling walk; fists high for the slam; arms flung back, winds spinning hard for the gust
+  c.anim = (c.anim || 0) + dt * speed * 1.1;
+  const w = Math.sin(c.anim * 2.2), up = B.st === 'windup' ? Math.min(1, B.t / 0.6) : B.st === 'recover' && B.cd > 1 ? Math.max(0, 1 - B.t * 4) * -0.4 : 0, gust = B.st === 'gustWind' ? Math.min(1, B.t / 0.7) : 0;
+  U.body.position.y = 1.7 + Math.abs(w) * 0.12 * (speed > 0 ? 1 : 0) + Math.sin(B.t * 2) * 0.03; U.body.rotation.z = w * 0.06 * (speed > 0 ? 1 : 0); U.body.rotation.x = up * -0.25 + gust * 0.2;
+  U.arms.forEach((a, i) => { a.rotation.x = -up * 2.6 + gust * 1.1 + (speed > 0 ? (i ? w : -w) * 0.5 : 0); a.rotation.z = (i ? -1 : 1) * (0.1 + gust * 0.5); });
+  U.rings.forEach((r, i) => { r.rotation.z += dt * (1.2 + i * 0.5 + gust * 9); r.scale.setScalar(1 + gust * 0.4); }); U.windM.opacity = 0.25 + gust * 0.4;
+  U.eyeM.color.setHex(up > 0.2 || gust > 0.2 ? 0xffffff : 0x9fe6ff);
+  // hit flash, health bars
+  const flashing = c.flash > 0; c.flash -= dt;
+  if (flashing !== !!c.flashOn) { c.flashOn = flashing; o.traverse((m) => { if (m.isMesh && m.material.emissive) m.material.emissive.setHex(flashing ? 0x882211 : 0x000000); }); }
+  const k = clamp(c.hp / d.hp, 0, 1); if (Math.abs(k - B.shown) > 0.002) { B.shown = k; c.bar.userData.draw(k); }
+  const bar = $('bossBar'); bar.classList.toggle('hidden', !inArena);
+  if (inArena) { bar.querySelector('.bn').textContent = d.name; bar.querySelector('.bt i').style.width = (k * 100).toFixed(1) + '%'; bar.querySelector('.bt u').style.width = (k * 100).toFixed(1) + '%'; }
+}
+function gustFx(pos, yaw) {                                  // a cone of wind streaks rushing out in front of it
+  const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color: 0xe8f6ff, transparent: true, opacity: 0.55, depthWrite: false });
+  for (let i = 0; i < 26; i++) { const s = mesh(new THREE.BoxGeometry(0.06, 0.06, rr(2, 4)), m, rr(-1.5, 1.5), rr(1, 4), rr(2, 4), g); s.userData.v = rr(22, 34); s.userData.sx = rr(-0.25, 0.25); }
+  g.position.copy(pos); g.rotation.y = yaw; scene.add(g);
+  let t = 0; const tick = () => { t += 0.016; g.children.forEach((s) => { s.position.z += s.userData.v * 0.016; s.position.x += s.userData.sx * s.position.z * 0.016 * 3; }); m.opacity = 0.55 * (1 - t / 0.9); if (t < 0.9) requestAnimationFrame(tick); else scene.remove(g); }; tick();
+}
+function bossDown(c) {
+  S.bossDead = true; $('bossBar').classList.add('hidden');
+  burst(c.obj.position.clone().setY(c.obj.position.y + 2.5), 0xcfeeff, 30); snd.thunder();
+  toast('The Windbinder falls. The winds tear loose!', true);
+  setTimeout(() => startStorm(), 1800);
+}
+
+// ---- Weather: after the Windbinder falls the winds come back all at once: clouds off the sea, rain, gusts, thunder.
+// WEATHER.k eases 0 → 1; the sky, fog, light, grass sway, rain and ambience all follow it.
+const WEATHER = { k: 0, target: 0, wt: 0, boltT: 6 }, STORM_FOG = new THREE.Color(0x5d6873), STORM_SKY = new THREE.Color(0x4a5562), STORM_HOR = new THREE.Color(0x7d8894);
+const RAIN_N = 1800, rainGeo = new THREE.BufferGeometry(), rainPos = new Float32Array(RAIN_N * 6), rainSeed = new Float32Array(RAIN_N * 3);
+for (let i = 0; i < RAIN_N; i++) { rainSeed[i * 3] = rr(-26, 26); rainSeed[i * 3 + 1] = rr(0, 24); rainSeed[i * 3 + 2] = rr(-26, 26); }
+rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
+const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: 0xb8c4d0, transparent: true, opacity: 0, depthWrite: false })); rain.frustumCulled = false; rain.visible = false; scene.add(rain);
+function startStorm(silent) {
+  S.storm = true; WEATHER.target = 1; $('rain').classList.add('on');
+  if (!silent) { snd.thunder(); $('flash').style.opacity = 0.7; setTimeout(() => ($('flash').style.opacity = 0), 120); }
+}
+function updateWeather(dt) {
+  WEATHER.k += (WEATHER.target - WEATHER.k) * Math.min(1, dt * 0.22);
+  const k = WEATHER.k;
+  rain.visible = k > 0.02; if (!rain.visible) return;
+  rain.material.opacity = 0.55 * k; const cx = camera.position.x, cy = camera.position.y - 8, cz = camera.position.z, wx = 6 * k, fall = 26;
+  for (let i = 0; i < RAIN_N; i++) {
+    let y = rainSeed[i * 3 + 1] - dt * fall; if (y < 0) y += 24; rainSeed[i * 3 + 1] = y;
+    let x = rainSeed[i * 3] + dt * wx; if (x > 26) x -= 52; rainSeed[i * 3] = x;
+    const px = cx + x, py = cy + y, pz = cz + rainSeed[i * 3 + 2], j = i * 6;
+    rainPos[j] = px; rainPos[j + 1] = py; rainPos[j + 2] = pz; rainPos[j + 3] = px - wx * 0.045; rainPos[j + 4] = py + 1.1; rainPos[j + 5] = pz;
+  }
+  rainGeo.attributes.position.needsUpdate = true;
+  WEATHER.boltT -= dt; if (k > 0.6 && WEATHER.boltT <= 0) { WEATHER.boltT = rr(9, 26); $('flash').style.opacity = 0.35; setTimeout(() => ($('flash').style.opacity = 0), 90); setTimeout(() => { $('flash').style.opacity = 0.25; setTimeout(() => ($('flash').style.opacity = 0), 70); }, 180); }
+}
+
+// ============================================================
 // Creature AI
 // ============================================================
 const tmp = new THREE.Vector3();
+// Escape route for fleeing game: of 16 headings, the one that runs most directly away from the threat, over dry land with
+// no cliff in the next 12 m and no trunk right ahead, preferring to keep the current heading (no dithering)
+function pickFleeDir(c, from) {
+  const o = c.obj.position, ax = o.x - from.x, az = o.z - from.z, al = Math.hypot(ax, az) || 1, h0 = heightAt(o.x, o.z);
+  let best = null, bs = -1e9;
+  for (let k = 0; k < 16; k++) {
+    const a = k / 16 * Math.PI * 2, dx = Math.cos(a), dz = Math.sin(a);
+    let ok = true; for (const r of [3, 7, 12]) { const h = heightAt(o.x + dx * r, o.z + dz * r); if (h < 0.6 || Math.abs(h - h0) / r > 0.55) { ok = false; break; } }
+    if (!ok) continue;
+    let sc = (dx * ax + dz * az) / al * 3 + rand() * 0.3;
+    if (c.fleeDir) sc += (dx * c.fleeDir.x + dz * c.fleeDir.z) * 1.2;
+    const px = o.x + dx * 2.5, pz = o.z + dz * 2.5; for (const cell of colCells(px, pz)) for (const q of cell) if ((!q.ref || q.ref.alive) && Math.hypot(px - q.x, pz - q.z) < q.r + 0.5) sc -= 2;
+    if (sc > bs) { bs = sc; best = new THREE.Vector3(dx, 0, dz); }
+  }
+  return best || new THREE.Vector3(ax / al, 0, az / al);
+}
 function updateCreature(c, dt) {
   const o = c.obj;
+  if (c.def.boss && !c.dead) { updateBoss(c, dt); return; }
   if (!c.dead && c.type !== 'wolf' && !c.tamed && !o.visible) return;          // far away: frozen until the player comes near
   if (c.dead) {
     c.deadT += dt;
+    if (c.loot && (c.lootT -= dt) > 0) { animateAnimal(c, 0, dt) || (o.rotation.z = Math.min(c.deadT * 4, Math.PI / 2)); c.deadT = Math.min(c.deadT, 1.4); return; }   // lies there until skinned
     if (animateAnimal(c, 0, dt)) o.position.y -= dt * (c.deadT > 2 ? 0.4 : 0);     // animated: play Death, then sink
     else { o.rotation.z = Math.min(c.deadT * 4, Math.PI / 2); o.position.y -= dt * (c.deadT > 1.5 ? 0.6 : 0); }
     if (c.deadT > 3) { scene.remove(o); c.gone = true; } return;
@@ -3660,8 +4162,14 @@ function updateCreature(c, dt) {
     else if (dist < aggro && !P.dead) c.state = 'chase';
     if (c.type === 'wolf' && !isNight()) c.state = 'flee';
     if (playerSafe && c.state === 'chase' && c.type !== 'skeleton') c.state = 'prowl';            // circle at the edge of the light
-  } else if (d.flee && dist < 7) c.state = 'flee';
-  else if (c.state === 'flee' && dist > 16) c.state = 'wander';
+  } else if ((d.flee || d.wary) && c.state !== 'chase' && !S.explore) {
+    // Wild game: lifts its head and watches you from ~24 m (your shot), bolts at ~14 m (sooner if you sprint), calms down past ~38 m
+    const flee = (c.type === 'fox' ? 11 : c.type === 'bull' ? 12 : 14) * (P.sprinting ? 1.5 : 1), alert = flee + 10;
+    if (dist < flee && !P.dead) c.state = 'flee';
+    else if (c.state !== 'flee' && dist < alert) c.state = 'alert';
+    else if (c.state === 'alert' && dist > alert + 4) c.state = 'wander';
+    else if (c.state === 'flee' && dist > 38) { c.state = 'wander'; c.fleeDir = null; }
+  }
   if (d.retaliate && c.state === 'chase' && dist > 18) c.state = 'wander';
 
   let speed = 0; const goal = tmp;
@@ -3680,10 +4188,17 @@ function updateCreature(c, dt) {
   }
   if (c.state === 'companion') { /* handled above */ }
   else if (c.state === 'wander') {
-    if (c.t <= 0) { c.t = rr(2, 6); { const R = d.roam || 10; c.target.set(c.home.x + rr(-R, R), 0, c.home.z + rr(-R, R)); } c.idle = rand() < 0.4; }
+    if (c.t <= 0) { c.t = rr(2, 6); { const R = d.roam || 10; for (let k = 0; k < 6; k++) { c.target.set(c.home.x + rr(-R, R), 0, c.home.z + rr(-R, R)); if (heightAt(c.target.x, c.target.z) > 0.8) break; } } c.idle = rand() < 0.4; }
     goal.copy(c.target); speed = c.idle ? 0 : d.speed * 0.3;
+  } else if (c.state === 'alert') {
+    speed = 0; c.idle = false; const yaw = Math.atan2(pp.x - o.position.x, pp.z - o.position.z);
+    o.rotation.y += Math.atan2(Math.sin(yaw - o.rotation.y), Math.cos(yaw - o.rotation.y)) * Math.min(1, dt * 3);   // head up, watching you
   } else if (c.state === 'flee') {
-    goal.copy(o.position).multiplyScalar(2).sub(pp); speed = d.speed;
+    c.fleeEval = (c.fleeEval || 0) - dt;
+    if (c.fleeEval <= 0 || !c.fleeDir) { c.fleeEval = 0.35; c.fleeDir = pickFleeDir(c, pp); }
+    // stuck (cornered against a rock or the shore)? break sideways for a moment
+    c.stuckT = (c.stuckT || 0) + dt; if (c.stuckT > 1) { if (c.lastP && c.lastP.distanceTo(o.position) < 1.2) { c.fleeDir.set(-c.fleeDir.z, 0, c.fleeDir.x).multiplyScalar(rand() < 0.5 ? 1 : -1); c.fleeEval = 1.2; } c.stuckT = 0; (c.lastP ||= new THREE.Vector3()).copy(o.position); }
+    goal.copy(o.position).addScaledVector(c.fleeDir, 10); speed = d.speed;
     if (c.type === 'wolf') { c.fleeT = (c.fleeT || 0) + dt; if (c.fleeT > 6) { scene.remove(o); c.gone = true; return; } }
   } else if (c.state === 'prowl') {
     if (!playerSafe) c.state = 'chase';
@@ -3703,6 +4218,7 @@ function updateCreature(c, dt) {
       dir.normalize();
       const nx = o.position.x + dir.x * speed * dt, nz = o.position.z + dir.z * speed * dt;
       if (heightAt(nx, nz) > 0.3 || c.type === 'skeleton') { o.position.x = nx; o.position.z = nz; }
+      if (c.type !== 'skeleton' && !d.passive) collide(o.position, Math.max(0.3, d.r * 0.6), 0);   // slide round trees and rocks instead of through them
       if (d.hostile && c.type !== 'skeleton') { const zc = zoneOf(o.position); if (zc) { const fp = zc.pos, fx = o.position.x - fp.x, fz = o.position.z - fp.z, fd = Math.hypot(fx, fz) || 1; o.position.x = fp.x + fx / fd * (zc.r + 1); o.position.z = fp.z + fz / fd * (zc.r + 1); } }
       else c.t = 0;
       const targetYaw = Math.atan2(dir.x, dir.z);
@@ -3710,9 +4226,9 @@ function updateCreature(c, dt) {
     }
   }
   const gy = heightAt(o.position.x, o.position.z);
-  if (c.type === 'skeleton') {                           // the dead never leave the cave
-    const dx = o.position.x - CAVE.x, dz = o.position.z - CAVE.z, d = Math.hypot(dx, dz), m = CH_R - 1.8;
-    if (d > m) { o.position.x = CAVE.x + dx / d * m; o.position.z = CAVE.z + dz / d * m; }
+  if (c.type === 'skeleton') {                           // the dead never leave their ship
+    const dx = o.position.x - WRECK_SITE.x, dz = o.position.z - WRECK_SITE.z, d = Math.hypot(dx, dz), m = 17;
+    if (d > m) { o.position.x = WRECK_SITE.x + dx / d * m; o.position.z = WRECK_SITE.z + dz / d * m; }
   }
   if (c.pen) { clampToPen(o); }
   o.position.y = heightAt(o.position.x, o.position.z);
@@ -3748,7 +4264,6 @@ function collide(pos, r, lift = 0) {
 }
 function surfaceAt(p, ground, swimming) {
   if (swimming || ground < 0.05) return 'water';
-  if (inCaveInterior(p.x, p.z)) return 'cave';
   if (p.y > ground + 0.25) return 'stone';                     // on a built floor (temple, dock, ruins)
   if (pathDist(p.x, p.z) < 1.9) return Math.hypot(p.x - MOUNT.x, p.z - MOUNT.z) < 112 && ground > 25 ? 'stone' : 'dirt';
   if (ground < 1.2) return 'sand';
@@ -3780,15 +4295,19 @@ function updatePlayer(dt) {
     input.normalize();
     const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);             // camera forward on XZ
     const dir = new THREE.Vector3().set(fx * input.z + -fz * input.x, 0, fz * input.z + fx * input.x).normalize();
-    const sprint = (keys.ShiftLeft || keys.ShiftRight) && S.sta > 1 && !swimming && S.energy > 5;
-    P.sprinting = sprint; wantV.copy(dir).multiplyScalar((swimming ? 2.4 : sprint ? 8 : 4.6) * (S.energy < 20 ? 0.8 : 1));
+    if (S.sta <= 1) P.winded = true; else if (S.sta > 30) P.winded = false;             // out of breath: no sprinting until stamina is back to 30
+    const aiming = bowAiming(), sprint = (keys.ShiftLeft || keys.ShiftRight) && !P.winded && !swimming && S.energy > 5 && !aiming;
+    if ((keys.ShiftLeft || keys.ShiftRight) && (P.winded || S.energy <= 5) && !swimming) toast(S.energy <= 5 ? 'Too exhausted to run. Sleep.' : 'Out of breath');
+    P.sprinting = sprint; wantV.copy(dir).multiplyScalar((swimming ? 2.4 : sprint ? 8 : aiming ? 2.2 : 4.6) * (S.energy < 20 ? 0.8 : 1));   // walk while the bow is drawn
     if (sprint && P.hv.length() > 3) S.sta -= 18 * dt;
   }
   const acc = !P.onGround ? 2.5 : wantV.lengthSq() > 0 ? 11 : 14;
   P.hv.x += (wantV.x - P.hv.x) * Math.min(1, acc * dt); P.hv.z += (wantV.z - P.hv.z) * Math.min(1, acc * dt);
   speed = Math.hypot(P.hv.x, P.hv.z); if (speed < 0.05) { speed = 0; P.hv.set(0, 0, 0); }
   player.position.x += P.hv.x * dt; player.position.z += P.hv.z * dt;
-  if (speed > 0.3 && wantV.lengthSq() > 0) { const ty = Math.atan2(wantV.x, wantV.z); P.yaw += Math.atan2(Math.sin(ty - P.yaw), Math.cos(ty - P.yaw)) * Math.min(1, dt * (P.onGround ? 10 : 4)); }
+  if (locked && bowAiming()) {                                         // drawing: face where the camera looks, strafe instead of turning
+    const ty = Math.atan2(-Math.sin(camYaw), -Math.cos(camYaw)); P.yaw += Math.atan2(Math.sin(ty - P.yaw), Math.cos(ty - P.yaw)) * Math.min(1, dt * 14);
+  } else if (speed > 0.3 && wantV.lengthSq() > 0) { const ty = Math.atan2(wantV.x, wantV.z); P.yaw += Math.atan2(Math.sin(ty - P.yaw), Math.cos(ty - P.yaw)) * Math.min(1, dt * (P.onGround ? 10 : 4)); }
   else if (locked && P.swing > 0) {
     P.yaw = Math.atan2(-Math.sin(camYaw), -Math.cos(camYaw));        // face where the camera looks when attacking
   }
@@ -3798,7 +4317,7 @@ function updatePlayer(dt) {
   // Keep the island a closed arena: the sea gets rough past the reef
   const r = Math.hypot(player.position.x, player.position.z);
   if (r > ISLAND_R + 18) { player.position.multiplyScalar((ISLAND_R + 18) / r); if (!P.warned) { toast('The currents are too strong to swim. Build a raft.'); P.warned = true; setTimeout(() => (P.warned = false), 5000); } }
-  const lift = player.position.y - heightAt(player.position.x, player.position.z); collide(player.position, 0.4, lift); caveCollide(player.position);
+  const lift = player.position.y - heightAt(player.position.x, player.position.z); collide(player.position, 0.4, lift);
   const yawRate = (P.yaw - (P.lastYaw ?? P.yaw)) / Math.max(dt, 1e-3); P.lastYaw = P.yaw;
   P.lean = lerp(P.lean || 0, P.onGround ? clamp(speed / 8, 0, 1) * 0.09 : 0, Math.min(1, dt * 6)); P.bank = lerp(P.bank || 0, clamp(-yawRate * 0.03 * clamp(speed / 5, 0, 1), -0.12, 0.12), Math.min(1, dt * 6));
   player.rotation.y = P.yaw;
@@ -3814,6 +4333,13 @@ function updatePlayer(dt) {
   // Swing
   if (P.swing > 0) { P.swing -= dt * (S.slot === 0 ? (PUNCH.ready ? 2.2 : 3.2) : (ATTACK.ready ? 1.35 : 3.2)); if (!P.swingHit && P.swing < 0.55) { P.swingHit = true; doHit(); } }
   P.animT += dt * (speed > 0 ? speed / 4.6 : 0.3);
+  updateBow(dt, swimming);
+  P.aimK = lerp(P.aimK || 0, bowAiming() ? 1 : 0, Math.min(1, dt * 8));
+  if (bowAiming()) P.aimPt = aimPoint(P.aimPt || new THREE.Vector3());
+  if (S.tools.bow && !S.bowTaught && S.slot === 2 && P.bow?.st === 'ready' && !convoBusy() && !inCard()) {   // first time the bow is out: how to use it
+    S.bowTaught = true;
+    showCards([{ kicker: 'Nestor teaches', title: 'The Bow', body: 'Hold the <b>right mouse button</b> to nock an arrow and draw: you look over your shoulder. <b>Left click</b> to loose.<br><br>There is no sight to help you. The arrow flies straight to the centre of your view, so look at what you want to hit. Keep holding right click after a shot and you nock the next arrow at once.', keys: [['RMB', 'Draw & aim (hold)'], ['LMB', 'Loose'], ['3', 'Take out / put away the bow']] }]);
+  }
   animateHumanoid(player, speed, P.animT, Math.max(P.swing, 0));
   if (hero.native) animateHero(dt, speed);
   else if (hero.rig) {
@@ -3840,25 +4366,30 @@ function updatePlayer(dt) {
   }
   let axeVis = S.slot === 1;
   if (P.equip && (P.equip.kind === 'equip' ? EQUIP : DISARM).ready) axeVis = P.equip.kind === 'equip' ? P.equip.t > 0.5 : P.equip.t < 0.6;
-  tools.axe.visible = axeVis; bowHeld.visible = S.slot === 2 && S.tools.bow;
-  backAxe.visible = S.tools.axe && !axeVis; backBow.visible = S.tools.bow && S.slot !== 2;
-  // (bow visibility handled above)
+  // the bow is in the hand once it's off the back (equip) and until it's back there (disarm)
+  const b = P.bow, bowVis = hero.native ? !!b && b.t >= 0 && !(b.st === 'equip' && b.t < 0.36) && !(b.st === 'disarm' && b.t > 0.48) : S.slot === 2 && S.tools.bow;
+  tools.axe.visible = axeVis; bowHeld.visible = S.tools.bow && bowVis;
+  backAxe.visible = S.tools.axe && !axeVis; backBow.visible = S.tools.bow && !bowVis;
+  if (hero.native) placeNockArrow();
   if (P.drawT > 0) P.drawT -= dt; updateArrows(dt);
   if (P.hurtT > 0) P.hurtT -= dt;
 }
-const camTgt = new THREE.Vector3(); let camTgtInit = false;
+const camTgt = new THREE.Vector3(), _camR = new THREE.Vector3(); let camTgtInit = false;
 function updateCamera(dt) {
   const raw = player.position.clone().add(new THREE.Vector3(0, 1.7, 0));
   if (!camTgtInit || camTgt.distanceTo(raw) > 6) { camTgt.copy(raw); camTgtInit = true; }
   camTgt.x += (raw.x - camTgt.x) * Math.min(1, dt * 16); camTgt.z += (raw.z - camTgt.z) * Math.min(1, dt * 16); camTgt.y += (raw.y - camTgt.y) * Math.min(1, dt * 7);
   const target = camTgt.clone();
-  const underground = inCaveInterior(player.position.x, player.position.z) && player.position.y < CAVE_Y + 4;
-  const dist = underground ? 4.2 : 7, pitch = underground ? Math.min(camPitch, 0.45) : camPitch;
+  const underground = false;
+  // drawing the bow: the camera comes in close over the right shoulder and narrows a little
+  const k = P.aimK || 0, dist = lerp(underground ? 4.2 : 7, 2.3, k), pitch = underground ? Math.min(camPitch, 0.45) : camPitch;
+  target.addScaledVector(_camR.set(Math.cos(camYaw), 0, -Math.sin(camYaw)), 0.75 * k); target.y -= 0.15 * k;
+  const fov = lerp(60, 50, k) - (bowAiming() ? bowPower() * 5 : 0); if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   const off = new THREE.Vector3(Math.sin(camYaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(camYaw) * Math.cos(pitch)).multiplyScalar(dist);
   const want = target.clone().add(off);
-  if (underground) { caveCollide(want.setY(CAVE_Y + 1)); want.y = Math.min(target.y + Math.sin(pitch) * dist, CAVE_Y + 5.2); }   // stay under the vault
   want.y = Math.max(want.y, heightAt(want.x, want.z) + 0.6, 0.3);
-  camera.position.lerp(want, Math.min(1, dt * 12)); camera.lookAt(target);
+  camera.position.lerp(want, Math.min(1, dt * (12 + k * 10))); camera.lookAt(target);
+  if (k < 0.5 && camPitch < -0.35) camPitch = lerp(camPitch, -0.35, Math.min(1, dt * 6));   // back to the normal range after aiming low
 }
 
 // ============================================================
@@ -3908,7 +4439,7 @@ function updateWorld(dt, t) {
   skyDome.material.uniforms.sunDir.value.copy(sunDir); skyDome.position.copy(camera.position); renderer.toneMappingExposure = lerp(0.5, 0.82, day);
   WATER_U.uTime.value = t; WATER_U.uDay.value = clamp(day + dusk * 0.3, 0, 1); WATER_U.uSky.value.copy(skyDome.material.uniforms.top.value); WATER_U.uHor.value.copy(skyDome.material.uniforms.hor.value);
   WATER_U.uSunDir.value.copy(sunDir.y > 0 ? sunDir : moonDir); WATER_U.uSunCol.value.setHex(day > 0.1 ? (dusk > 0.4 ? 0xffb070 : 0xfff1d6) : 0x7088b8).multiplyScalar(0.3 + day * 0.7);
-  windUniform.value = t; grassU.uCenter.value.set(player.position.x, player.position.z);
+  WEATHER.wt += dt * (1 + WEATHER.k * 1.8); windUniform.value = WEATHER.wt; grassU.uCenter.value.set(player.position.x, player.position.z);   // grass and leaves thrash in the storm
   envTimer -= 1;
   if (envTimer <= 0) { envTimer = 240; refreshEnvironment(); scene.environmentIntensity = lerp(0.15, 1, day); }
 
@@ -3916,18 +4447,20 @@ function updateWorld(dt, t) {
   const here = regionAt(player.position.x, player.position.z);
   if (S.running && here.key !== S.region) { S.regionT = (S.regionT || 0) + dt; if (S.regionT > 0.8) { S.region = here.key; S.regionT = 0; showRegion(here); } } else S.regionT = 0;
   const hy = player.position.y;
-  const fogTgt = here.key === 'swamp' ? [15, 150, 0x7d8a6a] : here.key === 'forest' ? [40, 380, 0x8fae9a] : here.key === 'cave' ? [6, 60, 0x1a1c22] : hy > 45 ? [30, 300, 0xdfe8f2] : [GFX.level === 'low' ? 120 : 160, GFX.fogFar || 1150, null];
+  let fogTgt = here.key === 'swamp' ? [15, 150, 0x7d8a6a] : here.key === 'forest' ? [40, 380, 0x8fae9a] : hy > 45 ? [30, 300, 0xdfe8f2] : [GFX.level === 'low' ? 120 : 160, GFX.fogFar || 1150, null];
+  if (WEATHER.k > 0.001) fogTgt = [lerp(fogTgt[0], 12, WEATHER.k), lerp(fogTgt[1], 210, WEATHER.k), fogTgt[2]];   // rain fog rolls over the island
   scene.fog.near = lerp(scene.fog.near, fogTgt[0], dt * 0.8); scene.fog.far = lerp(scene.fog.far, fogTgt[1], dt * 0.8);
   if (fogTgt[2] !== null) scene.fog.color.lerp(new THREE.Color(fogTgt[2]).multiplyScalar(0.3 + day * 0.7), 0.9);
-  const inCave = inCaveInterior(player.position.x, player.position.z) && player.position.y < CAVE_Y + 4;
-  caveTorches.forEach((c, i) => { c.fl.scale.y = 1 + Math.sin(t * 14 + i * 2) * 0.25; if (c.glow) c.L.opacity = 0.75 + Math.sin(t * 17 + i) * 0.2; else c.L.intensity = 12 + Math.sin(t * 17 + i) * 3; });
-  if (CAVE_VEILS.mat) { const along = (player.position.x - CAVE_MOUTH.x) * CAVE_DIR.x + (player.position.z - CAVE_MOUTH.z) * CAVE_DIR.z, near = segDist(player.position.x, player.position.z, CAVE_MOUTH, CAVE) < TUN_W + 1;
-    const want = near && along > -1.5 ? 0 : 1; CAVE_VEILS.mat.uniforms.uO.value += (want - CAVE_VEILS.mat.uniforms.uO.value) * Math.min(1, dt * 4); }
+  const inCave = false;
+  WRECK_FIRES.forEach((f, i) => { const k = 1 + Math.sin(t * 9 + i * 2) * 0.18 + Math.sin(t * 23 + i) * 0.08; f.fl.scale.set(1, k, 1); f.L.intensity = 26 * k; f.glow.material.opacity = 0.7 + Math.sin(t * 13 + i) * 0.2; });
   hemi.intensity *= inCave ? 0.15 : 1; sun.intensity *= inCave ? 0.3 : 1;
+  if (WEATHER.k > 0.001) { const k = WEATHER.k;                                     // the storm: grey sky, low cloud, flat light
+    sun.intensity *= 1 - 0.75 * k; hemi.intensity *= 1 - 0.45 * k; renderer.toneMappingExposure *= 1 - 0.28 * k;
+    if (!inCave) scene.fog.color.lerp(STORM_FOG.clone().multiplyScalar(0.35 + day * 0.65), 0.85 * k);
+    skyDome.material.uniforms.top.value.lerp(STORM_SKY.clone().multiplyScalar(0.3 + day * 0.7), 0.85 * k); skyDome.material.uniforms.hor.value.lerp(STORM_HOR.clone().multiplyScalar(0.3 + day * 0.7), 0.85 * k); }
   snow.material.opacity = lerp(snow.material.opacity, hy > 42 ? 0.9 : 0, dt); snow.position.set(camera.position.x, camera.position.y - 12, camera.position.z);
   if (snow.material.opacity > 0.01) { const sa3 = snow.geometry.attributes.position; for (let i = 0; i < sa3.count; i++) { let y = sa3.getY(i) - dt * 2.2 * S.timeScale; if (y < 0) y += 25; sa3.setY(i, y); sa3.setX(i, sa3.getX(i) + Math.sin(t + i) * 0.01); } sa3.needsUpdate = true; }
   fireflies.material.opacity = lerp(fireflies.material.opacity, night ? 0.9 * (0.6 + Math.sin(t * 3) * 0.4) : 0, dt * 2);
-  crystals.forEach((c, i) => { c.rotation.y += dt * 0.2; if (c.material.emissiveIntensity !== undefined) c.material.emissiveIntensity = 1.3 + Math.sin(t * 2 + i) * 0.4; });
   if (sacredMotes.pts && Math.abs(OLIVE.x - player.position.x) + Math.abs(OLIVE.z - player.position.z) < 120) { const a = sacredMotes.pts.geometry.attributes.position; sacredMotes.forEach(([an, r, y, ph], i) => { const k = t * 0.08 + ph * 6.28; a.setXYZ(i, Math.cos(an + k) * r, y + Math.sin(k * 2) * 0.6, Math.sin(an + k) * r); }); a.needsUpdate = true; }
   fallFx.forEach((m) => { const k = (t * 0.25 + m.userData.ph) % 1; m.position.copy(m.userData.base).setY(m.userData.base.y + 0.5 + k * 5); m.scale.setScalar(3 + k * 6); m.material.opacity = 0.3 * Math.sin(k * Math.PI); });
   braziers.forEach((f, i) => { f.scale.y = 1 + Math.sin(t * 13 + i) * 0.2; f.scale.x = f.scale.z = 1 + Math.sin(t * 9 + i * 2) * 0.08; if (f.userData.glow) f.userData.glow.material.opacity = 0.55 + Math.sin(t * 17 + i) * 0.12; });
@@ -3936,17 +4469,17 @@ function updateWorld(dt, t) {
   { const pa = pollen.geometry.attributes.position; for (let i = 0; i < pa.count; i += 3) { pa.setY(i, (pa.getY(i) + dt * 0.15) % 6); pa.setX(i, pa.getX(i) + Math.sin(t * 0.5 + i) * dt * 0.2); } pa.needsUpdate = true; }
   for (const b of birds) { const u = b.userData, a = t * u.sp + u.ph * 0.1; b.position.set(u.c0.x + Math.cos(a) * u.r, u.c0.y + Math.sin(t * 0.3 + u.ph), u.c0.z + Math.sin(a) * u.r).add(u.off);
     b.rotation.y = -a; b.scale.set(1, 1 + Math.sin(t * 9 + u.ph) * 0.9, 1); }
-  if (hy > 50 && !(S.campfire && player.position.distanceTo(S.campfire.pos) < 5)) { S.food = Math.max(0, S.food - dt * 0.6); if (!S.coldWarned) { toast('Freezing up here. Hunger drains faster. Keep moving.'); S.coldWarned = true; } } else if (hy < 40) S.coldWarned = false;
+  if (hy > 50 && !(S.campfire && player.position.distanceTo(S.campfire.pos) < 5)) { S.food = Math.max(0, S.food - dt * 0.3); if (!S.coldWarned) { toast('Freezing up here. Hunger drains faster. Keep moving.'); S.coldWarned = true; } } else if (hy < 40) S.coldWarned = false;
   // Explore to reveal the map
   S.revealT = (S.revealT || 0) - dt; if (S.revealT <= 0 && S.running) { S.revealT = 0.5; revealMap(player.position.x, player.position.z, 55); }
 
   // Hunger & regen
-  S.food = clamp(S.food - dt * S.timeScale * (P.resting ? 8 : 1) * 0.28, 0, 100);
-  if (S.food <= 0) { S.hp -= dt * 1.5; if (S.hp <= 0 && !P.dead) die(); }
-  else if (S.food > 50 && S.hp < 100) S.hp = Math.min(100, S.hp + dt * 1.2);
+  S.food = clamp(S.food - dt * S.timeScale * (P.resting ? 8 : 1) * 0.14, 0, 100);       // half the old rate: a full belly lasts most of a day
+  if (S.food <= 0) { S.hp -= dt * 3; if (S.hp <= 0 && !P.dead) die(); }
+  else if (S.food > 50 && S.hp < HP_MAX) S.hp = Math.min(HP_MAX, S.hp + dt * 2.4);
 
   // Night wolves
-  if (S.explore) { S.food = S.hp = 100; S.sta = Math.max(S.sta, 60); }
+  if (S.explore) { S.food = 100; S.hp = HP_MAX; S.sta = Math.max(S.sta, 60); }
   if (night && !P.dead && !S.explore) {
     wolfTimer -= dt * S.timeScale;
     const wolves = creatures.filter((c) => c.type === 'wolf' && !c.dead && !c.gone).length;
@@ -3955,7 +4488,7 @@ function updateWorld(dt, t) {
       for (let i = 0; i < 12; i++) {
         const a = rr(0, 6.28), p = player.position.clone().add(new THREE.Vector3(Math.cos(a) * 28, 0, Math.sin(a) * 28));
         p.y = heightAt(p.x, p.z);
-        if (p.y > 1 && Math.hypot(p.x - CAVE.x, p.z - CAVE.z) > 20) { spawnCreature('wolf', p).state = 'chase'; break; }
+        if (p.y > 1 && Math.hypot(p.x - WRECK_SITE.x, p.z - WRECK_SITE.z) > 30) { spawnCreature('wolf', p).state = 'chase'; break; }
       }
     }
   }
@@ -3989,7 +4522,10 @@ function updateWorld(dt, t) {
   // Water, smoke, clouds, NPC
   smoke.forEach((s) => { s.userData.t = (s.userData.t + dt * 0.15) % 1; const k = s.userData.t; s.position.set(CHIMNEY.x + k * 2, CHIMNEY.y + k * 6, CHIMNEY.z); s.scale.setScalar(0.5 + k * 1.8); s.material.opacity = 0.5 * (1 - k); });
   _cc.setRGB(1.5, 1.5, 1.55).lerp(_cd.setRGB(1.6, 0.95, 0.75), dusk * 0.6).lerp(_cd.setRGB(0.1, 0.12, 0.2), nightK);   // clouds: white by day, peach at dusk, dark moonlit at night
-  clouds.forEach((c) => { c.position.x += dt * 1.5; if (c.position.x > 1400) c.position.x = -1400; c.material.color.copy(_cc); });
+  { const k = WEATHER.k, wind = 1.5 + k * 22;                                       // the storm drives the clouds, darkens them and fills the sky
+    clouds.forEach((c) => { c.position.x += dt * wind; if (c.position.x > 1400) c.position.x = -1400; c.material.color.copy(_cc).lerp(_cd.setRGB(0.55, 0.58, 0.64).multiplyScalar(0.4 + day * 0.6), k * 0.85); });
+    stormClouds.forEach((c) => { c.visible = k > 0.02; if (!c.visible) return; c.position.x += dt * wind * 1.3; if (c.position.x > 950) c.position.x = -950;
+      c.material.opacity = k * c.userData.o; c.material.color.setRGB(0.42, 0.45, 0.5).multiplyScalar(0.35 + day * 0.65); }); }
   const nd = nestor.position.distanceTo(player.position);
   nestor.rotation.y = nd < 8 ? Math.atan2(player.position.x - nestor.position.x, player.position.z - nestor.position.z) : nestor.rotation.y;
   if (nestor.userData.rig) poseIdleRig(nestor.userData.rig, t); else animateHumanoid(nestor, 0, t);
@@ -4026,17 +4562,16 @@ function revealMap(x, z, r) {
 const toMapPx = (p) => [(p.x / MAPW + 0.5) * MAPN, (p.z / MAPW + 0.5) * MAPN];
 function drawMapMarkers(ctx, tf, target, big) {
   if (!big) {   // minimap: everything you can pick up nearby
-    const pp = player.position, ic = { bush: '🫐', branch: '🪵', pebble: '🪨', reeds: '🌾', olivebranch: '🌿', chest: '🧰' };
-    ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    for (const pk of pickups) { if (!pk.alive || (pk.kind === 'bush' && pk.regrow > 0) || !ic[pk.kind]) continue;
+    const pp = player.position, PI_ = { bush: 'bush', branch: 'branch', pebble: 'pebble', reeds: 'reeds', olivebranch: 'olivebranch', chest: 'chest' };
+    const draw = (name, x, y, sz) => { const im = iconImg(name); if (im.complete && im.naturalWidth) ctx.drawImage(im, x - sz / 2, y - sz / 2, sz, sz); };
+    for (const pk of pickups) { if (!pk.alive || (pk.kind === 'bush' && pk.regrow > 0) || !PI_[pk.kind]) continue;
       if (Math.hypot(pk.pos.x - pp.x, pk.pos.z - pp.z) > 30) continue;
-      const [x, y] = tf(pk.pos); ctx.globalAlpha = pk.kind === 'bush' ? 0.95 : 0.85; ctx.fillText(ic[pk.kind], x, y); }
+      const [x, y] = tf(pk.pos); ctx.globalAlpha = pk.kind === 'bush' ? 0.95 : 0.85; draw(PI_[pk.kind], x, y, 11); }
     ctx.globalAlpha = 1;
-    for (const f of FIRES) { const [x, y] = tf(f.pos); ctx.fillText('🔥', x, y); }
-    // animals within 40 m, each with its own icon (game you can hunt, livestock, your husky)
-    const AI = { deer: '🦌', stag: '🦌', fox: '🦊', bull: '🐂', cow: '🐄', horse: '🐎', horse_white: '🐎', donkey: '🫏', alpaca: '🦙', shibainu: '🐕', husky: '🐺' };
-    ctx.font = '11px sans-serif';
-    for (const c of creatures) { if (c.dead || c.gone || !AI[c.type] || Math.hypot(c.obj.position.x - pp.x, c.obj.position.z - pp.z) > 40) continue; const [x, y] = tf(c.obj.position); ctx.fillText(AI[c.type], x, y); }
+    for (const f of FIRES) { const [x, y] = tf(f.pos); draw('fire', x, y, 14); }
+    // animals within 40 m, each with its own black-figure silhouette (game you can hunt, livestock, your husky)
+    const AI = { deer: 'deer', stag: 'stag', fox: 'fox', bull: 'bull', cow: 'cow', horse: 'horse', horse_white: 'horse', donkey: 'donkey', alpaca: 'alpaca', shibainu: 'dog', husky: 'wolf' };
+    for (const c of creatures) { if (c.dead || c.gone || !AI[c.type] || Math.hypot(c.obj.position.x - pp.x, c.obj.position.z - pp.z) > 40) continue; const [x, y] = tf(c.obj.position); draw(AI[c.type], x, y, 15); }
   }
   ctx.fillStyle = '#b0392e'; creatures.forEach((c) => { if (!c.dead && c.def.hostile) { const [x, y] = tf(c.obj.position); ctx.fillRect(x - 1.5, y - 1.5, 3, 3); } });
   ctx.fillStyle = '#fff'; { const [x, y] = tf(nestor.position); ctx.fillRect(x - 2, y - 2, 4, 4); }
@@ -4051,11 +4586,11 @@ scene.add(waypoint);
 function questMarkers() {
   if (S.explore || S.sailing || talkCam.on || S.cine) return [];
   const i = S.questIdx, out = [];
-  if (i === 0) out.push({ pos: nestor.position, g: '!', h: 2.9 });
-  if (i === 3) out.push({ pos: ATHENA_OFFER, g: '?', h: 1.2 });
-  if (i === 4) out.push({ pos: nestor.position, g: '?', h: 2.9 });
-  if (i === 10 && S.inv.wood >= 12 && S.inv.rope >= 4 && S.inv.sail >= 1 && S.inv.meat >= 3) out.push({ pos: RAFT_SITE, g: '?', h: 2.4 });
-  if (i === 11) out.push({ pos: RAFT_SITE, g: '!', h: 2.4 });
+  if (i === QI.meet) out.push({ pos: nestor.position, g: '!', h: 2.9 });
+  if (i === QI.showaxe || i === QI.report || i === QI.dawn || i === QI.nowind || i === QI.storm) out.push({ pos: nestor.position, g: '?', h: 2.9 });
+  if (i === QI.temple) out.push({ pos: ATHENA_OFFER, g: '?', h: 1.2 });
+  if (i === QI.boat && S.inv.wood >= 12 && S.inv.rope >= 4 && S.inv.sail >= 1 && S.inv.meat >= 3) out.push({ pos: RAFT_SITE, g: '?', h: 2.4 });
+  if (i === QI.sail || i === QI.becalmed) out.push({ pos: RAFT_SITE, g: '!', h: 2.4 });
   return out;
 }
 const glyphTex = {};
@@ -4104,8 +4639,18 @@ function drawBigMap() {
 // ============================================================
 // Sailing ending
 // ============================================================
+// Before the Windbinder falls there is no wind: the boat goes nowhere
+function trySail() {
+  if (S.questIdx >= QI.sail) return setSail();
+  if (S.questIdx === QI.becalmed) return say([
+    ['You', 'Here we go, old girl...'],
+    ['You', '...Nothing. The sail hangs like a wet rag. The sea is flat as oil, not a ripple out to the reef.'],
+    ['You', 'No wind at all. Nestor will know what this means.'],
+  ], () => { S.triedSail = true; });
+  toast(S.questIdx === QI.storm ? 'The wind is back, but Nestor is waiting for you.' : 'Not a breath of wind. The sail hangs dead.');
+}
 function setSail() {
-  if (S.questIdx < 11) return;
+  if (S.questIdx < QI.sail) return;
   S.sailing = true; document.exitPointerLock(); $('prompt').classList.add('hidden'); checkQuest();
   say([['Nestor', '(from the shore) Fair winds! May the Guardian of Pedias fear you!'], ['You', 'One island down. Eight lands to go.']], () => {
     const start = performance.now();
@@ -4188,7 +4733,7 @@ function loop() {
   if (S.running && !S.paused) {
     const frozen = inDialog() || menuOpen() || !!S.cine;
     if (!S.sailing && (!frozen || S.cine)) updatePlayer(dt);
-    if (!frozen || S.cine || talkCam.on) { updateWorld(dt, t); if (!S.cine) for (const c of creatures) updateCreature(c, dt); }
+    if (!frozen || S.cine || talkCam.on) { updateWorld(dt, t); updateWeather(dt); if (!S.cine) for (const c of creatures) updateCreature(c, dt); }
     if (S.sailing) {
       const rp = raftGroup.position, fx = Math.sin(boatYaw), fz = Math.cos(boatYaw); camera.position.lerp(new THREE.Vector3(rp.x - fx * 14 - fz * 8, 6, rp.z - fz * 14 + fx * 8), dt); camera.lookAt(rp.x + fx * 20, 2, rp.z + fz * 20);
     } else if (S.cine) updateCine(dt); else if (talkCam.on) { updateTalkCam(dt); if (hero.native) animateHero(dt, 0); else if (hero.rig && !talkCam.fixed) poseHero(0, 0, 0, t); } else updateCamera(dt);
@@ -4213,7 +4758,7 @@ function loop() {
     const qm = updateQuestMarkers(t);
     waypoint.visible = !!target && !S.sailing && !qm.some((m) => m.pos.distanceTo(target) < 3);
     if (target) { waypoint.position.set(target.x, target.y + 3.2 + Math.sin(t * 3) * 0.2, target.z); waypoint.rotation.y = t * 2; }
-    hudT -= dt; if (hudT <= 0) { hudT = 0.1; renderHUD(); renderQuest(); $('crosshair').classList.toggle('bow', S.slot === 2 && !!S.tools.bow); }   // aiming dot only with the bow
+    updateCompass(); hudT -= dt; if (hudT <= 0) { hudT = 0.1; renderHUD(); renderQuest(); }
     drawMinimap(target);   // every frame: the map glides with you instead of stepping 10× a second
   } else if (!S.running) {
     // Title screen flyover
@@ -4224,7 +4769,6 @@ function loop() {
     updatePropLOD();
     const cx = camera.position.x, cz = camera.position.z;
     for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90;
-    { const near = Math.hypot(CAVE.x - cx, CAVE.z - cz) < 70; for (const o of caveInner) o.visible = near; }
     for (const c of creatures) c.obj.visible = S.running && !S.cine && Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < (c.type === 'fox' ? 80 : 140);
   }
   ambientSound(dt); updateLightPool();
@@ -4235,24 +4779,27 @@ function loop() {
 let cullFrame = 0, shadowTick = 0;
 // ---- Save / load (browser storage). The world is generated from a fixed seed, so pickups, trees, rocks and
 //      creatures are saved by index: what you picked up, felled or killed stays that way.
-const SAVE_KEY = 'argonisos.save.v2'   // v2: new world layout (animal pack, paddock); v1 saves no longer line up, INIT_CREATURES = creatures.length;
-const SAVE_FIELDS = ['recipes', 'questIdx', 'inv', 'tools', 'slot', 'day', 'time', 'hp', 'food', 'sta', 'energy', 'talkedNestor', 'oliveBranch', 'offered', 'reported', 'raftBuilt', 'kills', 'cooked', 'nights', 'nightsAtStart', 'warnedOnce', 'warnDay'];
+const SAVE_KEY = 'argonisos.save.v2', INIT_CREATURES = creatures.length;   // v2: new world layout (animal pack, paddock); v1 saves no longer line up
+const SAVE_FIELDS = ['recipes', 'questIdx', 'inv', 'tools', 'slot', 'day', 'time', 'hp', 'food', 'sta', 'energy', 'hotbar', 'lootTaught', 'triedSail', 'toldNoWind', 'reachedSummit', 'bossDead', 'toldStorm', 'storm', 'talkedNestor', 'showedAxe', 'ateMeal', 'toldNight', 'bowTaught', 'oliveBranch', 'offered', 'reported', 'raftBuilt', 'kills', 'cooked', 'nights', 'nightsAtStart', 'warnedOnce', 'warnDay'];
 function saveGame(manual) {
   if (!S.running || S.explore || S.sailing) { if (manual) toast('Nothing to save here.'); return; }
   try {
-    const d = { v: 1, at: Date.now(), S: {}, pos: player.position.toArray(), yaw: P.yaw,
+    const d = { v: 4, at: Date.now(), S: {}, pos: player.position.toArray(), yaw: P.yaw,
       pick: pickups.map((p) => (p.alive ? 1 : 0)).join(''), bush: pickups.map((p, i) => (p.kind === 'bush' && p.regrow > 0 ? i : -1)).filter((i) => i >= 0),
       res: resources.map((r) => (r.alive ? 1 : 0)).join(''), dead: creatures.slice(0, INIT_CREATURES).map((c) => (c.dead ? 1 : 0)).join(''),
       fire: S.campfire ? S.campfire.pos.toArray() : null, fog: mmFog.toDataURL('image/png') };
     for (const k of SAVE_FIELDS) d.S[k] = S[k];
     localStorage.setItem(SAVE_KEY, JSON.stringify(d));
-    toast(manual ? 'Game saved.' : 'Autosaved', !!manual); updateContinueBtn();
+    toast(manual ? 'Game saved.' : 'Autosaved', !!manual);
   } catch (e) { if (manual) toast('Could not save (browser storage is blocked).'); }
 }
 function readSave() { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch { return null; } }
 function loadGame(d) {
   for (const k of SAVE_FIELDS) if (d.S[k] !== undefined) S[k] = typeof d.S[k] === 'object' && d.S[k] ? JSON.parse(JSON.stringify(d.S[k])) : d.S[k];
+  if ((d.v || 1) < 2) S.questIdx = [0, 1, 3, 4, 5, 6, 7, 7, 9, 10, 11, 12][S.questIdx] ?? S.questIdx;   // v1 quest order: no 'Show Nestor', fire before the hunt
+  if ((d.v || 1) < 3 && S.questIdx >= QI.dawn) S.questIdx++;                                             // v2: no 'Back to Nestor' after the night
   S.kills = { rabbit: 0, boar: 0, wolf: 0, skeleton: 0, deer: 0, stag: 0, fox: 0, bull: 0, ...S.kills };
+  S.inv = { ...Object.fromEntries(Object.keys(NAMES).map((k) => [k, 0])), ...S.inv };   // items added since the save was made
   pickups.forEach((p, i) => { if (d.pick[i] === '0' && p.alive) { p.alive = false; scene.remove(p.obj); } });
   for (const i of d.bush || []) { const p = pickups[i]; if (p) { p.regrow = 60; p.obj.userData.berries.visible = false; } }
   resources.forEach((r, i) => { if (d.res[i] === '0' && r.alive) { r.alive = false; updateProp(r.item, true); } });
@@ -4262,17 +4809,51 @@ function loadGame(d) {
   if (d.fog) { const im = new Image(); im.onload = () => { const c = mmFog.getContext('2d'); c.clearRect(0, 0, MAPN, MAPN); c.drawImage(im, 0, 0); }; im.src = d.fog; }
   player.position.fromArray(d.pos); P.yaw = d.yaw || 0; player.rotation.y = P.yaw; camYaw = P.yaw + Math.PI; camTgtInit = false;
   S.wasNight = isNight(); S.region = null; questSig = '';
+  if (S.questIdx === QI.beast && !S.bossDead) spawnBoss();
+  if (S.storm) { WEATHER.k = 1; startStorm(true); }
 }
-function updateContinueBtn() { const d = readSave(), b = $('continueBtn'); if (!b) return; b.style.display = d && !S.running ? '' : 'none';
-  if (d) b.innerHTML = `Continue <small style="display:block;font-size:12px;opacity:.75">Day ${d.S.day} · ${Q[d.S.questIdx]?.title || 'Trial complete'}</small>`; }
-$('continueBtn').onclick = () => {
-  const d = readSave(); if (!d) return; initAudio();
-  loadGame(d);
+// ---- Main menu state. One save slot: Load Game shows only when there is a save. Opened from the pause menu over a
+//      running game it adds Resume and Save Game; loading, starting over or exploring from there reloads the page
+//      first, so the world is rebuilt clean, and the boot flag picks up where the click left off.
+const BOOT_KEY = 'argonisos.boot';
+function titleUp() { const t = $('title').classList; return !t.contains('hidden') && !t.contains('fading'); }
+function ago(t) { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; }
+function refreshMenu() {
+  const d = readSave(), ingame = S.running && !S.explore;
+  for (const id of ['startBtn', 'continueBtn', 'exploreBtn']) { const b = $(id); delete b.dataset.armed; clearTimeout(b._arm); }
+  $('resumeBtn').hidden = !S.running; $('saveBtn2').hidden = !ingame || S.sailing; $('continueBtn').hidden = !d;
+  $('startBtn').textContent = 'New Game'; $('exploreBtn').textContent = 'Explore Mode'; $('saveBtn2').textContent = 'Save Game';
+  if (d) $('continueBtn').innerHTML = `Load Game <small>Day ${d.S.day} · ${Q[d.S.questIdx]?.title || 'Trial complete'} · saved ${ago(d.at || Date.now())}</small>`;
+  const prim = S.running ? 'resumeBtn' : d ? 'continueBtn' : 'startBtn';
+  for (const id of ['resumeBtn', 'startBtn', 'continueBtn']) $(id).classList.toggle('prim', id === prim);
+}
+// confirm() is blocked inside the sandboxed artifact frame, so anything that throws progress away asks for a second click
+function armed(btn, label, note) {
+  if (btn.dataset.armed) return true;
+  btn.dataset.armed = '1'; btn.innerHTML = `${label} <small>${note}</small>`;
+  clearTimeout(btn._arm); btn._arm = setTimeout(refreshMenu, 8000); return false;
+}
+function reboot(mode) { try { sessionStorage.setItem(BOOT_KEY, mode); } catch {} location.reload(); }
+function closeTitle(fade) {
+  if (!fade) { $('title').classList.add('hidden'); return; }
   $('title').classList.add('fading'); setTimeout(() => { $('title').classList.add('hidden'); $('title').classList.remove('fading'); }, 1600);
-  S.running = true; S.started = performance.now(); setPause(false); $('hud').classList.remove('hidden'); updateContinueBtn(); $('startBtn').textContent = 'Continue';
+}
+function openTitle() {
+  $('pause').classList.add('hidden'); $('hud').classList.add('hidden'); $('title').classList.add('ingame'); $('title').classList.remove('hidden'); $('menuPage').classList.add('hidden');
+  document.querySelectorAll('.tabs button.on').forEach((b) => b.classList.remove('on')); refreshMenu();
+}
+$('continueBtn').onclick = () => {
+  const d = readSave(); if (!d) return;
+  if (S.running) { if (armed($('continueBtn'), 'Load your save?', `Click again. Your save is from ${ago(d.at || Date.now())}; anything since is lost.`)) reboot('load'); return; }
+  initAudio(); loadGame(d); closeTitle(true);
+  S.running = true; S.started = performance.now(); setPause(false); $('hud').classList.remove('hidden'); refreshMenu();
   canvas.requestPointerLock(); toast(`Welcome back. Day ${S.day}.`, true);
 };
 $('saveBtn').onclick = () => { saveGame(true); };
+$('saveBtn2').onclick = () => { saveGame(true); refreshMenu(); $('saveBtn2').innerHTML = 'Saved <small>Load Game picks up from here</small>'; };
+$('resumeBtn').onclick = () => { closeTitle(); $('hud').classList.remove('hidden'); setPause(false); canvas.requestPointerLock(); };
+$('quitBtn').onclick = () => { saveGame(false); location.reload(); };
+addEventListener('keydown', (e) => { if (e.code === 'Escape' && S.running && titleUp()) { closeTitle(); $('hud').classList.remove('hidden'); setPause(true); } });
 // ---- Fullscreen. While fullscreen the Escape key is captured (Keyboard Lock), so a tap still opens the pause menu
 //      and you HOLD Esc to leave fullscreen (Chrome/Edge do the hold natively; this handles the rest).
 //      Browsers without Keyboard Lock (Safari, Firefox, or the game inside an embedded frame) always drop fullscreen
@@ -4301,7 +4882,6 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => { if (e.code === 'Escape') { escDownAt = 0; clearTimeout(escTimer); } });
 syncFsBtn();
-updateContinueBtn();
 // ---- Light pool: three.js shades every pixel for every light in the scene, so ~16 torches and braziers were costing
 //      everywhere. Instead each source becomes an 'emitter' and 4 real point lights hop to the nearest ones.
 //      The light count never changes, so no shader recompiles either.
@@ -4339,8 +4919,8 @@ function ambientSound(dt) {
   const day = clamp(Math.min(h - 5.5, 19.5 - h) / 1.2, 0, 1), r = Math.hypot(p.x, p.z * 1.05) / ISLAND_R;
   let fire = 0; for (const f of [...FIRES.map((x) => x.pos), ...braziers.map((b) => b.getWorldPosition(_v3))]) fire = Math.max(fire, 1 - p.distanceTo(f) / 14);
   updateAmbience({ day, alt: clamp((p.y - 25) / 70, 0, 1), shore: clamp((r - 0.7) / 0.22, 0, 1) * (S.running ? 1 : 0.5), water: clamp(1 - Math.hypot(p.x - LAKE.x, p.z - LAKE.z) / 55, 0, 1),
-    fire, cave: S.running && inCaveInterior(p.x, p.z) && p.y < CAVE_Y + 5, forest: regionAt(p.x, p.z, g).key === 'forest' ? 1 : 0.35, title: !S.running, cine: !!S.cine,
-    wolves: creatures.some((c) => c.type === 'wolf' && !c.dead && Math.abs(c.obj.position.x - p.x) + Math.abs(c.obj.position.z - p.z) < 120) }, dt);
+    fire, cave: false, forest: regionAt(p.x, p.z, g).key === 'forest' ? 1 : 0.35, title: !S.running, cine: !!S.cine,
+    wolves: creatures.some((c) => c.type === 'wolf' && !c.dead && Math.abs(c.obj.position.x - p.x) + Math.abs(c.obj.position.z - p.z) < 120), storm: WEATHER.k }, dt);
 }
 const _v3 = new THREE.Vector3();
 addEventListener('pointerdown', initAudio); addEventListener('keydown', initAudio);
@@ -4356,6 +4936,11 @@ document.querySelectorAll('.tabs button[data-tab]').forEach((b) => b.onclick = (
   document.querySelectorAll('.tabpage').forEach((p) => p.classList.toggle('hidden', same || p.id !== b.dataset.tab));
   $('menuPage').classList.toggle('hidden', same);
 });
+// Dev Mode and Extras fold open in place; one group at a time
+document.querySelectorAll('.tabs .grp').forEach((g) => g.onclick = () => {
+  const open = g.getAttribute('aria-expanded') !== 'true';
+  document.querySelectorAll('.tabs .grp').forEach((x) => { const o = x === g && open; x.setAttribute('aria-expanded', o); $(x.dataset.grp).hidden = !o; });
+});
 document.querySelectorAll('.gallery img').forEach((img) => img.onclick = () => { $('lightbox').querySelector('img').src = img.src; $('lightbox').classList.remove('hidden'); });
 $('lightbox').onclick = () => $('lightbox').classList.add('hidden');
 function travelTo(x, z, look) {
@@ -4369,7 +4954,7 @@ function syncExplore() {
   $('exFly').textContent = P.fly ? 'Flying (V)' : 'Walking (V)'; $('exLock').textContent = S.timeLock ? 'Time: frozen' : 'Time: running';
 }
 {
-  const spots = [['Nestor\'s Cove', () => [START.x, START.z]], ...REGIONS.map((R) => [R.name, () => (R.key === 'cave' ? [CAVE_APPROACH.x, CAVE_APPROACH.z] : R.key === 'temple' ? [TEMPLE.x, TEMPLE.z + 28] : R.key === 'mountain' ? [MOUNT.x, MOUNT.z + 40] : R.key === 'tower' ? [TOWER.x + 8, TOWER.z + 10] : [R.c.x, R.c.z + 10])])];
+  const spots = [['Nestor\'s Cove', () => [START.x, START.z]], ...REGIONS.map((R) => [R.name, () => (R.key === 'wreck' ? [WRECK_SITE.x + 16, WRECK_SITE.z - 4] : R.key === 'temple' ? [TEMPLE.x, TEMPLE.z + 28] : R.key === 'mountain' ? [MOUNT.x, MOUNT.z + 40] : R.key === 'tower' ? [TOWER.x + 8, TOWER.z + 10] : [R.c.x, R.c.z + 10])])];
   $('exList').innerHTML = spots.map(([n], i) => `<button class="btn" data-go="${i}">${n}</button>`).join('');
   $('exList').onclick = (e) => { const b = e.target.closest('[data-go]'); if (!b) return; const [x, z] = spots[+b.dataset.go][1](); travelTo(x, z, 0); openMenu('explorePanel'); };
   $('exTime').oninput = () => { S.time = $('exTime').value / 96; S.timeLock = true; syncExplore(); };
@@ -4379,10 +4964,12 @@ function syncExplore() {
   $('exMap').onclick = () => { revealMap(0, 0, 700); toast('Whole map revealed'); };
 }
 $('exploreBtn').onclick = () => {
+  if (S.running) { if (S.explore) { $('resumeBtn').onclick(); return; }
+    if (armed($('exploreBtn'), 'Leave for Explore Mode?', 'Click again. Unsaved progress is lost.')) reboot('explore'); return; }
   initAudio();
   S.explore = true; Object.assign(S.tools, { axe: true, bow: true }); S.inv.arrows = Math.max(S.inv.arrows, 30);
   $('quest').classList.add('hidden'); $('hints').innerHTML = '<span>Fly / walk</span><span class="kbd">V</span><span>Travel &amp; time</span><span class="kbd">O</span><span>Time of day</span><span class="kbd">[ ]</span><span>Hide HUD</span><span class="kbd">H</span><span>Map</span><span class="kbd">M</span><span>Fast</span><span class="kbd">SHIFT</span>';
-  $('title').classList.add('hidden'); $('hud').classList.remove('hidden');
+  closeTitle(); $('hud').classList.remove('hidden');
   S.running = true; S.started = performance.now(); setPause(false); canvas.requestPointerLock();
   S.time = 0.4; S.timeLock = true; P.fly = true; travelTo(START.x, START.z, P.yaw + Math.PI);
   syncExplore(); toast('Explore mode: no enemies, no hunger. Press O for travel and time of day', true);
@@ -4431,21 +5018,20 @@ function endIntro() {
   setTimeout(() => { $('hud').classList.remove('hidden'); questCard(Q[0]); }, 900);
 }
 $('cineSkip').onclick = () => endIntro();
+function newGame() {
+  initAudio(); closeTitle(true);
+  S.running = true; S.started = performance.now(); setPause(false); playIntro();
+}
 $('startBtn').onclick = () => {
-  const first = !S.running;
-  // confirm() is blocked inside the sandboxed artifact frame, so confirm with a second click instead
   const btn = $('startBtn');
-  if (first && readSave() && !btn.dataset.armed) {
-    btn.dataset.armed = '1'; btn.innerHTML = 'Start over? <small style="display:block;font-size:12px;opacity:.75">Click again. Your save is replaced at the next save.</small>';
-    setTimeout(() => { delete btn.dataset.armed; if (!S.running) btn.textContent = 'New Game'; }, 8000); return;
-  }
-  delete btn.dataset.armed;
-  if (first) {
-    initAudio(); $('title').classList.add('fading'); setTimeout(() => { $('title').classList.add('hidden'); $('title').classList.remove('fading'); }, 1600);
-    S.running = true; S.started = performance.now(); setPause(false); playIntro(); return;
-  }
-  $('title').classList.add('hidden'); $('hud').classList.remove('hidden');
-  S.running = true; setPause(false); canvas.requestPointerLock();
+  if (S.running) { if (armed(btn, 'Start over?', 'Click again. Unsaved progress is lost.')) reboot('new'); return; }
+  if (readSave() && !armed(btn, 'Start over?', 'Click again. Your save is replaced at the next save.')) return;
+  newGame();
 };
+refreshMenu();
+{ let boot = null; try { boot = sessionStorage.getItem(BOOT_KEY); sessionStorage.removeItem(BOOT_KEY); } catch {}
+  if (boot === 'new') newGame();
+  else if (boot === 'load' && readSave()) $('continueBtn').onclick();
+  else if (boot === 'explore') $('exploreBtn').onclick(); }
 renderer.info.autoReset = false;
-window.ARG = { gp: () => ({ PROPS, PROP_CHUNKS, LO_GROUPS, renderer, composer, sun, GFX, scene, leafMat, propMat, camera }), prof: () => { const T = {}, time = (k, f, n = 20) => { const t0 = performance.now(); for (let i = 0; i < n; i++) f(); T[k] = +((performance.now() - t0) / n).toFixed(3); }; time("updateWorld", () => updateWorld(0.016, performance.now() / 1000)); time("creatures", () => { for (const c of creatures) updateCreature(c, 0.016); }); time("lightPool", updateLightPool); time("propLOD", updatePropLOD); time("minimap", () => drawMinimap(null)); time("hud", renderHUD); time("quest", renderQuest); time("interact", getInteractable); time("player", () => updatePlayer(0.016)); return T; }, sleep: (h) => sleep(h), backAxe, BENCH_: null, OLIVE, HEARTH, moonDir, sky: skyDome, fire: () => placeCampfire(), setTime: (v) => { S.time = v; }, talkT: (v) => { talkCam.t = v; }, THREE, pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), hit: () => doHit(), Q, skeletons, creatures, PROPS, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), CAVE_MOUTH, CAVE_DIR, world: (t) => { updateWorld(0.016, t); updatePropLOD(); updateLightPool(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, CAVE, HUT, BENCH, START, WRECK, DOCK, SEA_OUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, HA, animateHero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); if (GFX.post) composer.render(); else renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
+window.ARG = { gp: () => ({ PROPS, PROP_CHUNKS, LO_GROUPS, renderer, composer, sun, GFX, scene, leafMat, propMat, camera }), prof: () => { const T = {}, time = (k, f, n = 20) => { const t0 = performance.now(); for (let i = 0; i < n; i++) f(); T[k] = +((performance.now() - t0) / n).toFixed(3); }; time("updateWorld", () => updateWorld(0.016, performance.now() / 1000)); time("creatures", () => { for (const c of creatures) updateCreature(c, 0.016); }); time("lightPool", updateLightPool); time("propLOD", updatePropLOD); time("minimap", () => drawMinimap(null)); time("hud", renderHUD); time("quest", renderQuest); time("interact", getInteractable); time("player", () => updatePlayer(0.016)); return T; }, sleep: (h) => sleep(h), backAxe, BENCH_: null, OLIVE, HEARTH, moonDir, sky: skyDome, fire: () => placeCampfire(), setTime: (v) => { S.time = v; }, talkT: (v) => { talkCam.t = v; }, THREE, pickups, dbgLoop: () => ({ cullFrame, shadowTick }), cine: (tt) => { if (S.cine) { S.cine.t = tt; updateCine(0); } }, endIntro: () => endIntro(), nestor, talk: () => talkNestor(), offer: () => makeOffering(), hit: () => doHit(), Q, skeletons, creatures, PROPS, arrows, shoot: () => shootArrow(), census: () => { const out = {}; const cam = camera; const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); scene.traverseVisible((o) => { if (!(o.isMesh || o.isPoints || o.isSprite)) return; if (o.frustumCulled && o.geometry && !o.isInstancedMesh) { o.geometry.boundingSphere || o.geometry.computeBoundingSphere(); const sp = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld); if (!fr.intersectsSphere(sp)) return; } let top = o; while (top.parent && top.parent !== scene) top = top.parent; const k = (o.isInstancedMesh ? "inst:" : "") + (top.name || top.type) + (top.userData.tag ? ":" + top.userData.tag : ""); const t = (o.geometry?.index ? o.geometry.index.count : o.geometry?.attributes.position.count || 0) / 3 * (o.isInstancedMesh ? o.count : 1); out[k] = out[k] || [0, 0]; out[k][0]++; out[k][1] += Math.round(t); }); return Object.entries(out).sort((a, b) => b[1][0] - a[1][0]).slice(0, 18); }, setQ: (l) => setQuality(l), WRECK_SITE, world: (t) => { updateWorld(0.016, t); updatePropLOD(); updateLightPool(); const cx = camera.position.x, cz = camera.position.z; for (const c of creatures) c.obj.visible = Math.abs(c.obj.position.x - cx) + Math.abs(c.obj.position.z - cz) < 190; for (const pk of pickups) if (pk.alive) pk.obj.visible = Math.abs(pk.pos.x - cx) + Math.abs(pk.pos.z - cz) < 90; }, info: () => { const i = renderer.info.render; return { calls: i.calls, tris: i.triangles }; }, SUMMIT, HUT, BENCH, START, WRECK, DOCK, SEA_OUT, ASCENT, MOUNT, ARENA_R, LAKE, SWAMP, TEMPLE, floorH: (x, z) => Math.max(heightAt(x, z), floorAt(new THREE.Vector3(x, 999, z))) + 0.1, S, player, hero, HA, animateHero, poseHero, P, tools, camera, RUN, SPRINT, JUMP, ATTACK, PUNCH, EQUIP, DISARM, applyRun, applyClipAt, look: (y, pch) => { camYaw = y; if (pch !== undefined) camPitch = pch; }, snap: (cam = true) => { if (cam) updateCamera(1); renderer.shadowMap.needsUpdate = true; renderer.info.reset(); if (GFX.post) composer.render(); else renderer.render(scene, camera); return renderer.domElement.toDataURL("image/jpeg", 0.85); } };  // console access for playtesting
