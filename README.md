@@ -5,23 +5,38 @@ A playable concept slice for testing ideas before building them in Unity.
 ## Run
 ES modules need a local server (opening the file directly won't work):
 ```bash
-cd prototype/argonisos
-python3 -m http.server 8000   # then open http://localhost:8000
+npm run dev   # then open http://localhost:8000
 ```
+The dev server (`dev-server.mjs`, no dependencies) reloads open pages whenever a project file changes.
+Any static server works too, e.g. `python3 -m http.server 8000`, just without the auto-reload.
 three.js r160 is vendored (`three.module.js`), so it runs offline.
 
 ## Loop
-Story cards → meet Nestor (tutorial cards) → craft a stone axe → gather berries + sacred olive branch → offering at the Temple of Athena → report to Nestor → craft spear → campfire → hunt rabbits & boar, cook meat → survive a night (wolves) → clear 3 skeletons at the hilltop ruins, loot the sailcloth → build the raft at the south dock → sail to Pedias.
+Story cards → meet Nestor (tutorial cards) → craft a stone axe → show it to Nestor, who sends you to honour Athena → gather berries + cut a sacred olive branch with the axe → offering at the Temple of Athena → report to Nestor → craft a bow and arrows → hunt a deer and one other beast (stag, bull or fox) → campfire, cook and eat → survive the night (wolves) → back to Nestor at dawn → cross the marsh causeway to the Drowned Ship, put its 4 skeleton crew to rest and open its strongbox (sail, rope, arrows, bronze) → mend the boat in the cove → try to sail: no wind → tell Nestor → take the switchback Mountain Road to the Ascent and defeat the Windbinder on the Throne of Olympos → the winds return as a storm (rain, gusts, thunder) → back to Nestor → sail to Pedias.
 
 ## Controls
-WASD move · Shift sprint · Mouse look (click to lock) · LMB swing · E interact · F eat · 1–3 tools · C craft · R rest at fire · Space jump · Esc pause
+WASD move · Shift sprint · Mouse look (click to lock) · LMB swing / loose arrow · RMB (hold) draw and aim the bow over the shoulder (no crosshair: arrows fly to the centre of the screen; a fuller draw hits harder and flies farther) · E interact · F eat · 1–8 quick slots (arrange them in the inventory, Tab, by dragging items) · P abilities (actions & skills) · L journal · C craft · M map · R rest at fire · Space jump · Esc pause
 
 Playtest keys: **T** time ×10 · **G** +10 materials · **N** skip current quest. State is on `window.ARG` in the console.
+
+## Menu & saves
+Main menu: New Game · Load Game (only when a save exists) · Dev Mode (Explore Mode, Game Direction, Concept Art) · Controls · Fullscreen · Extras (The Story, Credits). Opened from the pause menu over a running game it adds Resume and Save Game.
+One save slot in browser storage: manual saves, autosaves on quest complete and after sleeping, and Save & Quit from the pause menu. Loading, starting over or switching to Explore Mode mid-game asks for a second click, then reloads the page and picks up from there.
+
+## Survival & hunting
+Health pool 200; hunger drains at 0.14/s. Out of stamina you are winded and can't sprint until it recovers to 30 (or at all with no energy left).
+Wild game watches you from ~24 m and bolts at ~14 m (sooner if you sprint), steering round water, cliffs and trees; stags and bulls charge once hit.
+Kills stay where they fall: walk up and press E to skin them for meat, hide, bone and horn.
+
+## UI
+Attic black-figure look: icons are hand-drawn SVG in `icons.js` (`icon(name)` for the DOM, `iconImg(name)` for canvas), panels are papyrus with a black-glaze header and a clay meander. `play.html` is `index.html` without the document wrapper (artifact hosting): regenerate it after editing the page.
 
 ## Tuning knobs (game.js)
 - `DAY_LEN`: seconds per day (300)
 - `TYPES`: creature hp/speed/damage/drops
 - `TOOL_STATS`: tool damage, gather power, reach
+- `ARROW_V`, `ARROW_FLAT`, `ARROW_DMG`: arrow speed, flat-flight time and damage, from a snap shot to a full draw
+- `TYPES.beast`: the Windbinder (placeholder boss); `makeWindbinder()` builds its body, `updateBoss()` runs its attacks
 - `RECIPES` and the raft cost in `buildRaft()`
 - Hunger drain in `updateWorld()` (`0.28`/s)
 
@@ -33,7 +48,7 @@ Reflective sea (planar mirror), physical sky with image-based reflections, soft 
 ## World (v2)
 ~580 m island (≈9× the original area), nine regions linked by trails:
 Nestor's Cove (start) · Hill of the Fallen (skeletons) · Hylaea Woods (dense forest) · Stymphalian Marsh (swamp) · Mount Olympos (90 m, snow, cold) ·
-Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kastalia (waterfall) · Temple of Athena · Olive Terraces (vineyard, farmhouse) · Watchtower of Aeolus (climb to reveal the map).
+The Drowned Ship (a wreck on a mud bank in the marsh, guarded by its dead crew) · Lake Kastalia (waterfall) · Temple of Athena · Olive Terraces (vineyard, farmhouse) · Watchtower of Aeolus (climb to reveal the map).
 
 - Region title banners, map fog-of-war that clears as you explore, **M** for the full map, **Tab** inventory, **C** crafting
 - Trees: 7 species × 3 variants, merged + instanced per 100 m chunk (thousands of trees, few draw calls), wind sway in the shader
@@ -44,9 +59,8 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
 - **Audio** (`audio.js`): fully procedural WebAudio. Footsteps per surface (grass, dirt, stone, sand, water, cave), swings, wood/stone/flesh hits, bow, pickups, crafting, UI; ambience (wind by altitude, surf by the shore, waterfall, birds by day, crickets and wolf howls at night, cave drips with reverb, fire crackle); a generative lyre + drone score in D Dorian that changes with mood (title, explore, night, cave, cinematic). Volume sliders in the pause menu.
 - **Intro cinematic**: the menu fades, letterbox bars come in, the camera flies over the mountain, the temple and the olive terraces while the story is narrated, then lands at the cove where Zeus delivers you in a column of light. Skip with the button, Space, Enter or Esc.
 - **Quest markers** (WoW convention): gold `!` = someone has a task for you, gold `?` = hand in / deliver here. Shown in the world and on the minimap and map.
-- **The Ascent**: a paved switchback road cut into Mount Olympos from the cave trail to the summit arena: retaining wall, rope posts, steps on the steep parts, torches, a marble gate at its foot.
+- **The Ascent**: a paved road spiralling up Mount Olympos from the end of the switchback Mountain Road to the summit arena: dry-stone parapet, rock cut on the uphill side, braziers, a marble gate at its foot.
 - **Paths**: every trail is now a smoothed, textured ribbon (dirt with cart ruts; paved Sacred Way to the temple).
-- **Cave mouth**: natural rock arch, dark depth veils that fade as you enter, entrance torches.
 - **Temple of Athena**: Doric peristyle with entasis columns and echinus capitals, painted triglyph/metope frieze, sculpted pediments, tiled roof with antefixes, pronaos with bronze doors, coffered ceiling, polished floor, two-tier inner colonnade, reflecting pool, offering table, owls on plinths, and a chryselephantine Athena Parthenos with Nike, shield, serpent and spear.
 - **Performance**: pickups merged per material, cave interior merged and distance-culled, creatures culled tighter (and hidden on the title), Low refreshes shadows every other frame.
 
@@ -134,7 +148,7 @@ Cave of Echoes (crystals + empty altar, reserved for future content) · Lake Kas
     - Athena's white mare grazes on the temple plateau.
   - Companion: a stray husky in the forest. It joins you when you walk up to it, follows you, and attacks wolves and boars that come close.
   - Trees: birches added sparingly on the mountain and by the lake (4 variants).
-  - Wolf sculpt: the realistic wolf (static) is a bronze-tinted monument on a rock at the ravine before the Cave of Echoes. It loads after start-up.
+  - Wolf sculpt: the realistic wolf (static) is the Drowned Ship's bronze figurehead, set on a rock at the edge of its mud bank. It loads after start-up.
 
 ## v16: modelled animals only, bushes, farmhouse
 - **Animals:** the old block rabbits, boars and placeholder wolves are gone, and every animal is now an animated model.

@@ -112,14 +112,17 @@ function buildAmbience() {
   amb.stream = loopNoise('bandpass', 1400, 0.4);
   amb.fire = loopNoise('lowpass', 260, 0.7);
   amb.cave = loopNoise('lowpass', 140, 0.7);
+  amb.rain = loopNoise('highpass', 1600, 0.3);                       // the storm after the summit: hiss of rain
 }
-let ambT = 0, birdT = 2, cricketT = 0, dripT = 0, crackT = 0, howlT = 25;
-// env: { day 0..1, alt 0..1, shore 0..1, water 0..1, fire 0..1, cave bool, forest 0..1, wolves bool, title bool }
+let ambT = 0, birdT = 2, cricketT = 0, dripT = 0, crackT = 0, howlT = 25, thunderT = 8;
+// env: { day 0..1, alt 0..1, shore 0..1, water 0..1, fire 0..1, cave bool, forest 0..1, wolves bool, title bool, storm 0..1 }
 export function updateAmbience(env, dt) {
   if (!ctx) return;
   ambT -= dt;
   if (ambT <= 0) { ambT = 0.2; const T = now() + 0.05, k = 0.6;
-    amb.wind.g.gain.setTargetAtTime(env.cave ? 0.005 : 0.025 + env.alt * 0.12, T, k);
+    const st = env.storm || 0;
+    amb.wind.g.gain.setTargetAtTime(env.cave ? 0.005 + st * 0.02 : 0.025 + env.alt * 0.12 + st * 0.2, T, k);
+    amb.rain.g.gain.setTargetAtTime(st * (env.cave ? 0.025 : 0.13), T, k);
     amb.surf.g.gain.setTargetAtTime(env.cave ? 0 : env.shore * 0.22, T, k);
     amb.stream.g.gain.setTargetAtTime(env.water * 0.12, T, k);
     amb.fire.g.gain.setTargetAtTime(env.fire * 0.1, T, k);
@@ -127,10 +130,11 @@ export function updateAmbience(env, dt) {
     verbSend.gain.setTargetAtTime(env.cave ? 0.9 : 0.18, T, 0.4);
     setMood(env.title ? 'title' : env.cine ? 'cine' : env.cave ? 'cave' : env.day < 0.3 ? 'night' : 'explore');
   }
-  // birds by day, away from the peak and the cave
+  if ((env.storm || 0) > 0.5) { thunderT -= dt; if (thunderT <= 0) { thunderT = rnd(14, 34); snd.thunder(); } }
+  // birds by day, away from the peak and the cave (they shelter in a storm)
   birdT -= dt;
   if (birdT <= 0) { birdT = rnd(1.5, 5) / (0.4 + env.forest);
-    if (env.day > 0.5 && !env.cave && env.alt < 0.6) bird(); }
+    if (env.day > 0.5 && !env.cave && env.alt < 0.6 && !(env.storm > 0.3)) bird(); }
   cricketT -= dt;
   if (cricketT <= 0) { cricketT = rnd(0.3, 0.9); if (env.day < 0.3 && !env.cave && env.alt < 0.5) for (let i = 0; i < 3; i++) tone({ f: rnd(4200, 4700), dur: 0.035, vol: 0.012, dest: ambBus, pan: rnd(-0.8, 0.8), t: i * 0.06 }); }
   dripT -= dt;
