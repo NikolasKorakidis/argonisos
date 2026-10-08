@@ -7,9 +7,18 @@ import { Crafting } from './crafting.js';
 import { Build } from '../build/build.js';
 import { Creatures } from '../creatures/creatures.js';
 import { Combat } from './combat.js';
+import { Structures } from '../world/structures.js';
+import { Trial } from './trial.js';
+import { SITES } from '../world/sites.js';
+import { WorldMap } from '../ui/map.js';
+import { Owl } from './owl.js';
+import { save, load, Graves } from './save.js';
+import { sound, updateAmbience } from '../audio/sound.js';
+import { LIGHT } from '../world/sky.js';
 import { WEATHER, flashSky } from '../world/weather.js';
 import { heldModel, isLeftHanded } from '../player/held.js';
 import { updateFx } from '../render/fx.js';
+import { askLight, updateLights } from '../render/lights.js';
 import { camera } from '../render/core.js';
 import { input, hit } from '../input.js';
 
@@ -19,16 +28,23 @@ export function installGame(g) {
   g.harvest = new Harvest(g);
   g.build = new Build(g);
   g.crafting = new Crafting(g);
+  g.SITES = SITES;
+  g.structures = new Structures(g);
   g.creatures = new Creatures(g);
+  g.trial = new Trial(g);
+  g.map = new WorldMap(g);
+  g.owl = new Owl(g);
+  g.ITEMS = ITEMS; g.graves = new Graves(g); g.onDeath = () => g.graves.fall();
   g.combat = new Combat(g);
-  player.floorAt = (p) => g.build.floorAt(p.x, p.z, p.y);
+  player.floorAt = (p) => Math.max(g.build.floorAt(p.x, p.z, p.y), g.structures.floorAt(p.x, p.z, p.y));
   player.camBlock = (a, b) => g.build.rayBlock(a, b);
-  g.underRoof = (p) => g.build.underRoof(p);
-  g.nearFire = (p) => !!g.build.nearFire(p);
+  g.underRoof = (p) => g.build.underRoof(p) || g.structures.underRoof(p);
+  g.nearFire = (p) => !!g.build.nearFire(p) || g.structures.nearSacredFire(p);
   g.weatherRain = () => WEATHER.k.rain;
   g.flashSky = flashSky;
   g.nearMsg = (pos, m) => { if (pos.distanceTo(player.pos) < 25) hud.toast(m); };
-  g.sound ||= () => {};
+  g.sound = sound;
+  player.onStep = (k) => { if (k === 'step') sound('step', player.swimming ? 'water' : g.build.floorAt(player.pos.x, player.pos.z, player.pos.y) > player.pos.y - 0.1 ? 'wood' : 'ground'); else sound(k); };
 
   // ---- giving items: into the pack, the rest at your feet
   g.give = (id, n = 1, extra) => {
@@ -85,6 +101,8 @@ export function installGame(g) {
     const f = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)), front = player.pos.clone().addScaledVector(f, 0.9);
     const p = g.pickups.nearest(front, 1.9);
     if (p) { const id = p.kind === 'drop' ? p.item : KINDS[p.kind].item, n = p.kind === 'drop' ? p.n : 1; return { kind: 'pickup', p, label: `Pick up ${ITEMS[id].name}${n > 1 ? ` ×${n}` : ''}` }; }
+    const ow = g.owl.interactable(player.pos) || g.graves.interactable(player.pos); if (ow) return ow;
+    const tr = g.trial.interactable(player.pos); if (tr) return tr;
     const s = g.build?.interactable?.(player.pos, f); if (s) return s;
     const t = g.harvest.fruitTree(); if (t) return { kind: 'fruit', t, label: t.ready ? `Pick ${t.fruit[0]}s` : 'Picked clean' };
     return null;
@@ -98,8 +116,14 @@ export function installGame(g) {
 
   // ---- per frame
   g.update = (dt) => {
+    g.owl.update(dt);
+    if (g.owl.open) { hud.prompt(null); return; }
+    if (hit('KeyM') || (hit('Escape') && g.map.open)) g.map.toggle();
+    g.map.update(dt);
+    { const f = g.build.nearFire(player.pos, 9), fd = f ? Math.max(0, 1 - f.pos.distanceTo(player.pos) / 9) : g.structures.nearSacredFire(player.pos) ? 0.5 : 0;
+      updateAmbience(dt, { wind: WEATHER.k.overcast * 0.8 + 0.1, rain: WEATHER.k.rain, night: LIGHT.night, fire: fd, inside: player.stats.has('underRoof') ? 1 : 0 }); }
     if (hit('KeyC') && !(hud.open && g.crafting.tab === 'craft')) { if (!hud.open) hud.toggle(true); g.crafting.open('craft'); }
-    if (input.uiOpen || player.dead) { hud.prompt(null); g.build.update(dt); g.creatures.update(dt); g.combat.update(dt); return; }
+    if (input.uiOpen || player.dead) { hud.prompt(null); g.build.update(dt); g.creatures.update(dt); g.combat.update(dt); g.structures.update(dt); return; }
     const t = target();
     if (!g.build.active && !(g.equippedTool('build') && g.build.aimPiece)) hud.prompt(t ? 'E' : null, t?.label, t?.sub);
     if (hit('KeyE')) g.interact();
@@ -117,11 +141,17 @@ export function installGame(g) {
     g.build.update(dt);
     g.creatures.update(dt);
     g.combat.update(dt);
+    g.structures.update(dt);
+    g.graves.update(dt);
+    g.trial.update(dt);
     // loot from kills is picked up as you walk over it
     for (const d of [...g.pickups.drops]) if (d.extra?.auto && Math.hypot(d.x - player.pos.x, d.z - player.pos.z) < 1.8 && Math.abs(d.y - player.pos.y) < 2) { g.pickups.take(d); g.give(d.item, d.n); g.sound('pick'); }
-    if (g.torchLight) g.torchLight.intensity = 5 + Math.sin(performance.now() * 0.02) * 0.6 + Math.random() * 0.4;
+    if (g.torchLight?.parent) askLight(g.torchLight.getWorldPosition(new THREE.Vector3()), 7 + Math.sin(performance.now() * 0.02) * 0.6 + Math.random() * 0.4, 14);
   };
-  g.lateUpdate = (dt) => { updateFx(dt, camera); };
+  g.lateUpdate = (dt) => { updateFx(dt, camera); updateLights(); };
   hud.onToggle = (on) => { if (on) g.crafting.open(); };
+  g.loaded = load(g);
+  g.save = () => !player.dead && save(g);
+  setInterval(() => g.save(), 60000); addEventListener('beforeunload', () => g.save());
   refreshLook();
 }

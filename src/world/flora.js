@@ -5,6 +5,7 @@
 // Yleos:  dense dark forest (pines, firs, holm oaks, broadleaves, dead snags) with clearings.
 // Valtos: dead and drowned trees, cypresses, sparse.
 import { heightAt, biomeWeights, fbm, hash2, smooth } from './gen.js';
+import { siteClear } from './sites.js';
 
 export const CELL = 64;
 // species: name for the builder, scale range, collision radius (and height) per unit of scale; 'res' marks things you can harvest (trees give logs, rocks stone)
@@ -51,6 +52,7 @@ export function layoutCell(cx, cz) {
   const rnd = () => hash2(cx * 7919 + (k++), cz * 104729 - k * 31);
   for (let j = 0; j < CELL / STEP; j++) for (let i = 0; i < CELL / STEP; i++) {
     const x = x0 + (i + rnd()) * STEP, z = z0 + (j + rnd()) * STEP, h = heightAt(x, z), r1 = rnd(), r2 = rnd(), r3 = rnd(), r4 = rnd();
+    if (siteClear(x, z)) continue;
     biomeWeights(x, z, w);
     // reeds fringe the marsh pools and the low shores
     if (h > -0.5 && h < 1.4 && r1 < w.v * 0.09 * STEP * STEP / 4) { out.push(SP.reeds, Math.floor(r4 * 3), x, h, z, r3 * 6.283, 0.8 + r2 * 0.5); continue; }

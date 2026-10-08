@@ -25,6 +25,7 @@ export const ITEMS = {
   boarHide: M('Hog Hide', { weight: 1, icon: 'hide' }),
   giantHide: M('Giant Hide', { weight: 2, icon: 'hide' }),
   minotaurHide: M('Minotaur Hide', { weight: 3, icon: 'hide' }),
+  chimeraHide: M('Chimera Hide', { weight: 4, icon: 'hide', stack: 5 }),
   dryadHeart: M('Dryad Heart', { weight: 0.5, icon: 'heart' }),
   moonflower: M('Moonflower', { weight: 0.1, icon: 'flower' }),
   oliveSeed: M('Olive Seed', { weight: 0.1, icon: 'seed' }),

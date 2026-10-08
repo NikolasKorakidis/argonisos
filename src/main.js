@@ -19,6 +19,7 @@ import { Inventory } from './game/inventory.js';
 import { ITEMS } from './game/items.js';
 import { HUD } from './ui/hud.js';
 import { installGame } from './game/game.js';
+import { titleScreen } from './ui/title.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -103,6 +104,9 @@ function updateConditions() {
 // Game systems (crafting, building, creatures...) plug in here
 export const game = { player, inv, hud, veg, colliders, scene, S, pool, useSlot };
 installGame(game);
+// the title screen until the land around you and the hero are in (?play skips it, for tests)
+const readiness = () => Math.min(1, (terrain.drawn > 40 && terrain.pending === 0 ? 0.6 : terrain.drawn / 70) + (player.hero.model ? 0.25 : 0) + (veg.near.size > 6 ? 0.15 : 0));
+if (new URLSearchParams(location.search).has('play')) game.started = true; else titleScreen(game, readiness);
 const clockText = () => { const t = S.time, h = t < DAY_FRACTION ? 6 + (t / DAY_FRACTION) * 15 : (21 + ((t - DAY_FRACTION) / (1 - DAY_FRACTION)) * 9) % 24; return `Day ${S.day} · ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 6) * 10).padStart(2, '0')}`; };
 
 // ---- Loop
@@ -110,20 +114,22 @@ const clock = new THREE.Clock(); let fpsT = 0, frames = 0, fps = 60, atmo = { ov
 function loop() {
   requestAnimationFrame(loop);
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
-  S.time += dt * S.timeScale / DAY_SECONDS; if (S.time >= 1) { S.time -= 1; S.day++; hud.toast(`<b>Day ${S.day}</b> dawns`); }
+  if (!game.paused) S.time += dt * S.timeScale / DAY_SECONDS; if (S.time >= 1) { S.time -= 1; S.day++; hud.toast(`<b>Day ${S.day}</b> dawns`); }
   // keys
-  if (hit('Tab') || hit('KeyI') || (hit('Escape') && hud.open)) hud.toggle();
-  if (!input.uiOpen) for (let k = 1; k <= 8; k++) if (hit('Digit' + k)) useSlot(k - 1);
+  const busy = !game.started || game.paused;
+  if (game.started && hit('Escape') && !hud.open && !game.map?.open && !game.owl?.open && !game.build?.sel) game.pause(!game.paused);
+  if (!busy && (hit('Tab') || hit('KeyI') || (hit('Escape') && hud.open))) hud.toggle();
+  if (!busy && !input.uiOpen) for (let k = 1; k <= 8; k++) if (hit('Digit' + k)) useSlot(k - 1);
   if (hit('F3')) { S.debug = !S.debug; $('dbg').classList.toggle('hidden', !S.debug); }
   if (hit('F9')) { S.fly = !S.fly; fly.pos.copy(camera.position); fly.yaw = player.camYaw; fly.pitch = player.camPitch; }
   if (S.debug && hit('KeyT')) S.timeScale = S.timeScale === 1 ? 60 : 1;
-  game.update?.(dt, t);
-  player.frozen = S.fly || hud.open; player.update(dt);
+  if (!busy) game.update?.(dt, t);
+  player.frozen = S.fly || hud.open || busy; if (!game.paused) player.update(dt);
   if (S.fly) updateFly(dt);
-  updateConditions(); player.stats.update(dt); updateRegion();
+  if (!busy) { updateConditions(); player.stats.update(dt); updateRegion(); }
   const focus = S.fly ? camera.position : player.pos;
   updateSky(S.time, dt, t, atmo.overcast, atmo.dark);
-  atmo = updateWeather(dt, focus, LIGHT);
+  atmo = updateWeather(dt, focus, LIGHT, (k) => setTimeout(() => game.sound?.('thunder', Math.min(1.5, k * 0.6)), 300 + k * 900));
   fogSky(Math.min(1, Math.max(0, 1 - scene.fog.far / 1400, atmo.overcast)));
   updateWater(t, camera.position, LIGHT, skyDome, sunDir, moonDir);
   updateStormWall(t, LIGHT);

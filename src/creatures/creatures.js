@@ -112,7 +112,8 @@ export class Creatures {
         if (d < sense) { c.state = 'chase'; c.aware = true; if (T.heavy) g.sound?.('roar'); }
       }
       if (T.passive && c.state !== 'flee' && d < T.flee * (P.sneaking ? 0.5 : 1) && !P.dead) { c.state = 'flee'; c.t = rr(4, 7); c.aware = true; }
-      let want = 0, face = c.yaw;
+      let want = 0, face = c.yaw, special = null;
+      if (c.boss && !P.dead) special = g.trial?.bossThink(c, dt, d);
       if (c.state === 'flee') {
         const away = Math.atan2(c.pos.x - pp.x, c.pos.z - pp.z); face = away + Math.sin(c.t * 2) * 0.4; want = T.speed[1];
         if (c.t <= 0 && d > 25) { c.state = 'idle'; c.t = rr(2, 5); }
@@ -131,6 +132,7 @@ export class Creatures {
         if (!c.hitDone && c.atkT < (T.heavy ? 0.45 : 0.25)) { c.hitDone = true; if (d < T.reach + T.r + 0.6 && !P.dead) g.combat.hitPlayer(c, T.dmg); else if (T.heavy) { dust(c.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), 3), 18); addShake(0.3); } this.hitBuildings(c); }
         if (c.atkT <= 0) c.state = 'chase';
       }
+      if (c.charge > 0) { want = 11; face = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z); }
       // move: turn towards the wanted heading, accelerate, follow the ground, avoid deep water and the storm
       c.yaw += angDiff(face, c.yaw) * Math.min(1, dt * (T.heavy ? 2.5 : 6));
       c.speed += (want - c.speed) * Math.min(1, dt * 4);
@@ -143,7 +145,7 @@ export class Creatures {
       c.stuck = c.pos.distanceTo(c.lastP) < 0.05 * dt * 60 && want > 0.5 ? c.stuck + dt : 0; c.lastP.copy(c.pos);
       if (c.stuck > 1.2 && (c.state === 'chase') && c.atkCd <= 0) { c.state = 'attack'; c.atkT = 0.55; c.atkCd = 2; c.hitDone = false; c.stuck = 0; }
       c.body.obj.rotation.y = c.yaw;
-      c.body.animate(c.state === 'attack' ? 'attack' : c.hitT > 0 ? 'hit' : c.state, c.speed, dt);
+      c.body.animate(special && special !== 'run' ? special : c.state === 'attack' ? 'attack' : c.hitT > 0 ? 'hit' : c.state, c.speed, dt);
     }
     this.updatePlates();
   }

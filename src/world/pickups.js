@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { heightAt, biomeWeights, hash2, fbm } from './gen.js';
 import { clearGrass } from './grass.js';
+import { siteClear } from './sites.js';
 
 const CELL = 64, RANGE = 110, REGROW_DAYS = 3;
 const rnd = (a, b) => hash2(a * 13.37 + b * 0.71, b * 7.13 - a * 1.9);
@@ -41,7 +42,7 @@ export function layoutPickups(cx, cz) {
     const whole = Math.floor(n) + (rnd(cx * 31 + k, cz * 17 - k) < n % 1 ? 1 : 0);
     for (let i = 0; i < whole; i++, k++) {
       const x = x0 + rnd(cx + k * 3.1, cz - k) * CELL, z = z0 + rnd(cx - k * 1.7, cz + k * 2.3) * CELL, h = heightAt(x, z);
-      if (h < 0.8) continue;
+      if (h < 0.8 || siteClear(x, z)) continue;
       const s = Math.hypot(heightAt(x + 1, z) - h, heightAt(x, z + 1) - h); if (s > 0.8) continue;
       out.push({ id: `${cx},${cz},${k}`, kind, x, z, y: h, rot: rnd(k, cx + cz) * 6.28 });
     }

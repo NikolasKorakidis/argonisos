@@ -22,7 +22,7 @@ const CARVED = {
   spear: (mat = stone) => grp(M(new THREE.CylinderGeometry(0.02, 0.024, 1.7, 6).translate(0, 0.55, 0), wood), M(new THREE.ConeGeometry(0.045, 0.24, 4).scale(1, 1, 0.4).translate(0, 1.5, 0), mat), lash(1.37, 0.026)),
   torch: () => { const g = grp(M(new THREE.CylinderGeometry(0.025, 0.03, 0.55, 6).translate(0, 0.27, 0), wood), M(new THREE.CylinderGeometry(0.05, 0.035, 0.12, 7).translate(0, 0.57, 0), leather));
     const fl = M(new THREE.ConeGeometry(0.06, 0.22, 7).translate(0, 0.72, 0), new THREE.MeshBasicMaterial({ color: 0xffb040 })); fl.castShadow = false; fl.userData.flame = true; g.add(fl);
-    const L = new THREE.PointLight(0xffa050, 6, 14, 1.6); L.position.y = 0.8; L.castShadow = false; g.add(L); g.userData.light = L; return g; },
+    const L = new THREE.Object3D(); L.position.y = 0.8; g.add(L); g.userData.light = L; return g; },
   shield: (big) => { const g = new THREE.Group(); if (big) g.add(M(new THREE.BoxGeometry(0.6, 1.1, 0.05), wood)); else g.add(M(new THREE.CylinderGeometry(0.34, 0.34, 0.05, 14).rotateX(Math.PI / 2), wood));
     g.add(M(new THREE.CylinderGeometry(0.08, 0.08, 0.06, 10).rotateX(Math.PI / 2).translate(0, 0, 0.03), stone)); g.add(M(new THREE.TorusGeometry(big ? 0.45 : 0.33, 0.012, 4, 20), leather)); return g; },
 };

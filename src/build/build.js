@@ -14,6 +14,7 @@ import { burst, dust, addShake } from '../render/fx.js';
 import { ITEMS } from '../game/items.js';
 import { icon } from '../ui/icons.js';
 import { Inventory } from '../game/inventory.js';
+import { askLight } from '../render/lights.js';
 
 const V_LOSS = 0.125, H_LOSS = 0.2, MIN_SUPPORT = 0.1, REACH = 9, G = 8;
 const _v = new THREE.Vector3(), _ray = new THREE.Raycaster();
@@ -30,7 +31,6 @@ export class Build {
     this.meshes = []; this.lights = [];
     this.flameMat = new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
     this.flameMat2 = new THREE.MeshBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
-    for (let i = 0; i < 4; i++) { const L = new THREE.PointLight(0xff9a40, 0, 20, 1.5); L.castShadow = false; g.scene.add(L); this.lights.push(L); }   // the nearest fires get real lights
     this.tint = false; this.chest = null;
     this.buildChestPanel();
   }
@@ -276,7 +276,7 @@ export class Build {
       } else if (tp) g.hud.prompt('MMB', `Remove ${tp.def.name}`, `${Math.ceil(tp.hp)} / ${tp.def.hp}`);
     }
     // doors swing, fires burn (and go out in the rain if nothing covers them), food cooks
-    let lights = [];
+    const lights = [];
     for (const p of this.placed) {
       if (p.def.door && p.targetA !== undefined) p.inner.rotation.y += (p.targetA - p.inner.rotation.y) * Math.min(1, dt * 8);
       if ((p.def.fire || p.def.torch) && p.state.lit) {
@@ -294,9 +294,8 @@ export class Build {
         for (const q of this.near(p.pos.x, p.pos.z, 1.5)) if (q.def.cook && q.state.cook.length) { let ch = false; for (const c of q.state.cook) { const was = c.t >= c.need; c.t += dt; if (!was && c.t >= c.need) ch = true; } if (ch) this.drawCook(q); }
       }
     }
-    // the four fires nearest the player get real light
-    const pp = g.player.pos; lights.sort((a, b) => a.pos.distanceToSquared(pp) - b.pos.distanceToSquared(pp));
-    this.lights.forEach((L, i) => { const p = lights[i]; if (!p) { L.intensity = 0; return; } L.position.copy(p.pos).setY(p.pos.y + (p.def.fire ? 1 : 1.8)); const fl = 1 + Math.sin(performance.now() * 0.013 + i) * 0.1 + Math.random() * 0.06; L.intensity = (p.def.fire ? 26 : 9) * fl * Math.min(1, 0.4 + p.state.fuel / 3); L.distance = p.def.fire ? 22 : 12; });
+    // light from the shared pool (the nearest fires get it)
+    for (const p of lights) { const fl = 1 + Math.sin(performance.now() * 0.013 + p.pos.x) * 0.1 + Math.random() * 0.06; askLight(p.lightPos ||= p.pos.clone().setY(p.pos.y + (p.def.fire ? 1 : 1.8)), (p.def.fire ? 26 : 9) * fl * Math.min(1, 0.4 + p.state.fuel / 3), p.def.fire ? 22 : 12); }
     if (this.chest && !input.uiOpen) this.closeChest();
   }
   toJSON() { return this.placed.map((p) => ({ uid: p.uid, id: p.id, x: p.pos.x, y: p.pos.y, z: p.pos.z, rot: p.rot, hp: p.hp, state: { ...p.state, slots: p.inv?.slots } })); }

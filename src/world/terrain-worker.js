@@ -2,6 +2,7 @@
 // never stutters. Also bakes the world height texture used by the water shader.
 import { heightAt, biomeWeights, groundColor, fbm } from './gen.js';
 import { layoutCell, CELL } from './flora.js';
+import './sites.js';   // registers the flattened ground under the trial's sites
 
 function patch({ id, x0, z0, size, res }) {
   const n = res + 1, step = size / res, NV = n * n + 4 * res;
@@ -62,6 +63,24 @@ self.onmessage = (e) => {
       data[k + 3] = Math.min(1, Math.max(0, (fbm(x * 0.07, z * 0.07 + 5, 2) - 0.42) * 3)) * (w.p * 1 + w.y * 0.2);
     }
     self.postMessage({ type: 'grassTex', id: msg.id, data, N, x0, z0, size }, [data.buffer]);
+  }
+  else if (msg.type === 'mapImage') {     // the world map: painted like an old chart, hill-shaded
+    const { N, extent } = msg, data = new Uint8ClampedArray(N * N * 4), w = { p: 0, y: 0, v: 0, r: 0 }, k = extent / N, H = new Float32Array(N * N);
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) H[j * N + i] = heightAt(-extent / 2 + (i + 0.5) * k, -extent / 2 + (j + 0.5) * k);
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const x = -extent / 2 + (i + 0.5) * k, z = -extent / 2 + (j + 0.5) * k, h = H[j * N + i], o = (j * N + i) * 4;
+      biomeWeights(x, z, w);
+      let r, g, b;
+      if (h < 0) { const d = Math.min(1, -h / 25); r = 96 - d * 40; g = 146 - d * 50; b = 168 - d * 30; }
+      else if (h < 1.2) { r = 214; g = 196; b = 150; }
+      else { r = 150 * w.p + 62 * w.y + 104 * w.v; g = 168 * w.p + 96 * w.y + 104 * w.v; b = 92 * w.p + 56 * w.y + 78 * w.v; }
+      const hx = H[j * N + Math.min(N - 1, i + 1)] - H[j * N + Math.max(0, i - 1)], hz = H[Math.min(N - 1, j + 1) * N + i] - H[Math.max(0, j - 1) * N + i];
+      const shade = h < 0 ? 1 : Math.max(0.55, Math.min(1.25, 1 + (-hx + -hz) * 0.035));
+      const paper = 0.82 + 0.18 * fbm(x * 0.02, z * 0.02, 2);
+      data[o] = r * shade * paper; data[o + 1] = g * shade * paper; data[o + 2] = b * shade * paper; data[o + 3] = 255;
+      if (h > 0 && h < 30 && Math.abs((h % 10) - 5) < 0.18) { data[o] *= 0.8; data[o + 1] *= 0.8; data[o + 2] *= 0.8; }   // contour lines
+    }
+    self.postMessage({ type: 'mapImage', id: msg.id, data, N, extent }, [data.buffer]);
   }
   else if (msg.type === 'flora') {         // lay out an n×n block of flora cells
     const parts = []; let len = 0;

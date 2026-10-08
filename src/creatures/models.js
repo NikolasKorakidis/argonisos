@@ -153,6 +153,7 @@ const DRESS = {
   dryad: () => ({ mat: new THREE.MeshStandardMaterial({ map: TEX.bark, roughness: 0.95, color: 0xb8c49a }), scale: 1.05, crown: 0x5d8a34, eyes: 0xc8ff8a }),
   giant: () => ({ mat: new THREE.MeshStandardMaterial({ map: TEX.hide, roughness: 0.9, color: 0x8a8f9a }), scale: 3.1, crown: null, eyes: 0xffd27a, club: true }),
   skeleton: () => ({ mat: new THREE.MeshStandardMaterial({ map: TEX.bone, roughness: 0.8, emissive: 0x302618, emissiveIntensity: 0.4 }), scale: 0.98, crown: null, eyes: 0x8af0ff, sword: true }),
+  minotaur: () => ({ mat: new THREE.MeshStandardMaterial({ map: TEX.hide, roughness: 0.85, color: 0x7a4a30 }), scale: 1.75, crown: null, eyes: 0xff5a30, bull: true, labrys: true }),
 };
 class RigBody {
   constructor(kind) {
@@ -170,6 +171,19 @@ class RigBody {
       const hand = bones.mixamorigRightHand;
       if (D.club && hand) { const club = new THREE.Group(); mesh(new THREE.CylinderGeometry(4, 7, 95, 8).translate(0, 40, 0), new THREE.MeshStandardMaterial({ color: 0x6e5238, roughness: 0.9 }), 0, 0, 0, club); club.position.set(0, 8, 3); club.rotation.set(0, 0, -1.9); hand.add(club); }
       if (D.sword && hand) { const sw = new THREE.Group(); mesh(new THREE.BoxGeometry(3, 70, 7).translate(0, 45, 0), new THREE.MeshStandardMaterial({ color: 0x8a8070, roughness: 0.4, metalness: 0.6 }), 0, 0, 0, sw); mesh(new THREE.BoxGeometry(16, 3, 4).translate(0, 10, 0), flat(0x5a4632), 0, 0, 0, sw); sw.position.set(0, 8, 3); sw.rotation.set(0, Math.PI * 1.5, -2.1, 'ZYX'); hand.add(sw); }
+      if (D.bull && head) {   // a bull's head over the hero's: broad skull, muzzle, great horns
+        const hide = new THREE.MeshStandardMaterial({ map: TEX.hide, color: 0x4a2c1c, roughness: 0.9 }), horn = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.5 });
+        const bh = new THREE.Group(); bh.position.set(0, 10, 2); head.add(bh);
+        mesh(new THREE.IcosahedronGeometry(14, 1), hide, 0, 0, 0, bh).scale.set(1.15, 1, 1.25);
+        mesh(new THREE.CylinderGeometry(8, 10, 14, 8).rotateX(Math.PI / 2), hide, 0, -5, 14, bh); mesh(new THREE.CylinderGeometry(8.2, 8.2, 1, 8).rotateX(Math.PI / 2), flat(0x2a1a12), 0, -5, 21.2, bh);
+        for (const sx of [-1, 1]) { const h = mesh(new THREE.TorusGeometry(14, 2.6, 6, 12, Math.PI * 0.62), horn, sx * 10, 8, 0, bh); h.rotation.set(0, sx > 0 ? 0 : Math.PI, sx > 0 ? -0.35 : 0.35); mesh(new THREE.SphereGeometry(2.2, 6, 4), eyeM, sx * 7, 3, 12, bh); mesh(new THREE.ConeGeometry(3, 8, 5).rotateZ(sx * 1.2), hide, sx * 14, 2, 0, bh); }
+        mesh(new THREE.TorusGeometry(3, 0.7, 5, 10), SMATgold(), 0, -9, 21, bh);
+      }
+      if (D.labrys && hand) { const ax = new THREE.Group(); mesh(new THREE.CylinderGeometry(2.4, 2.8, 150, 7).translate(0, 55, 0), new THREE.MeshStandardMaterial({ color: 0x5e4128, roughness: 0.9 }), 0, 0, 0, ax);
+        const blade = new THREE.Shape(); blade.moveTo(0, -18); blade.quadraticCurveTo(34, -30, 40, 0); blade.quadraticCurveTo(34, 30, 0, 18); blade.closePath();
+        const bg = new THREE.ExtrudeGeometry(blade, { depth: 3, bevelEnabled: false }).translate(0, 0, -1.5), bm = new THREE.MeshStandardMaterial({ color: 0x9a8a70, roughness: 0.35, metalness: 0.7 });
+        for (const sx of [-1, 1]) { const b = mesh(bg.clone().scale(sx, 1, 1), bm, sx * 2, 118, 0, ax); b.castShadow = true; }
+        ax.position.set(0, 8, 3); ax.rotation.set(0, Math.PI * 1.5, -2.1, 'ZYX'); hand.add(ax); }
       void inv;
       const act = (C, key, once) => { if (!C.ready) return; const a = this.mixer.clipAction(C.clip.clone()); if (once) { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; } a.setEffectiveWeight(0); a.play(); this.acts[key] = a; };
       const go = () => { act(CLIPS.run, 'run'); act(CLIPS.attack, 'attack', true); act(CLIPS.punch, 'punch', true); if (CLIPS.disarm.ready) { const a = this.mixer.clipAction(CLIPS.disarm.clip.clone()); a.time = CLIPS.disarm.dur * 0.97; a.paused = true; a.play(); this.acts.idle = a; } this.ready = true; };
@@ -190,7 +204,49 @@ class RigBody {
   dispose() { this.gone = true; }
 }
 
+const SMATgold = () => new THREE.MeshStandardMaterial({ color: 0xc9973a, roughness: 0.35, metalness: 0.8 });
+// ---- the Chimera: a lion's body the size of a cart, a goat's head rising from its back, a serpent for a tail
+class ChimeraBody extends CarvedBody {
+  constructor() {
+    super((g) => {
+      const fur = new THREE.MeshStandardMaterial({ map: TEX.hide, color: 0xb88a4a, roughness: 0.9 }), mane = flat(0x6a3a1a), goat = flat(0x8a8070), scale = new THREE.MeshStandardMaterial({ color: 0x3e5a2a, roughness: 0.6, flatShading: true }), claw = flat(0xe8dcc0), eye = new THREE.MeshStandardMaterial({ color: 0xffd040, emissive: 0xffa000, emissiveIntensity: 2.5 });
+      const root = new THREE.Group(); root.scale.setScalar(1.25); g.add(root);
+      const body = new THREE.Group(); body.position.y = 1.55; root.add(body);
+      mesh(new THREE.IcosahedronGeometry(1, 2), fur, 0, 0, 0, body).scale.set(0.95, 0.85, 1.9);
+      mesh(new THREE.IcosahedronGeometry(1.05, 1), mane, 0, 0.25, 1.35, body).scale.set(1.05, 1.15, 0.9);
+      const head = new THREE.Group(); head.position.set(0, 0.45, 2.15); body.add(head);
+      mesh(new THREE.IcosahedronGeometry(0.62, 1), fur, 0, 0, 0, head).scale.set(1, 0.9, 1.1);
+      mesh(new THREE.BoxGeometry(0.62, 0.45, 0.6), fur, 0, -0.2, 0.55, head); const jaw = mesh(new THREE.BoxGeometry(0.56, 0.16, 0.55), fur, 0, -0.45, 0.45, head);
+      for (const sx of [-1, 1]) { mesh(new THREE.SphereGeometry(0.08, 6, 4), eye, sx * 0.28, 0.12, 0.5, head); mesh(new THREE.ConeGeometry(0.05, 0.18, 4).rotateX(Math.PI), claw, sx * 0.18, -0.38, 0.78, head); }
+      // the goat
+      const gn = new THREE.Group(); gn.position.set(0, 0.8, -0.3); body.add(gn);
+      mesh(new THREE.CylinderGeometry(0.22, 0.32, 1.1, 7), goat, 0, 0.5, 0, gn).rotation.x = -0.3;
+      const gh = new THREE.Group(); gh.position.set(0, 1.1, 0.2); gn.add(gh); mesh(new THREE.IcosahedronGeometry(0.3, 1), goat, 0, 0, 0, gh).scale.set(0.8, 0.9, 1.3); mesh(new THREE.ConeGeometry(0.06, 0.3, 4), goat, 0, -0.25, 0.25, gh);
+      for (const sx of [-1, 1]) { const h = mesh(new THREE.TorusGeometry(0.28, 0.06, 5, 10, Math.PI * 1.1), flat(0x3a3028), sx * 0.15, 0.25, -0.1, gh); h.rotation.y = Math.PI / 2; mesh(new THREE.SphereGeometry(0.05, 5, 4), eye, sx * 0.14, 0.05, 0.25, gh); }
+      // the serpent tail
+      const tail = []; let prev = body;
+      for (let i = 0; i < 7; i++) { const t = new THREE.Group(); t.position.set(0, i === 0 ? 0.2 : 0, i === 0 ? -1.8 : -0.42); prev.add(t); mesh(new THREE.SphereGeometry(0.24 - i * 0.022, 7, 5), scale, 0, 0, 0, t).scale.set(1, 1, 1.6); tail.push(t); prev = t; }
+      const sh = new THREE.Group(); sh.position.z = -0.35; prev.add(sh); mesh(new THREE.ConeGeometry(0.16, 0.5, 6).rotateX(-Math.PI / 2), scale, 0, 0, -0.2, sh); for (const sx of [-1, 1]) mesh(new THREE.SphereGeometry(0.04, 5, 4), eye, sx * 0.08, 0.06, -0.15, sh);
+      const legs = [];
+      for (const [x, z] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) { const l = new THREE.Group(); l.position.set(0.55 * x, 1.4, 1.1 * z); root.add(l); mesh(new THREE.CylinderGeometry(0.24, 0.18, 1.4, 7), fur, 0, -0.7, 0, l); mesh(new THREE.IcosahedronGeometry(0.24, 0), fur, 0, -1.4, 0.08, l).scale.set(1, 0.6, 1.3);
+        for (let k = -1; k <= 1; k++) mesh(new THREE.ConeGeometry(0.04, 0.16, 4).rotateX(Math.PI / 2), claw, k * 0.09, -1.45, 0.32, l); legs.push(l); }
+      return { root, body, head, jaw, gn, tail, legs };
+    });
+  }
+  animate(st, speed, dt) {
+    this.t += dt; const { body, head, jaw, gn, tail, legs } = this.parts;
+    if (st === 'dead') { this.deadT += dt; this.obj.rotation.z = Math.min(Math.PI / 2, this.deadT * 1.6); return; }
+    const k = Math.min(1, speed / 4), f = 3 + speed * 0.9;
+    legs.forEach((l, i) => (l.rotation.x = Math.sin(this.t * f + (i === 0 || i === 3 ? 0 : Math.PI)) * 0.6 * k + (st === 'claw' && i < 2 ? -1.1 * Math.max(0, Math.sin(this.t * 10)) : 0)));
+    body.position.y = 1.55 + Math.abs(Math.sin(this.t * f)) * 0.08 * k; body.rotation.x = st === 'bite' ? -0.15 : 0;
+    head.rotation.x = st === 'bite' ? 0.3 : Math.sin(this.t * 1.1) * 0.05; jaw.rotation.x = st === 'bite' || st === 'attack' ? 0.4 + Math.sin(this.t * 18) * 0.2 : 0.05;
+    gn.rotation.z = Math.sin(this.t * 0.9) * 0.15; gn.rotation.x = st === 'roar' ? -0.4 : 0;
+    tail.forEach((s, i) => { s.rotation.y = Math.sin(this.t * 2.5 - i * 0.6) * 0.25; s.rotation.x = (st === 'sting' ? -0.55 : -0.12) + Math.sin(this.t * 1.8 - i) * 0.05; });
+  }
+}
 export function makeBody(kind, level = 0) {
+  if (kind === 'chimera') return new ChimeraBody();
+  if (kind === 'minotaur') return new RigBody('minotaur');
   if (kind === 'deer') return new PackBody(level >= 2 ? 'stag' : 'deer');
   if (kind === 'fox') return new PackBody('fox');
   if (kind === 'rabbit') return new RabbitBody();

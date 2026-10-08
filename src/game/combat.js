@@ -37,7 +37,7 @@ export class Combat {
     const g = this.g, P = g.player, kind = item?.skill || 'unarmed', reach = REACH[kind] ?? (item ? 2.1 : 1.7);
     const targets = g.creatures.inArc(P.pos, P.yaw, reach).slice(0, kind === 'axe' || kind === 'mace' ? 2 : 1);
     if (!targets.length) return false;
-    const dmg = item?.dmg || [[2, 'blunt']], k = P.stats.damageK(kind) * (P.stats.has('zeusBlessing') ? 1.1 : 1);
+    const dmg = item?.dmg || (P.stats.has('claws') ? [[30, 'slash'], [10, 'poison']] : [[2, 'blunt']]), k = P.stats.damageK(kind) * (P.stats.has('zeusBlessing') ? 1.1 : 1);
     for (const c of targets) g.creatures.hurt(c, dmg, P.pos, { k, backstab: item?.backstab || 2, knock: item?.knock ?? 0.1 });
     P.stats.train(kind, 12.5); addShake(0.18); g.sound?.('hit');
     return true;
