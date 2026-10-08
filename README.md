@@ -1,189 +1,48 @@
-# Argonisos — Island Prologue (three.js prototype)
+# Argonisos: the Trial of Zeus
 
-A playable concept slice for testing ideas before building them in Unity.
+An open-world survival game in three.js, in the spirit of Valheim: you wake on Nisos with nothing, learn what you can
+make from what you pick up, build shelter against the cold and the rain, and track down the beasts that rule each land.
 
 ## Run
-ES modules need a local server (opening the file directly won't work):
+ES modules need a local server:
 ```bash
 npm run dev   # then open http://localhost:8000
 ```
-The dev server (`dev-server.mjs`, no dependencies) reloads open pages whenever a project file changes.
-Any static server works too, e.g. `python3 -m http.server 8000`, just without the auto-reload.
-three.js r160 is vendored (`three.module.js`), so it runs offline.
+The dev server reloads open pages when a file changes. three.js r160 is vendored, so it runs offline.
+`index.html?play` skips the title screen (handy for testing).
 
-## Loop
-Story cards → meet Nestor (tutorial cards) → craft a stone axe → show it to Nestor, who sends you to honour Athena → gather berries + cut a sacred olive branch with the axe → offering at the Temple of Athena → report to Nestor → craft a bow and arrows → hunt a deer and one other beast (stag, bull or fox) → campfire, cook and eat → survive the night (wolves) → back to Nestor at dawn → cross the marsh causeway to the Drowned Ship, put its 4 skeleton crew to rest and open its strongbox (sail, rope, arrows, bronze) → mend the boat in the cove → try to sail: no wind → tell Nestor → take the switchback Mountain Road to the Ascent and defeat the Windbinder on the Throne of Olympos → the winds return as a storm (rain, gusts, thunder) → back to Nestor → sail to Pedias.
+## The trial
+- **Explore.** A 2.9 km island: the meadows of **Pedias** in the middle, the dark forest hills of **Yleos** around them,
+  and the marsh of **Valtos**, sealed this milestone behind Zeus's storm wall.
+- **Craft.** Recipes appear once you've held one of their materials (**C**). Better gear needs a workbench, most of it
+  under a roof; stronger materials need the bosses' heads.
+- **Survive.** No hunger: health 25 and stamina 50, raised for a while by what you eat (three food slots). Rain soaks
+  you, night and wet make you cold; a fire and a roof put that right. Sleep in a bed to wake rested and to come back
+  there when you fall (your belongings stay in a grave where you died).
+- **Build** with the hammer: walls, floors, roofs, doors, stairs, fences, beams, plus workbench, campfire, cooking
+  stand, bed, chest and torches. Pieces snap together and need support: the hammer tints them by how well they're held.
+- **The bosses.** Marks carved in ancient olive trees lead to the Minotaur's Labyrinth; carvings in the Giants' caves
+  lead to the Chimera's shrine. Lay the tribute on the altar to call the beast, then take its head to the Ancient
+  Temple: Zeus grants its power (**F**) and the next tier of crafting. Pray at his altar once a day for his blessing.
+- An owl tells you all this the first time you pick something up.
 
 ## Controls
-WASD move · Shift sprint · Mouse look (click to lock) · LMB swing / loose arrow · RMB (hold) draw and aim the bow over the shoulder (no crosshair: arrows fly to the centre of the screen; a fuller draw hits harder and flies farther) · E interact · F eat · 1–8 quick slots (arrange them in the inventory, Tab, by dragging items) · P abilities (actions & skills) · L journal · C craft · M map · R rest at fire · Space jump · Esc pause
+WASD move · Shift sprint · Space jump · Ctrl sneak · mouse look (click to lock) · LMB strike / place / loose ·
+RMB block, draw the bow, or (hammer) open the build menu · E use · 1–8 hotbar · Tab pack · C craft · M map ·
+F power · R turn a piece · MMB / X take a piece down · Esc pause.
+Debug: F3 info line · F9 free camera · T (with F3 on) time ×60.
 
-Playtest keys: **T** time ×10 · **G** +10 materials · **N** skip current quest. State is on `window.ARG` in the console.
+## Code
+- `src/world`: generation (`gen.js`), sites, streamed terrain (`terrain.js` + `terrain-worker.js` in a worker pool),
+  vegetation in three bands (full trees, light far meshes, impostor cards), grass, sky, water, weather, storm wall,
+  pickups, structures.
+- `src/player`: the hero rig and its clips, controller and camera, stats, held models.
+- `src/game`: items and recipes, inventory, crafting, harvesting, combat, the trial (bosses, clues, offerings), the owl,
+  saving.
+- `src/build`: building pieces and the build system. `src/creatures`: bodies and AI. `src/ui`: HUD, map, title, icons.
+- `src/audio/sound.js`: all sound is synthesised (WebAudio), no files.
+- The world saves to browser storage every minute and when the page closes.
 
-## Menu & saves
-Main menu: New Game · Load Game (only when a save exists) · Dev Mode (Explore Mode, Game Direction, Concept Art) · Controls · Fullscreen · Extras (The Story, Credits). Opened from the pause menu over a running game it adds Resume and Save Game.
-One save slot in browser storage: manual saves, autosaves on quest complete and after sleeping, and Save & Quit from the pause menu. Loading, starting over or switching to Explore Mode mid-game asks for a second click, then reloads the page and picks up from there.
-
-## Survival & hunting
-Health pool 200; hunger drains at 0.14/s. Out of stamina you are winded and can't sprint until it recovers to 30 (or at all with no energy left).
-Wild game watches you from ~24 m and bolts at ~14 m (sooner if you sprint), steering round water, cliffs and trees; stags and bulls charge once hit.
-Kills stay where they fall: walk up and press E to skin them for meat, hide, bone and horn.
-
-## UI
-Attic black-figure look: icons are hand-drawn SVG in `icons.js` (`icon(name)` for the DOM, `iconImg(name)` for canvas), panels are papyrus with a black-glaze header and a clay meander. `play.html` is `index.html` without the document wrapper (artifact hosting): regenerate it after editing the page.
-
-## Tuning knobs (game.js)
-- `DAY_LEN`: seconds per day (300)
-- `TYPES`: creature hp/speed/damage/drops
-- `TOOL_STATS`: tool damage, gather power, reach
-- `ARROW_V`, `ARROW_FLAT`, `ARROW_DMG`: arrow speed, flat-flight time and damage, from a snap shot to a full draw
-- `TYPES.beast`: the Windbinder (placeholder boss); `makeWindbinder()` builds its body, `updateBoss()` runs its attacks
-- `RECIPES` and the raft cost in `buildRaft()`
-- Hunger drain in `updateWorld()` (`0.28`/s)
-
-Characters are procedural placeholders. Swap `makeHumanoid()` / `makeQuad()` for GLTF assets later.
-
-## Graphics
-Reflective sea (planar mirror), physical sky with image-based reflections, soft shadows, bloom and vignette, and about 60k wind-animated grass blades plus wildflowers. Pause menu → **Graphics** switches to Performance mode (plain water, no post-processing) for slower machines.
-
-## World (v2)
-~580 m island (≈9× the original area), nine regions linked by trails:
-Nestor's Cove (start) · Hill of the Fallen (skeletons) · Hylaea Woods (dense forest) · Stymphalian Marsh (swamp) · Mount Olympos (90 m, snow, cold) ·
-The Drowned Ship (a wreck on a mud bank in the marsh, guarded by its dead crew) · Lake Kastalia (waterfall) · Temple of Athena · Olive Terraces (vineyard, farmhouse) · Watchtower of Aeolus (climb to reveal the map).
-
-- Region title banners, map fog-of-war that clears as you explore, **M** for the full map, **Tab** inventory, **C** crafting
-- Trees: 7 species × 3 variants, merged + instanced per 100 m chunk (thousands of trees, few draw calls), wind sway in the shader
-- Graphics preset defaults to **Performance**; High adds reflective sea, bloom, full grass density, sharper shadows
-- Layout constants (`MOUNT`, `CAVE`, `TEMPLE`, …) and `FLORA` densities at the top of `game.js` control the whole map
-
-## v5: sound, intro cinematic, quest markers
-- **Audio** (`audio.js`): fully procedural WebAudio. Footsteps per surface (grass, dirt, stone, sand, water, cave), swings, wood/stone/flesh hits, bow, pickups, crafting, UI; ambience (wind by altitude, surf by the shore, waterfall, birds by day, crickets and wolf howls at night, cave drips with reverb, fire crackle); a generative lyre + drone score in D Dorian that changes with mood (title, explore, night, cave, cinematic). Volume sliders in the pause menu.
-- **Intro cinematic**: the menu fades, letterbox bars come in, the camera flies over the mountain, the temple and the olive terraces while the story is narrated, then lands at the cove where Zeus delivers you in a column of light. Skip with the button, Space, Enter or Esc.
-- **Quest markers** (WoW convention): gold `!` = someone has a task for you, gold `?` = hand in / deliver here. Shown in the world and on the minimap and map.
-- **The Ascent**: a paved road spiralling up Mount Olympos from the end of the switchback Mountain Road to the summit arena: dry-stone parapet, rock cut on the uphill side, braziers, a marble gate at its foot.
-- **Paths**: every trail is now a smoothed, textured ribbon (dirt with cart ruts; paved Sacred Way to the temple).
-- **Temple of Athena**: Doric peristyle with entasis columns and echinus capitals, painted triglyph/metope frieze, sculpted pediments, tiled roof with antefixes, pronaos with bronze doors, coffered ceiling, polished floor, two-tier inner colonnade, reflecting pool, offering table, owls on plinths, and a chryselephantine Athena Parthenos with Nike, shield, serpent and spear.
-- **Performance**: pickups merged per material, cave interior merged and distance-culled, creatures culled tighter (and hidden on the title), Low refreshes shadows every other frame.
-
-## v6: cutscene camera, trees, summit arena
-- **Intro** now loops the whole island (sea, marsh, woods, watchtower, summit arena, waterfall, temple, olive terraces, cove) in ~53 s, with camera banking on turns and a slow FOV breathe.
-- **Conversations** play as cutscenes: letterbox, over-the-shoulder shots that cut between speakers and drift slowly. The offering to Athena gets its own push-in shot on the statue.
-- **Trees** are grown from a branching generator: gnarled trunks with knots and roots, limbs forking into twigs, and leaf clusters at every twig tip (oak, birch, autumn oak, and twisted, often split-trunk olives).
-- **Summit**: the mountain is bigger and its peak is cut into a ~76 m paved arena ("Throne of Olympos") with a ring of broken columns, four great braziers, and the ruins of a Temple of Zeus: broken peristyle, a standing corner with its painted entablature, a fallen pediment, ruined cella walls and Zeus' empty colossal throne with his fallen head. Built for the boss fight.
-- **No bow on Nisos**: bow pickup, arrow recipe and slot 4 removed.
-
-## v7: the wreck, water, trees, performance
-- **Intro**: starts far out at sea in the haze and glides in, high to low, over the water, into the cove, ending on the hero standing beside his wrecked boat. No banking, no teleport.
-- **Nestor's Cove** is now open to the sea through a carved channel. Your broken boat lies on its west shore; **Mend Your Boat** is the main quest (tracked in the quest panel from the start) and replaces the old raft. The mended boat sails out through the channel.
-- **Trees**: every species uses the branching generator with three personalities per species (broad spreader / tall upright / wind-bent oak, Mediterranean umbrella stone pines, flame-shaped cypresses, twisted olives, gnarled leafless marsh trees). Far LOD is ~3× lighter.
-- **Water**: new shader for sea, lake and marsh: depth absorption, caustics on the shallows, cloud and sun reflections, far-distance ripple fade, lapping broken foam, duckweed rafts in the marsh. Lake has an irregular shore and a rim, a proper rock waterfall with a curving sheet, churning plunge-pool foam, mist and lily pads. The marsh trail is a raised causeway.
-- **Performance**: point lights pooled (4 real lights follow the nearest of ~17 sources: every pixel was paying for all of them), shadow camera snapped to texels (no more shimmering on the hero), resolution scaling with hysteresis (no pumping), sharper default resolution on Retina, mirror water removed, cave pit capped.
-
-## v8: conversations, gathering, quest UI
-- Conversations use one continuous shot: it glides in from the gameplay camera to a close side-on two-shot and slowly pulls back while they talk. No cuts between lines.
-- Bare hands (and the spear) no longer break trees or rocks: wood and stone come from branches and pebbles on the ground (doubled across the island), food from berry bushes; fists are for beasts. The axe still fells trees and splits rocks.
-- Quest tracker moved to the top left: full card when a quest starts or an objective ticks, then it settles to just the title and objectives. **L** opens the quest journal: the active quest in green, the main quest (Mend Your Boat), and the completed list. Upcoming quests stay hidden.
-
-## v9: nights, fire, Nestor's house, smithy
-- Cards queue properly: a new card waits until the one on screen is closed, each card stays up at least 0.7 s, and held keys can't skip them (the tutorial used to be overwritten by the next quest card).
-- Days last 15 minutes and daylight is stretched (sunrise ~05:00, sunset ~20:00).
-- Night sky: twinkling starfield, the Milky Way with dust lanes, a moon with maria and halo, moonlight (soft blue, from the moon), clouds that darken at night and warm at dusk, and on some nights aurora curtains over the north. Water darkens to moonlit blue.
-- Dusk warning: the first evening a card explains fire; later evenings a reminder if you're far from one. Beasts will not enter a campfire's light (9 m): they prowl the edge and can't hurt you inside. The campfire is brighter, with layered flames, embers and a warm light pool.
-- Nestor's house is a proper farmhouse: upper room with balcony, tiled porch on columns, walled courtyard with a vine pergola, jars, garden, windows that glow at night, and a smithy wing (forge with glowing coals, anvil, tool rack, workbench). The axe and spear can only be made at the workbench (E); rope and campfires anywhere with C.
-- Light pool raised to 5 lights.
-
-## v10: movement, sleep, Sacred Olive
-- Movement has momentum (accelerate / ease to a stop, little air control), the body leans into speed and banks into turns, and the camera follows a smoothed target.
-- Jump is one per press (Space no longer auto-repeats), a bit higher, and low obstacles (rocks, dry-stone and courtyard walls, stone circles) can be jumped over. Tree trunks and rocks have tighter per-species hitboxes.
-- The axe (and spear) are slung on your back when not in hand.
-- The quest olive branch comes from the **Sacred Olive**: a colossal ancient tree in a clearing at the heart of the terraces, ringed by standing stones, with an altar, oil lamps, votive jars and golden motes.
-- **Sleep**: press E at any fire, or at **Nestor's hearth** (a permanent fire pit in his courtyard), and pick 1–8 hours or until dawn. Restores energy and health, costs hunger. New **energy** bar: it drains while awake and caps stamina.
-- **Safe zones**: beasts can't enter firelight or Nestor's house and courtyard; they prowl the edge.
-- Nothing interrupts a conversation anymore: cards (quest, night warning) wait until the dialogue ends, and dialogue waits for an open card.
-
-## v11: roots, the Sacred Olive, walls, minimap
-- Tree roots now start on the trunk with a flared base, arch outward and dive into the soil (no more starfish roots on the grass).
-- The Sacred Olive is three trunks twisting around each other with burls, smooth bark with procedural fissures (no banding), splitting into gnarled limbs and a pale-gold crown; rough standing stones ring the clearing.
-- Olive terrace walls are real dry-stone walls: rough base blocks, a smaller top course, capstones, a few mossy stones, gently curving with the ground; they stop cleanly at trees, paths and the sacred circle, and olive trees are planted between the wall lines, not on them.
-- Fallen branches lie under trees (around the crown), not in open fields.
-- The minimap shows everything nearby you can gather (berries, branches, stones, reeds, the sacred branch) and fires.
-
-## v12: saving
-- Autosave after every completed quest and after sleeping; **Save Game** in the pause menu (Esc) for a manual save. **Continue** on the title screen resumes (shows day and current quest).
-- Saved: quest progress and flags, inventory, tools, stats, day/time, position, your campfire, which pickups/trees/rocks are gone, which creatures are dead, and the explored map. Stored in browser storage on this device.
-- Minimap resource icons now only show within 30 m.
-
-## v13: Greek trees, walls, house details, cutscene framing
-- Native Greek species, each with its own shape and region: **Aleppo pine** (crooked coastal pine, airy crown), **Oriental plane** (huge pale-trunked shade tree, lake and marsh), **holm oak** (dense evergreen, dark crown; Hylaea woods), **carob** (low glossy dome with pods; meadows), **strawberry tree** (multi-stem, red-brown bark, red/orange berries; woods and lake), **fig** (low grey limbs, big leaves; meadows), alongside olive, Mediterranean cypress, stone pine, Greek fir (mountain), valonia oak and chestnut. Birch removed.
-- Regions: Hylaea Woods = holm oak + Aleppo pine forest with strawberry trees; Lake Kastalia = plane grove; mountain = fir; meadows = olive/carob/valonia oak/fig/cypress mix.
-- Shared dry-stone wall builder (rough base course, top course, wedge stones, capstones, fallen stones); Nestor's courtyard walls get a whitewashed lime coping.
-- All baked buildings get procedural plaster/stone/marble grain in the shader (no textures).
-- Nestor's house: rafter ends under the eaves, geranium window boxes, stone door steps, bougainvillea on the pergola, strings of garlic and peppers, a paved path across the yard.
-- Conversation camera frames both speakers in full (heads no longer cut by the letterbox). Daytime firelight toned down.
-
-## v14: native rigged hero
-- `models/hero_rig.fbx` is the hero auto-rigged by Mixamo. The Mixamo clips now play on its own skeleton, with no retargeting onto a home-made rig.
-- Base layer (idle / run / sprint) runs on an `AnimationMixer`. Its playback rate follows ground speed to cut foot sliding, and run and sprint stay phase-locked.
-- One-shot clips are sampled from their tracks and blended over the base layer: jump, strike, punch, draw and sheathe. They play full body when standing and upper body only while moving.
-- Idle is a held end frame of the sheathe clip plus procedural breathing. A real Idle clip would replace it.
-- Textures were extracted from the old `hero.fbx` and saved as `hero_diffuse.jpg` and `hero_normal.jpg`. If the rig fails to load, the old static hero is used.
-
-## v15: animal and tree packs
-- **Animals:** low-poly rigged glTF pack, trimmed to 7 clips each (`models/*.glb`, ~1.1 MB). Each creature gets a skeleton clone and its own mixer, and crossfades between Idle, Walk, Gallop, Attack, Hit, Death and Eating. Walk and gallop speed follow movement speed.
-  - Wolf: now the animated model.
-  - New wild animals:
-    - deer (8): flees; drops meat and hide.
-    - stag (3): fights back like the boar.
-    - fox (6): flees; drops hide.
-  - New livestock: Nestor has a donkey, a cow and a horse grazing beside the farmhouse. They can't be hurt.
-  - Not changed yet: the boar and rabbit stay procedural (the pack has neither).
-- **Trees:** stylised pack added as `qtree`, `qpine` and `qdead`, packed as quantised binary in `models/qtrees.js`.
-  - They run through the same instanced and chunked prop system as the other trees, so they cost no extra per-tree draw calls.
-  - Leaf clusters use their own alpha-cut textures, tinted to the island palette.
-  - Mixed into the regional flora: meadow, forest, mountain, swamp (dead trees), lake and tower.
-  - Birch was left out because it isn't an Aegean tree.
-- v15b: the rest of the uploads went in.
-  - Wild animals: a herd of 3 wild bulls that fight back.
-  - Farm and temple animals:
-    - Nestor has an alpaca and a Shiba (his dog).
-    - Athena's white mare grazes on the temple plateau.
-  - Companion: a stray husky in the forest. It joins you when you walk up to it, follows you, and attacks wolves and boars that come close.
-  - Trees: birches added sparingly on the mountain and by the lake (4 variants).
-  - Wolf sculpt: the realistic wolf (static) is the Drowned Ship's bronze figurehead, set on a rock at the edge of its mud bank. It loads after start-up.
-
-## v16: modelled animals only, bushes, farmhouse
-- **Animals:** the old block rabbits, boars and placeholder wolves are gone, and every animal is now an animated model.
-  - Deer (16) are the easy game. Stags (7) and wild bulls (3) fight back. Foxes (8) give hides.
-  - The Hunt quest is now: 2 deer, plus 1 stag or wild bull, plus cook 3 meat.
-- **Minimap:** shows animals within 40 m with their own icons.
-- **Bushes:** rebuilt from leaf-cluster cards.
-  - Berry bushes are big dark-green domes with clusters of bright red berries.
-  - The 1,400 scenery shrubs use the same card style and still sway in the wind.
-- **Farmhouse:** the ground is levelled under the house, smithy and yard, so nothing floats.
-  - New paddock west of the smithy: fence with a gate, water trough, hay rack, bales and straw. The donkey, cow, horse and alpaca stay inside it.
-  - Nestor's dog stays by the porch.
-  - New stone well by the path.
-- **Saves:** the save key is now `argonisos.save.v2`, because the world layout changed.
-
-## v17: wreck, mountain, foliage fringes
-- **Boat:** a lofted clinker hull used by both the wreck and the mended boat:
-  - shaped cross-sections with a rising sheer;
-  - overlapping plank strakes in alternating tones;
-  - keel, ribs, thwarts, painted sheer strake, curled stem post and oculi.
-- **Wreck:** stove in on the starboard side, with sprung planks. All debris sits on dry sand: the snapped mast with the torn sail draped over it, a broken oar, amphorae, a crate, rope coils and planks.
-- **Mount Olympos:** about 30 % taller, with ridged-noise crags and buttresses. Alpine meadow lower down, bare rock higher up, and a proper snow cap.
-- **Foliage textures:** the transparent pixels of the leaf textures were recoloured leaf green, so distant shrubs and trees no longer bleach to white specks on the hills.
-
-## v18: temple, olive, bow, papyrus UI
-- **Temple of Athena:**
-  - The reflecting pool is gone. A red woven runner with a gold meander border now leads to the offering table, lined with bronze lamp stands.
-  - Kraters holding olive sprigs stand between the columns, with a meander frieze and painted shields on the walls.
-  - The owls outside are now sculpted bronze owls perched on olive branches, on carved plinths.
-- **Sacred Olive:** the branch no longer lies on the ground. Four axe blows bring it down, then you pick it up. The tree never falls.
-- **Bow replaces the spear:**
-  - The spear is removed completely.
-  - Nestor teaches recipes as the story goes: rope and fire from the start, the axe at the First Tool, the bow and arrows at Arms of the Chosen.
-  - Unknown recipes show as locked in the crafting menu.
-  - Hunting Bow: made at the workbench; costs 4 wood, 3 fiber, 1 rope. Arrows ×6: cost 1 wood, 1 stone, 1 fiber.
-  - Archer stance is procedural on the rig: bow arm out, draw to the cheek, re-draw after each shot. The hero turns to face where you aim.
-- **Papyrus UI:** every panel, tooltip, quest tracker, dialog and card is a papyrus sheet with an inline SVG fibre texture (no image downloads). Ink text, red-ochre and black-figure buttons, meander borders, a rolled top edge on modals.
-- **Minimap:** round papyrus disc with a bronze and meander rim, retina resolution, redrawn every frame.
+## The classic prologue
+The earlier quest-driven prototype (Nestor, the Windbinder, the Drowned Ship) is still playable at `classic.html`
+(`game.js`, `play.html`).

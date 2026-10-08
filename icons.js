@@ -2,7 +2,7 @@
 // incised cream lines and touches of added red and gold, meant to sit on clay or papyrus. Every icon is a 64×64 viewBox.
 //   icon(name, cls)  → inline <svg> markup for the DOM
 //   iconImg(name)    → an <img> of the same drawing, for canvas (minimap, map)
-const K = '#211610', R = '#a8401f', C = '#f1dcae', G = '#c9973a', O = '#d97d3e', L = '#6b7a32';   // glaze, red, cream, gold, clay, olive
+export const K = '#211610', R = '#a8401f', C = '#f1dcae', G = '#c9973a', O = '#d97d3e', L = '#6b7a32';   // glaze, red, cream, gold, clay, olive
 const inc = (d, w = 1.6) => `<path d="${d}" fill="none" stroke="${C}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;   // incised line
 const fill = (d, c = K) => `<path d="${d}" fill="${c}"/>`;
 const ln = (d, c = K, w = 3) => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
@@ -30,7 +30,7 @@ function beast({ len = 30, h = 14, leg = 12, neck = 10, neckA = -0.9, head = 9, 
   return s;
 }
 
-const ICONS = {
+export const ICONS = {
   // ---- materials ----
   wood: fill('M8 40 L50 26 a6 6 0 0 1 4 11 L12 51 a6 6 0 0 1 -4 -11z') + `<ellipse cx="10" cy="45.5" rx="5" ry="6" fill="${O}" transform="rotate(-18 10 45.5)"/>` + inc('M8 44 a2.6 3 -18 1 1 4 3') +
         fill('M14 25 L54 18 a5 5 0 0 1 2 10 L16 35 a5 5 0 0 1 -2 -10z') + `<ellipse cx="15" cy="30" rx="4.2" ry="5" fill="${O}" transform="rotate(-10 15 30)"/>` + inc('M14 29 a2 2.4 -10 1 1 3 2') + inc('M24 31 L44 27 M22 44 L40 38', 1.2),
