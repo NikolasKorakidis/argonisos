@@ -2,7 +2,7 @@
 // a rate matched to ground speed; one-shots (jump, strike, punch, draw / sheathe, the bow) are sampled straight from
 // their tracks and blended over it: whole body when standing, upper body only while moving.
 import * as THREE from 'three';
-import { loadFBX, loadTex, fixMaterials, normalizeHandle } from '../assets.js';
+import { loadFBX, loadTex } from '../assets.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
 const ss = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
@@ -167,5 +167,3 @@ export class Hero {
   }
 }
 
-// Held models, shared between hand and back copies
-export async function loadAxeModel() { const obj = fixMaterials(await loadFBX('axe')); const h = normalizeHandle(obj, 0.85); h.position.y = -0.09; return h; }

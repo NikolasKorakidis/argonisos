@@ -166,3 +166,13 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 #chestPanel .grid { display:grid; gap:5px; }
 #chestPanel .grid .slot { width:56px; height:56px; font-size:34px; cursor:pointer; }
 #chestPanel .hint, #craftPanel .hint { margin:10px 0 0; font-size:12.5px; color:var(--ink2); font-style:italic; text-align:center; }
+
+/* creature health plates and damage numbers */
+#plates { position:absolute; inset:0; }
+.plate { position:absolute; left:0; top:0; display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:none; }
+.plate b { font:700 12px Cinzel,serif; letter-spacing:.06em; color:#fff6e2; text-shadow:0 1px 3px #000, 0 0 2px #000; white-space:nowrap; }
+.plate b i { font-style:normal; color:var(--gold); margin-left:2px; }
+.plate span { width:70px; height:5px; border-radius:2px; background:rgba(20,10,6,.75); box-shadow:0 0 0 1px rgba(0,0,0,.6); overflow:hidden; }
+.plate span u { display:block; height:100%; background:linear-gradient(180deg,#e05a48,#9a2a1e); transition:width .15s; }
+.dmgn { position:absolute; transform:translate(-50%,-50%); font:700 18px 'Alegreya Sans',sans-serif; color:#ffe7b0; text-shadow:0 2px 3px #000, 0 0 2px #000; animation:dmgn .9s ease-out forwards; }
+@keyframes dmgn { 0%{opacity:0; transform:translate(-50%,-30%) scale(.7)} 15%{opacity:1; transform:translate(-50%,-80%) scale(1.15)} 100%{opacity:0; transform:translate(-50%,-260%)} }

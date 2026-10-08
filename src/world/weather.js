@@ -102,3 +102,5 @@ export function updateWeather(dt, pos, light, onThunder) {
 export function setWeather(type) { WEATHER.forced = type || null; if (type) WEATHER.type = type; }
 // After a teleport (respawn, fast travel): jump straight to the new place's air instead of easing into it
 export function snapWeather() { first = true; WEATHER.timer = 0; }
+// A brief white flash of the sky (thunder when a creature vanishes, lightning)
+export function flashSky(k = 0.3) { flashEl.style.opacity = String(k); setTimeout(() => (flashEl.style.opacity = '0'), 90); }

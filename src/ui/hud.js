@@ -55,6 +55,12 @@ export class HUD {
     if (html === this.last.prompt) return; this.last.prompt = html;
     p.classList.toggle('hidden', !key); p.innerHTML = html;
   }
+  // A number that pops off a creature when you hit it
+  damageNumber(world, n) {
+    const v = world.clone().project(this.camera || window.AG?.camera); if (v.z > 1) return;
+    const e = el('div', 'dmgn', Math.max(1, Math.round(n))); e.style.left = (v.x * 0.5 + 0.5) * innerWidth + 'px'; e.style.top = (-v.y * 0.5 + 0.5) * innerHeight + 'px';
+    document.getElementById('hud').appendChild(e); setTimeout(() => e.remove(), 900);
+  }
   hurt(k) { $('hurt').style.boxShadow = `inset 0 0 160px rgba(200,20,20,${Math.min(0.75, k)})`; clearTimeout(this.hurtT); this.hurtT = setTimeout(() => ($('hurt').style.boxShadow = ''), 250); }
   death(on) { $('death').classList.toggle('show', on); }
   // Fade out, let the night pass, fade back in

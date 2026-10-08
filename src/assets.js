@@ -10,15 +10,12 @@ export async function loadModelBuffer(file) {
   const b64 = (await import(new URL(file + '.js', ROOT).href)).default;
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer;
 }
-const cache = new Map();
-export function loadFBX(name) {
-  if (!cache.has(name)) cache.set(name, loadModelBuffer(name + '.fbx').then((buf) => new FBXLoader().parse(buf, '')));
-  return cache.get(name);
-}
-export function loadGLB(name) {
-  if (!cache.has(name + '.glb')) cache.set(name + '.glb', loadModelBuffer(name + '.glb').then((buf) => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej))));
-  return cache.get(name + '.glb');
-}
+// The file is fetched once; every call parses its own copy, so one user can rescale or re-dress it without touching
+// another's (the hero and the creatures built on its rig both load hero_rig)
+const buffers = new Map();
+const buffer = (file) => { if (!buffers.has(file)) buffers.set(file, loadModelBuffer(file)); return buffers.get(file); };
+export function loadFBX(name) { return buffer(name + '.fbx').then((buf) => new FBXLoader().parse(buf, '')); }
+export function loadGLB(name) { return buffer(name + '.glb').then((buf) => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej))); }
 const texLoader = new THREE.TextureLoader();
 export function loadTex(file, srgb = true) {
   const t = texLoader.load(new URL(file, ROOT).href); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;

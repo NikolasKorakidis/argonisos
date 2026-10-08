@@ -27,7 +27,7 @@ export const grassU = { uWind: windUniform, uCenter: { value: new THREE.Vector2(
         vec4 hm = texture2D(uHeight, (wp - uOrigin) / uSize);
         float rnd = fract(sin(dot(ip.xz, vec2(12.9898, 78.233))) * 43758.5453);
         float fade = 1.0 - smoothstep(0.6, 1.0, length(wp - uCenter) / (uTile * 0.5));
-        float sc = hm.g * fade * (0.65 + rnd * 0.8);
+        float sc = hm.g * fade * (0.55 + rnd * 0.62);
         vec3 p = position; p.y *= sc; p.x *= step(0.01, sc);
         float a = rnd * 6.2831; p.xz = mat2(cos(a), -sin(a), sin(a), cos(a)) * p.xz;
         float gh = position.y / ${H.toFixed(2)};

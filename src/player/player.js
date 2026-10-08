@@ -59,12 +59,12 @@ export class Player {
       want.set((fx * iz - fz * ix) / l, 0, (fz * iz + fx * ix) / l);
       if (S.stamina <= 0.5) this.winded = true; else if (S.stamina > 12) this.winded = false;
       const aiming = this.aiming, shift = down('ShiftLeft') || down('ShiftRight');
-      const canSprint = shift && !this.winded && !this.swimming && !aiming && !this.overweight && this.swing <= 0;
+      const canSprint = shift && !this.winded && !this.swimming && !aiming && !this.overweight && this.swing <= 0 && !this.blocking;
       if (shift && this.overweight && !this.warnedW) { this.onToast?.('Carrying too much to run'); this.warnedW = true; setTimeout(() => (this.warnedW = false), 4000); }
       if (canSprint) this.sneaking = false;
       this.sprinting = canSprint;
       const base = this.swimming ? SWIM * S.skillK('swimming') : canSprint ? SPRINT * S.skillK('sprinting') : this.sneaking ? SNEAK : aiming ? 2.2 : RUN;
-      want.multiplyScalar(base * S.speedK * (1 + this.speedMod) * (this.overweight && !this.swimming ? 0.6 : 1));
+      want.multiplyScalar(base * S.speedK * (1 + this.speedMod) * (this.overweight && !this.swimming ? 0.6 : 1) * (this.blocking ? 0.5 : 1));
     }
     // momentum: accelerate into a run, ease to a stop, little air control
     const acc = !this.onGround && !this.swimming ? 2.5 : want.lengthSq() ? 11 : 14;

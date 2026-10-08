@@ -5,7 +5,9 @@ import { Pickups, KINDS } from '../world/pickups.js';
 import { Harvest } from './harvest.js';
 import { Crafting } from './crafting.js';
 import { Build } from '../build/build.js';
-import { WEATHER } from '../world/weather.js';
+import { Creatures } from '../creatures/creatures.js';
+import { Combat } from './combat.js';
+import { WEATHER, flashSky } from '../world/weather.js';
 import { heldModel, isLeftHanded } from '../player/held.js';
 import { updateFx } from '../render/fx.js';
 import { camera } from '../render/core.js';
@@ -17,11 +19,14 @@ export function installGame(g) {
   g.harvest = new Harvest(g);
   g.build = new Build(g);
   g.crafting = new Crafting(g);
+  g.creatures = new Creatures(g);
+  g.combat = new Combat(g);
   player.floorAt = (p) => g.build.floorAt(p.x, p.z, p.y);
   player.camBlock = (a, b) => g.build.rayBlock(a, b);
   g.underRoof = (p) => g.build.underRoof(p);
   g.nearFire = (p) => !!g.build.nearFire(p);
   g.weatherRain = () => WEATHER.k.rain;
+  g.flashSky = flashSky;
   g.nearMsg = (pos, m) => { if (pos.distanceTo(player.pos) < 25) hud.toast(m); };
   g.sound ||= () => {};
 
@@ -70,7 +75,7 @@ export function installGame(g) {
   // ---- strikes
   player.onStrike = () => {
     const slot = g.heldSlot(), item = slot ? ITEMS[slot.id] : null;
-    const hitSomething = g.harvest.strike(item) || g.combat?.strike(item) || false;
+    const hitSomething = g.combat.strike(item) || g.harvest.strike(item) || false;
     if (hitSomething && slot?.dur !== undefined) { slot.dur -= 1; if (slot.dur <= 0) { hud.toast(`Your ${ITEMS[slot.id].name.toLowerCase()} broke`); inv.slots[inv.slots.indexOf(slot)] = null; } hud.dirtyInv = true; refreshLook(); }
     if (!item) player.stats.train('unarmed', 12.5);
   };
@@ -86,7 +91,7 @@ export function installGame(g) {
   }
   g.interact = () => {
     const t = target(); if (!t) return;
-    if (t.kind === 'pickup') { const [id, n, extra] = g.pickups.take(t.p); g.give(id, n, extra); g.sound('pick'); return; }
+    if (t.kind === 'pickup') { const [id, n, extra] = g.pickups.take(t.p); g.give(id, n, extra?.dur ? { dur: extra.dur } : undefined); g.sound('pick'); return; }
     if (t.kind === 'fruit') { g.harvest.pick(t.t); return; }
     t.use?.();
   };
@@ -94,7 +99,7 @@ export function installGame(g) {
   // ---- per frame
   g.update = (dt) => {
     if (hit('KeyC') && !(hud.open && g.crafting.tab === 'craft')) { if (!hud.open) hud.toggle(true); g.crafting.open('craft'); }
-    if (input.uiOpen || player.dead) { hud.prompt(null); g.build.update(dt); return; }
+    if (input.uiOpen || player.dead) { hud.prompt(null); g.build.update(dt); g.creatures.update(dt); g.combat.update(dt); return; }
     const t = target();
     if (!g.build.active && !(g.equippedTool('build') && g.build.aimPiece)) hud.prompt(t ? 'E' : null, t?.label, t?.sub);
     if (hit('KeyE')) g.interact();
@@ -110,6 +115,10 @@ export function installGame(g) {
     g.pickups.update(player.pos, g.S.day);
     g.harvest.update(dt);
     g.build.update(dt);
+    g.creatures.update(dt);
+    g.combat.update(dt);
+    // loot from kills is picked up as you walk over it
+    for (const d of [...g.pickups.drops]) if (d.extra?.auto && Math.hypot(d.x - player.pos.x, d.z - player.pos.z) < 1.8 && Math.abs(d.y - player.pos.y) < 2) { g.pickups.take(d); g.give(d.item, d.n); g.sound('pick'); }
     if (g.torchLight) g.torchLight.intensity = 5 + Math.sin(performance.now() * 0.02) * 0.6 + Math.random() * 0.4;
   };
   g.lateUpdate = (dt) => { updateFx(dt, camera); };
