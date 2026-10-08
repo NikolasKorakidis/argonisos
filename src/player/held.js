@@ -41,7 +41,7 @@ const bowModel = () => (bowP ||= loadFBX('bow').then((o) => { const tex = loadTe
 export async function heldModel(id) {
   const k = LOOK[id]; if (!k) return null;
   if (k === 'axe' || k === 'axeLight') { const m = (await axeModel()).clone(); if (k === 'axeLight') m.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(0xf4efe0); } }); return m; }
-  if (k === 'bow') return (await bowModel()).clone();
+  if (k === 'bow') { const b = (await bowModel()).clone(); b.rotation.y = Math.PI; const w = new THREE.Group(); w.add(b); return w; }   // turned so the string faces the archer and the limbs curve away
   if (k === 'daggerLight') return CARVED.dagger(light); if (k === 'spearLight') return CARVED.spear(light);
   if (k === 'towerShield') return CARVED.shield(true);
   return CARVED[k]?.() ?? null;
