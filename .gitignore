@@ -1,0 +1,8 @@
+# Design documents are private: they stay on this machine and never go to GitHub.
+# (Anything new dropped into concept/ is ignored; only the old reference images were ever committed.)
+concept/*
+!concept/animals.webp
+!concept/buildings.webp
+!concept/nature.webp
+!concept/world-characters.webp
+.DS_Store
