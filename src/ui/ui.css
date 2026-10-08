@@ -276,3 +276,5 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 #dropAsk .big { width:64px; height:64px; margin:0 auto 6px; font-size:44px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:radial-gradient(circle at 50% 40%, var(--clay3), var(--clay) 60%, var(--clay2)); box-shadow:0 0 0 1px var(--glaze); }
 #dropAsk h3 { margin:0 0 4px; font:700 18px Cinzel,serif; } #dropAsk p { margin:0 0 14px; color:var(--ink2); font-size:14px; }
 #dropAsk .btns { display:flex; gap:10px; justify-content:center; } #dropAsk .btn { min-width:120px; }
+/* the game UI isn't a document: dragging items mustn't select text */
+#hud, #invPanel, #craftPanel, #chestPanel, #pause, #devPanel .pnl > h2, #title, #owlTalk, #dropAsk, #mapPanel { -webkit-user-select:none; user-select:none; }

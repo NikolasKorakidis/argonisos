@@ -227,6 +227,8 @@ export class Build {
       if (dist < bd) { bd = dist; best = p; }
     }
     if (!best) return null;
+    // a cooking stand over a fire: E goes to the stand when there's meat to put on or food to take off
+    if (best.def.fire) { const st = [...this.near(best.pos.x, best.pos.z, 2)].find((q) => q.def.cook && q.pos.distanceTo(best.pos) < 1.5); if (st && (st.state.cook.length || this.g.inv.count('rawMeat') || this.g.inv.count('rawFish'))) best = st; }
     const p = best, d = p.def, inv = this.g.inv;
     if (d.door) return { label: p.state.open ? 'Close' : 'Open', sub: d.name, use: () => { this.setDoor(p, !p.state.open); this.g.sound?.('door'); } };
     if (d.fire) return { label: p.state.lit ? `Add wood (${Math.ceil(p.state.fuel)}/10)` : inv.count('wood') ? 'Light the fire' : 'Needs wood to light', sub: 'Campfire', use: () => {

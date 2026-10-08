@@ -7,7 +7,7 @@ import { Vegetation } from './world/vegetation.js';
 import { windUniform } from './world/trees.js';
 import { updateGrass } from './world/grass.js';
 import { heightAt, biomeWeights, BIOME_NAMES, biomeAt, WORLD } from './world/gen.js';
-import { skyDome, updateSky, fogSky, sunDir, moonDir, LIGHT, DAY_SECONDS, DAY_FRACTION } from './world/sky.js';
+import { skyDome, updateSky, fogSky, sunDir, moonDir, lightDir, LIGHT, DAY_SECONDS, DAY_FRACTION } from './world/sky.js';
 import { updateWeather, setWeather, snapWeather, WEATHER } from './world/weather.js';
 import { setHeightTexture, updateWater } from './world/water.js';
 import { buildStormWall, updateStormWall, STORM_WALL } from './world/stormwall.js';
@@ -142,7 +142,7 @@ function loop() {
   fogSky(Math.min(1, Math.max(0, 1 - scene.fog.far / 1400, atmo.overcast)));
   updateWater(t, camera.position, LIGHT, skyDome, sunDir, moonDir);
   updateStormWall(t, LIGHT);
-  followShadow(focus, sunDir.y > 0 ? sunDir : moonDir);
+  followShadow(focus, lightDir);
   terrain.update(camera.position);
   veg.update(dt, focus); windUniform.value = t; updateGrass(pool, focus);
   game.lateUpdate?.(dt, t);

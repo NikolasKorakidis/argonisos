@@ -5,11 +5,11 @@
 import * as THREE from 'three';
 import { renderer, composer, bloom, sun, camera, GFX } from '../render/core.js';
 import { GRASS } from '../world/grass.js';
-import { setVolume } from '../audio/sound.js';
+import { setVolume, setMusicVolume } from '../audio/sound.js';
 import { input } from '../input.js';
 
 const KEY = 'argonisos.settings.v1';
-export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, sens: 1, fullscreen: false };
+export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, music: 0.5, sens: 1, fullscreen: false };
 try { Object.assign(SETTINGS, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* defaults */ }
 const store = () => { try { localStorage.setItem(KEY, JSON.stringify(SETTINGS)); } catch { /* private mode */ } };
 
@@ -35,6 +35,7 @@ export function applyGraphics() {
 export function setGraphics(level) { SETTINGS.graphics = level; store(); applyGraphics(); }
 export function setRes(r) { SETTINGS.res = r; store(); applyGraphics(); }
 export function setVol(v) { SETTINGS.volume = v; store(); setVolume(v); }
+export function setMusic(v) { SETTINGS.music = v; store(); setMusicVolume(v); }
 export function setSens(s) { SETTINGS.sens = s; store(); input.sens = s; }
 
 // ---- fullscreen
@@ -56,5 +57,5 @@ addEventListener('keyup', (e) => { if (e.code === 'Escape') clearTimeout(escTime
 let onFsChange = null;
 export function onFullscreenChange(f) { onFsChange = f; document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) navigator.keyboard?.unlock?.(); f(); }); }
 
-input.sens = SETTINGS.sens; setVolume(SETTINGS.volume);
+input.sens = SETTINGS.sens; setVolume(SETTINGS.volume); setMusicVolume(SETTINGS.music);
 if (SETTINGS.fullscreen) wantFs = true;   // fullscreen needs a click to come back after a reload: the first one does it

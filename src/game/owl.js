@@ -102,14 +102,14 @@ export class Owl {
   }
   draw() { const c = this.cards[this.card]; this.box.querySelector('h3').textContent = c.title; this.box.querySelector('p').innerHTML = c.body; this.box.querySelector('.dots').innerHTML = this.cards.map((_, i) => `<i class="${i === this.card ? 'on' : ''}"></i>`).join(''); this.box.querySelector('#owlNext').textContent = this.card === this.cards.length - 1 ? 'Farewell' : 'Next'; }
   // is she roughly where the hero is facing (then E talks to her before anything else)
-  faced() { const P = this.g.player, dx = this.pos.x - P.pos.x, dz = this.pos.z - P.pos.z; return Math.abs(Math.atan2(Math.sin(Math.atan2(dx, dz) - P.yaw), Math.cos(Math.atan2(dx, dz) - P.yaw))) < 0.9; }
+  faced() { const P = this.g.player, dx = this.pos.x - P.pos.x, dz = this.pos.z - P.pos.z; return Math.abs(Math.atan2(Math.sin(Math.atan2(dx, dz) - P.yaw), Math.cos(Math.atan2(dx, dz) - P.yaw))) < 1.25; }
   interactable(pos) { if (this.state !== 'escort' || !this.hasNews || this.pos.distanceTo(pos.clone().setY(pos.y + 1.5)) > 4.5) return null; return { label: 'Talk to the Owl', sub: 'She has something to tell you', use: () => this.talk() }; }
   // ---- flying
   arrive() { const P = this.g.player.pos; this.state = 'escort'; this.o.g.visible = true; this.pos.copy(P).add(new THREE.Vector3(25, 22, -15)); this.vel.set(0, 0, 0); this.g.sound?.('owl'); this.g.hud.toast('The <b>Owl</b> has something to tell you <span class="kbd">E</span>'); }
   leave() { this.state = 'leave'; this.t = 0; this.from = this.pos.clone(); }
   escortTarget(out) {
     const P = this.g.player, side = new THREE.Vector3(Math.cos(P.yaw), 0, -Math.sin(P.yaw)), fwd = new THREE.Vector3(Math.sin(P.yaw), 0, Math.cos(P.yaw));
-    out.copy(P.pos).addScaledVector(side, -1.1).addScaledVector(fwd, 2.0); const gy = Math.max(heightAt(out.x, out.z), P.pos.y - 0.5); out.y = gy + 1.9 + Math.sin(this.t * 1.7) * 0.15;
+    out.copy(P.pos).addScaledVector(side, -1.9).addScaledVector(fwd, 1.1); const gy = Math.max(heightAt(out.x, out.z), P.pos.y - 0.5); out.y = gy + 2.5 + Math.sin(this.t * 1.7) * 0.15;   // up and off to the side, out of your view
     return out;
   }
   update(dt) {

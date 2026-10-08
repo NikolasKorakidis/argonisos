@@ -17,6 +17,7 @@ import { save, load, Graves } from './save.js';
 import { sound, updateAmbience } from '../audio/sound.js';
 import { LIGHT } from '../world/sky.js';
 import { WEATHER, flashSky } from '../world/weather.js';
+import { heightAt, biomeWeights } from '../world/gen.js';
 import { heldModel, isLeftHanded } from '../player/held.js';
 import { updateFx } from '../render/fx.js';
 import { askLight, updateLights } from '../render/lights.js';
@@ -124,7 +125,10 @@ export function installGame(g) {
     if (hit('KeyM') || (hit('Escape') && g.map.open)) g.map.toggle();
     g.map.update(dt);
     { const f = g.build.nearFire(player.pos, 9), fd = f ? Math.max(0, 1 - f.pos.distanceTo(player.pos) / 9) : g.structures.nearSacredFire(player.pos) ? 0.5 : 0;
-      updateAmbience(dt, { wind: WEATHER.k.overcast * 0.8 + 0.1, rain: WEATHER.k.rain, night: LIGHT.night, fire: fd, inside: player.stats.has('underRoof') ? 1 : 0 }); }
+      // where you are, sampled twice a second: the biome, and how much sea is around you
+      if (!(g.ambT > 0)) { g.ambT = 0.5; const P = player.pos, bw = biomeWeights(P.x, P.z); let sea = 0; for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; if (heightAt(P.x + Math.cos(a) * 45, P.z + Math.sin(a) * 45) < -0.5) sea++; } g.amb = { forest: bw.y, marsh: bw.v, sea: sea / 8 }; } g.ambT -= dt;
+      const roof = player.stats.has('underRoof');
+      updateAmbience(dt, { wind: WEATHER.k.overcast * 0.8 + 0.1, rain: WEATHER.k.rain, night: LIGHT.night, dusk: LIGHT.dusk, fire: fd, roof: roof ? 1 : 0, inside: roof ? 0.6 : 0, ...g.amb }); }
     if (hit('KeyC') && !g.map.open) hud.toggle(!hud.open);   // C opens and closes the pack and crafting, on whichever tab you left it
     if (input.uiOpen || player.dead) { hud.prompt(null); g.build.update(dt); g.creatures.update(dt); g.combat.update(dt); g.structures.update(dt); return; }
     const t = target();

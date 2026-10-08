@@ -97,19 +97,23 @@ const skyDay = new THREE.Color(0xa9cfe8), skyDusk = new THREE.Color(0xf0a070), s
 const _c1 = new THREE.Color(), _c2 = new THREE.Color();
 export const LIGHT = { day: 1, dusk: 0, night: 0, elev: 1 };   // shared with water, weather, fog
 export function isNight(t) { return t >= DAY_FRACTION; }
-// elevation of the sun: 0 at sunrise, 1 at noon, 0 at sunset, negative through the night
-function sunElevation(t) { return t < DAY_FRACTION ? Math.sin(Math.PI * t / DAY_FRACTION) : -Math.sin(Math.PI * (t - DAY_FRACTION) / (1 - DAY_FRACTION)); }
+// elevation of the sun: 0 at sunrise, 1 at noon, 0 at sunset; through the night it only dips a little below the
+// horizon, so dusk and dawn are long, slow twilights instead of a sudden drop into darkness
+function sunElevation(t) { return t < DAY_FRACTION ? Math.sin(Math.PI * t / DAY_FRACTION) : -0.42 * Math.sin(Math.PI * (t - DAY_FRACTION) / (1 - DAY_FRACTION)); }
+const sstep = (a, b, x) => { const k = clamp((x - a) / (b - a), 0, 1); return k * k * (3 - 2 * k); };
+export const lightDir = new THREE.Vector3(0, 1, 0);   // where the shadows come from: the sun, handing over smoothly to the moon
 export function updateSky(t, dt, time, overcast = 0, dark = 0) {
   const e = sunElevation(t), dayArc = t < DAY_FRACTION ? t / DAY_FRACTION : 1 + (t - DAY_FRACTION) / (1 - DAY_FRACTION);   // 0..1 across the day, 1..2 across the night
-  const day = clamp(e * 2.4 + 0.25, 0, 1), dusk = clamp(1 - Math.abs(e) * 3.2, 0, 1) * (t < DAY_FRACTION ? 1 : 0.6), night = clamp(-e * 3 - 0.05, 0, 1);
+  const day = sstep(-0.14, 0.4, e), dusk = sstep(0.42, 0.04, Math.abs(e - 0.04)) * (t < DAY_FRACTION ? 1 : 0.75), night = sstep(0.02, -0.34, e);
   LIGHT.day = day; LIGHT.dusk = dusk; LIGHT.night = night; LIGHT.elev = e;
   const az = dayArc * Math.PI;                                            // the sun crosses from east to west
   sunDir.set(Math.cos(az), Math.max(e, -0.3), -0.35).normalize();
   moonDir.set(-Math.cos((dayArc - 1) * Math.PI), Math.max(0.3, night * 0.75 + 0.15), 0.4).normalize();
+  lightDir.copy(sunDir).lerp(moonDir, sstep(0.06, -0.12, e)).normalize(); if (lightDir.y < 0.08) { lightDir.y = 0.08; lightDir.normalize(); }
   const skyCol = _c1.copy(skyNight).lerp(skyDay, day).lerp(skyDusk, dusk * 0.55);
   scene.fog.color.copy(skyCol); scene.background = skyCol;
   sun.intensity = lerp(0.15 + day * 2.9, 0.42, night) * (1 - overcast * 0.8) * (1 - dark * 0.75);
-  sun.color.setHex(dusk > 0.4 ? 0xffb070 : 0xffe2b0).lerp(_c2.setHex(0x9fb8ff), night);
+  sun.color.setHex(0xffe2b0).lerp(_c2.setHex(0xffa060), dusk * 0.85).lerp(_c2.setHex(0x9fb8ff), night);
   hemi.intensity = (0.22 + day * 0.45 + night * 0.15) * (1 - overcast * 0.5) * (1 - dark * 0.45);
   hemi.color.setHex(0xbfdcff).lerp(_c2.setHex(0x5a74b8), night); hemi.groundColor.setHex(0x3f6a5a).lerp(_c2.setHex(0x1a2030), night);
   const U = skyDome.material.uniforms;
@@ -119,7 +123,7 @@ export function updateSky(t, dt, time, overcast = 0, dark = 0) {
   skyDome.position.copy(camera.position);
   sky.material.uniforms.sunPosition.value.copy(sunDir);
   renderer.toneMappingExposure = lerp(0.5, 0.84, day) * (1 - overcast * 0.3) * (1 - dark * 0.25);
-  envTimer -= dt; if (envTimer <= 0) { envTimer = 8; refreshEnvironment(); }
+  envTimer -= dt; if (envTimer <= 0) { envTimer = 2; refreshEnvironment(); }
   scene.environmentIntensity = lerp(0.15, 1, day) * (1 - overcast * 0.65) * (1 - dark * 0.4);
   // clouds drift with the wind, warm at dusk, dark at night
   const cc = _c1.setRGB(1.5, 1.5, 1.55).lerp(_c2.setRGB(1.6, 0.95, 0.75), dusk * 0.6).lerp(_c2.setRGB(0.1, 0.12, 0.2), night);
