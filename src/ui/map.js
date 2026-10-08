@@ -33,6 +33,7 @@ export class WorldMap {
   isKnown(s) { return this.st.known.includes(s.x.toFixed(0) + ',' + s.z.toFixed(0)); }
   reveal(s) { this.know(s); this.uncover(s.x, s.z, 90); }
   uncover(x, z, r) { const k = FOG / EXT, f = this.fctx; f.globalCompositeOperation = 'destination-out'; const g = f.createRadialGradient((x + EXT / 2) * k, (z + EXT / 2) * k, 0, (x + EXT / 2) * k, (z + EXT / 2) * k, r * k); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.7, 'rgba(0,0,0,.9)'); g.addColorStop(1, 'rgba(0,0,0,0)'); f.fillStyle = g; f.beginPath(); f.arc((x + EXT / 2) * k, (z + EXT / 2) * k, r * k, 0, 7); f.fill(); f.globalCompositeOperation = 'source-over'; }
+  done(s) { const st = this.g.trial?.st; if (!st) return false; const i = SITES.olives.indexOf(s); if (i >= 0) return st.scraps.includes('olive' + i); const k = SITES.caves.indexOf(s); return k >= 0 && st.carvings.includes('cave' + k); }
   sites() { return [SITES.temple, SITES.house, SITES.labyrinth, SITES.chimera, ...SITES.olives, ...SITES.caves].filter(Boolean); }
   toggle(on = !this.open) { this.open = on; this.panel.classList.toggle('hidden', !on); input.uiOpen = on || this.g.hud.open; if (on) { unlock(); this.cx = this.g.player.pos.x; this.cz = this.g.player.pos.z; this.zoom = 2; this.fit(); this.draw(); } else if (!this.g.hud.open) lock(); }
   fit() { const s = Math.min(innerWidth - 80, innerHeight - 140, 900); this.cv.width = this.cv.height = s; this.cv.style.width = this.cv.style.height = s + 'px'; }
@@ -44,8 +45,8 @@ export class WorldMap {
     // the unexplored: parchment fog
     c.save(); c.globalAlpha = 0.96; c.drawImage(this.fog, (sx / N) * FOG, (sz / N) * FOG, (sw / N) * FOG, (sw / N) * FOG, 0, 0, W, W); c.restore();
     const P = (x, z) => [(x - x0) * k, (z - z0) * k];
-    for (const s of this.sites()) { if (!this.isKnown(s)) continue; const [px, py] = P(s.x, s.z); const im = iconImg(ICON[s.kind]); c.fillStyle = 'rgba(244,230,196,.85)'; c.beginPath(); c.arc(px, py, 13, 0, 7); c.fill(); c.strokeStyle = '#211610'; c.lineWidth = 1.5; c.stroke(); if (im.complete) c.drawImage(im, px - 10, py - 10, 20, 20);
-      c.font = '600 13px Cinzel, serif'; c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = 'rgba(244,230,196,.9)'; c.strokeText(LABEL[s.kind], px, py + 27); c.fillStyle = '#2b1c0f'; c.fillText(LABEL[s.kind], px, py + 27); }
+    for (const s of this.sites()) { if (!this.isKnown(s)) continue; const [px, py] = P(s.x, s.z); const im = iconImg(ICON[s.kind]); const done = this.done(s); c.globalAlpha = done ? 0.55 : 1; c.fillStyle = 'rgba(244,230,196,.85)'; c.beginPath(); c.arc(px, py, 13, 0, 7); c.fill(); c.strokeStyle = '#211610'; c.lineWidth = 1.5; c.stroke(); if (im.complete) c.drawImage(im, px - 10, py - 10, 20, 20);
+      c.font = '600 13px Cinzel, serif'; c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = 'rgba(244,230,196,.9)'; const lb = LABEL[s.kind] + (done ? (s.kind === 'olive' ? ' (copied)' : ' (taken)') : ''); c.strokeText(lb, px, py + 27); c.fillStyle = '#2b1c0f'; c.fillText(lb, px, py + 27); c.globalAlpha = 1; }
     const b = this.g.S.bed; if (b) { const [px, py] = P(b.x, b.z), im = iconImg('rested'); if (im.complete) c.drawImage(im, px - 9, py - 9, 18, 18); }
     const pl = this.g.player, [px, py] = P(pl.pos.x, pl.pos.z); c.save(); c.translate(px, py); c.rotate(-pl.yaw + Math.PI); c.fillStyle = '#a8401f'; c.strokeStyle = '#fff4dc'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, -11); c.lineTo(8, 9); c.lineTo(0, 4); c.lineTo(-8, 9); c.closePath(); c.fill(); c.stroke(); c.restore();
     document.getElementById('mapLegend').innerHTML = `<span>${icon('you')} You</span>${b ? `<span>${icon('rested')} Your bed</span>` : ''}<span class="dim">Wheel to zoom · drag to pan · <span class="kbd">M</span> close</span>`;
@@ -57,7 +58,7 @@ export class WorldMap {
     const yaw = this.g.player.camYaw, W = this.strip.parentElement.clientWidth || 440, deg = (((yaw * 180) / Math.PI + 180) % 360 + 360) % 360, px = 2.4;
     let html = ''; const put = (bearing, label, cls) => { let d = bearing - deg; d = ((d + 540) % 360) - 180; if (Math.abs(d) > 90) return; html += `<span class="${cls}" style="left:${W / 2 - d * px}px">${label}</span>`; };
     [['N', 180], ['E', 90], ['S', 0], ['W', 270]].forEach(([l, b]) => put(b, l, 'card')); [45, 135, 225, 315].forEach((b) => put(b, '·', 'mid'));
-    for (const s of this.sites()) if (this.isKnown(s)) { const b = ((Math.atan2(s.x - P.x, s.z - P.z) * 180) / Math.PI + 360) % 360, dist = Math.hypot(s.x - P.x, s.z - P.z); if (dist > 15) put(b, `${icon(ICON[s.kind])}<small>${dist > 999 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm'}</small>`, 'poi'); }
+    for (const s of this.sites()) if (this.isKnown(s) && !this.done(s)) { const b = ((Math.atan2(s.x - P.x, s.z - P.z) * 180) / Math.PI + 360) % 360, dist = Math.hypot(s.x - P.x, s.z - P.z); if (dist > 15) put(b, `${icon(ICON[s.kind])}<small>${dist > 999 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm'}</small>`, 'poi'); }
     if (html !== this.lastC) { this.lastC = html; this.strip.innerHTML = html; }
   }
   toJSON() { return { known: this.st.known, fog: this.fog.toDataURL() }; }

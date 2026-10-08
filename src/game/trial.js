@@ -44,8 +44,8 @@ export class Trial {
     if (u.kind === 'offering') { const head = u.boss + 'Head'; if (st.offered[u.boss]) return { label: `${ITEMS[head].name} offered`, sub: POWERS[u.boss === 'minotaur' ? 'roar' : 'claw'].name, use: () => this.choosePower(u.boss) };
       return { label: inv.count(head) ? `Offer the ${ITEMS[head].name.toLowerCase()}` : `A place for the head of ${BOSS_NAME[u.boss]}`, sub: 'Offering stand', use: () => this.offer(u) }; }
     if (u.kind === 'loot') return st.looted.includes(u.id) ? { label: 'Empty', sub: 'Old chest', use: () => {} } : { label: 'Search the old chest', sub: 'Abandoned house', use: () => this.loot(u) };
-    if (u.kind === 'scrap') return st.scraps.includes(u.id) ? { label: 'You already copied these marks', sub: 'Ancient olive', use: () => {} } : { label: 'Copy the carved marks', sub: 'Ancient olive', use: () => this.clue(u, 'scraps', 'oliveScrap') };
-    if (u.kind === 'carving') return st.carvings.includes(u.id) ? { label: 'You already took this carving', sub: 'Giant cave', use: () => {} } : { label: 'Take a rubbing of the carving', sub: 'Giant cave', use: () => this.clue(u, 'carvings', 'caveCarving') };
+    if (u.kind === 'scrap') return st.scraps.includes(u.id) ? { label: 'You already copied these marks', sub: this.nextHint('scraps'), use: () => this.pointNext('scraps', true) } : { label: 'Copy the carved marks', sub: 'Ancient olive', use: () => this.clue(u, 'scraps', 'oliveScrap') };
+    if (u.kind === 'carving') return st.carvings.includes(u.id) ? { label: 'You already took this carving', sub: this.nextHint('carvings'), use: () => this.pointNext('carvings', true) } : { label: 'Take a rubbing of the carving', sub: 'Giant cave', use: () => this.clue(u, 'carvings', 'caveCarving') };
     if (u.kind === 'summon') {
       if (st.down[u.boss]) return { label: 'The altar is silent', sub: `${BOSS_NAME[u.boss][0].toUpperCase() + BOSS_NAME[u.boss].slice(1)} is no more`, use: () => {} };
       if (this.boss) return { label: 'The fight is on', sub: '', use: () => {} };
@@ -64,11 +64,27 @@ export class Trial {
   clue(u, key, item) {
     const g = this.g; this.st[key].push(u.id); u.taken = true; g.give(item, 1); burst(u.at.clone().setY(u.at.y + 1.4), { color: 0xffe7a0, n: 16, speed: 1.4, grav: -1.5 });
     const n = this.st[key].length, boss = key === 'scraps' ? 'labyrinth' : 'chimera';
-    if (n < 3) { g.hud.toast(key === 'scraps' ? `The marks are part of a map. <b>${n} of 3</b> pieces.` : `A carving of the forest and a beast. <b>${n} of 3</b> pieces.`); return; }
+    if (n < 3) {
+      g.hud.toast(key === 'scraps' ? `The marks are part of a map. <b>${n} of 3</b> pieces.` : `A carving of the forest and a beast. <b>${n} of 3</b> pieces.`);
+      setTimeout(() => this.pointNext(key), 1800); return;
+    }
     if (this.st.revealed[boss]) return;
     this.st.revealed[boss] = true;
     g.hud.region(boss === 'labyrinth' ? 'The Labyrinth' : "The Chimera's Shrine", boss === 'labyrinth' ? 'The pieces fit: the way to the Minotaur is marked on your map' : 'The carvings fit: the Chimera\'s lair is marked on your map');
     g.sound?.('reveal'); g.map?.reveal(SITES[boss]);
+  }
+  // The clue sites not yet done, by distance from the player
+  remaining(key) {
+    const P = this.g.player.pos, list = key === 'scraps' ? SITES.olives.map((s, i) => [s, 'olive' + i]) : SITES.caves.map((s, i) => [s, 'cave' + i]);
+    return list.filter(([, id]) => !this.st[key].includes(id)).map(([s]) => s).sort((a, b) => Math.hypot(a.x - P.x, a.z - P.z) - Math.hypot(b.x - P.x, b.z - P.z));
+  }
+  nextHint(key) { const done = this.st[key].length; if (done >= 3) return key === 'scraps' ? 'The Labyrinth is on your map' : "The Chimera's shrine is on your map"; return `${done} of 3 · the next is marked on your map`; }
+  // Each piece shows where to find another: mark the nearest one not yet done on the map and compass
+  pointNext(key, again) {
+    if (this.st[key].length >= 3) return; const s = this.remaining(key)[0]; if (!s) return;
+    const known = this.g.map?.isKnown(s); this.g.map?.reveal(s);
+    const d = Math.round(Math.hypot(s.x - this.g.player.pos.x, s.z - this.g.player.pos.z));
+    if (!known || again) this.g.hud.toast(key === 'scraps' ? `The marks point to another <b>ancient olive</b>, about ${d} m away. It's on your map and compass.` : `The carving shows another <b>Giant cave</b>, about ${d} m away. It's on your map and compass.`);
   }
   summon(u) {
     const g = this.g, T = TRIBUTE[u.boss]; if (!g.inv.has(T)) { g.hud.toast('You don\'t have the tribute yet'); return; }
