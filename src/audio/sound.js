@@ -1,11 +1,12 @@
 // Sound, synthesised with WebAudio (no files): shaped noise and oscillators for footsteps, chops, strikes, thunder and
 // roars, and ambient beds that follow the world (wind, rain, birdsong by day, crickets at night, the crackle of fires).
-let ctx = null, master = null, noiseBuf = null;
+let ctx = null, master = null, noiseBuf = null, volume = 0.8;
+export function setVolume(v) { volume = v; if (master) master.gain.value = 0.9 * v; }
 const amb = {};
 function init() {
   if (ctx) return true;
   try {
-    ctx = new AudioContext(); master = ctx.createGain(); master.gain.value = 0.7; master.connect(ctx.destination);
+    ctx = new AudioContext(); master = ctx.createGain(); master.gain.value = 0.9 * volume; master.connect(ctx.destination);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate); const d = noiseBuf.getChannelData(0); let b = 0;
     for (let i = 0; i < d.length; i++) { const w = Math.random() * 2 - 1; b = 0.98 * b + 0.02 * w; d[i] = w * 0.6 + b * 2.5; }   // a little pinkish
     // ambient beds: looping noise through filters, faded by update()

@@ -1,7 +1,7 @@
 // Keyboard and mouse. Mouse look while the pointer is locked; panels (inventory, crafting, build menu) free the cursor.
 import { renderer } from './render/core.js';
 
-export const input = { keys: {}, pressed: new Set(), lmb: false, rmb: false, clicks: [], wheel: 0, dx: 0, dy: 0, locked: false, uiOpen: false };
+export const input = { sens: 1, keys: {}, pressed: new Set(), lmb: false, rmb: false, clicks: [], wheel: 0, dx: 0, dy: 0, locked: false, uiOpen: false };
 const canvas = renderer.domElement;
 addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement) return;
@@ -19,7 +19,7 @@ addEventListener('mouseup', (e) => { if (e.button === 0) input.lmb = false; if (
 addEventListener('contextmenu', (e) => e.preventDefault());
 addEventListener('mousemove', (e) => { if (!input.locked) return; input.dx += e.movementX; input.dy += e.movementY; });
 addEventListener('wheel', (e) => { if (input.locked) input.wheel += Math.sign(e.deltaY); }, { passive: true });
-document.addEventListener('pointerlockchange', () => { input.locked = document.pointerLockElement === canvas; if (!input.locked) input.lmb = input.rmb = false; });
+document.addEventListener('pointerlockchange', () => { input.locked = document.pointerLockElement === canvas; if (!input.locked) { input.lmb = input.rmb = false; input.onUnlock?.(); } });
 export function lock() { canvas.requestPointerLock?.()?.catch?.(() => {}); }
 export function unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
 // Call once at the end of each frame

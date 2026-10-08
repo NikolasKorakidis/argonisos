@@ -42,7 +42,7 @@ export class Player {
     const S = this.stats;
     // ---- camera input
     if (input.locked && !input.uiOpen) {
-      this.camYaw -= input.dx * 0.0022; this.camPitch = clamp(this.camPitch - input.dy * 0.0022, -1.25, 1.0);
+      this.camYaw -= input.dx * 0.0022 * input.sens; this.camPitch = clamp(this.camPitch - input.dy * 0.0022 * input.sens, -1.25, 1.0);
       this.camDist = clamp(this.camDist + input.wheel * 0.6, 1.8, 11);
     }
     const ground = heightAt(this.pos.x, this.pos.z);

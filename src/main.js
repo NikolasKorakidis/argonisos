@@ -19,7 +19,7 @@ import { Inventory } from './game/inventory.js';
 import { ITEMS } from './game/items.js';
 import { HUD } from './ui/hud.js';
 import { installGame } from './game/game.js';
-import { titleScreen } from './ui/title.js';
+import { titleScreen, pauseMenu } from './ui/title.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -106,6 +106,7 @@ export const game = { player, inv, hud, veg, colliders, scene, S, pool, useSlot 
 installGame(game);
 // the title screen until the land around you and the hero are in (?play skips it, for tests)
 const readiness = () => Math.min(1, (terrain.drawn > 40 && terrain.pending === 0 ? 0.6 : terrain.drawn / 70) + (player.hero.model ? 0.25 : 0) + (veg.near.size > 6 ? 0.15 : 0));
+pauseMenu(game);
 if (new URLSearchParams(location.search).has('play')) game.started = true; else titleScreen(game, readiness);
 const clockText = () => { const t = S.time, h = t < DAY_FRACTION ? 6 + (t / DAY_FRACTION) * 15 : (21 + ((t - DAY_FRACTION) / (1 - DAY_FRACTION)) * 9) % 24; return `Day ${S.day} · ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 6) * 10).padStart(2, '0')}`; };
 
@@ -117,7 +118,8 @@ function loop() {
   if (!game.paused) S.time += dt * S.timeScale / DAY_SECONDS; if (S.time >= 1) { S.time -= 1; S.day++; hud.toast(`<b>Day ${S.day}</b> dawns`); }
   // keys
   const busy = !game.started || game.paused;
-  if (game.started && hit('Escape') && !hud.open && !game.map?.open && !game.owl?.open && !game.build?.sel) game.pause(!game.paused);
+  const pauseKey = hit('KeyP') || (hit('Escape') && performance.now() - (game.pausedAt || 0) > 400);   // (the Esc that just paused us via the mouse release doesn't unpause)
+  if (game.started && pauseKey && !hud.open && !game.map?.open && !game.owl?.open && !(game.build?.sel && !game.paused)) game.pause(!game.paused);
   if (!busy && (hit('Tab') || hit('KeyI') || (hit('Escape') && hud.open))) hud.toggle();
   if (!busy && !input.uiOpen) for (let k = 1; k <= 8; k++) if (hit('Digit' + k)) useSlot(k - 1);
   if (hit('F3')) { S.debug = !S.debug; $('dbg').classList.toggle('hidden', !S.debug); }
