@@ -34,7 +34,7 @@ export function installGame(g) {
   g.trial = new Trial(g);
   g.map = new WorldMap(g);
   g.owl = new Owl(g);
-  g.ITEMS = ITEMS; g.graves = new Graves(g); g.onDeath = () => g.graves.fall();
+  g.ITEMS = ITEMS; g.graves = new Graves(g); { const od = g.onDeath; g.onDeath = () => { g.graves.fall(); od?.(); }; }
   g.combat = new Combat(g);
   player.floorAt = (p) => Math.max(g.build.floorAt(p.x, p.z, p.y), g.structures.floorAt(p.x, p.z, p.y));
   player.camBlock = (a, b) => g.build.rayBlock(a, b);
@@ -99,6 +99,7 @@ export function installGame(g) {
   // ---- E: the nearest thing you can use
   function target() {
     const f = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)), front = player.pos.clone().addScaledVector(f, 0.9);
+    const owl = g.owl.interactable(player.pos); if (owl && g.owl.faced()) return owl;
     const p = g.pickups.nearest(front, 1.9);
     if (p) { const id = p.kind === 'drop' ? p.item : KINDS[p.kind].item, n = p.kind === 'drop' ? p.n : 1; return { kind: 'pickup', p, label: `Pick up ${ITEMS[id].name}${n > 1 ? ` ×${n}` : ''}` }; }
     const ow = g.owl.interactable(player.pos) || g.graves.interactable(player.pos); if (ow) return ow;
