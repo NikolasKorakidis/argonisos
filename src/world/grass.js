@@ -101,13 +101,37 @@ export const grassU = { uWind: windUniform, uCenter: { value: new THREE.Vector2(
   const f2 = flowerCarpet(merge(spikeParts), 2600, [0x7a5fd0, 0x5b4fc4, 0x9a6ad8], 1.1);
   f2.material.vertexColors = true;
 }
-let pending = false, lastX = 1e9, lastZ = 1e9;
+let pending = false, lastX = 1e9, lastZ = 1e9, cur = null;
+// Places where grass doesn't grow: under logs, floors, fires and the like. Each is a circle (x, z, r) or a rotated
+// rectangle (x, z, hw, hd, rot); they are stamped into the grass channel of the local ground texture.
+const clears = new Map();
+let restamp = false;
+export function clearGrass(key, shape) { if (shape) clears.set(key, shape); else clears.delete(key); restamp = true; }
+function stamp(c) {
+  const { data, N, x0, z0, base } = c, k = TEX_SIZE / N;
+  data.set(base);                                   // start from the worker's grass, then cut every clearing into it
+  for (const s of clears.values()) {
+    const r = s.r ?? Math.hypot(s.hw, s.hd), i0 = Math.max(0, Math.floor((s.x - r - 1 - x0) / k)), i1 = Math.min(N - 1, Math.ceil((s.x + r + 1 - x0) / k));
+    const j0 = Math.max(0, Math.floor((s.z - r - 1 - z0) / k)), j1 = Math.min(N - 1, Math.ceil((s.z + r + 1 - z0) / k));
+    const cs = Math.cos(s.rot || 0), sn = Math.sin(s.rot || 0);
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const dx = x0 + (i + 0.5) * k - s.x, dz = z0 + (j + 0.5) * k - s.z;
+      let d;   // distance outside the shape (negative inside)
+      if (s.r !== undefined) d = Math.hypot(dx, dz) - s.r;
+      else { const u = Math.abs(dx * cs - dz * sn) - s.hw, v = Math.abs(dx * sn + dz * cs) - s.hd; d = Math.max(u, v); }
+      const f = Math.min(1, Math.max(0, (d + 0.2) / 0.6)), o = (j * N + i) * 4 + 1;
+      data[o] = Math.min(data[o], data[o] * f); data[o + 2] *= f;   // grass and flowers both
+    }
+  }
+}
 export function updateGrass(pool, pos) {
   grassU.uCenter.value.set(pos.x, pos.z);
+  if (restamp && cur) { restamp = false; stamp(cur); cur.tex.needsUpdate = true; }
   if (pending || Math.hypot(pos.x - lastX, pos.z - lastZ) < 25) return;
   pending = true; const x0 = Math.round(pos.x) - TEX_SIZE / 2, z0 = Math.round(pos.z) - TEX_SIZE / 2;
   pool.post({ type: 'grassTex', N: TEX_N, x0, z0, size: TEX_SIZE }).then((m) => {
-    const t = new THREE.DataTexture(m.data, m.N, m.N, THREE.RGBAFormat, THREE.FloatType); t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
+    const t = new THREE.DataTexture(m.data, m.N, m.N, THREE.RGBAFormat, THREE.FloatType); t.magFilter = t.minFilter = THREE.LinearFilter;
+    cur = { data: m.data, base: m.data.slice(), N: m.N, x0: m.x0, z0: m.z0, tex: t }; stamp(cur); t.needsUpdate = true;
     grassU.uHeight.value?.dispose(); grassU.uHeight.value = t; grassU.uOrigin.value.set(m.x0, m.z0);
     lastX = m.x0 + TEX_SIZE / 2; lastZ = m.z0 + TEX_SIZE / 2; pending = false;
   });

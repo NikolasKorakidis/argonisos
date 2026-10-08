@@ -13,7 +13,7 @@ addEventListener('keyup', (e) => { input.keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in input.keys) input.keys[k] = false; input.lmb = input.rmb = false; });
 canvas.addEventListener('mousedown', (e) => {
   if (!input.locked && !input.uiOpen) { lock(); return; }
-  if (e.button === 0) { input.lmb = true; input.clicks.push(0); } if (e.button === 2) { input.rmb = true; input.clicks.push(2); }
+  if (e.button === 0) { input.lmb = true; input.clicks.push(0); } if (e.button === 1) { input.clicks.push(1); e.preventDefault(); } if (e.button === 2) { input.rmb = true; input.clicks.push(2); }
 });
 addEventListener('mouseup', (e) => { if (e.button === 0) input.lmb = false; if (e.button === 2) input.rmb = false; });
 addEventListener('contextmenu', (e) => e.preventDefault());

@@ -153,6 +153,8 @@ export class Player {
     // keep the camera out of hills between it and the player
     for (let i = 1; i <= 6; i++) { const p = target.clone().lerp(want, i / 6), g = heightAt(p.x, p.z) + 0.4; if (p.y < g) { want.y += g - p.y; } }
     want.y = Math.max(want.y, heightAt(want.x, want.z) + 0.5, -0.6);
+    // ...and out of walls and roofs: pull in to just in front of whatever is between
+    const block = this.camBlock?.(target, want); if (block !== undefined && block !== null) { const dir = want.clone().sub(target); want.copy(target).add(dir.setLength(Math.max(0.6, block - 0.25))); }
     camera.position.lerp(want, Math.min(1, dt * (14 + k * 10))); camera.lookAt(target);
   }
 }

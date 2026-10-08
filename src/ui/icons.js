@@ -51,6 +51,16 @@ Object.assign(ICONS, {
   blessing: Array.from({ length: 10 }, (_, i) => { const a = i / 10 * Math.PI * 2; return ln(`M${(32 + Math.cos(a) * 16).toFixed(1)} ${(32 + Math.sin(a) * 16).toFixed(1)} L${(32 + Math.cos(a) * 26).toFixed(1)} ${(32 + Math.sin(a) * 26).toFixed(1)}`, G, 2.6); }).join('') + circ(32, 32, 12, G) + fill('M34 22 L26 33 h5 L28 42 L38 30 h-5 L36 22z'),
   swift: fill('M10 32 q14 -18 40 -10 l-8 4 q8 2 12 8 q-26 -4 -44 -2z') + ln('M6 40 h20 M10 46 h14', K, 2.4),
   hammerBuild: ICONS.hammer,
+  wall: `<rect x="8" y="10" width="48" height="44" fill="${K}"/>` + [16, 24, 32, 40, 48].map((x) => inc(`M${x} 12 V52`, 1.2)).join('') + `<rect x="8" y="10" width="48" height="5" fill="${O}"/>` + `<rect x="8" y="10" width="5" height="44" fill="${O}"/><rect x="51" y="10" width="5" height="44" fill="${O}"/>`,
+  door: `<rect x="10" y="8" width="44" height="50" fill="${K}"/>` + `<rect x="20" y="18" width="24" height="40" fill="${O}"/>` + ln('M26 20 V56 M32 20 V56 M38 20 V56', K, 1.4) + circ(40, 38, 2, K),
+  beam: `<rect x="27" y="4" width="10" height="56" fill="${K}"/>` + inc('M30 8 V56 M34 10 V52', 1) + ln('M10 50 L54 14', K, 6) + inc('M14 47 L50 18', 1),
+  floor: fill('M4 40 L32 26 L60 40 L32 54z') + [0, 1, 2, 3].map((i) => inc(`M${11 + i * 7} ${36.5 - i * 3.5} L${39 + i * 7} ${50.5 - i * 3.5}`, 1.1)).join('') + fill('M4 40 v5 L32 59 L60 45 v-5 L32 54z', O),
+  roofEnd: fill('M6 52 L32 12 L58 52z') + inc('M14 46 L32 20 L50 46z', 1.3) + `<rect x="4" y="52" width="56" height="5" fill="${O}"/>`,
+  stairs: fill('M6 56 V46 H18 V36 H30 V26 H42 V16 H58 V56z') + inc('M8 52 H54 M20 42 H54 M32 32 H54 M44 22 H54', 1.1),
+  fence: ln('M12 16 V56 M32 16 V56 M52 16 V56', K, 5) + ln('M6 28 H58 M6 44 H58', K, 4) + inc('M8 28 H56', 1),
+  stockade: [10, 18, 26, 34, 42, 50].map((x, i) => fill(`M${x - 3.5} 58 V${16 + (i % 2) * 4} L${x} ${8 + (i % 2) * 4} L${x + 3.5} ${16 + (i % 2) * 4} V58z`)).join('') + ln('M6 30 H58 M6 46 H58', O, 3),
+  gate: ln('M8 10 V58 M56 10 V58', K, 5) + fill('M12 18 H52 V54 H12z') + inc('M18 20 V52 M26 20 V52 M34 20 V52 M42 20 V52 M12 22 L52 50', 1.2),
+  repair: ln('M16 54 L40 30', K, 6) + fill('M36 14 a12 12 0 1 0 14 14 l-8 -2 l-4 -4 z') + inc('M20 50 L38 32', 1),
 });
 
 export { ICONS, icon, iconImg, K, R, C, G, O, L };

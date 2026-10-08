@@ -32,6 +32,7 @@ export class HUD {
       <div class="pnl" id="charPanel"><h2>Hero</h2><div class="pbody" id="charBody"></div></div>`;
     document.body.appendChild(p); this.panel = p;
     $('invX').onclick = () => this.toggle(false);
+    addEventListener('resize', () => this.open && this.fit());
     this.side = null;     // optional extra panel (crafting) placed beside the pack
   }
   bind(player, inv) {
@@ -56,6 +57,11 @@ export class HUD {
   }
   hurt(k) { $('hurt').style.boxShadow = `inset 0 0 160px rgba(200,20,20,${Math.min(0.75, k)})`; clearTimeout(this.hurtT); this.hurtT = setTimeout(() => ($('hurt').style.boxShadow = ''), 250); }
   death(on) { $('death').classList.toggle('show', on); }
+  // Fade out, let the night pass, fade back in
+  sleep(cb) {
+    const d = $('death'); d.querySelector('h1').textContent = 'You sleep'; d.querySelector('p').textContent = 'The night passes…'; d.classList.add('show');
+    setTimeout(() => { cb(); setTimeout(() => { d.classList.remove('show'); setTimeout(() => { d.querySelector('h1').textContent = 'You have fallen'; d.querySelector('p').textContent = 'Zeus is not done with you yet…'; }, 1300); }, 600); }, 2200);
+  }
   // ---- per frame
   update(dt, clockText, night) {
     const P = this.player, S = P.stats;
@@ -98,12 +104,20 @@ export class HUD {
     this.open = on; this.panel.classList.toggle('hidden', !on); input.uiOpen = on;
     if (on) { unlock(); this.drawGrid(); this.drawChar(); } else { lock(); this.sel = -1; this.onClose?.(); }
     this.onToggle?.(on);
+    if (on) this.fit();
+  }
+  // Scale the screen down to fit small windows
+  fit() {
+    const p = this.panel; p.style.transform = 'translate(-50%,-50%)';
+    const k = Math.min(1, (innerWidth - 24) / p.scrollWidth, (innerHeight - 24) / p.scrollHeight);
+    p.style.transform = `translate(-50%,-50%) scale(${k})`;
   }
   buildGrid() {
     const g = $('invGrid'); let drag = null, ghost = null;
     g.addEventListener('pointerdown', (e) => {
       const s = e.target.closest('.slot'); if (!s) return; const i = +s.dataset.i;
       if (e.button === 2) { this.onUse?.(i); return; }                                  // right click: use / equip / eat
+      if (this.onSlotClick?.(i)) { this.drawGrid(); return; }                          // a chest is open: click moves things across
       if (!this.inv.slots[i]) return;
       if (e.shiftKey) { this.inv.split(i); return; }
       drag = i; s.classList.add('drag'); ghost = el('div', 'slot', icon(ITEMS[this.inv.slots[i].id].icon)); ghost.id = 'dragGhost'; document.body.appendChild(ghost);

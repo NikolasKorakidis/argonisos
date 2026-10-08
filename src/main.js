@@ -18,6 +18,7 @@ import { Player } from './player/player.js';
 import { Inventory } from './game/inventory.js';
 import { ITEMS } from './game/items.js';
 import { HUD } from './ui/hud.js';
+import { installGame } from './game/game.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -101,6 +102,7 @@ function updateConditions() {
 }
 // Game systems (crafting, building, creatures...) plug in here
 export const game = { player, inv, hud, veg, colliders, scene, S, pool, useSlot };
+installGame(game);
 const clockText = () => { const t = S.time, h = t < DAY_FRACTION ? 6 + (t / DAY_FRACTION) * 15 : (21 + ((t - DAY_FRACTION) / (1 - DAY_FRACTION)) * 9) % 24; return `Day ${S.day} · ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 6) * 10).padStart(2, '0')}`; };
 
 // ---- Loop

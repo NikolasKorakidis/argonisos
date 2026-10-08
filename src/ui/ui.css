@@ -135,3 +135,34 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 .skill i { grid-column:1 / -1; height:4px; border-radius:2px; background:rgba(107,79,44,.2); overflow:hidden; }
 .skill i u { display:block; height:100%; background:var(--clay2); }
 #dragGhost { position:fixed; z-index:40; pointer-events:none; width:56px; height:56px; font-size:34px; transform:translate(-50%,-50%); opacity:.9; }
+
+/* ---------- crafting ---------- */
+#craftPanel { width:330px; }
+#craftPanel .pbody { display:flex; flex-direction:column; gap:10px; max-height:72vh; }
+#craftTabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+#craftTabs button { display:flex; align-items:center; justify-content:center; gap:6px; padding:6px 0; font:700 12px Cinzel,serif; letter-spacing:.1em; text-transform:uppercase; cursor:pointer;
+                    color:var(--ink2); background:rgba(120,80,30,.12); border:1px solid rgba(90,60,25,.35); border-radius:var(--r); }
+#craftTabs button .ic { font-size:18px; }
+#craftTabs button.on { color:var(--cream); background:linear-gradient(180deg,var(--glaze2),var(--glaze)); border-color:#000; }
+#craftList { overflow:auto; max-height:34vh; min-height:120px; padding-right:4px; }
+#craftList .psub { margin:8px 0 4px; }
+#craftList .empty { font-size:14px; color:var(--ink2); font-style:italic; }
+.rrow { display:flex; width:100%; align-items:center; gap:10px; padding:5px 8px; border:1px solid transparent; border-radius:var(--r); cursor:pointer; font-size:15px; color:var(--ink); background:none; text-align:left; }
+.rrow i { font-style:normal; font-size:24px; width:26px; display:flex; justify-content:center; }
+.rrow em { margin-left:auto; font:700 10px Cinzel,serif; letter-spacing:.1em; text-transform:uppercase; color:var(--cream); background:var(--red); padding:2px 6px; border-radius:8px; font-style:normal; }
+.rrow:hover { background:rgba(120,80,30,.12); }
+.rrow.on { background:rgba(154,52,32,.12); border-color:rgba(154,52,32,.45); }
+.rrow.no { color:#8a7458; } .rrow.locked { font-style:italic; opacity:.7; }
+#craftDetail { display:flex; flex-direction:column; align-items:center; gap:8px; padding-top:10px; border-top:6px solid transparent; border-image:var(--dots) 6; text-align:center; }
+#craftDetail .big { width:72px; height:72px; font-size:50px; display:flex; align-items:center; justify-content:center; border-radius:50%;
+                    background:radial-gradient(circle at 50% 40%, var(--clay3), var(--clay) 60%, var(--clay2)); box-shadow:0 0 0 1px var(--glaze), 0 0 0 4px rgba(244,230,196,.35); }
+#craftDetail h3 { margin:0; font:700 18px Cinzel,serif; }
+#craftDetail .desc { margin:0; color:var(--ink2); font-size:13.5px; line-height:1.4; }
+#craftDetail .cost { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+#craftDetail .cost .slot { width:48px; height:48px; font-size:30px; }
+#craftDetail .cost .slot.no em { color:#ffb4a4; }
+#craftDetail .where { margin:0; font-size:12.5px; color:var(--ink2); display:flex; gap:6px; align-items:center; }
+#craftDetail .btn { width:100%; }
+#chestPanel .grid { display:grid; gap:5px; }
+#chestPanel .grid .slot { width:56px; height:56px; font-size:34px; cursor:pointer; }
+#chestPanel .hint, #craftPanel .hint { margin:10px 0 0; font-size:12.5px; color:var(--ink2); font-style:italic; text-align:center; }

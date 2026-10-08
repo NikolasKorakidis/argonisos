@@ -61,7 +61,8 @@ export class Vegetation {
     for (const nm of names) for (let v = 0; v < 3; v++) { propGeo(nm, v); progress?.(++n / (names.length * 3)); }
   }
   geoFor(sp, v) { return propGeo(SPECIES[sp].name, v); }
-  buildMeshes(items, far, cx, cz) {
+  buildMeshes(items, far, cx, cz, ids) {
+    const hidden = new Set(); if (far && ids) for (const [id, i] of ids) if (this.removed.has(id)) hidden.add(i);
     const groups = new Map();
     for (let i = 0; i < items.length / STRIDE; i++) {
       const sp = items[i * STRIDE], v = items[i * STRIDE + 1];
@@ -72,11 +73,11 @@ export class Vegetation {
     for (const { P, idx } of groups.values()) {
       const geo = far ? P.lo : P.geo;
       const im = new THREE.InstancedMesh(geo, cut(propMat, far), idx.length);
-      idx.forEach((i, k) => im.setMatrixAt(k, matrixOf(items, i, !far && this.removed.has(`${cx},${cz},${i}`))));
+      idx.forEach((i, k) => im.setMatrixAt(k, matrixOf(items, i, far ? hidden.has(i) : this.removed.has(`${cx},${cz},${i}`))));
       im.castShadow = !far; im.receiveShadow = true; im.computeBoundingSphere(); meshes.push(im); im.userData.idx = idx;
       if (P.cards && (!far || P.leafFar)) {
         const lm = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, far), idx.length);
-        idx.forEach((i, k) => lm.setMatrixAt(k, matrixOf(items, i, !far && this.removed.has(`${cx},${cz},${i}`))));
+        idx.forEach((i, k) => lm.setMatrixAt(k, matrixOf(items, i, far ? hidden.has(i) : this.removed.has(`${cx},${cz},${i}`))));
         lm.castShadow = !far; lm.receiveShadow = true; lm.computeBoundingSphere(); meshes.push(lm); lm.userData.idx = idx;
       }
     }
@@ -105,15 +106,30 @@ export class Vegetation {
       const bx = fcx + i, bz = fcz + j, key = bx + ',' + bz;
       if (this.far.has(key) || Math.hypot((bx + 0.5) * FAR - pos.x, (bz + 0.5) * FAR - pos.z) > FAR_R + FAR * 0.7) continue;
       const blk = { meshes: null }; this.far.set(key, blk);
-      this.pool.post({ type: 'flora', cx: bx * per, cz: bz * per, n: per }).then((m) => { if (this.far.get(key) === blk) blk.meshes = this.buildMeshes(m.items, true); });
+      this.pool.post({ type: 'flora', cx: bx * per, cz: bz * per, n: per }).then((m) => {
+        if (this.far.get(key) !== blk) return;
+        // items come cell by cell, in order: recover each one's "cx,cz,i" id
+        const ids = new Map(), cnt = new Map();
+        for (let i = 0; i < m.items.length / STRIDE; i++) { const ck = Math.floor(m.items[i * STRIDE + 2] / CELL) + ',' + Math.floor(m.items[i * STRIDE + 4] / CELL), k = cnt.get(ck) || 0; cnt.set(ck, k + 1); ids.set(ck + ',' + k, i); }
+        blk.items = m.items; blk.ids = ids; blk.meshes = this.buildMeshes(m.items, true, null, null, ids);
+      });
     }
     for (const key of this.far.keys()) { const [bx, bz] = key.split(',').map(Number); if (Math.hypot((bx + 0.5) * FAR - pos.x, (bz + 0.5) * FAR - pos.z) > FAR_R + FAR * 1.4) this.dropCell(this.far, key); }
   }
-  // Remove one tree/rock (felled or mined): hidden in the near cell now and remembered for when cells are rebuilt
+  // Remove one tree/rock (felled or mined): hidden in its near cell and far block now, and remembered for when they are rebuilt
   remove(cx, cz, i) {
     const key = cx + ',' + cz; this.removed.add(`${cx},${cz},${i}`);
-    const c = this.near.get(key); if (!c?.meshes) return;
-    for (const m of c.meshes) { const k = m.userData.idx.indexOf(i); if (k >= 0) { m.setMatrixAt(k, matrixOf(c.items, i, true)); m.instanceMatrix.needsUpdate = true; } }
+    const c = this.near.get(key);
+    if (c?.meshes) for (const m of c.meshes) { const k = m.userData.idx.indexOf(i); if (k >= 0) { m.setMatrixAt(k, matrixOf(c.items, i, true)); m.instanceMatrix.needsUpdate = true; } }
+    const per = FAR / CELL, bkey = Math.floor(cx / per) + ',' + Math.floor(cz / per), b = this.far.get(bkey);
+    if (b?.meshes) { const fi = b.ids?.get(`${cx},${cz},${i}`); if (fi !== undefined) for (const m of b.meshes) { const k = m.userData.idx.indexOf(fi); if (k >= 0) { m.setMatrixAt(k, matrixOf(b.items, fi, true)); m.instanceMatrix.needsUpdate = true; } } }
+  }
+  // One tree or rock as its own little object (for felling animations): instanced meshes of count 1 in a group
+  single(sp, v) {
+    const P = this.geoFor(sp, v), g = new THREE.Group(), I = new THREE.Matrix4();
+    const a = new THREE.InstancedMesh(P.geo, cut(propMat, false), 1); a.setMatrixAt(0, I); a.castShadow = a.receiveShadow = true; a.frustumCulled = false; g.add(a);
+    if (P.cards) { const l = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, false), 1); l.setMatrixAt(0, I); l.castShadow = true; l.frustumCulled = false; g.add(l); }
+    return g;
   }
 }
 void mergeParts;
