@@ -10,7 +10,7 @@ import { icon } from './icons.js';
 import { SCRIPT } from './script.js';
 
 const KEY = 'argonisos.dev.v1';
-const DEV = { god: false, free: false, peaceful: false, valtos: false, flySpeed: 40 };
+const DEV = { god: false, free: false, peaceful: false, valtos: false, flySpeed: 40, guide: false };
 try { Object.assign(DEV, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* defaults */ }
 const store = () => { try { localStorage.setItem(KEY, JSON.stringify(DEV)); } catch { /* private mode */ } };
 
@@ -59,7 +59,7 @@ export function devMenu(g) {
       ${sect('Bosses', `<div class="row"><button class="btn small" data-boss="minotaur">Fight the Minotaur</button><button class="btn small" data-boss="chimera">Fight the Chimera</button></div><p class="hint">Takes you to the altar and lays the tribute for you.</p>`)}
       ${sect('The Owl', `<div class="row"><button class="btn small ghost" id="dvOwl">Replay everything she says</button></div><p class="hint">Forgets what she has told you: she comes back for each topic as you reach it again (the introduction right away).</p>`)}
     </div>
-    <div class="pane script" data-pane="script">${SCRIPT}</div>
+    <div class="pane" data-pane="script">${sect('Guided gameplay', `<div class="set"><span>Guided gameplay <small>step-by-step goals on screen, to the end of the trial</small></span><button class="btn small" data-t="guide"></button></div><div class="row"><button class="btn small ghost" id="dvGuideReset">Restart the steps</button></div>`)}<section class="script">${SCRIPT}</section></div>
   </div></div>`;
   document.body.appendChild(el);
   const $ = (s) => el.querySelector(s), P = g.player;
@@ -71,7 +71,7 @@ export function devMenu(g) {
     el.querySelectorAll('#dvW button').forEach((b) => b.classList.toggle('on', b.dataset.v === (WEATHER.forced || '')));
   };
   // apply the remembered toggles
-  const apply = () => { P.stats.god = DEV.god; g.S.freeBuild = DEV.free; g.S.peaceful = DEV.peaceful; STORM_WALL.open = DEV.valtos; g.S.flySpeed = DEV.flySpeed; };
+  const apply = () => { g.guide?.set(DEV.guide); P.stats.god = DEV.god; g.S.freeBuild = DEV.free; g.S.peaceful = DEV.peaceful; STORM_WALL.open = DEV.valtos; g.S.flySpeed = DEV.flySpeed; };
   apply();
   const toast = (m) => g.hud.toast(m);
   el.addEventListener('click', (e) => {
@@ -95,6 +95,7 @@ export function devMenu(g) {
   $('#dvSpawn').onclick = () => { const k = $('#dvMob').value, f = 6; const c = g.creatures.spawn(k, P.pos.x + Math.sin(P.yaw) * f, P.pos.z + Math.cos(P.yaw) * f, { level: +$('#dvLvl').value }); c.yaw = P.yaw + Math.PI; toast(`Spawned a ${TYPES[k].name.toLowerCase()}`); };
   $('#dvKill').onclick = () => { let n = 0; for (const c of g.creatures.list) if (!c.dead && c.pos.distanceTo(P.pos) < 80) { g.creatures.hurt(c, [[1e6, 'force']], null); n++; } toast(`${n} creatures struck down`); };
   $('#dvBack').onclick = () => { close(); };
+  $('#dvGuideReset').onclick = () => { g.guide.st.done = []; g.guide.set(DEV.guide); toast('Guided gameplay starts over from step 1'); };
   $('#dvOwl').onclick = () => { const o = g.owl; o.st.done = []; o.st.queue = []; o.want('intro'); toast('The Owl will tell you everything again'); };
   // tabs
   let tab = 'player';

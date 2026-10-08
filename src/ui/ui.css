@@ -259,3 +259,15 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 #devPanel select { flex:1; min-width:160px; padding:6px 8px; font:15px 'Alegreya Sans',sans-serif; color:var(--ink); background:rgba(255,248,230,.6); border:1px solid rgba(90,60,25,.45); border-radius:var(--r); }
 #devPanel .hint { margin:2px 0 0; font-size:12.5px; color:var(--ink2); font-style:italic; }
 #devPanel .seg button { padding:5px 9px; }
+
+/* guided gameplay (dev) */
+#guide { position:absolute; left:16px; top:88px; width:300px; padding:10px 14px 12px; color:var(--ink); border-radius:var(--r); border-left:5px solid var(--gold);
+         background:var(--papyrus), linear-gradient(180deg,rgba(242,229,195,.94),rgba(224,202,150,.94)); box-shadow:0 0 0 1px rgba(31,22,16,.7), 0 6px 18px rgba(0,0,0,.35); }
+#guide .gh { display:flex; align-items:center; gap:6px; font:700 10px Cinzel,serif; letter-spacing:.16em; text-transform:uppercase; color:var(--red); }
+#guide .gh .ic { font-size:13px; } #guide .gh em { margin-left:auto; font-style:normal; color:var(--ink2); letter-spacing:.06em; }
+#guide .gbar { height:4px; margin:6px 0 8px; border-radius:2px; background:rgba(107,79,44,.2); overflow:hidden; } #guide .gbar i { display:block; height:100%; background:var(--gold); transition:width .4s; }
+#guide h4 { margin:0 0 4px; font:700 15px Cinzel,serif; color:var(--ink); }
+#guide p { margin:3px 0; font-size:13.5px; line-height:1.4; color:var(--ink2); } #guide p b { color:var(--ink); }
+#guide .gd { color:var(--red); font-weight:700; display:flex; align-items:center; gap:5px; } #guide .gd .ic { font-size:11px; }
+#guide .gn { margin-top:7px; padding-top:6px; border-top:1px dotted rgba(107,79,44,.4); font-size:12px; font-style:italic; }
+#compassStrip span.poi.guide { color:#ffd25a; }

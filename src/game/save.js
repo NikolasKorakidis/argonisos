@@ -10,7 +10,7 @@ export function save(g) {
   const P = g.player, S = g.S;
   const data = {
     v: 1, at: Date.now(),
-    S: { time: S.time, day: S.day, tier: S.tier || 0, bed: S.bed, trial: S.trial, map: S.map, owl: S.owl },
+    S: { time: S.time, day: S.day, tier: S.tier || 0, bed: S.bed, trial: S.trial, map: S.map, owl: S.owl, guide: S.guide },
     player: { x: P.pos.x, y: P.pos.y, z: P.pos.z, yaw: P.yaw, cam: P.camYaw, stats: P.stats.toJSON() },
     inv: g.inv.toJSON(), build: g.build.toJSON(), harvest: g.harvest.toJSON(), pickups: g.pickups.toJSON(),
     fog: g.map.fog.toDataURL('image/png'), graves: g.graves?.toJSON() || [], offered: g.trial.st.offered,
@@ -25,6 +25,7 @@ export function load(g) {
   if (d.S.trial) Object.assign(g.trial.st, d.S.trial);
   if (d.S.map) Object.assign(g.map.st, d.S.map);
   if (d.S.owl) Object.assign(g.owl.st, d.S.owl);
+  if (d.S.guide) Object.assign(g.guide.st, d.S.guide);
   // the pack and the hero
   g.inv.load(d.inv);
   const st = d.player.stats; P.stats.health = st.health; P.stats.stamina = st.stamina; P.stats.cond = st.cond || {}; P.stats.skills = st.skills || P.stats.skills;

@@ -12,6 +12,7 @@ import { Trial } from './trial.js';
 import { SITES } from '../world/sites.js';
 import { WorldMap } from '../ui/map.js';
 import { Owl } from './owl.js';
+import { Guide } from './guide.js';
 import { save, load, Graves } from './save.js';
 import { sound, updateAmbience } from '../audio/sound.js';
 import { LIGHT } from '../world/sky.js';
@@ -34,6 +35,7 @@ export function installGame(g) {
   g.trial = new Trial(g);
   g.map = new WorldMap(g);
   g.owl = new Owl(g);
+  g.guide = new Guide(g);
   g.ITEMS = ITEMS; g.graves = new Graves(g); { const od = g.onDeath; g.onDeath = () => { g.graves.fall(); od?.(); }; }
   g.combat = new Combat(g);
   player.floorAt = (p) => Math.max(g.build.floorAt(p.x, p.z, p.y), g.structures.floorAt(p.x, p.z, p.y));
@@ -117,7 +119,7 @@ export function installGame(g) {
 
   // ---- per frame
   g.update = (dt) => {
-    g.owl.update(dt);
+    g.owl.update(dt); g.guide.update(dt);
     if (g.owl.open) { hud.prompt(null); return; }
     if (hit('KeyM') || (hit('Escape') && g.map.open)) g.map.toggle();
     g.map.update(dt);
