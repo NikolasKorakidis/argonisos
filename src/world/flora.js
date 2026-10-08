@@ -7,22 +7,22 @@
 import { heightAt, biomeWeights, fbm, hash2, smooth } from './gen.js';
 
 export const CELL = 64;
-// species: name for the builder, biome mixes, scale range; 'res' marks things you can harvest (trees give logs, rocks stone)
+// species: name for the builder, scale range, collision radius (and height) per unit of scale; 'res' marks things you can harvest (trees give logs, rocks stone)
 export const SPECIES = [
-  { name: 'olive', s: [0.95, 1.25], res: 'tree' },
-  { name: 'oak', s: [0.95, 1.3], res: 'tree' },
-  { name: 'cypress', s: [0.85, 1.2], res: 'tree' },
-  { name: 'pomegranate', s: [0.9, 1.15], res: 'tree' },
-  { name: 'fig', s: [0.95, 1.2], res: 'tree' },
-  { name: 'plane', s: [1.0, 1.25], res: 'tree' },
-  { name: 'qtree', s: [0.9, 1.35], res: 'tree' },
-  { name: 'qpine', s: [0.9, 1.4], res: 'tree' },
-  { name: 'fir', s: [0.9, 1.35], res: 'tree' },
-  { name: 'holm', s: [0.95, 1.3], res: 'tree' },
-  { name: 'qdead', s: [0.85, 1.2], res: 'tree' },
-  { name: 'dead', s: [0.9, 1.2], res: 'tree' },
-  { name: 'rock', s: [0.5, 2.4], res: 'rock' },
-  { name: 'boulder', s: [2.2, 4.5], res: 'rock' },
+  { name: 'olive', s: [0.95, 1.25], res: 'tree', col: 0.5 },
+  { name: 'oak', s: [0.95, 1.3], res: 'tree', col: 0.6 },
+  { name: 'cypress', s: [0.85, 1.2], res: 'tree', col: 0.4 },
+  { name: 'pomegranate', s: [0.9, 1.15], res: 'tree', col: 0.25 },
+  { name: 'fig', s: [0.95, 1.2], res: 'tree', col: 0.3 },
+  { name: 'plane', s: [1.0, 1.25], res: 'tree', col: 0.8 },
+  { name: 'qtree', s: [0.9, 1.35], res: 'tree', col: 0.45 },
+  { name: 'qpine', s: [0.9, 1.4], res: 'tree', col: 0.4 },
+  { name: 'fir', s: [0.9, 1.35], res: 'tree', col: 0.4 },
+  { name: 'holm', s: [0.95, 1.3], res: 'tree', col: 0.5 },
+  { name: 'qdead', s: [0.85, 1.2], res: 'tree', col: 0.4 },
+  { name: 'dead', s: [0.9, 1.2], res: 'tree', col: 0.4 },
+  { name: 'rock', s: [0.5, 2.4], res: 'rock', col: 0.95, h: 0.85 },
+  { name: 'boulder', s: [2.2, 4.5], res: 'rock', col: 0.95, h: 0.8 },
   { name: 'reeds', s: [0.8, 1.3], res: 'reed' },
 ];
 export const SP = Object.fromEntries(SPECIES.map((s, i) => [s.name, i]));
