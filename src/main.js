@@ -20,6 +20,7 @@ import { ITEMS } from './game/items.js';
 import { HUD } from './ui/hud.js';
 import { installGame } from './game/game.js';
 import { titleScreen, pauseMenu } from './ui/title.js';
+import { devMenu } from './ui/dev.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -43,7 +44,7 @@ veg.onCell = (key, items, cx, cz) => {
 };
 
 // ---- State
-export const S = { time: 0.06, day: 1, timeScale: 1, debug: false, fly: false, bed: null };
+export const S = { time: 0.06, day: 1, timeScale: 1, debug: false, fly: false, flySpeed: 40, bed: null };
 const SPAWN = { x: 6, z: 4 };
 
 // ---- Player, pack and HUD
@@ -75,10 +76,10 @@ function useSlot(i) {
 // ---- Debug free camera (F9): flies without the player, for looking around the world
 const fly = { pos: new THREE.Vector3(), yaw: 0, pitch: -0.2 };
 function updateFly(dt) {
-  if (input.locked) { fly.yaw -= input.dx * 0.0022; fly.pitch = Math.max(-1.5, Math.min(1.5, fly.pitch - input.dy * 0.0022)); }
+  if (input.locked) { fly.yaw -= input.dx * 0.0022 * input.sens; fly.pitch = Math.max(-1.5, Math.min(1.5, fly.pitch - input.dy * 0.0022 * input.sens)); }
   const f = new THREE.Vector3(-Math.sin(fly.yaw), 0, -Math.cos(fly.yaw)), r = new THREE.Vector3(-f.z, 0, f.x), mv = new THREE.Vector3();
   if (down('KeyW')) mv.add(f); if (down('KeyS')) mv.sub(f); if (down('KeyD')) mv.add(r); if (down('KeyA')) mv.sub(r);
-  const sp = down('ShiftLeft') ? 160 : 40; if (mv.lengthSq()) fly.pos.addScaledVector(mv.normalize(), sp * dt);
+  const sp = S.flySpeed * (down('ShiftLeft') ? 4 : 1); if (mv.lengthSq()) fly.pos.addScaledVector(mv.normalize(), sp * dt);
   if (down('Space')) fly.pos.y += sp * dt; if (down('KeyQ')) fly.pos.y -= sp * dt;
   fly.pos.y = Math.max(fly.pos.y, Math.max(heightAt(fly.pos.x, fly.pos.z), 0) + 1.5);
   camera.position.copy(fly.pos); camera.rotation.set(fly.pitch, fly.yaw, 0, 'YXZ');
@@ -104,9 +105,15 @@ function updateConditions() {
 // Game systems (crafting, building, creatures...) plug in here
 export const game = { player, inv, hud, veg, colliders, scene, S, pool, useSlot };
 installGame(game);
+// Free flight (F9 or the dev menu): the camera flies; leaving it sets the hero down on the ground below
+game.setFly = (on) => {
+  if (on === S.fly) return; S.fly = on;
+  if (on) { fly.pos.copy(camera.position); fly.yaw = player.camYaw; fly.pitch = player.camPitch; hud.toast('Flying: <span class="kbd">WASD</span> move · <span class="kbd">Space</span> / <span class="kbd">Q</span> up / down · <span class="kbd">Shift</span> ×4 · <span class="kbd">F9</span> land'); }
+  else { player.spawn(camera.position.x, camera.position.z); player.camYaw = fly.yaw; player.yaw = fly.yaw + Math.PI; snapWeather(); }
+};
 // the title screen until the land around you and the hero are in (?play skips it, for tests)
 const readiness = () => Math.min(1, (terrain.drawn > 40 && terrain.pending === 0 ? 0.6 : terrain.drawn / 70) + (player.hero.model ? 0.25 : 0) + (veg.near.size > 6 ? 0.15 : 0));
-pauseMenu(game);
+pauseMenu(game); devMenu(game);
 if (new URLSearchParams(location.search).has('play')) game.started = true; else titleScreen(game, readiness);
 const clockText = () => { const t = S.time, h = t < DAY_FRACTION ? 6 + (t / DAY_FRACTION) * 15 : (21 + ((t - DAY_FRACTION) / (1 - DAY_FRACTION)) * 9) % 24; return `Day ${S.day} · ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 6) * 10).padStart(2, '0')}`; };
 
@@ -123,7 +130,7 @@ function loop() {
   if (!busy && (hit('Tab') || hit('KeyI') || (hit('Escape') && hud.open))) hud.toggle();
   if (!busy && !input.uiOpen) for (let k = 1; k <= 8; k++) if (hit('Digit' + k)) useSlot(k - 1);
   if (hit('F3')) { S.debug = !S.debug; $('dbg').classList.toggle('hidden', !S.debug); }
-  if (hit('F9')) { S.fly = !S.fly; fly.pos.copy(camera.position); fly.yaw = player.camYaw; fly.pitch = player.camPitch; }
+  if (hit('F9') && !busy) game.setFly(!S.fly);
   if (S.debug && hit('KeyT')) S.timeScale = S.timeScale === 1 ? 60 : 1;
   if (!busy) game.update?.(dt, t);
   player.frozen = S.fly || hud.open || busy; if (!game.paused) player.update(dt);

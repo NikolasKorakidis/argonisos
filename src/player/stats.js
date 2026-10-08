@@ -66,6 +66,7 @@ export class Stats {
   // ---- stamina
   // Spend stamina for an action (skill makes it cheaper). Returns false if there isn't enough
   use(amount, skill) {
+    if (this.god) return true;
     const cost = amount * this.drainK * (skill ? 1 - (this.skills[skill].level - 1) * 0.003 : 1);
     if (this.stamina < cost && amount > 0) return false;
     this.stamina = Math.max(0, this.stamina - cost); this.staminaUsedT = 0; return true;
@@ -80,7 +81,7 @@ export class Stats {
     while (k.level < 100 && k.xp >= xpForLevel(k.level + 1)) { k.level++; this.onLevel?.(s, k.level); }
   }
   // ---- health
-  damage(n) { if (this.dead || n <= 0) return; this.health -= n; if (this.health <= 0) { this.health = 0; this.dead = true; this.onDeath?.(); } }
+  damage(n) { if (this.dead || n <= 0 || this.god) return; this.health -= n; if (this.health <= 0) { this.health = 0; this.dead = true; this.onDeath?.(); } }
   heal(n) { this.health = Math.min(this.maxHealth, this.health + n); }
   // ---- per frame
   update(dt) {

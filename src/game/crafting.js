@@ -40,6 +40,7 @@ export class Crafting {
   // Why a recipe can't be made right now (null if it can)
   blocker(r) {
     const g = this.g;
+    if (g.S.freeBuild) return r.kind === 'piece' && !g.equippedTool?.('build') ? 'Hold the hammer to build' : null;   // dev: everything is free
     if (r.tier > (g.S.tier || 0)) return TIER_HINT[r.tier];
     if (r.kind === 'piece') { if (!g.equippedTool?.('build')) return 'Hold the hammer to build'; }
     if (r.at === 'workbench') {
@@ -55,7 +56,7 @@ export class Crafting {
     const r = this.list().find((x) => x.key === key); if (!r) return;
     const why = this.blocker(r); if (why) { this.g.hud.toast(why); return; }
     if (r.kind === 'piece') { this.g.hud.toggle(false); this.g.build.select(r.id); return; }        // building: pick the piece, place it in the world
-    this.g.inv.takeMats(r.mats); this.g.inv.add(r.id, r.n); this.g.hud.pickup(r.id, r.n); this.g.sound?.('craft');
+    if (!this.g.S.freeBuild) this.g.inv.takeMats(r.mats); this.g.inv.add(r.id, r.n); this.g.hud.pickup(r.id, r.n); this.g.sound?.('craft');
     this.g.player.stats.train('gathering', 0);
     this.draw();
   }

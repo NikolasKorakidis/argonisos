@@ -24,7 +24,7 @@ export function titleScreen(g, ready) {
 export function pauseMenu(g) {
   const pm = document.createElement('div'); pm.id = 'pause'; pm.className = 'hidden';
   pm.innerHTML = `<div class="pnl"><h2>Paused</h2><div class="pbody">
-    <div class="pcol"><button class="btn" id="pResume">Resume</button><button class="btn" id="pSave">Save</button><button class="btn ghost" id="pNew">New trial</button></div>
+    <div class="pcol"><button class="btn" id="pResume">Resume</button><button class="btn" id="pSave">Save</button><button class="btn ghost" id="pDev">Dev menu</button><button class="btn ghost" id="pNew">New trial</button></div>
     <p class="psub">Settings</p>
     <div class="set"><span>Fullscreen</span><button class="btn small" id="sFs"></button></div>
     <div class="set"><span>Graphics</span><div class="seg" id="sGfx">${Object.entries(PRESETS).map(([k, q]) => `<button data-v="${k}">${q.name}</button>`).join('')}</div></div>
@@ -45,7 +45,8 @@ export function pauseMenu(g) {
   pm.querySelector('#sVol').oninput = (e) => setVol(e.target.value / 100);
   pm.querySelector('#sSens').oninput = (e) => setSens(e.target.value / 100);
   onFullscreenChange(sync); sync(); applyGraphics();
-  g.pause = (on) => { pm.classList.toggle('hidden', !on); g.paused = on; input.uiOpen = on; if (on) { unlock(); sync(); g.pausedAt = performance.now(); } else lock(); };
+  pm.querySelector('#pDev').onclick = () => g.devMenu?.open();
+  g.pause = (on) => { pm.classList.toggle('hidden', !on); if (!on) document.getElementById('devPanel')?.classList.add('hidden'); g.paused = on; input.uiOpen = on; if (on) { unlock(); sync(); g.pausedAt = performance.now(); } else lock(); };
   pm.querySelector('#pResume').onclick = () => g.pause(false);
   pm.querySelector('#pSave').onclick = () => { g.hud.toast(g.save() ? 'Saved' : 'Could not save'); g.pause(false); };
   pm.querySelector('#pNew').onclick = () => { if (!confirm('Start a new trial? Your saved world will be lost.')) return; clearSave(); g.save = () => false; location.reload(); };
