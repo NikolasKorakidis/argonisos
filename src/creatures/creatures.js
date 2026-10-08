@@ -62,6 +62,15 @@ export class Creatures {
       return;
     }
   }
+  // How far it notices you, as a share of its normal range: full in its field of view (about 220° in front), a third
+  // behind where it can only hear you; less while grazing; half when you sneak; more when you sprint
+  senseK(c, pp, P) {
+    const toP = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z), off = Math.abs(Math.atan2(Math.sin(toP - c.yaw), Math.cos(toP - c.yaw)));
+    let k = off < 1.9 ? 1 : 0.33;
+    if (c.state === 'graze') k *= 0.7;
+    if (P.sneaking) k *= 0.5; else if (P.sprinting) k *= off < 1.9 ? 1.2 : 2;
+    return k;
+  }
   // ---- damage dealt to a creature. Returns the damage done
   hurt(c, dmgList, from, opts = {}) {
     if (c.dead) return 0;
@@ -107,11 +116,23 @@ export class Creatures {
       const fire = T.fearFire ? g.build?.nearFire(c.pos, 7) : null;
       // decide
       if (P.dead && c.state === 'chase') c.state = 'idle';
-      if (!P.dead && !c.T.passive && c.state !== 'chase' && c.state !== 'attack') {
-        const sense = (T.sight || T.aggro || 0) * (P.sneaking ? 0.55 : 1) * (g.S.time > 0.75 ? 0.75 : 1);
-        if (d < sense) { c.state = 'chase'; c.aware = true; if (T.heavy) g.sound?.('roar'); }
+      // noticing you: a field of view in front, only hearing behind; sneaking halves it, sprinting is heard further
+      const calm = c.state === 'idle' || c.state === 'wander' || c.state === 'graze';
+      if (!P.dead && calm) {
+        const base = T.passive ? T.flee : (T.sight || T.aggro || 0), range = base * this.senseK(c, pp, P) * (g.S.time > 0.75 && !T.passive ? 0.75 : 1);
+        if (d < range) {
+          // a moment of alarm first: it freezes, lifts its head and turns to look at you, then bolts (or charges)
+          if (c.boss) { c.state = 'chase'; c.aware = true; }
+          else { c.state = 'alert'; c.alertT = T.alert ?? (T.passive ? 1.2 : 0.7); c.alertD = d; c.aware = true; g.sound?.('alert'); }
+        }
       }
-      if (T.passive && c.state !== 'flee' && d < T.flee * (P.sneaking ? 0.5 : 1) && !P.dead) { c.state = 'flee'; c.t = rr(4, 7); c.aware = true; }
+      if (c.state === 'alert') {
+        c.alertT -= dt; const P2 = P.pos, close = d < c.alertD * 0.55 || d < 1.5;   // rushing it cuts the moment short
+        if (P.dead) c.state = 'idle';
+        else if (c.alertT <= 0 || close || (P.sprinting && d < (T.flee || 8) * 1.2)) { if (T.passive) { c.state = 'flee'; c.t = rr(4, 7); } else { c.state = 'chase'; if (T.heavy) g.sound?.('roar'); } }
+        else if (d > (T.passive ? T.flee : (T.sight || T.aggro || 8)) * 1.6) { c.state = 'idle'; c.t = rr(2, 4); c.aware = false; }   // you backed off: it settles down
+        void P2;
+      }
       let want = 0, face = c.yaw, special = null;
       if (c.boss && !P.dead) special = g.trial?.bossThink(c, dt, d);
       if (c.state === 'flee') {
@@ -123,6 +144,8 @@ export class Creatures {
         if (d < T.reach + T.r * 0.5) { want = 0; if (c.atkCd <= 0) { c.state = 'attack'; c.atkT = T.heavy ? 1.1 : 0.55; c.atkCd = T.heavy ? 3.2 : rr(1.4, 2.2); c.hitDone = false; } }
         if (T.ranged && d > 5 && d < T.ranged.range && c.rangedCd <= 0) { c.rangedCd = T.ranged.every + rr(-1, 1); this.throwThorn(c); }
         if (d > 60 || (c.t < -30 && d > 30)) { c.state = 'idle'; c.t = rr(2, 4); }
+      } else if (c.state === 'alert') {
+        face = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z); want = 0;   // freeze and stare
       } else {   // idle / wander / graze near home
         if (c.t <= 0) { const r = Math.random(); c.state = r < 0.4 ? 'idle' : r < 0.7 && T.passive ? 'graze' : 'wander'; c.t = rr(3, 8); c.wanderYaw = Math.random() * 6.28; if (c.pos.distanceTo(c.home) > 25) c.wanderYaw = Math.atan2(c.home.x - c.pos.x, c.home.z - c.pos.z); }
         if (c.state === 'wander') { face = c.wanderYaw; want = T.speed[0]; }

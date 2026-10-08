@@ -16,7 +16,8 @@ export const SCRIPT = `
 
 <h3>2 · Getting set up</h3>
 <ul>
-<li><b>Rope</b> comes from leather at a workbench (1 leather → 10 rope; a workbench is 10 wood). <b>Leather</b> comes from animals: rabbits, deer and hogs. Sneak (${K('Ctrl')}) for sneak attacks; deer also give <b>deer hides</b>, needed later.</li>
+<li><b>Rope</b> comes from leather at a workbench (1 leather → 10 rope; a workbench is 10 wood). <b>Leather</b> comes from animals: rabbits, deer and hogs. Deer also give <b>deer hides</b>, needed later.</li>
+<li><b>Hunting:</b> animals see a wide arc in front of them but only hear you behind. Sneak (${K('Ctrl')}) up from behind and strike: an unaware animal takes a sneak attack. When one notices you it freezes and stares for a moment before it bolts (or charges): that's your chance to strike or loose an arrow. Sprinting is heard from far off; grazing animals notice less.</li>
 <li>A <b>crude axe</b> (5 wood, 4 stone, 2 rope) fells trees: they topple and leave a log to split into wood (pines also give resin).</li>
 <li>No hunger. Health 25 and stamina 50, raised for a while by food (three slots): olives (olive trees, once a day), acorns (oaks), pomegranates, cooked meat (+40 health). Raw meat makes you sick: cook it on a cooking stand over a fire.</li>
 <li>Night or rain makes you <b>Cold</b>, rain makes you <b>Wet</b>: both slow your healing. A <b>campfire</b> (10 stone, 10 wood) cures them; rain puts out a fire that has no roof over it.</li>

@@ -52,6 +52,7 @@ const SFX = {
   bow: () => { tone(140, 0.25, { type: 'triangle', vol: 0.18, slide: -40 }); noise(0.12, { freq: 1600, q: 1, vol: 0.12 }); },
   arrowHit: () => noise(0.1, { type: 'lowpass', freq: 600, vol: 0.3 }),
   arrowThud: () => noise(0.08, { freq: 400, q: 2, vol: 0.15 }),
+  alert: () => noise(0.18, { freq: 700, q: 2, vol: 0.08, slide: 300 }),
   kill: () => tone(90, 0.5, { type: 'triangle', vol: 0.12, slide: -40 }),
   thunder: (k = 1) => { noise(2.6 * k, { type: 'lowpass', freq: 160, vol: 0.55 * k, slide: -100, attack: 0.02 }); noise(0.4, { type: 'lowpass', freq: 900, vol: 0.25 * k }); },
   roar: () => { tone(70, 1.4, { type: 'sawtooth', vol: 0.18, slide: -25, attack: 0.15 }); tone(105, 1.2, { type: 'square', vol: 0.06, slide: -40, attack: 0.15 }); noise(1.3, { type: 'lowpass', freq: 400, vol: 0.3, attack: 0.15, slide: -200 }); },
