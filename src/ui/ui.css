@@ -271,3 +271,8 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 #guide .gd { color:var(--red); font-weight:700; display:flex; align-items:center; gap:5px; } #guide .gd .ic { font-size:11px; }
 #guide .gn { margin-top:7px; padding-top:6px; border-top:1px dotted rgba(107,79,44,.4); font-size:12px; font-style:italic; }
 #compassStrip span.poi.guide { color:#ffd25a; }
+
+#dropAsk { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:45; width:min(360px,90vw); text-align:center; }
+#dropAsk .big { width:64px; height:64px; margin:0 auto 6px; font-size:44px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:radial-gradient(circle at 50% 40%, var(--clay3), var(--clay) 60%, var(--clay2)); box-shadow:0 0 0 1px var(--glaze); }
+#dropAsk h3 { margin:0 0 4px; font:700 18px Cinzel,serif; } #dropAsk p { margin:0 0 14px; color:var(--ink2); font-size:14px; }
+#dropAsk .btns { display:flex; gap:10px; justify-content:center; } #dropAsk .btn { min-width:120px; }

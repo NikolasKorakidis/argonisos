@@ -119,7 +119,7 @@ function stamp(c) {
       let d;   // distance outside the shape (negative inside)
       if (s.r !== undefined) d = Math.hypot(dx, dz) - s.r;
       else { const u = Math.abs(dx * cs - dz * sn) - s.hw, v = Math.abs(dx * sn + dz * cs) - s.hd; d = Math.max(u, v); }
-      const f = Math.min(1, Math.max(0, (d + 0.2) / 0.6)), o = (j * N + i) * 4 + 1;
+      const f = Math.min(1, Math.max(0, (d - 0.1) / 0.5))   // none at all inside, fading back in just outside the edge, o = (j * N + i) * 4 + 1;
       data[o] = Math.min(data[o], data[o] * f); data[o + 2] *= f;   // grass and flowers both
     }
   }

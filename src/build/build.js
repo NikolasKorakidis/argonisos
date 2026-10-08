@@ -16,7 +16,7 @@ import { icon } from '../ui/icons.js';
 import { Inventory } from '../game/inventory.js';
 import { askLight } from '../render/lights.js';
 
-const V_LOSS = 0.125, H_LOSS = 0.2, MIN_SUPPORT = 0.1, REACH = 9, G = 8;
+const V_LOSS = 0.125, H_LOSS = 0.2, MIN_SUPPORT = 0.1, REACH = 12, G = 8;
 const _v = new THREE.Vector3(), _ray = new THREE.Raycaster();
 const ghostOk = new THREE.MeshStandardMaterial({ color: 0x7fe08a, transparent: true, opacity: 0.45, depthWrite: false, emissive: 0x2a8a3a, emissiveIntensity: 0.6 });
 const ghostBad = new THREE.MeshStandardMaterial({ color: 0xff6a5a, transparent: true, opacity: 0.45, depthWrite: false, emissive: 0x8a2a1a, emissiveIntensity: 0.6 });
@@ -81,18 +81,33 @@ export class Build {
     const def = this.ghostDef, a = this.aim(); if (!a) { this.ghost.visible = false; return null; }
     this.ghost.visible = true;
     let pos = a.p.clone();
-    // snap one of the ghost's points onto a point of a nearby piece, choosing the pair that moves it least
-    let best = null, bd = 1.4;
-    const local = def.snaps;
-    for (const p of this.near(pos.x, pos.z, 8)) for (const s of p.snaps) {
-      if (s.distanceTo(pos) > 6) continue;
-      for (const l of local) { const c = Math.cos(this.rot), sn = Math.sin(this.rot), cand = _v.set(s.x - (l[0] * c + l[2] * sn), s.y - l[1], s.z - (-l[0] * sn + l[2] * c)); const d = cand.distanceTo(pos); if (d < bd) { bd = d; best = cand.clone(); } }
+    // near a structure, turn with its grid: the ghost takes the nearest quarter-turn to your chosen angle, relative to
+    // the piece you're aiming at (or the nearest piece)
+    let rot = this.rot, anchor = a.piece; if (!anchor) { let bd2 = 4; for (const p of this.near(pos.x, pos.z, 4)) { const d = p.pos.distanceTo(pos); if (d < bd2) { bd2 = d; anchor = p; } } }
+    if (anchor) rot = anchor.rot + Math.round((this.rot - anchor.rot) / (Math.PI / 2)) * (Math.PI / 2);
+    this.aligned = !!anchor;
+    // snap: try putting each of the ghost's points on each point of what's built nearby, and keep the placement where the
+    // most points line up (a gable sits on both walls, a roof on both corners), then the one nearest where you aim
+    const local = def.snaps, targets = [];
+    for (const p of this.near(pos.x, pos.z, 9)) for (const s of p.snaps) if (s.distanceTo(pos) < 7) targets.push(s);
+    // (against a structure a quarter turn is tried too, but it only wins if it lines up clearly more points)
+    let best = null, bs = Infinity, bestRot = rot;
+    for (const [r2, pen] of anchor ? [[rot, 0], [rot + Math.PI / 2, 2.5], [rot - Math.PI / 2, 2.5]] : [[rot, 0]]) {
+      const c = Math.cos(r2), sn = Math.sin(r2);
+      for (const s of targets) for (const l of local) {
+        const cand = _v.set(s.x - (l[0] * c + l[2] * sn), s.y - l[1], s.z - (-l[0] * sn + l[2] * c)), d = cand.distanceTo(pos); if (d > 2.4) continue;
+        let match = 0; for (const m of local) { const wx = cand.x + m[0] * c + m[2] * sn, wy = cand.y + m[1], wz = cand.z - m[0] * sn + m[2] * c; if (targets.some((t) => Math.abs(t.x - wx) + Math.abs(t.y - wy) + Math.abs(t.z - wz) < 0.2)) match++; }
+        const score = d - 1.6 * (match - 1) + pen; if (score < bs) { bs = score; best = cand.clone(); bestRot = r2; }
+      }
     }
+    rot = bestRot;
     if (best) pos = best;
-    this.ghost.position.copy(pos); this.ghost.rotation.y = this.rot;
-    const why = this.invalid(def, pos, this.rot, !!best, a);
+    // a floor laid on the ground sits on its highest corner, so the ground doesn't poke up through it
+    else if (a.terrain && def.cat === 'Floors' && def.tops) { const t = def.tops[0]; let top = -1e9; for (const [lx, lz] of [[t.x0, t.z0], [t.x1, t.z0], [t.x0, t.z1], [t.x1, t.z1], [0, 0]]) { const w = toWorld(pos, rot, [lx, 0, lz]); top = Math.max(top, heightAt(w.x, w.z)); } pos.y = top + 0.03; }
+    this.ghost.position.copy(pos); this.ghost.rotation.y = rot;
+    const why = this.invalid(def, pos, rot, !!best, a);
     for (const m of this.ghost.children) m.material = why ? ghostBad : ghostOk;
-    return { pos, why, snapped: !!best };
+    return { pos, rot, why, snapped: !!best };
   }
   // Why this placement isn't allowed (null if it is)
   invalid(def, pos, rot, snapped, a) {
@@ -124,10 +139,13 @@ export class Build {
     return out;
   }
   touch(def, pos, rot, p) { const A = this.boxes(def, pos, rot), B = p.boxes; for (const a of A) for (const b of B) if (a.clone().expandByScalar(0.06).intersectsBox(b)) return true; return false; }
+  // Only real bodies collide (walls, posts, furniture): the space under a sloped roof or over a floor doesn't count, so
+  // gable ends, awnings and roofs can go in in any order
+  solidBoxes(def, pos, rot) { return this.boxes({ solids: def.solids }, pos, rot); }
   overlaps(def, pos, rot) {
     if (def.door) return false;
-    const A = this.boxes(def, pos, rot).map((b) => b.clone().expandByScalar(-0.12));
-    for (const p of this.near(pos.x, pos.z, 8)) { if (p.def.door) continue; for (const a of A) for (const b of p.boxes) if (!a.isEmpty() && a.intersectsBox(b.clone().expandByScalar(-0.12))) return true; }
+    const A = this.solidBoxes(def, pos, rot).map((b) => b.clone().expandByScalar(-0.15));
+    for (const p of this.near(pos.x, pos.z, 8)) { if (p.def.door) continue; for (const b of this.solidBoxes(p.def, p.pos, p.rot)) { const bb = b.clone().expandByScalar(-0.15); for (const a of A) if (!a.isEmpty() && !bb.isEmpty() && a.intersectsBox(bb)) return true; } }
     return false;
   }
   supportFor(def, pos, rot, self) {
@@ -146,7 +164,7 @@ export class Build {
     this.index(p, true); this.placed.push(p);
     this.addColliders(p);
     // grass doesn't grow through floors and furniture
-    const bb = p.boxes.reduce((a, b) => a.union(b), new THREE.Box3()); if (bb.min.y < heightAt(pos.x, pos.z) + 1.2) clearGrass(p.uid, { x: pos.x, z: pos.z, hw: (def.tops?.[0] ? Math.abs(def.tops[0].x1 - def.tops[0].x0) / 2 : (def.solids?.[0]?.[3] ?? 1) / 2) + 0.2, hd: (def.tops?.[0] ? Math.abs(def.tops[0].z1 - def.tops[0].z0) / 2 : (def.solids?.[0]?.[5] ?? 1) / 2) + 0.2, rot });
+    const bb = p.boxes.reduce((a, b) => a.union(b), new THREE.Box3()); if (bb.min.y < heightAt(pos.x, pos.z) + 1.2) clearGrass(p.uid, { x: pos.x, z: pos.z, hw: (def.tops?.[0] ? Math.abs(def.tops[0].x1 - def.tops[0].x0) / 2 : (def.solids?.[0]?.[3] ?? 1) / 2) + 0.35, hd: (def.tops?.[0] ? Math.abs(def.tops[0].z1 - def.tops[0].z0) / 2 : (def.solids?.[0]?.[5] ?? 1) / 2) + 0.35, rot });
     if (def.fire || def.torch) { p.state.fuel ??= def.fire ? 3 : 4; p.state.lit ??= true; this.addFlame(p); }
     if (def.chest) { p.inv = new Inventory(); p.inv.slots = new Array(def.chest[0] * def.chest[1]).fill(null); if (opts.state?.slots) p.inv.slots = opts.state.slots; }
     if (def.cook) p.state.cook ??= [];
@@ -255,8 +273,9 @@ export class Build {
     if (hammer && !input.uiOpen && !g.player.dead) {
       if (input.clicks.includes(2)) { g.hud.toggle(true); g.crafting.open('build'); }
       if (this.sel) {
-        if (hit('KeyR')) this.rot += Math.PI / 8;
-        if (input.wheel) { this.rot += input.wheel * Math.PI / 8; input.wheel = 0; }
+        const step = this.aligned ? Math.PI / 2 : Math.PI / 8;   // quarter turns against a structure, finer on open ground
+        if (hit('KeyR')) this.rot += step;
+        if (input.wheel) { this.rot += input.wheel * step; input.wheel = 0; }
         if (hit('Escape')) { this.sel = null; if (this.ghost) this.g.scene.remove(this.ghost); this.ghost = null; }
       }
       const target = this.aim(), tp = target?.piece;
@@ -270,7 +289,7 @@ export class Build {
         if (r) g.hud.prompt('LMB', r.why || `Place ${this.ghostDef.name}`, r.why ? '' : Object.entries(this.ghostDef.mats).map(([m, n]) => `${n} ${ITEMS[m].name.toLowerCase()}`).join(', '));
         if (r && !r.why && input.clicks.includes(0)) {
           if (!g.S.freeBuild) g.inv.takeMats(this.ghostDef.mats);
-          const p = this.place(this.ghostDef.id, r.pos, this.rot); dust(p.pos.clone().setY(p.pos.y + 0.2), 8, 0xb8a684, 0.3); addShake(0.08); g.sound?.('build');
+          const p = this.place(this.ghostDef.id, r.pos, r.rot); dust(p.pos.clone().setY(p.pos.y + 0.2), 8, 0xb8a684, 0.3); addShake(0.08); g.sound?.('build');
           if (!g.inv.has(this.ghostDef.mats) && !g.S.freeBuild) g.hud.toast(`Out of materials for ${this.ghostDef.name.toLowerCase()}`);
         }
       } else if (tp) g.hud.prompt('MMB', `Remove ${tp.def.name}`, `${Math.ceil(tp.hp)} / ${tp.def.hp}`);

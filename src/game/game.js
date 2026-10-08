@@ -125,7 +125,7 @@ export function installGame(g) {
     g.map.update(dt);
     { const f = g.build.nearFire(player.pos, 9), fd = f ? Math.max(0, 1 - f.pos.distanceTo(player.pos) / 9) : g.structures.nearSacredFire(player.pos) ? 0.5 : 0;
       updateAmbience(dt, { wind: WEATHER.k.overcast * 0.8 + 0.1, rain: WEATHER.k.rain, night: LIGHT.night, fire: fd, inside: player.stats.has('underRoof') ? 1 : 0 }); }
-    if (hit('KeyC') && !(hud.open && g.crafting.tab === 'craft')) { if (!hud.open) hud.toggle(true); g.crafting.open('craft'); }
+    if (hit('KeyC') && !g.map.open) hud.toggle(!hud.open);   // C opens and closes the pack and crafting, on whichever tab you left it
     if (input.uiOpen || player.dead) { hud.prompt(null); g.build.update(dt); g.creatures.update(dt); g.combat.update(dt); g.structures.update(dt); return; }
     const t = target();
     if (!g.build.active && !(g.equippedTool('build') && g.build.aimPiece)) hud.prompt(t ? 'E' : null, t?.label, t?.sub);

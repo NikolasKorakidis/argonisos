@@ -9,12 +9,13 @@ const TIER_HINT = ['', 'Offer the Minotaur\'s head to learn this', 'Offer the Ch
 
 export class Crafting {
   constructor(g) {
-    this.g = g; this.tab = 'craft'; this.sel = null; this.known = new Set(); this.fresh = new Set();
+    this.g = g; this.tab = 'craft'; this.selBy = { craft: null, build: null }; this.scrollBy = { craft: 0, build: 0 }; this.known = new Set(); this.fresh = new Set();
     const p = document.createElement('div'); p.className = 'pnl'; p.id = 'craftPanel';
     p.innerHTML = `<h2>Craft</h2><div class="pbody"><div id="craftTabs"><button data-t="craft" class="on">${icon('anvil')} Craft</button><button data-t="build">${icon('hammer')} Build</button></div>
       <div id="craftList"></div><div id="craftDetail"></div></div>`;
     $('invPanel').prepend(p); this.panel = p;
-    p.querySelectorAll('#craftTabs button').forEach((b) => (b.onclick = () => { this.tab = b.dataset.t; this.sel = null; this.draw(); }));
+    p.querySelectorAll('#craftTabs button').forEach((b) => (b.onclick = () => { this.tab = b.dataset.t; this.draw(); }));
+    $('craftList').addEventListener('scroll', () => { this.scrollBy[this.tab] = $('craftList').scrollTop; });
     $('craftList').addEventListener('click', (e) => { const r = e.target.closest('.rrow'); if (!r) return; this.sel = r.dataset.id; this.fresh.delete(this.sel); this.draw(); });
     $('craftList').addEventListener('dblclick', (e) => { const r = e.target.closest('.rrow'); if (r) this.make(r.dataset.id); });
     $('craftDetail').addEventListener('click', (e) => { if (e.target.closest('#craftGo')) this.make(this.sel); });
@@ -22,6 +23,9 @@ export class Crafting {
     this.discover(true);
   }
   // Find recipes newly revealed by what you've held
+  // each tab remembers what was selected and how far down the list you were, so the menu reopens where you left it
+  get sel() { return this.selBy[this.tab]; }
+  set sel(v) { this.selBy[this.tab] = v; }
   discover(silent) {
     const seen = this.g.inv.seen, list = this.list();
     for (const r of list) {
@@ -69,9 +73,11 @@ export class Crafting {
     if (!list.length) { $('craftList').innerHTML = `<p class="empty">${this.tab === 'craft' ? 'Pick things up to learn what you can make from them.' : 'Gather wood to learn what you can build.'}</p>`; $('craftDetail').innerHTML = ''; return; }
     if (!this.sel || !list.find((r) => r.key === this.sel)) this.sel = list[0].key;
     const groups = new Map(); for (const r of list) { const k = r.kind === 'piece' ? r.cat || 'Structures' : r.at ? 'Workbench' : 'By hand'; (groups.get(k) || groups.set(k, []).get(k)).push(r); }
+    const scroll = this.scrollBy[this.tab];
     $('craftList').innerHTML = [...groups].map(([k, rs]) => `<p class="psub">${k}</p>` + rs.map((r) => {
       const why = this.blocker(r); return `<button class="rrow${r.key === this.sel ? ' on' : ''}${why ? ' no' : ''}${r.tier > (this.g.S.tier || 0) ? ' locked' : ''}" data-id="${r.key}"><i>${icon(r.icon)}</i><span>${r.name}</span>${this.fresh.has(r.key) ? '<em>new</em>' : ''}</button>`;
     }).join('')).join('');
+    $('craftList').scrollTop = scroll;
     const r = list.find((x) => x.key === this.sel), why = this.blocker(r), d = r.kind === 'item' ? ITEMS[r.id] : this.g.build.piece(r.id);
     const stats = [];
     if (d.dmg) stats.push('Damage ' + d.dmg.map(([n, k]) => `${n} ${k}`).join(' + ')); if (d.block) stats.push(`Block ${d.block}`); if (d.armor) stats.push(`Armour ${d.armor}`);

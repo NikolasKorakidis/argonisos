@@ -16,8 +16,10 @@ const merge = (list) => {     // [[geo, colorHex]] → one geometry with vertex 
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(out, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); return g;
 };
 const vc = (o = {}) => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, flatShading: true, ...o });
+// show: how much bigger than life they're drawn (so they read in the grass), patch: radius of the bare ground around them
+const SHOW = { stone: [1.7, 0.85], branch: [1.3, 1.15], lightstone: [1.5, 0.8], dandelion: [1.3, 0.55], moonflower: [1.3, 0.6], feather: [1.6, 0.55], bones: [1.4, 0.9], drop: [1, 0.7] };
 export const KINDS = {
-  stone: { item: 'stone', n: [1, 1], model: () => ({ geo: merge([[new THREE.DodecahedronGeometry(0.2, 0).scale(1.2, 0.7, 1).translate(0, 0.1, 0), 0x8f887e], [new THREE.DodecahedronGeometry(0.12, 0).translate(0.22, 0.06, 0.1), 0x7c766c]]), mat: vc() }) },
+  stone: { item: 'stone', n: [1, 1], model: () => ({ geo: merge([[new THREE.DodecahedronGeometry(0.2, 0).scale(1.2, 0.7, 1).translate(0, 0.1, 0), 0xb3ab9c], [new THREE.DodecahedronGeometry(0.12, 0).translate(0.22, 0.06, 0.1), 0x9a9286]]), mat: vc() }) },
   branch: { item: 'branch', n: [1, 1], model: () => ({ geo: merge([[new THREE.CylinderGeometry(0.035, 0.055, 1.4, 5).rotateZ(Math.PI / 2).translate(0, 0.06, 0), 0x6e5238], [new THREE.CylinderGeometry(0.02, 0.03, 0.5, 4).rotateZ(Math.PI / 2 - 0.7).translate(0.25, 0.12, 0.08), 0x6e5238], [new THREE.CylinderGeometry(0.018, 0.025, 0.4, 4).rotateZ(Math.PI / 2 + 0.6).rotateY(0.8).translate(-0.3, 0.1, -0.05), 0x6e5238], [new THREE.IcosahedronGeometry(0.09, 0).translate(0.45, 0.16, 0.1), 0x5d7a34]]), mat: vc() }) },
   lightstone: { item: 'lightstone', n: [1, 2], model: () => ({ geo: merge([[new THREE.OctahedronGeometry(0.22, 0).scale(1, 1.3, 0.9).translate(0, 0.16, 0), 0xe8e2d0], [new THREE.OctahedronGeometry(0.13, 0).translate(0.2, 0.08, -0.12), 0xd9d2bc]]), mat: vc({ emissive: 0x6a6450, emissiveIntensity: 0.35, roughness: 0.5 }) }) },
   dandelion: { item: 'dandelion', n: [1, 2], model: () => ({ geo: merge([[new THREE.CylinderGeometry(0.012, 0.015, 0.35, 4).translate(0, 0.17, 0), 0x5d8a34], [new THREE.SphereGeometry(0.07, 6, 4).scale(1, 0.6, 1).translate(0, 0.36, 0), 0xf2d040], [new THREE.ConeGeometry(0.1, 0.06, 5).rotateX(Math.PI).translate(0, 0.03, 0), 0x4a7a2a]]), mat: vc() }) },
@@ -57,6 +59,14 @@ export class Pickups {
     this.meshes = {}; this.dirty = true; this.day = 1; this.seq = 0;
     for (const [k, K] of Object.entries(KINDS)) { const { geo, mat } = K.model(); const m = new THREE.InstancedMesh(geo, mat, 1024); m.count = 0; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; scene.add(m); this.meshes[k] = m; }
     this.visible = [];
+    // a patch of bare earth and pebbles under each one, tilted to the slope
+    const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+    const gr = x.createRadialGradient(64, 64, 4, 64, 64, 62); gr.addColorStop(0, 'rgba(112,92,64,0.95)'); gr.addColorStop(0.55, 'rgba(104,86,58,0.75)'); gr.addColorStop(1, 'rgba(96,80,54,0)'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+    let sd = 5; const r = () => ((sd = (sd * 16807) % 2147483647) - 1) / 2147483646;
+    for (let i = 0; i < 70; i++) { const a = r() * 6.28, d = Math.sqrt(r()) * 44, v = 120 + r() * 70; x.fillStyle = `rgba(${v},${v * 0.95},${v * 0.85},${0.5 + r() * 0.4})`; x.beginPath(); x.ellipse(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 1 + r() * 2.5, 1 + r() * 2, r() * 3, 0, 7); x.fill(); }
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    this.patch = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 2048);
+    this.patch.count = 0; this.patch.receiveShadow = true; this.patch.frustumCulled = false; this.patch.renderOrder = -1; scene.add(this.patch);
   }
   isTaken(id) { const d = this.taken.get(id); return d !== undefined && this.day - d < REGROW_DAYS; }
   update(pos, day) {
@@ -71,15 +81,22 @@ export class Pickups {
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), s = new THREE.Vector3(1, 1, 1), n = {};
     for (const k in this.meshes) n[k] = 0;
     this.visible = [];
-    const put = (kind, p) => { const mesh = this.meshes[kind]; if (n[kind] >= 1024) return; e.set(0, p.rot, 0); q.setFromEuler(e); v.set(p.x, p.y, p.z); mesh.setMatrixAt(n[kind]++, m4.compose(v, q, s)); this.visible.push(p); };
+    let np = 0; const up = new THREE.Vector3(0, 1, 0), nrm = new THREE.Vector3(), qq = new THREE.Quaternion(), ss = new THREE.Vector3();
+    const put = (kind, p) => {
+      const mesh = this.meshes[kind]; if (n[kind] >= 1024) return; const [k, rad] = SHOW[kind];
+      e.set(0, p.rot, 0); q.setFromEuler(e); v.set(p.x, p.y, p.z); mesh.setMatrixAt(n[kind]++, m4.compose(v, q, ss.setScalar(k))); this.visible.push(p);
+      if (np < 2048) { nrm.set(heightAt(p.x - 0.5, p.z) - heightAt(p.x + 0.5, p.z), 1, heightAt(p.x, p.z - 0.5) - heightAt(p.x, p.z + 0.5)).normalize(); qq.setFromUnitVectors(up, nrm).multiply(q);
+        v.set(p.x, p.y + 0.03, p.z); this.patch.setMatrixAt(np++, m4.compose(v, qq, ss.setScalar(rad))); }
+    };
     for (const list of this.cells.values()) for (const p of list) if (!this.isTaken(p.id)) put(p.kind, p);
     for (const d of this.drops) put('drop', d);
     // keep the grass short round everything lying about, so it can be found
     const keep = new Set(this.visible.map((p) => 'pk' + p.id));
     for (const k of this.cleared || []) if (!keep.has(k)) clearGrass(k, null);
-    for (const p of this.visible) if (!this.cleared?.has('pk' + p.id)) clearGrass('pk' + p.id, { x: p.x, z: p.z, r: p.kind === 'branch' ? 0.75 : 0.4 });
+    for (const p of this.visible) if (!this.cleared?.has('pk' + p.id)) clearGrass('pk' + p.id, { x: p.x, z: p.z, r: SHOW[p.kind][1] * 1.05 });
     this.cleared = keep;
     for (const k in this.meshes) { this.meshes[k].count = n[k]; this.meshes[k].instanceMatrix.needsUpdate = true; }
+    this.patch.count = np; this.patch.instanceMatrix.needsUpdate = true;
   }
   // The nearest thing to pick up within reach of a point
   nearest(p, reach = 2.4) {

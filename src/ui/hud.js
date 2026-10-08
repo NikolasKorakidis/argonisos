@@ -112,6 +112,18 @@ export class HUD {
     this.onToggle?.(on);
     if (on) this.fit();
   }
+  // Ask before throwing something away
+  confirmDrop(i) {
+    const s = this.inv.slots[i]; if (!s) return; const d = ITEMS[s.id];
+    let box = document.getElementById('dropAsk'); if (!box) { box = el('div', 'pnl'); box.id = 'dropAsk'; document.body.appendChild(box); }
+    box.innerHTML = `<div class="pbody"><div class="big">${icon(d.icon || 'stone')}</div><h3>Drop ${d.name}${s.n > 1 ? ` ×${s.n}` : ''}?</h3><p>${s.worn ? 'You are using it. ' : ''}It will lie on the ground where you stand.</p>
+      <div class="btns"><button class="btn ghost" id="dropNo">Keep it</button><button class="btn" id="dropYes">Drop</button></div></div>`;
+    box.classList.remove('hidden');
+    const done = (yes) => { box.classList.add('hidden'); removeEventListener('keydown', key, true); if (yes && this.inv.slots[i] === s) this.onDrop?.(i); this.drawGrid(); };
+    const key = (e) => { if (e.code === 'Escape') { e.stopPropagation(); done(false); } if (e.code === 'Enter') done(true); };
+    addEventListener('keydown', key, true);
+    box.querySelector('#dropNo').onclick = () => done(false); box.querySelector('#dropYes').onclick = () => done(true);
+  }
   // Scale the screen down to fit small windows
   fit() {
     const p = this.panel; p.style.transform = 'translate(-50%,-50%)';
@@ -137,7 +149,7 @@ export class HUD {
       if (drag === null) return; ghost?.remove(); ghost = null;
       const s = document.elementFromPoint(e.clientX, e.clientY)?.closest('#invGrid .slot');
       if (s) this.inv.move(drag, +s.dataset.i);
-      else if (!e.target.closest?.('#invPanel')) this.onDrop?.(drag);                 // dropped outside the panel: throw it on the ground
+      else if (!e.target.closest?.('#invPanel')) this.confirmDrop(drag);              // dragged outside the panel: ask, then throw it on the ground
       drag = null; this.drawGrid();
     });
     g.addEventListener('contextmenu', (e) => e.preventDefault());
