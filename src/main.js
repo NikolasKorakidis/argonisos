@@ -126,8 +126,8 @@ function loop() {
   // keys
   const busy = !game.started || game.paused;
   const pauseKey = hit('KeyP') || (hit('Escape') && performance.now() - (game.pausedAt || 0) > 400);   // (the Esc that just paused us via the mouse release doesn't unpause)
-  if (game.started && pauseKey && !hud.open && !game.map?.open && !game.owl?.open && !(game.build?.sel && !game.paused)) game.pause(!game.paused);
-  if (!busy && (hit('Tab') || hit('KeyI') || (hit('Escape') && hud.open))) hud.toggle();
+  if (game.started && pauseKey && !hud.open && !game.map?.open && !game.owl?.open && !game.buildMenu?.open && !(game.build?.sel && !game.paused)) game.pause(!game.paused);
+  if (!busy && !game.buildMenu?.open && (hit('Tab') || hit('KeyI') || (hit('Escape') && hud.open))) hud.toggle();
   if (!busy && !input.uiOpen) for (let k = 1; k <= 8; k++) if (hit('Digit' + k)) useSlot(k - 1);
   if (hit('F3')) { S.debug = !S.debug; $('dbg').classList.toggle('hidden', !S.debug); }
   if (hit('F9') && !busy) game.setFly(!S.fly);

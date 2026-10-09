@@ -81,27 +81,39 @@ export class Build {
     const def = this.ghostDef, a = this.aim(); if (!a) { this.ghost.visible = false; return null; }
     this.ghost.visible = true;
     let pos = a.p.clone();
+    // Only structural pieces are snap anchors: never the workbench, campfire, bed, chest or other furniture. Equipment
+    // itself doesn't snap at all; it goes where you aim.
+    const structural = (p) => !p.def.equip, snapping = !def.equip;
     // near a structure, turn with its grid: the ghost takes the nearest quarter-turn to your chosen angle, relative to
     // the piece you're aiming at (or the nearest piece)
-    let rot = this.rot, anchor = a.piece; if (!anchor) { let bd2 = 4; for (const p of this.near(pos.x, pos.z, 4)) { const d = p.pos.distanceTo(pos); if (d < bd2) { bd2 = d; anchor = p; } } }
+    let rot = this.rot, anchor = snapping && a.piece && structural(a.piece) ? a.piece : null;
+    if (snapping && !anchor) { let bd2 = 4; for (const p of this.near(pos.x, pos.z, 4)) { if (!structural(p)) continue; const d = p.pos.distanceTo(pos); if (d < bd2) { bd2 = d; anchor = p; } } }
     if (anchor) rot = anchor.rot + Math.round((this.rot - anchor.rot) / (Math.PI / 2)) * (Math.PI / 2);
     this.aligned = !!anchor;
-    // snap: try putting each of the ghost's points on each point of what's built nearby, and keep the placement where the
-    // most points line up (a gable sits on both walls, a roof on both corners), then the one nearest where you aim
-    const local = def.snaps, targets = [];
-    for (const p of this.near(pos.x, pos.z, 9)) for (const s of p.snaps) if (s.distanceTo(pos) < 7) targets.push(s);
+    // snap: try putting each of the ghost's points on each point of what's built nearby, score each placement (the most
+    // points lined up first, then nearest where you aim), and take the best one that's actually allowed
+    const local = snapping ? def.snaps : [], targets = [];
+    if (snapping) for (const p of this.near(pos.x, pos.z, 9)) if (structural(p)) for (const s of p.snaps) if (s.distanceTo(pos) < 5) targets.push(s);
+    const cands = [];
     // (against a structure a quarter turn is tried too, but it only wins if it lines up clearly more points)
-    let best = null, bs = Infinity, bestRot = rot;
     for (const [r2, pen] of anchor ? [[rot, 0], [rot + Math.PI / 2, 2.5], [rot - Math.PI / 2, 2.5]] : [[rot, 0]]) {
       const c = Math.cos(r2), sn = Math.sin(r2);
       for (const s of targets) for (const l of local) {
-        const cand = _v.set(s.x - (l[0] * c + l[2] * sn), s.y - l[1], s.z - (-l[0] * sn + l[2] * c)), d = cand.distanceTo(pos); if (d > 2.4) continue;
+        const cand = new THREE.Vector3(s.x - (l[0] * c + l[2] * sn), s.y - l[1], s.z - (-l[0] * sn + l[2] * c)), d = cand.distanceTo(pos); if (d > 1.7) continue;
         let match = 0; for (const m of local) { const wx = cand.x + m[0] * c + m[2] * sn, wy = cand.y + m[1], wz = cand.z - m[0] * sn + m[2] * c; if (targets.some((t) => Math.abs(t.x - wx) + Math.abs(t.y - wy) + Math.abs(t.z - wz) < 0.2)) match++; }
-        const score = d - 1.6 * (match - 1) + pen; if (score < bs) { bs = score; best = cand.clone(); bestRot = r2; }
+        if (cands.some((q) => q.pos.distanceTo(cand) < 0.02 && Math.abs(q.rot - r2) < 0.01)) continue;
+        cands.push({ pos: cand, rot: r2, score: d - 1.6 * (match - 1) + pen });
       }
     }
-    rot = bestRot;
-    if (best) pos = best;
+    cands.sort((x, y) => x.score - y.score);
+    // keep the snap we had while it's still among the good ones, so the ghost doesn't flicker between near-equal spots
+    const last = this.lastSnap, keep = last && cands.find((q) => q.pos.distanceTo(last.pos) < 0.02 && Math.abs(q.rot - last.rot) < 0.01 && q.score <= (cands[0]?.score ?? 0) + 0.6);
+    let best = null;
+    if (keep && !this.blocked(def, keep.pos, keep.rot)) best = keep;
+    else for (const q of cands.slice(0, 8)) if (!this.blocked(def, q.pos, q.rot)) { best = q; break; }
+    if (!best && cands.length) best = cands[0];   // nothing free: show the best one (it will be red)
+    this.lastSnap = best;
+    if (best) { pos = best.pos.clone(); rot = best.rot; }
     // a floor laid on the ground sits on its highest corner, so the ground doesn't poke up through it
     else if (a.terrain && def.cat === 'Floors' && def.tops) { const t = def.tops[0]; let top = -1e9; for (const [lx, lz] of [[t.x0, t.z0], [t.x1, t.z0], [t.x0, t.z1], [t.x1, t.z1], [0, 0]]) { const w = toWorld(pos, rot, [lx, 0, lz]); top = Math.max(top, heightAt(w.x, w.z)); } pos.y = top + 0.03; }
     this.ghost.position.copy(pos); this.ghost.rotation.y = rot;
@@ -118,6 +130,7 @@ export class Build {
     if (def.equip && a.terrain && Math.abs(heightAt(pos.x, pos.z) - pos.y) > 0.4) return 'Too steep here';
     const sup = this.supportFor(def, pos, rot); if (sup.s < MIN_SUPPORT) return 'Nothing holds it up';
     if (this.overlaps(def, pos, rot)) return 'Something is in the way';
+    if (this.duplicate(def, pos, rot)) return 'Already built here';
     if (pos.y < -0.8) return 'Too deep in the water';
     return null;
   }
@@ -139,6 +152,19 @@ export class Build {
     return out;
   }
   touch(def, pos, rot, p) { const A = this.boxes(def, pos, rot), B = p.boxes; for (const a of A) for (const b of B) if (a.clone().expandByScalar(0.06).intersectsBox(b)) return true; return false; }
+  // Would this sit on (or half over) a piece of the same kind? Floors, roofs and beams have no body, so overlaps between
+  // them are caught here: the same spot, or their surfaces overlapping by more than a sliver
+  duplicate(def, pos, rot) {
+    const inset = (b) => { b.min.x += 0.2; b.max.x -= 0.2; b.min.z += 0.2; b.max.z -= 0.2; b.min.y -= 0.05; b.max.y += 0.05; return b; };   // shrink sideways only: a floor's surface is thin
+    const mine = this.snapsOf(def, pos, rot), A = this.boxes({ tops: def.tops }, pos, rot).map(inset);
+    for (const p of this.near(pos.x, pos.z, 6)) {
+      if (p.id !== def.id) continue;
+      if (mine.every((m) => p.snaps.some((q) => q.distanceTo(m) < 0.15))) return true;
+      for (const b of this.boxes({ tops: p.def.tops }, p.pos, p.rot)) { const bb = inset(b); for (const a of A) if (!a.isEmpty() && !bb.isEmpty() && a.intersectsBox(bb)) return true; }
+    }
+    return false;
+  }
+  blocked(def, pos, rot) { return this.overlaps(def, pos, rot) || this.duplicate(def, pos, rot); }
   // Only real bodies collide (walls, posts, furniture): the space under a sloped roof or over a floor doesn't count, so
   // gable ends, awnings and roofs can go in in any order
   solidBoxes(def, pos, rot) { return this.boxes({ solids: def.solids }, pos, rot); }
@@ -259,9 +285,9 @@ export class Build {
   // ---- chest window: click an item to move it between the chest and your pack
   buildChestPanel() {
     const p = document.createElement('div'); p.className = 'pnl hidden'; p.id = 'chestPanel';
-    p.innerHTML = '<h2>Chest</h2><div class="pbody"><div class="grid" id="chestGrid"></div><p class="hint">Click to move between the chest and your pack</p></div>';
+    p.innerHTML = '<h2>Chest</h2><div class="pbody"><div class="grid" id="chestGrid"></div><div class="chestFoot"><button class="btn small" id="chestSort">Sort Items</button><p class="hint">Click to move between the chest and your pack</p></div></div>';
     document.getElementById('invPanel').prepend(p); this.chestEl = p;
-    p.addEventListener('click', (e) => { const s = e.target.closest('.slot'); if (!s || !this.chest) return; const i = +s.dataset.i, it = this.chest.inv.slots[i]; if (!it) return; const left = this.g.inv.add(it.id, it.n, it.dur ? { dur: it.dur } : {}); if (left) it.n = left; else this.chest.inv.slots[i] = null; this.drawChest(); });
+    p.addEventListener('click', (e) => { if (e.target.closest('#chestSort') && this.chest) { this.chest.inv.sort(); this.drawChest(); return; } const s = e.target.closest('.slot'); if (!s || !this.chest) return; const i = +s.dataset.i, it = this.chest.inv.slots[i]; if (!it) return; const left = this.g.inv.add(it.id, it.n, it.dur ? { dur: it.dur } : {}); if (left) it.n = left; else this.chest.inv.slots[i] = null; this.drawChest(); });
     this.g.hud.onSlotClick = (i) => { if (!this.chest) return false; const it = this.g.inv.slots[i]; if (!it || it.worn) return true; const left = this.chest.inv.add(it.id, it.n, it.dur ? { dur: it.dur } : {}); if (left) it.n = left; else this.g.inv.slots[i] = null; this.g.inv.onChange?.(); this.drawChest(); return true; };
   }
   openChest(p) { this.chest = p; this.chestEl.classList.remove('hidden'); document.getElementById('craftPanel').classList.add('hidden'); this.g.hud.toggle(true); this.drawChest(); this.g.sound?.('chest'); }
@@ -273,7 +299,7 @@ export class Build {
     if (hammer !== this.tint) this.updateTint();
     if (!hammer && this.ghost) { this.ghost.visible = false; }
     if (hammer && !input.uiOpen && !g.player.dead) {
-      if (input.clicks.includes(2)) { g.hud.toggle(true); g.crafting.open('build'); }
+      if (input.clicks.includes(2)) { g.buildMenu.toggle(true); input.clicks.length = 0; return; }
       if (this.sel) {
         const step = this.aligned ? Math.PI / 2 : Math.PI / 8;   // quarter turns against a structure, finer on open ground
         if (hit('KeyR')) this.rot += step;

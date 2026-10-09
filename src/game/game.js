@@ -13,6 +13,7 @@ import { SITES } from '../world/sites.js';
 import { WorldMap } from '../ui/map.js';
 import { Owl } from './owl.js';
 import { Guide } from './guide.js';
+import { BuildMenu } from '../ui/buildmenu.js';
 import { save, load, Graves } from './save.js';
 import { sound, updateAmbience } from '../audio/sound.js';
 import { LIGHT } from '../world/sky.js';
@@ -37,6 +38,7 @@ export function installGame(g) {
   g.map = new WorldMap(g);
   g.owl = new Owl(g);
   g.guide = new Guide(g);
+  g.buildMenu = new BuildMenu(g);
   g.ITEMS = ITEMS; g.graves = new Graves(g); { const od = g.onDeath; g.onDeath = () => { g.graves.fall(); od?.(); }; }
   g.combat = new Combat(g);
   player.floorAt = (p) => Math.max(g.build.floorAt(p.x, p.z, p.y), g.structures.floorAt(p.x, p.z, p.y));
@@ -104,7 +106,7 @@ export function installGame(g) {
     const f = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)), front = player.pos.clone().addScaledVector(f, 0.9);
     const owl = g.owl.interactable(player.pos); if (owl && g.owl.faced()) return owl;
     const p = g.pickups.nearest(front, 1.9);
-    if (p) { const id = p.kind === 'drop' ? p.item : KINDS[p.kind].item, n = p.kind === 'drop' ? p.n : 1; return { kind: 'pickup', p, label: `Pick up ${ITEMS[id].name}${n > 1 ? ` ×${n}` : ''}` }; }
+    if (p) { const K = KINDS[p.kind], id = p.kind === 'drop' ? p.item : K.item, n = p.kind === 'drop' ? p.n : 1; return { kind: 'pickup', p, label: `Pick up ${K.label || ITEMS[id].name}${n > 1 ? ` ×${n}` : ''}`, sub: K.label ? `+${K.n[0]} ${ITEMS[id].name.toLowerCase()}` : '' }; }
     const ow = g.owl.interactable(player.pos) || g.graves.interactable(player.pos); if (ow) return ow;
     const tr = g.trial.interactable(player.pos); if (tr) return tr;
     const s = g.build?.interactable?.(player.pos, f); if (s) return s;
@@ -120,7 +122,7 @@ export function installGame(g) {
 
   // ---- per frame
   g.update = (dt) => {
-    g.owl.update(dt); g.guide.update(dt);
+    g.owl.update(dt); g.guide.update(dt); g.buildMenu.update();
     if (g.owl.open) { hud.prompt(null); return; }
     if (hit('KeyM') || (hit('Escape') && g.map.open)) g.map.toggle();
     g.map.update(dt);
@@ -129,7 +131,7 @@ export function installGame(g) {
       if (!(g.ambT > 0)) { g.ambT = 0.5; const P = player.pos, bw = biomeWeights(P.x, P.z); let sea = 0; for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; if (heightAt(P.x + Math.cos(a) * 45, P.z + Math.sin(a) * 45) < -0.5) sea++; } g.amb = { forest: bw.y, marsh: bw.v, sea: sea / 8 }; } g.ambT -= dt;
       const roof = player.stats.has('underRoof');
       updateAmbience(dt, { wind: WEATHER.k.overcast * 0.8 + 0.1, rain: WEATHER.k.rain, night: LIGHT.night, dusk: LIGHT.dusk, fire: fd, roof: roof ? 1 : 0, inside: roof ? 0.6 : 0, ...g.amb }); }
-    if (hit('KeyC') && !g.map.open) hud.toggle(!hud.open);   // C opens and closes the pack and crafting, on whichever tab you left it
+    if (hit('KeyC') && !g.map.open && !g.buildMenu.open) hud.toggle(!hud.open);   // C opens and closes the pack and crafting, on whichever tab you left it
     if (input.uiOpen || player.dead) { hud.prompt(null); g.build.update(dt); g.creatures.update(dt); g.combat.update(dt); g.structures.update(dt); return; }
     const t = target();
     if (!g.build.active && !(g.equippedTool('build') && g.build.aimPiece)) hud.prompt(t ? 'E' : null, t?.label, t?.sub);

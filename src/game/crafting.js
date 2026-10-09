@@ -72,6 +72,7 @@ export class Crafting {
     const list = this.list().filter((r) => (this.tab === 'craft' ? r.kind === 'item' : r.kind === 'piece') && this.known.has(r.key));
     if (!list.length) { $('craftList').innerHTML = `<p class="empty">${this.tab === 'craft' ? 'Pick things up to learn what you can make from them.' : 'Gather wood to learn what you can build.'}</p>`; $('craftDetail').innerHTML = ''; return; }
     if (!this.sel || !list.find((r) => r.key === this.sel)) this.sel = list[0].key;
+    if (this.tab === 'build') list.sort((a, b) => (a.cat === 'Crafting' ? 0 : 1) - (b.cat === 'Crafting' ? 0 : 1));   // crafting pieces first
     const groups = new Map(); for (const r of list) { const k = r.kind === 'piece' ? r.cat || 'Structures' : r.at ? 'Workbench' : 'By hand'; (groups.get(k) || groups.set(k, []).get(k)).push(r); }
     const scroll = this.scrollBy[this.tab];
     $('craftList').innerHTML = [...groups].map(([k, rs]) => `<p class="psub">${k}</p>` + rs.map((r) => {

@@ -32,6 +32,7 @@ export class HUD {
       <div class="pnl" id="charPanel"><h2>Hero</h2><div class="pbody" id="charBody"></div></div>`;
     document.body.appendChild(p); this.panel = p;
     $('invX').onclick = () => this.toggle(false);
+    p.addEventListener('click', (e) => { if (e.target.closest('#invSort')) { this.inv.sort(COLS, this.inv.slots.length); this.drawGrid(); } });   // the pack rows; the hotbar stays as you arranged it
     addEventListener('resize', () => this.open && this.fit());
     this.side = null;     // optional extra panel (crafting) placed beside the pack
   }
@@ -158,7 +159,7 @@ export class HUD {
     const g = $('invGrid'), sl = this.inv.slots;
     g.innerHTML = sl.slice(0, COLS).map((s, i) => this.slotHTML(s, i, true)).join('') + '<div class="hot"></div>' + sl.slice(COLS).map((s, i) => this.slotHTML(s, i + COLS, false)).join('');
     const w = this.inv.weight;
-    $('invFoot').innerHTML = `${icon('weight')}<span class="${w > MAX_WEIGHT ? 'heavy' : ''}">${w.toFixed(1)} / ${MAX_WEIGHT}</span><span style="margin-left:auto">Drag to move · <span class="kbd">Shift</span> split · <span class="kbd">RMB</span> use · drag out to drop</span>`;
+    $('invFoot').innerHTML = `${icon('weight')}<span class="${w > MAX_WEIGHT ? 'heavy' : ''}">${w.toFixed(1)} / ${MAX_WEIGHT}</span><button class="btn small" id="invSort" title="Merge piles and sort by name (the hotbar and worn things stay put)">Sort Items</button><span style="margin-left:auto">Drag to move · <span class="kbd">Shift</span> split · <span class="kbd">RMB</span> use · drag out to drop</span>`;
     void ROWS;
   }
   info(i) {

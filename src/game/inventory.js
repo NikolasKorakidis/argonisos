@@ -45,6 +45,23 @@ export class Inventory {
     const A = this.slots[a]; if (!A || A.n < 2) return; const e = this.slots.indexOf(null); if (e < 0) return;
     const k = Math.floor(A.n / 2); A.n -= k; this.slots[e] = { id: A.id, n: k }; this.onChange?.();
   }
+  // Sort the slots from..to: identical plain piles merge (up to the stack size), then everything is ordered by name.
+  // Worn items keep their slots; anything carrying data of its own (durability...) is moved but never merged.
+  sort(from = 0, to = this.slots.length) {
+    const idx = []; for (let i = from; i < to; i++) if (!this.slots[i]?.worn) idx.push(i);
+    const items = idx.map((i) => this.slots[i]).filter(Boolean), out = [], piles = new Map();
+    const plain = (it) => Object.keys(it).every((k) => k === 'id' || k === 'n');
+    for (const it of items) {
+      const st = ITEMS[it.id]?.stack ?? 1;
+      if (st <= 1 || !plain(it)) { out.push(it); continue; }
+      let n = it.n; const list = piles.get(it.id) || piles.set(it.id, []).get(it.id);
+      for (const p of list) { const k = Math.min(n, st - p.n); p.n += k; n -= k; if (!n) break; }
+      while (n > 0) { const k = Math.min(n, st), p = { id: it.id, n: k }; out.push(p); list.push(p); n -= k; }
+    }
+    out.sort((a, b) => (ITEMS[a.id]?.name ?? a.id).localeCompare(ITEMS[b.id]?.name ?? b.id) || b.n - a.n);
+    idx.forEach((i, k) => (this.slots[i] = out[k] || null));
+    this.onChange?.();
+  }
   drop(i) { const s = this.slots[i]; this.slots[i] = null; this.onChange?.(); return s; }
   worn(slot) { return this.slots.find((s) => s?.worn === slot) || null; }
   toJSON() { return { slots: this.slots, seen: [...this.seen] }; }

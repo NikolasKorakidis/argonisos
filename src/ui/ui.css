@@ -278,3 +278,31 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 #dropAsk .btns { display:flex; gap:10px; justify-content:center; } #dropAsk .btn { min-width:120px; }
 /* the game UI isn't a document: dragging items mustn't select text */
 #hud, #invPanel, #craftPanel, #chestPanel, #pause, #devPanel .pnl > h2, #title, #owlTalk, #dropAsk, #mapPanel { -webkit-user-select:none; user-select:none; }
+
+/* the hammer's build menu */
+#buildMenu { position:fixed; inset:0; z-index:24; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; background:rgba(10,6,4,.25); }
+#buildMenu > .pnl { width:min(900px,94vw); padding:12px 14px 14px; }
+#buildMenu .bmtabs { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+#buildMenu .bmtabs nav { flex:1; display:flex; gap:4px; }
+#buildMenu .bmtabs nav button { flex:1; padding:7px 4px; font:700 12px Cinzel,serif; letter-spacing:.06em; cursor:pointer; color:var(--ink2); background:rgba(120,80,30,.12); border:1px solid rgba(90,60,25,.35); border-radius:var(--r); white-space:nowrap; }
+#buildMenu .bmtabs nav button b { color:var(--red); font-weight:700; }
+#buildMenu .bmtabs nav button.on { color:var(--cream); background:linear-gradient(180deg,var(--glaze2),var(--glaze)); border-color:#000; } #buildMenu .bmtabs nav button.on b { color:var(--gold); }
+#buildMenu .bmtabs nav button:disabled { opacity:.4; cursor:default; }
+#buildMenu .bmgrid { display:grid; grid-template-columns:repeat(9, 1fr); gap:6px; }
+#buildMenu .bmtile { aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; font-size:36px; cursor:pointer; border-radius:var(--r); border:0;
+  background:radial-gradient(circle at 50% 40%, var(--clay3), var(--clay) 60%, var(--clay2)); box-shadow:inset 0 0 0 1px rgba(31,22,16,.55), inset 0 0 0 3px rgba(244,230,196,.25); color:var(--ink); }
+#buildMenu .bmtile i { font:600 10px/1.1 'Alegreya Sans',sans-serif; font-style:normal; text-align:center; padding:0 3px; color:var(--glaze); }
+#buildMenu .bmtile:hover { box-shadow:inset 0 0 0 1px var(--glaze), 0 0 0 2px var(--clay3); }
+#buildMenu .bmtile.on { box-shadow:inset 0 0 0 1px var(--glaze), 0 0 0 3px var(--gold), 0 0 14px rgba(217,169,74,.7); }
+#buildMenu .bmtile.no { filter:saturate(.35) brightness(.85); }
+#buildMenu .bmtile.empty { background:rgba(120,80,30,.1); box-shadow:inset 0 0 0 1px rgba(90,60,25,.25); cursor:default; }
+#buildMenu .bminfo { width:min(560px,90vw); display:flex; align-items:center; gap:14px; padding:12px 16px; }
+#buildMenu .bminfo .big { width:62px; height:62px; flex:none; font-size:42px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:radial-gradient(circle at 50% 40%, var(--clay3), var(--clay) 60%, var(--clay2)); box-shadow:0 0 0 1px var(--glaze); }
+#buildMenu .bminfo .txt { flex:1; } #buildMenu .bminfo h3 { margin:0; font:700 17px Cinzel,serif; } #buildMenu .bminfo p { margin:2px 0 0; font-size:13.5px; color:var(--ink2); }
+#buildMenu .bminfo .cost { display:flex; gap:6px; } #buildMenu .bminfo .cost .slot { width:46px; height:46px; font-size:28px; } #buildMenu .bminfo .cost .slot.no em { color:#ffb4a4; }
+#buildMenu .bminfo .free, #buildMenu .bminfo .empty { color:var(--ink2); font-style:italic; font-size:14px; }
+#buildMenu .bmkeys { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; padding:6px 14px; border-radius:var(--r); background:rgba(31,22,16,.72); color:var(--cream); font-size:13px; }
+#buildMenu, #buildMenu * { -webkit-user-select:none; user-select:none; }
+
+#invFoot .btn.small, .chestFoot .btn.small { padding:4px 10px; font-size:12px; min-width:0; }
+.chestFoot { display:flex; align-items:center; gap:10px; margin-top:10px; } .chestFoot .hint { margin:0 !important; }
