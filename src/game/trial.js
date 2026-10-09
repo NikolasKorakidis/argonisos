@@ -162,7 +162,7 @@ export class Trial {
   }
   update(dt) {
     const g = this.g, st = this.st;
-    if (hit('KeyF') && !g.player.dead) this.usePower();
+    if (hit('KeyF') && !g.player.dead && g.altUsed !== 'F') this.usePower();   // (F at a lit fire puts the fire out instead)
     if (st.powerCd > 0) { st.powerCd -= dt; if (Math.floor(st.powerCd) !== this.lastCd) { this.lastCd = Math.floor(st.powerCd); this.drawPower(); } }
     if (g.player.stats.has('poisoned')) g.player.stats.damage(1.5 * dt);
     // boss fight: health bar, and help arrives every 30 seconds

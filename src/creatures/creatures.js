@@ -1,6 +1,6 @@
 // Wildlife and monsters. Stats come from the data table (speeds converted from ft/s). Creatures spawn out of sight
 // around the player by biome and time of day, never close to a workbench, and fade away when you leave them far
-// behind. Levels 0-2 (shown as stars) add 25% health, damage and drops each.
+// behind. Levels 0-2 (shown as owls over the name) add 25% health, damage and drops each.
 //   passive: wander and graze, bolt when you come close or hurt them
 //   aggressive: attack when you come close (hogs) or as soon as they see you (dryads, giants, skeletons)
 //   Most of them won't come near a fire.
@@ -10,6 +10,7 @@ import { makeBody, preloadBodies } from './models.js';
 import { burst, dust, addShake } from '../render/fx.js';
 import { camera } from '../render/core.js';
 import { stormWallDepth } from '../world/stormwall.js';
+import { icon } from '../ui/icons.js';
 
 const FT = 0.3048, clamp = (v, a, b) => Math.max(a, Math.min(b, v)), rr = (a, b) => a + Math.random() * (b - a), ri = (a, b) => Math.floor(rr(a, b + 1));
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
@@ -191,7 +192,7 @@ export class Creatures {
     for (const c of show) {
       if (c.boss) continue;
       let el = this.plates.get(c);
-      if (!el) { el = document.createElement('div'); el.className = 'plate'; el.innerHTML = `<b>${c.T.name}${'<i>★</i>'.repeat(c.level)}</b><span><u></u></span>`; this.box.appendChild(el); this.plates.set(c, el); }
+      if (!el) { el = document.createElement('div'); el.className = 'plate'; el.innerHTML = `<b>${c.T.name}${`<i class="lvl" title="Level ${c.level}">${icon('owl')}</i>`.repeat(c.level)}</b><span><u></u></span>`; /* an owl for each level (same levels as before) */ this.box.appendChild(el); this.plates.set(c, el); }
       v.copy(c.pos); v.y += c.T.h + 0.5; v.project(camera);
       if (v.z > 1) { el.style.display = 'none'; continue; }
       el.style.display = ''; el.style.transform = `translate(${(v.x * 0.5 + 0.5) * innerWidth}px, ${(-v.y * 0.5 + 0.5) * innerHeight}px) translate(-50%, -100%)`;

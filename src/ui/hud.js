@@ -51,8 +51,8 @@ export class HUD {
     box.appendChild(e); setTimeout(() => e.remove(), 3000); while (box.children.length > 6) box.firstChild.remove();
   }
   region(name, sub) { const r = $('region'); r.querySelector('.rname').textContent = name; r.querySelector('.rsub').textContent = sub || ''; r.classList.remove('show'); void r.offsetWidth; r.classList.add('show'); }
-  prompt(key, text, sub) {
-    const p = $('prompt'), html = key ? `<kbd>${key}</kbd><span>${text}</span>${sub ? `<small>${sub}</small>` : ''}` : '';
+  prompt(key, text, sub, alt) {
+    const p = $('prompt'), html = key ? `<kbd>${key}</kbd><span>${text}</span>${sub ? `<small>${sub}</small>` : ''}${alt ? `<i class="sep"></i><kbd>${alt.key}</kbd><span>${alt.label}</span>` : ''}` : '';
     if (html === this.last.prompt) return; this.last.prompt = html;
     p.classList.toggle('hidden', !key); p.innerHTML = html;
   }

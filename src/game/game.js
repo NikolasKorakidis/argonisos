@@ -14,6 +14,7 @@ import { WorldMap } from '../ui/map.js';
 import { Owl } from './owl.js';
 import { Guide } from './guide.js';
 import { BuildMenu } from '../ui/buildmenu.js';
+import { Occlusion } from '../render/occlusion.js';
 import { save, load, Graves } from './save.js';
 import { sound, updateAmbience } from '../audio/sound.js';
 import { LIGHT } from '../world/sky.js';
@@ -39,6 +40,7 @@ export function installGame(g) {
   g.owl = new Owl(g);
   g.guide = new Guide(g);
   g.buildMenu = new BuildMenu(g);
+  g.occlusion = new Occlusion(g);
   g.ITEMS = ITEMS; g.graves = new Graves(g); { const od = g.onDeath; g.onDeath = () => { g.graves.fall(); od?.(); }; }
   g.combat = new Combat(g);
   player.floorAt = (p) => Math.max(g.build.floorAt(p.x, p.z, p.y), g.structures.floorAt(p.x, p.z, p.y));
@@ -122,6 +124,7 @@ export function installGame(g) {
 
   // ---- per frame
   g.update = (dt) => {
+    g.altUsed = null;
     g.owl.update(dt); g.guide.update(dt); g.buildMenu.update();
     if (g.owl.open) { hud.prompt(null); return; }
     if (hit('KeyM') || (hit('Escape') && g.map.open)) g.map.toggle();
@@ -134,8 +137,9 @@ export function installGame(g) {
     if (hit('KeyC') && !g.map.open && !g.buildMenu.open) hud.toggle(!hud.open);   // C opens and closes the pack and crafting, on whichever tab you left it
     if (input.uiOpen || player.dead) { hud.prompt(null); g.build.update(dt); g.creatures.update(dt); g.combat.update(dt); g.structures.update(dt); return; }
     const t = target();
-    if (!g.build.active && !(g.equippedTool('build') && g.build.aimPiece)) hud.prompt(t ? 'E' : null, t?.label, t?.sub);
+    if (!g.build.active && !(g.equippedTool('build') && g.build.aimPiece)) hud.prompt(t ? 'E' : null, t?.label, t?.sub, t?.alt);
     if (hit('KeyE')) g.interact();
+    if (t?.alt && hit(`Key${t.alt.key}`)) { t.alt.use(); g.altUsed = t.alt.key; }   // e.g. F: put out the fire (and not the boss power)
     // attack / use with LMB (the hammer and the bow have their own handlers)
     for (const b of input.clicks) {
       if (b !== 0) continue;
@@ -157,7 +161,7 @@ export function installGame(g) {
     for (const d of [...g.pickups.drops]) if (d.extra?.auto && Math.hypot(d.x - player.pos.x, d.z - player.pos.z) < 1.8 && Math.abs(d.y - player.pos.y) < 2) { g.pickups.take(d); g.give(d.item, d.n); g.sound('pick'); }
     if (g.torchLight?.parent) askLight(g.torchLight.getWorldPosition(new THREE.Vector3()), 7 + Math.sin(performance.now() * 0.02) * 0.6 + Math.random() * 0.4, 14);
   };
-  g.lateUpdate = (dt) => { updateFx(dt, camera); updateLights(); };
+  g.lateUpdate = (dt) => { updateFx(dt, camera); updateLights(); g.occlusion.update(dt); };
   hud.onToggle = (on) => { if (on) g.crafting.open(); };
   g.loaded = load(g);
   g.save = () => !player.dead && save(g);

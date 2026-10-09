@@ -257,20 +257,30 @@ export class Build {
     if (best.def.fire) { const st = [...this.near(best.pos.x, best.pos.z, 2)].find((q) => q.def.cook && q.pos.distanceTo(best.pos) < 1.5); if (st && (st.state.cook.length || this.g.inv.count('rawMeat') || this.g.inv.count('rawFish'))) best = st; }
     const p = best, d = p.def, inv = this.g.inv;
     if (d.door) return { label: p.state.open ? 'Close' : 'Open', sub: d.name, use: () => { this.setDoor(p, !p.state.open); this.g.sound?.('door'); } };
-    if (d.fire) return { label: p.state.lit ? `Add wood (${Math.ceil(p.state.fuel)}/10)` : inv.count('wood') ? 'Light the fire' : 'Needs wood to light', sub: 'Campfire', use: () => {
+    if (d.fire) return { label: p.state.lit ? `Add wood (${Math.ceil(p.state.fuel)}/10)` : inv.count('wood') ? 'Light the fire' : 'Needs wood to light', sub: 'Campfire', alt: this.douseAction(p), use: () => {
       if (!inv.count('wood')) { this.g.hud.toast('You have no wood'); return; } if (p.state.fuel >= 10 && p.state.lit) { this.g.hud.toast('The fire is full'); return; }
-      inv.take('wood', 1); p.state.fuel = Math.min(10, (p.state.lit ? p.state.fuel : 0) + 1); p.state.lit = true; p.state.rainT = 0; p.flame.visible = true; burst(p.pos.clone().setY(p.pos.y + 0.4), { color: 0xffa040, n: 10, speed: 1.5, grav: -2 }); } };
+      inv.take('wood', 1); p.state.fuel = Math.min(10, (p.state.lit || p.state.doused ? p.state.fuel : 0) + 1);   /* a fire you put out keeps its wood */ p.state.lit = true; p.state.doused = false; p.state.rainT = 0; p.flame.visible = true; burst(p.pos.clone().setY(p.pos.y + 0.4), { color: 0xffa040, n: 10, speed: 1.5, grav: -2 }); } };
     if (d.torch) return { label: p.state.lit ? 'Burning' : inv.count('resin') ? 'Light it (resin)' : 'Needs resin', sub: d.name, use: () => { if (!p.state.lit && inv.take('resin', 1)) { p.state.lit = true; p.state.fuel = 4; p.flame.visible = true; } } };
     if (d.bed) return { label: 'Sleep', sub: 'Bed', use: () => this.sleep(p) };
     if (d.chest) return { label: 'Open', sub: 'Chest', use: () => this.openChest(p) };
     if (d.station) return { label: 'Craft', sub: d.name, use: () => { this.g.hud.toggle(true); this.g.crafting.open('craft'); } };
     if (d.cook) {
-      const ready = p.state.cook.filter((c) => c.t >= c.need), raw = inv.count('rawMeat') ? 'rawMeat' : inv.count('rawFish') ? 'rawFish' : null;
-      if (ready.length) return { label: `Take ${ITEMS[ITEMS[ready[0].id].cook.to].name.toLowerCase()}`, sub: 'Cooking Stand', use: () => { const c = ready[0]; p.state.cook.splice(p.state.cook.indexOf(c), 1); this.g.give(ITEMS[c.id].cook.to, 1); this.drawCook(p); } };
-      if (raw && p.state.cook.length < d.cook) return { label: `Cook ${ITEMS[raw].name.toLowerCase()}`, sub: 'Cooking Stand', use: () => { inv.take(raw, 1); p.state.cook.push({ id: raw, t: 0, need: ITEMS[raw].cook.time }); this.drawCook(p); } };
-      return { label: p.state.cook.length ? 'Cooking…' : 'Needs raw meat', sub: 'Cooking Stand', use: () => {} };
+      // every piece cooks on its own timer; one press puts on all the raw meat that fits, or takes off all that's done
+      const ready = p.state.cook.filter((c) => c.t >= c.need), free = d.cook - p.state.cook.length, raw = inv.count('rawMeat') + inv.count('rawFish');
+      const fire = [...this.near(p.pos.x, p.pos.z, 2)].find((q) => q.def.fire && q.state.lit && q.pos.distanceTo(p.pos) < 1.5), alt = fire ? this.douseAction(fire) : null;
+      if (ready.length) return { alt, label: `Take ${ready.length > 1 ? `${ready.length} cooked` : ITEMS[ITEMS[ready[0].id].cook.to].name.toLowerCase()}`, sub: 'Cooking Stand', use: () => {
+        for (const c of ready) { p.state.cook.splice(p.state.cook.indexOf(c), 1); this.g.give(ITEMS[c.id].cook.to, 1); } this.drawCook(p); } };
+      if (raw && free > 0) return { alt, label: `Cook ${Math.min(raw, free) > 1 ? `${Math.min(raw, free)} pieces of meat` : (inv.count('rawMeat') ? 'raw meat' : 'raw fish')}`, sub: `Cooking Stand · ${p.state.cook.length}/${d.cook}`, use: () => {
+        for (const id of ['rawMeat', 'rawFish']) while (p.state.cook.length < d.cook && inv.take(id, 1)) p.state.cook.push({ id, t: 0, need: ITEMS[id].cook.time });
+        this.drawCook(p); } };
+      return { alt, label: p.state.cook.length ? `Cooking… ${p.state.cook.length}/${d.cook}` : 'Needs raw meat', sub: 'Cooking Stand', use: () => {} };
     }
     return null;
+  }
+  // F at a lit campfire puts it out (its remaining wood stays for when you light it again)
+  douseAction(p) {
+    if (!p.state.lit) return null;
+    return { key: 'F', label: 'Put out fire', use: () => { p.state.lit = false; p.state.doused = true; p.state.rainT = 0; p.flame.visible = false; dust(p.pos.clone().setY(p.pos.y + 0.5), 14, 0x8a8a8a, 0.45); this.g.sound?.('douse'); } };
   }
   drawCook(p) {
     if (!p.meat) { p.meat = new THREE.Group(); p.obj.add(p.meat); } p.meat.clear();
@@ -323,7 +333,7 @@ export class Build {
       } else if (tp) g.hud.prompt('MMB', `Remove ${tp.def.name}`, `${Math.ceil(tp.hp)} / ${tp.def.hp}`);
     }
     // doors swing, fires burn (and go out in the rain if nothing covers them), food cooks
-    const lights = [];
+    const lights = [], heated = new Set();   // cooking stands over a lit fire this frame (each cooks once, however many fires)
     for (const p of this.placed) {
       if (p.def.door && p.targetA !== undefined) p.inner.rotation.y += (p.targetA - p.inner.rotation.y) * Math.min(1, dt * 8);
       if ((p.def.fire || p.def.torch) && p.state.lit) {
@@ -338,9 +348,10 @@ export class Build {
         // standing in the fire burns
         if (p.def.fire && g.player.pos.distanceTo(p.pos) < 0.7) g.player.stats.damage(3 * dt);
         // cooking over it
-        for (const q of this.near(p.pos.x, p.pos.z, 1.5)) if (q.def.cook && q.state.cook.length) { let ch = false; for (const c of q.state.cook) { const was = c.t >= c.need; c.t += dt; if (!was && c.t >= c.need) ch = true; } if (ch) this.drawCook(q); }
+        for (const q of this.near(p.pos.x, p.pos.z, 1.5)) if (q.def.cook && q.state.cook.length) heated.add(q);
       }
     }
+    for (const q of heated) { let ch = false; for (const c of q.state.cook) { const was = c.t >= c.need; c.t += dt; if (!was && c.t >= c.need) ch = true; } if (ch) this.drawCook(q); }
     // light from the shared pool (the nearest fires get it)
     for (const p of lights) { const fl = 1 + Math.sin(performance.now() * 0.013 + p.pos.x) * 0.1 + Math.random() * 0.06; askLight(p.lightPos ||= p.pos.clone().setY(p.pos.y + (p.def.fire ? 1 : 1.8)), (p.def.fire ? 26 : 9) * fl * Math.min(1, 0.4 + p.state.fuel / 3), p.def.fire ? 22 : 12); }
     if (this.chest && !input.uiOpen) this.closeChest();

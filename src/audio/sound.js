@@ -104,6 +104,7 @@ const SFX = {
   arrowHit: () => { noise(0.1, { type: 'lowpass', freq: 600, vol: 0.32, brown: true }); noise(0.05, { freq: 2000, q: 2, vol: 0.08 }); },
   arrowThud: () => { noise(0.08, { freq: 420, q: 2, vol: 0.16 }); tone(240, 0.12, { type: 'triangle', vol: 0.04, slide: 40 }); },
   alert: () => noise(0.2, { freq: 650, q: 2.5, vol: 0.09, slide: 350 }),
+  douse: () => { noise(0.9, { freq: 3000, q: 0.6, vol: 0.18, slide: -2000, attack: 0.02 }); noise(0.5, { type: 'lowpass', freq: 400, vol: 0.12, brown: true }); },
   kill: () => tone(90, 0.5, { type: 'triangle', vol: 0.12, slide: -40, wet: 0.3 }),
   // thunder: a crack when it's close, then a long roll of rumbling bursts under the reverb
   thunder: (k = 1) => {

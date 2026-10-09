@@ -51,6 +51,9 @@ Object.assign(ICONS, {
   blessing: Array.from({ length: 10 }, (_, i) => { const a = i / 10 * Math.PI * 2; return ln(`M${(32 + Math.cos(a) * 16).toFixed(1)} ${(32 + Math.sin(a) * 16).toFixed(1)} L${(32 + Math.cos(a) * 26).toFixed(1)} ${(32 + Math.sin(a) * 26).toFixed(1)}`, G, 2.6); }).join('') + circ(32, 32, 12, G) + fill('M34 22 L26 33 h5 L28 42 L38 30 h-5 L36 22z'),
   swift: fill('M10 32 q14 -18 40 -10 l-8 4 q8 2 12 8 q-26 -4 -44 -2z') + ln('M6 40 h20 M10 46 h14', K, 2.4),
   hammerBuild: ICONS.hammer,
+  // the owl of Athens, gold with black-glaze details (marks a stronger creature)
+  owl: fill('M32 8 q-10 -2 -14 8 l-4 -6 q-2 10 3 16 q-5 8 -5 18 q0 14 20 16 q20 -2 20 -16 q0 -10 -5 -18 q5 -6 3 -16 l-4 6 q-4 -10 -14 -8z', G) + ln('M32 8 q-10 -2 -14 8 l-4 -6 q-2 10 3 16 q-5 8 -5 18 q0 14 20 16 q20 -2 20 -16 q0 -10 -5 -18 q5 -6 3 -16 l-4 6 q-4 -10 -14 -8z', K, 2.6) +
+    circ(24, 24, 7, C) + circ(40, 24, 7, C) + circ(24, 24, 3.6) + circ(40, 24, 3.6) + fill('M30 28 l2 6 l2 -6z') + inc('M22 40 q4 3 8 0 M34 40 q4 3 8 0 M24 47 q4 3 8 0 M32 47 q4 3 8 0', 1.2) + ln('M18 58 h28', K, 3),
   wall: `<rect x="8" y="10" width="48" height="44" fill="${K}"/>` + [16, 24, 32, 40, 48].map((x) => inc(`M${x} 12 V52`, 1.2)).join('') + `<rect x="8" y="10" width="48" height="5" fill="${O}"/>` + `<rect x="8" y="10" width="5" height="44" fill="${O}"/><rect x="51" y="10" width="5" height="44" fill="${O}"/>`,
   door: `<rect x="10" y="8" width="44" height="50" fill="${K}"/>` + `<rect x="20" y="18" width="24" height="40" fill="${O}"/>` + ln('M26 20 V56 M32 20 V56 M38 20 V56', K, 1.4) + circ(40, 38, 2, K),
   beam: `<rect x="27" y="4" width="10" height="56" fill="${K}"/>` + inc('M30 8 V56 M34 10 V52', 1) + ln('M10 50 L54 14', K, 6) + inc('M14 47 L50 18', 1),

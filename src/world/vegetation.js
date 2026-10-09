@@ -149,7 +149,7 @@ export class Vegetation {
       const cell = { meshes: null }; this.near.set(key, cell);
       this.pool.post({ type: 'flora', cx, cz, n: 1 }).then((m) => {
         if (this.near.get(key) !== cell) return;
-        cell.items = m.items; cell.meshes = this.buildMeshes(m.items, false, cx, cz); this.onCell?.(key, m.items, cx, cz);
+        cell.items = m.items; cell.cx = cx; cell.cz = cz; cell.meshes = this.buildMeshes(m.items, false, cx, cz); for (const ms of cell.meshes) ms.userData.cell = cell; this.onCell?.(key, m.items, cx, cz);
       });
     }
     for (const [key, c] of this.near) { const [cx, cz] = key.split(',').map(Number); if (Math.hypot((cx + 0.5) * CELL - pos.x, (cz + 0.5) * CELL - pos.z) > NEAR_KEEP + CELL) this.dropCell(this.near, key); void c; }
