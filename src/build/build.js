@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { PIECES, PIECE } from './pieces.js';
 import { heightAt } from '../world/gen.js';
 import { clearGrass } from '../world/grass.js';
+import { setCut } from '../world/groundcut.js';
 import { camera } from '../render/core.js';
 import { input, hit } from '../input.js';
 import { burst, dust, addShake } from '../render/fx.js';
@@ -81,27 +82,39 @@ export class Build {
     const def = this.ghostDef, a = this.aim(); if (!a) { this.ghost.visible = false; return null; }
     this.ghost.visible = true;
     let pos = a.p.clone();
+    // Only structural pieces are snap anchors: never the workbench, campfire, bed, chest or other furniture. Equipment
+    // itself doesn't snap at all; it goes where you aim.
+    const structural = (p) => !p.def.equip, snapping = !def.equip;
     // near a structure, turn with its grid: the ghost takes the nearest quarter-turn to your chosen angle, relative to
     // the piece you're aiming at (or the nearest piece)
-    let rot = this.rot, anchor = a.piece; if (!anchor) { let bd2 = 4; for (const p of this.near(pos.x, pos.z, 4)) { const d = p.pos.distanceTo(pos); if (d < bd2) { bd2 = d; anchor = p; } } }
+    let rot = this.rot, anchor = snapping && a.piece && structural(a.piece) ? a.piece : null;
+    if (snapping && !anchor) { let bd2 = 4; for (const p of this.near(pos.x, pos.z, 4)) { if (!structural(p)) continue; const d = p.pos.distanceTo(pos); if (d < bd2) { bd2 = d; anchor = p; } } }
     if (anchor) rot = anchor.rot + Math.round((this.rot - anchor.rot) / (Math.PI / 2)) * (Math.PI / 2);
     this.aligned = !!anchor;
-    // snap: try putting each of the ghost's points on each point of what's built nearby, and keep the placement where the
-    // most points line up (a gable sits on both walls, a roof on both corners), then the one nearest where you aim
-    const local = def.snaps, targets = [];
-    for (const p of this.near(pos.x, pos.z, 9)) for (const s of p.snaps) if (s.distanceTo(pos) < 7) targets.push(s);
+    // snap: try putting each of the ghost's points on each point of what's built nearby, score each placement (the most
+    // points lined up first, then nearest where you aim), and take the best one that's actually allowed
+    const local = snapping ? def.snaps : [], targets = [];
+    if (snapping) for (const p of this.near(pos.x, pos.z, 9)) if (structural(p)) for (const s of p.snaps) if (s.distanceTo(pos) < 5) targets.push(s);
+    const cands = [];
     // (against a structure a quarter turn is tried too, but it only wins if it lines up clearly more points)
-    let best = null, bs = Infinity, bestRot = rot;
     for (const [r2, pen] of anchor ? [[rot, 0], [rot + Math.PI / 2, 2.5], [rot - Math.PI / 2, 2.5]] : [[rot, 0]]) {
       const c = Math.cos(r2), sn = Math.sin(r2);
       for (const s of targets) for (const l of local) {
-        const cand = _v.set(s.x - (l[0] * c + l[2] * sn), s.y - l[1], s.z - (-l[0] * sn + l[2] * c)), d = cand.distanceTo(pos); if (d > 2.4) continue;
+        const cand = new THREE.Vector3(s.x - (l[0] * c + l[2] * sn), s.y - l[1], s.z - (-l[0] * sn + l[2] * c)), d = cand.distanceTo(pos); if (d > 1.7) continue;
         let match = 0; for (const m of local) { const wx = cand.x + m[0] * c + m[2] * sn, wy = cand.y + m[1], wz = cand.z - m[0] * sn + m[2] * c; if (targets.some((t) => Math.abs(t.x - wx) + Math.abs(t.y - wy) + Math.abs(t.z - wz) < 0.2)) match++; }
-        const score = d - 1.6 * (match - 1) + pen; if (score < bs) { bs = score; best = cand.clone(); bestRot = r2; }
+        if (cands.some((q) => q.pos.distanceTo(cand) < 0.02 && Math.abs(q.rot - r2) < 0.01)) continue;
+        cands.push({ pos: cand, rot: r2, score: d - 1.6 * (match - 1) + pen });
       }
     }
-    rot = bestRot;
-    if (best) pos = best;
+    cands.sort((x, y) => x.score - y.score);
+    // keep the snap we had while it's still among the good ones, so the ghost doesn't flicker between near-equal spots
+    const last = this.lastSnap, keep = last && cands.find((q) => q.pos.distanceTo(last.pos) < 0.02 && Math.abs(q.rot - last.rot) < 0.01 && q.score <= (cands[0]?.score ?? 0) + 0.6);
+    let best = null;
+    if (keep && !this.blocked(def, keep.pos, keep.rot)) best = keep;
+    else for (const q of cands.slice(0, 8)) if (!this.blocked(def, q.pos, q.rot)) { best = q; break; }
+    if (!best && cands.length) best = cands[0];   // nothing free: show the best one (it will be red)
+    this.lastSnap = best;
+    if (best) { pos = best.pos.clone(); rot = best.rot; }
     // a floor laid on the ground sits on its highest corner, so the ground doesn't poke up through it
     else if (a.terrain && def.cat === 'Floors' && def.tops) { const t = def.tops[0]; let top = -1e9; for (const [lx, lz] of [[t.x0, t.z0], [t.x1, t.z0], [t.x0, t.z1], [t.x1, t.z1], [0, 0]]) { const w = toWorld(pos, rot, [lx, 0, lz]); top = Math.max(top, heightAt(w.x, w.z)); } pos.y = top + 0.03; }
     this.ghost.position.copy(pos); this.ghost.rotation.y = rot;
@@ -118,6 +131,7 @@ export class Build {
     if (def.equip && a.terrain && Math.abs(heightAt(pos.x, pos.z) - pos.y) > 0.4) return 'Too steep here';
     const sup = this.supportFor(def, pos, rot); if (sup.s < MIN_SUPPORT) return 'Nothing holds it up';
     if (this.overlaps(def, pos, rot)) return 'Something is in the way';
+    if (this.duplicate(def, pos, rot)) return 'Already built here';
     if (pos.y < -0.8) return 'Too deep in the water';
     return null;
   }
@@ -139,6 +153,19 @@ export class Build {
     return out;
   }
   touch(def, pos, rot, p) { const A = this.boxes(def, pos, rot), B = p.boxes; for (const a of A) for (const b of B) if (a.clone().expandByScalar(0.06).intersectsBox(b)) return true; return false; }
+  // Would this sit on (or half over) a piece of the same kind? Floors, roofs and beams have no body, so overlaps between
+  // them are caught here: the same spot, or their surfaces overlapping by more than a sliver
+  duplicate(def, pos, rot) {
+    const inset = (b) => { b.min.x += 0.2; b.max.x -= 0.2; b.min.z += 0.2; b.max.z -= 0.2; b.min.y -= 0.05; b.max.y += 0.05; return b; };   // shrink sideways only: a floor's surface is thin
+    const mine = this.snapsOf(def, pos, rot), A = this.boxes({ tops: def.tops }, pos, rot).map(inset);
+    for (const p of this.near(pos.x, pos.z, 6)) {
+      if (p.id !== def.id) continue;
+      if (mine.every((m) => p.snaps.some((q) => q.distanceTo(m) < 0.15))) return true;
+      for (const b of this.boxes({ tops: p.def.tops }, p.pos, p.rot)) { const bb = inset(b); for (const a of A) if (!a.isEmpty() && !bb.isEmpty() && a.intersectsBox(bb)) return true; }
+    }
+    return false;
+  }
+  blocked(def, pos, rot) { return this.overlaps(def, pos, rot) || this.duplicate(def, pos, rot); }
   // Only real bodies collide (walls, posts, furniture): the space under a sloped roof or over a floor doesn't count, so
   // gable ends, awnings and roofs can go in in any order
   solidBoxes(def, pos, rot) { return this.boxes({ solids: def.solids }, pos, rot); }
@@ -154,15 +181,28 @@ export class Build {
     for (const p of this.neighbours(def, pos, rot, self)) { const up = pos.y - p.pos.y > 0.3 ? V_LOSS : H_LOSS; s = Math.max(s, p.support * (1 - up)); }
     return { s, grounded: false };
   }
+  // Where two pieces share a surface (wall tops at a corner, a panel's overhang on the one below) the depth buffer can't
+  // tell them apart and they flicker. Each piece gets a small, fixed depth priority instead, so one always wins: roofs over
+  // gable ends over walls over beams over floors over furniture, and pieces of one kind at right angles (walls meeting at
+  // a corner) alternate.
+  depthRank(def, rot) {
+    const rank = { Floors: 1, Beams: 2, Fences: 2, Walls: 3 }[def.cat] ?? (def.cat === 'Roofs' ? (def.roof ? 5 : 4) : 0);
+    const alt = ((Math.round(rot / (Math.PI / 2)) % 2) + 2) % 2, k = rank * 2 + alt;
+    return { polygonOffset: k > 0, polygonOffsetFactor: -0.12 * k, polygonOffsetUnits: -k };
+  }
   place(id, pos, rot, opts = {}) {
     const def = PIECE[id], obj = new THREE.Group(); obj.position.copy(pos); obj.rotation.y = rot;
     const inner = new THREE.Group(); obj.add(inner);
     const p = { uid: opts.uid ?? 'pc' + this.seq++, id, def, obj, inner, pos: pos.clone(), rot, hp: opts.hp ?? def.hp, state: opts.state || {}, support: 1, grounded: false, mats: [] };
-    for (const { geo, mat } of def.build()) { const m2 = mat.clone(); p.mats.push(m2); const m = new THREE.Mesh(geo, m2); m.castShadow = m.receiveShadow = true; m.userData.piece = p; inner.add(m); this.meshes.push(m); }
+    const depth = this.depthRank(def, rot);
+    for (const { geo, mat } of def.build()) { const m2 = mat.clone(); Object.assign(m2, depth); p.mats.push(m2); const m = new THREE.Mesh(geo, m2); m.castShadow = m.receiveShadow = true; m.userData.piece = p; inner.add(m); this.meshes.push(m); }
     this.g.scene.add(obj);
     p.snaps = this.snapsOf(def, pos, rot); p.boxes = this.boxes(def, pos, rot);
     this.index(p, true); this.placed.push(p);
     this.addColliders(p);
+    // a floor near the ground presses it down under its boards (flat floors only: stairs keep the slope)
+    const ft = def.cat === 'Floors' && def.tops?.length === 1 && def.tops[0].y !== undefined ? def.tops[0] : null;
+    if (ft) { const c = toWorld(pos, rot, [(ft.x0 + ft.x1) / 2, 0, (ft.z0 + ft.z1) / 2]); setCut(p.uid, { x: c.x, z: c.z, hw: Math.abs(ft.x1 - ft.x0) / 2, hd: Math.abs(ft.z1 - ft.z0) / 2, rot, y: pos.y + ft.y - 0.3 }); }
     // grass doesn't grow through floors and furniture
     const bb = p.boxes.reduce((a, b) => a.union(b), new THREE.Box3()); if (bb.min.y < heightAt(pos.x, pos.z) + 1.2) clearGrass(p.uid, { x: pos.x, z: pos.z, hw: (def.tops?.[0] ? Math.abs(def.tops[0].x1 - def.tops[0].x0) / 2 : (def.solids?.[0]?.[3] ?? 1) / 2) + 0.35, hd: (def.tops?.[0] ? Math.abs(def.tops[0].z1 - def.tops[0].z0) / 2 : (def.solids?.[0]?.[5] ?? 1) / 2) + 0.35, rot });
     if (def.fire || def.torch) { p.state.fuel ??= def.fire ? 3 : 4; p.state.lit ??= true; this.addFlame(p); }
@@ -182,9 +222,9 @@ export class Build {
   }
   remove(p, refund) {
     this.g.scene.remove(p.obj); this.meshes = this.meshes.filter((m) => m.userData.piece !== p); this.index(p, false); this.placed.splice(this.placed.indexOf(p), 1);
-    this.g.colliders.removeGroup(p.uid); clearGrass(p.uid, null);
+    this.g.colliders.removeGroup(p.uid); clearGrass(p.uid, null); setCut(p.uid, null);
     if (refund) for (const [id, n] of Object.entries(p.def.mats)) this.g.give(id, n);
-    if (p.inv) for (const s of p.inv.slots) if (s) this.g.pickups.drop(s.id, s.n, p.pos.x + Math.random() - 0.5, p.pos.z + Math.random() - 0.5, s.dur ? { dur: s.dur } : undefined);
+    if (p.inv) for (const s of p.inv.slots) if (s) this.g.pickups.drop(s.id, s.n, p.pos.x + Math.random() - 0.5, p.pos.z + Math.random() - 0.5, s.dur ? { dur: s.dur } : undefined, p.pos.y);
     if (p.flame) p.flame = null;
     if (this.chest === p) this.closeChest();
   }
@@ -231,20 +271,30 @@ export class Build {
     if (best.def.fire) { const st = [...this.near(best.pos.x, best.pos.z, 2)].find((q) => q.def.cook && q.pos.distanceTo(best.pos) < 1.5); if (st && (st.state.cook.length || this.g.inv.count('rawMeat') || this.g.inv.count('rawFish'))) best = st; }
     const p = best, d = p.def, inv = this.g.inv;
     if (d.door) return { label: p.state.open ? 'Close' : 'Open', sub: d.name, use: () => { this.setDoor(p, !p.state.open); this.g.sound?.('door'); } };
-    if (d.fire) return { label: p.state.lit ? `Add wood (${Math.ceil(p.state.fuel)}/10)` : inv.count('wood') ? 'Light the fire' : 'Needs wood to light', sub: 'Campfire', use: () => {
+    if (d.fire) return { label: p.state.lit ? `Add wood (${Math.ceil(p.state.fuel)}/10)` : inv.count('wood') ? 'Light the fire' : 'Needs wood to light', sub: 'Campfire', alt: this.douseAction(p), use: () => {
       if (!inv.count('wood')) { this.g.hud.toast('You have no wood'); return; } if (p.state.fuel >= 10 && p.state.lit) { this.g.hud.toast('The fire is full'); return; }
-      inv.take('wood', 1); p.state.fuel = Math.min(10, (p.state.lit ? p.state.fuel : 0) + 1); p.state.lit = true; p.state.rainT = 0; p.flame.visible = true; burst(p.pos.clone().setY(p.pos.y + 0.4), { color: 0xffa040, n: 10, speed: 1.5, grav: -2 }); } };
+      inv.take('wood', 1); p.state.fuel = Math.min(10, (p.state.lit || p.state.doused ? p.state.fuel : 0) + 1);   /* a fire you put out keeps its wood */ p.state.lit = true; p.state.doused = false; p.state.rainT = 0; p.flame.visible = true; burst(p.pos.clone().setY(p.pos.y + 0.4), { color: 0xffa040, n: 10, speed: 1.5, grav: -2 }); } };
     if (d.torch) return { label: p.state.lit ? 'Burning' : inv.count('resin') ? 'Light it (resin)' : 'Needs resin', sub: d.name, use: () => { if (!p.state.lit && inv.take('resin', 1)) { p.state.lit = true; p.state.fuel = 4; p.flame.visible = true; } } };
     if (d.bed) return { label: 'Sleep', sub: 'Bed', use: () => this.sleep(p) };
     if (d.chest) return { label: 'Open', sub: 'Chest', use: () => this.openChest(p) };
     if (d.station) return { label: 'Craft', sub: d.name, use: () => { this.g.hud.toggle(true); this.g.crafting.open('craft'); } };
     if (d.cook) {
-      const ready = p.state.cook.filter((c) => c.t >= c.need), raw = inv.count('rawMeat') ? 'rawMeat' : inv.count('rawFish') ? 'rawFish' : null;
-      if (ready.length) return { label: `Take ${ITEMS[ITEMS[ready[0].id].cook.to].name.toLowerCase()}`, sub: 'Cooking Stand', use: () => { const c = ready[0]; p.state.cook.splice(p.state.cook.indexOf(c), 1); this.g.give(ITEMS[c.id].cook.to, 1); this.drawCook(p); } };
-      if (raw && p.state.cook.length < d.cook) return { label: `Cook ${ITEMS[raw].name.toLowerCase()}`, sub: 'Cooking Stand', use: () => { inv.take(raw, 1); p.state.cook.push({ id: raw, t: 0, need: ITEMS[raw].cook.time }); this.drawCook(p); } };
-      return { label: p.state.cook.length ? 'Cooking…' : 'Needs raw meat', sub: 'Cooking Stand', use: () => {} };
+      // every piece cooks on its own timer; one press puts on all the raw meat that fits, or takes off all that's done
+      const ready = p.state.cook.filter((c) => c.t >= c.need), free = d.cook - p.state.cook.length, raw = inv.count('rawMeat') + inv.count('rawFish');
+      const fire = [...this.near(p.pos.x, p.pos.z, 2)].find((q) => q.def.fire && q.state.lit && q.pos.distanceTo(p.pos) < 1.5), alt = fire ? this.douseAction(fire) : null;
+      if (ready.length) return { alt, label: `Take ${ready.length > 1 ? `${ready.length} cooked` : ITEMS[ITEMS[ready[0].id].cook.to].name.toLowerCase()}`, sub: 'Cooking Stand', use: () => {
+        for (const c of ready) { p.state.cook.splice(p.state.cook.indexOf(c), 1); this.g.give(ITEMS[c.id].cook.to, 1); } this.drawCook(p); } };
+      if (raw && free > 0) return { alt, label: `Cook ${Math.min(raw, free) > 1 ? `${Math.min(raw, free)} pieces of meat` : (inv.count('rawMeat') ? 'raw meat' : 'raw fish')}`, sub: `Cooking Stand · ${p.state.cook.length}/${d.cook}`, use: () => {
+        for (const id of ['rawMeat', 'rawFish']) while (p.state.cook.length < d.cook && inv.take(id, 1)) p.state.cook.push({ id, t: 0, need: ITEMS[id].cook.time });
+        this.drawCook(p); } };
+      return { alt, label: p.state.cook.length ? `Cooking… ${p.state.cook.length}/${d.cook}` : 'Needs raw meat', sub: 'Cooking Stand', use: () => {} };
     }
     return null;
+  }
+  // F at a lit campfire puts it out (its remaining wood stays for when you light it again)
+  douseAction(p) {
+    if (!p.state.lit) return null;
+    return { key: 'F', label: 'Put out fire', use: () => { p.state.lit = false; p.state.doused = true; p.state.rainT = 0; p.flame.visible = false; dust(p.pos.clone().setY(p.pos.y + 0.5), 14, 0x8a8a8a, 0.45); this.g.sound?.('douse'); } };
   }
   drawCook(p) {
     if (!p.meat) { p.meat = new THREE.Group(); p.obj.add(p.meat); } p.meat.clear();
@@ -259,9 +309,9 @@ export class Build {
   // ---- chest window: click an item to move it between the chest and your pack
   buildChestPanel() {
     const p = document.createElement('div'); p.className = 'pnl hidden'; p.id = 'chestPanel';
-    p.innerHTML = '<h2>Chest</h2><div class="pbody"><div class="grid" id="chestGrid"></div><p class="hint">Click to move between the chest and your pack</p></div>';
+    p.innerHTML = '<h2>Chest</h2><div class="pbody"><div class="grid" id="chestGrid"></div><div class="chestFoot"><button class="btn small" id="chestSort">Sort Items</button><p class="hint">Click to move between the chest and your pack</p></div></div>';
     document.getElementById('invPanel').prepend(p); this.chestEl = p;
-    p.addEventListener('click', (e) => { const s = e.target.closest('.slot'); if (!s || !this.chest) return; const i = +s.dataset.i, it = this.chest.inv.slots[i]; if (!it) return; const left = this.g.inv.add(it.id, it.n, it.dur ? { dur: it.dur } : {}); if (left) it.n = left; else this.chest.inv.slots[i] = null; this.drawChest(); });
+    p.addEventListener('click', (e) => { if (e.target.closest('#chestSort') && this.chest) { this.chest.inv.sort(); this.drawChest(); return; } const s = e.target.closest('.slot'); if (!s || !this.chest) return; const i = +s.dataset.i, it = this.chest.inv.slots[i]; if (!it) return; const left = this.g.inv.add(it.id, it.n, it.dur ? { dur: it.dur } : {}); if (left) it.n = left; else this.chest.inv.slots[i] = null; this.drawChest(); });
     this.g.hud.onSlotClick = (i) => { if (!this.chest) return false; const it = this.g.inv.slots[i]; if (!it || it.worn) return true; const left = this.chest.inv.add(it.id, it.n, it.dur ? { dur: it.dur } : {}); if (left) it.n = left; else this.g.inv.slots[i] = null; this.g.inv.onChange?.(); this.drawChest(); return true; };
   }
   openChest(p) { this.chest = p; this.chestEl.classList.remove('hidden'); document.getElementById('craftPanel').classList.add('hidden'); this.g.hud.toggle(true); this.drawChest(); this.g.sound?.('chest'); }
@@ -273,7 +323,7 @@ export class Build {
     if (hammer !== this.tint) this.updateTint();
     if (!hammer && this.ghost) { this.ghost.visible = false; }
     if (hammer && !input.uiOpen && !g.player.dead) {
-      if (input.clicks.includes(2)) { g.hud.toggle(true); g.crafting.open('build'); }
+      if (input.clicks.includes(2)) { g.buildMenu.toggle(true); input.clicks.length = 0; return; }
       if (this.sel) {
         const step = this.aligned ? Math.PI / 2 : Math.PI / 8;   // quarter turns against a structure, finer on open ground
         if (hit('KeyR')) this.rot += step;
@@ -297,7 +347,7 @@ export class Build {
       } else if (tp) g.hud.prompt('MMB', `Remove ${tp.def.name}`, `${Math.ceil(tp.hp)} / ${tp.def.hp}`);
     }
     // doors swing, fires burn (and go out in the rain if nothing covers them), food cooks
-    const lights = [];
+    const lights = [], heated = new Set();   // cooking stands over a lit fire this frame (each cooks once, however many fires)
     for (const p of this.placed) {
       if (p.def.door && p.targetA !== undefined) p.inner.rotation.y += (p.targetA - p.inner.rotation.y) * Math.min(1, dt * 8);
       if ((p.def.fire || p.def.torch) && p.state.lit) {
@@ -312,9 +362,10 @@ export class Build {
         // standing in the fire burns
         if (p.def.fire && g.player.pos.distanceTo(p.pos) < 0.7) g.player.stats.damage(3 * dt);
         // cooking over it
-        for (const q of this.near(p.pos.x, p.pos.z, 1.5)) if (q.def.cook && q.state.cook.length) { let ch = false; for (const c of q.state.cook) { const was = c.t >= c.need; c.t += dt; if (!was && c.t >= c.need) ch = true; } if (ch) this.drawCook(q); }
+        for (const q of this.near(p.pos.x, p.pos.z, 1.5)) if (q.def.cook && q.state.cook.length) heated.add(q);
       }
     }
+    for (const q of heated) { let ch = false; for (const c of q.state.cook) { const was = c.t >= c.need; c.t += dt; if (!was && c.t >= c.need) ch = true; } if (ch) this.drawCook(q); }
     // light from the shared pool (the nearest fires get it)
     for (const p of lights) { const fl = 1 + Math.sin(performance.now() * 0.013 + p.pos.x) * 0.1 + Math.random() * 0.06; askLight(p.lightPos ||= p.pos.clone().setY(p.pos.y + (p.def.fire ? 1 : 1.8)), (p.def.fire ? 26 : 9) * fl * Math.min(1, 0.4 + p.state.fuel / 3), p.def.fire ? 22 : 12); }
     if (this.chest && !input.uiOpen) this.closeChest();

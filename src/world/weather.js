@@ -25,12 +25,12 @@ const FOG_CHANCE = [0.1, 0.3, 0.5];
 const MAX_MIN = { heavyRain: 10, lightRain: 10, thunder: 4 };
 // biome mood: light multiplier, fog near/far (m) and fog tint
 const MOOD = [
-  { light: 1, near: 380, far: 3200, tint: null },
+  { light: 1, near: 300, far: 2400, tint: null },   // the far meadows soften into haze
   { light: 0.42, near: 40, far: 520, tint: new THREE.Color(0x46604c) },
   { light: 0.32, near: 18, far: 260, tint: new THREE.Color(0x4c5236) },
 ];
 
-export const WEATHER = { type: 'clear', biome: BIOME.PEDIAS, timer: 0, k: { overcast: 0, rain: 0, fog: 0 }, mood: { light: 1, near: 380, far: 3200 }, storm: 0, boltT: 8, flash: 0, forced: null };
+export const WEATHER = { type: 'clear', biome: BIOME.PEDIAS, timer: 0, k: { overcast: 0, rain: 0, fog: 0 }, mood: { light: 1, near: 300, far: 2400 }, storm: 0, boltT: 8, flash: 0, forced: null };
 let rnd = Math.random, first = true;
 function roll(biome) {
   const list = ODDS[biome]; let t = 0; for (const [, w] of list) t += w; let a = rnd() * t, type = list[0][0];

@@ -19,9 +19,11 @@ const flat = (c) => flatMats[c] || (flatMats[c] = new THREE.MeshStandardMaterial
 function mesh(geo, mat, x = 0, y = 0, z = 0, parent) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; if (parent) parent.add(m); return m; }
 
 const windUniformEarly = { value: 0 };
+// the sun (or moon) for light shining through leaves and grass blades: direction towards it, and its colour × strength
+export const LIGHT_U = { uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(0, 0, 0) } };
 // --- Props: every tree/rock species is one merged geometry, drawn with InstancedMesh per 100 m chunk
 // (frustum culling per chunk keeps thousands of trees cheap). Trees sway in the wind in the vertex shader.
-const trunkMat = flat(0x7a4f2c), birchMat = flat(0xe9e2d2), rockMat = flat(0x9b958c);
+const trunkMat = flat(0x7a4f2c), birchMat = flat(0xe9e2d2), rockMat = flat(0x8e887e);
 // Leaf-cluster texture (drawn once): ~30 pointed leaves with midribs on transparent background, near-neutral so species tint it
 const leafTex = (() => {
   const N = 256, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d');
@@ -178,20 +180,27 @@ const TREE_BUILDERS = {
     return P;
   },
   fir(v) {
-    const P = [], H = rr(7, 9.5);
+    // Stacked tiers of drooping boughs. Each tier is a 12-sided cone whose rim is ragged (every other bough tip reaches
+    // further out and droops lower), turned a little from the tier below, with a dark inner shell so the hollow never
+    // shows from below. No needle cards: lying along the cone they cut through it and flickered as the camera moved.
+    const P = [], H = rr(7, 9.5), SEG = 12;
     P.push([limb(0.42, 0.18, H, 0, -0.2, 0, 0, 0, 7), 0x5e3f28]);
     const tiers = 6 + (v % 2);
     for (let i = 0; i < tiers; i++) {
-      const r = lerp(2.6, 0.7, i / tiers) * rr(0.9, 1.1), g = new THREE.ConeGeometry(r, 2.3, 9, 1, true);
-      const a = g.attributes.position; for (let k = 0; k < a.count; k++) if (a.getY(k) < 0) a.setY(k, a.getY(k) - 0.35 - hash(a.getX(k) * 7, a.getZ(k) * 7) * 0.35); // droopy tips
-      g.computeVertexNormals(); g.translate(0, 2.4 + i * (H - 2.6) / tiers, 0);
+      const r = lerp(2.6, 0.7, i / tiers) * rr(0.9, 1.1), y = 2.4 + i * (H - 2.6) / tiers, turn = rr(0, 6.283);
+      const g = new THREE.ConeGeometry(r, 2.3, SEG, 1, true), a = g.attributes.position;
+      for (let k = 0; k < a.count; k++) {
+        if (a.getY(k) >= 0) continue;
+        const s = ((Math.round(Math.atan2(a.getX(k), a.getZ(k)) / (Math.PI * 2 / SEG)) % SEG) + SEG) % SEG, h = hash(s + i * 13, v * 7 + i), tip = s % 2 === 0;
+        const f = tip ? 1.1 + h * 0.08 : 0.84 + h * 0.06;
+        a.setXYZ(k, a.getX(k) * f, a.getY(k) - (tip ? 0.5 + h * 0.25 : 0.18 + h * 0.1), a.getZ(k) * f);
+      }
+      g.computeVertexNormals(); g.rotateY(turn); g.translate(0, y, 0);
       P.push([g, i % 2 ? 0x2d5a3a : 0x274f34]);
-      if (!PROP_LO) {                                   // needle fringe: drooping cards around each tier's rim
-        const ty = 2.4 + i * (H - 2.6) / tiers - 0.9;
-        for (let k = 0; k < 12; k++) { const a = k / 12 * 6.28 + rr(-0.2, 0.2), sz = r * rr(0.7, 1);
-          const cg = new THREE.PlaneGeometry(sz, sz * 0.8); cg.rotateX(-0.9); cg.translate(0, 0, r * 0.62); cg.rotateY(a); cg.translate(0, ty, 0);
-          const na = cg.attributes.normal, nx = Math.sin(a) * 0.6, nz = Math.cos(a) * 0.6; for (let q = 0; q < na.count; q++) na.setXYZ(q, nx, 0.8, nz);
-          CARD_PARTS.push([cg, new THREE.Color(0x2f5e3a).offsetHSL(rr(-0.02, 0.02), 0, rr(-0.05, 0.05)).getHex()]); }
+      if (!PROP_LO) {                                   // the dark underside: the same cone a touch smaller, facing inwards
+        const inner = g.clone(), ix = inner.index.array; for (let q = 0; q < ix.length; q += 3) { const t = ix[q]; ix[q] = ix[q + 1]; ix[q + 1] = t; }
+        inner.translate(0, -y, 0).scale(0.95, 0.97, 0.95).translate(0, y - 0.04, 0); inner.computeVertexNormals();
+        P.push([inner, 0x1b3324]);
       }
     }
     return P;
@@ -319,7 +328,7 @@ function qGeo(g, tint) {
 }
 function qLeafMat(file, tint) {
   const t = new THREE.TextureLoader().load(`models/${file}`); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
-  const m = new THREE.MeshStandardMaterial({ map: t, color: tint, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85 });   // tinted down to the island palette
+  const m = new THREE.MeshStandardMaterial({ map: t, color: tint, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85, alphaToCoverage: true });   // tinted down to the island palette
   m.onBeforeCompile = leafMat.onBeforeCompile; return m;
 }
 const Q_SRC = { qtree: 'qtree', qpine: 'qpine', qdead: 'qtree', qbirch: 'qbirch' };
@@ -354,9 +363,26 @@ propMat.onBeforeCompile = (sh) => {
     transformed.x += sin(uWind * 1.1 + ipp.x * 0.13 + ipp.z * 0.07) * sway;
     transformed.z += cos(uWind * 0.9 + ipp.z * 0.11) * sway * 0.7;`);
 };
-const leafMat = new THREE.MeshStandardMaterial({ map: leafTex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85 });
+// Leaf and impostor cut-outs: instead of a hard alpha test (which shimmers as you move), the edge is sharpened to about one
+// pixel and handed to the MSAA samples as coverage (alpha to coverage), so leaves get smooth, stable edges
+export const A2C_FRAG = `#ifdef USE_ALPHATEST
+  diffuseColor.a = clamp((diffuseColor.a - alphaTest) / max(fwidth(diffuseColor.a), 1e-4) + 0.5, 0.0, 1.0);
+  if (diffuseColor.a <= 0.0) discard;
+#endif`;
+const leafMat = new THREE.MeshStandardMaterial({ map: leafTex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85, alphaToCoverage: true });
 leafMat.onBeforeCompile = (sh) => {
-  sh.uniforms.uWind = windUniformEarly;
+  sh.uniforms.uWind = windUniformEarly; Object.assign(sh.uniforms, LIGHT_U);
+  // leaves glow where the sun shines through them (looking towards the sun)
+  sh.fragmentShader = 'uniform vec3 uSunDir, uSunCol; varying vec3 vLeafW;\n' + sh.fragmentShader.replace('#include <alphatest_fragment>', A2C_FRAG)
+    .replace('#include <tonemapping_fragment>', `float shine = pow(max(dot(normalize(vLeafW - cameraPosition), uSunDir), 0.0), 3.0);
+      gl_FragColor.rgb += diffuseColor.rgb * uSunCol * shine * 0.55;
+      #include <tonemapping_fragment>`);
+  sh.vertexShader = 'varying vec3 vLeafW;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
+    #ifdef USE_INSTANCING
+      vLeafW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+    #else
+      vLeafW = (modelMatrix * vec4(transformed, 1.0)).xyz;
+    #endif`);
   sh.vertexShader = 'uniform float uWind;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
     vec4 ipp = instanceMatrix[3];
     float sway = max(position.y - 2.0, 0.0) * 0.02;

@@ -67,20 +67,18 @@ let envRT = null, envTimer = 0;
 function refreshEnvironment() { if (envRT) envRT.dispose(); envRT = pmrem.fromScene(envScene, 0.04); scene.environment = envRT.texture; }
 
 // ---- Clouds: soft billboard puffs, high and drifting
-const cloudTex = (() => {
-  const c = document.createElement('canvas'); c.width = 256; c.height = 128; const g = c.getContext('2d'); let s = 11; const r = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
-  for (let i = 0; i < 26; i++) {
-    const x = 50 + r() * 156, y = 55 + r() * 40 - Math.sin((x - 50) / 156 * Math.PI) * 30, rad = 18 + r() * 18;
-    const gr = g.createRadialGradient(x, y - rad * 0.3, 0, x, y, rad);
-    gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.6, 'rgba(245,247,252,0.8)'); gr.addColorStop(1, 'rgba(220,228,240,0)');
-    g.fillStyle = gr; g.beginPath(); g.arc(x, y, rad, 0, 6.28); g.fill();
-  }
+const cloudTex = (() => {   // puffs with sunlit tops over grey-blue undersides, so a cloud has a shape rather than a white blot
+  const c = document.createElement('canvas'); c.width = 512; c.height = 256; const g = c.getContext('2d'); let s = 11; const r = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+  const puffs = []; for (let i = 0; i < 34; i++) { const x = 100 + r() * 312, y = 120 + r() * 70 - Math.sin((x - 100) / 312 * Math.PI) * 60, rad = 34 + r() * 38; puffs.push([x, y, rad]); }
+  const blob = (x, y, rad, a, b) => { const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, a); gr.addColorStop(0.62, a); gr.addColorStop(1, b); g.fillStyle = gr; g.beginPath(); g.arc(x, y, rad, 0, 6.28); g.fill(); };
+  for (const [x, y, rad] of puffs) blob(x, y + rad * 0.12, rad, 'rgba(196,206,222,0.95)', 'rgba(196,206,222,0)');
+  for (const [x, y, rad] of puffs) blob(x - rad * 0.08, y - rad * 0.3, rad * 0.72, 'rgba(255,255,255,0.95)', 'rgba(255,255,255,0)');
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 })();
 export const clouds = [], stormClouds = [];
 { let s = 3; const r = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
   for (let i = 0; i < 70; i++) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, fog: false, transparent: true, depthWrite: false, opacity: 0.8 + r() * 0.2, color: new THREE.Color(1.5, 1.5, 1.55) }));
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, fog: false, transparent: true, depthWrite: false, opacity: 0.8 + r() * 0.2, color: new THREE.Color(1.3, 1.3, 1.34) }));
     const a = r() * 6.28, d = 300 + r() * 2600, w = 160 + r() * 260;
     sp.scale.set(w, w * 0.5, 1); sp.position.set(Math.cos(a) * d, 300 + r() * 160, Math.sin(a) * d); sp.renderOrder = -1; scene.add(sp); clouds.push(sp);
   }
@@ -126,7 +124,7 @@ export function updateSky(t, dt, time, overcast = 0, dark = 0) {
   envTimer -= dt; if (envTimer <= 0) { envTimer = 2; refreshEnvironment(); }
   scene.environmentIntensity = lerp(0.15, 1, day) * (1 - overcast * 0.65) * (1 - dark * 0.4);
   // clouds drift with the wind, warm at dusk, dark at night
-  const cc = _c1.setRGB(1.5, 1.5, 1.55).lerp(_c2.setRGB(1.6, 0.95, 0.75), dusk * 0.6).lerp(_c2.setRGB(0.1, 0.12, 0.2), night);
+  const cc = _c1.setRGB(1.3, 1.3, 1.34).lerp(_c2.setRGB(1.6, 0.95, 0.75), dusk * 0.6).lerp(_c2.setRGB(0.1, 0.12, 0.2), night);
   const wind = 2 + overcast * 20;
   for (const c of clouds) { c.position.x += dt * wind; if (c.position.x > 3000) c.position.x = -3000; c.material.color.copy(cc).lerp(_c2.setRGB(0.55, 0.58, 0.64).multiplyScalar(0.4 + day * 0.6), overcast * 0.85); }
   for (const c of stormClouds) {

@@ -89,8 +89,10 @@ class HogBody extends CarvedBody {
   constructor(scale = 1) {
     super((g) => {
       const hide = flat(0x4e3a2c), dark = flat(0x2e221a), tusk = flat(0xf0e6d0), root = new THREE.Group(); root.scale.setScalar(scale); g.add(root);
-      const b = mesh(new THREE.IcosahedronGeometry(0.42, 1), hide, 0, 0.55, 0, root); b.scale.set(0.85, 0.85, 1.45);
-      const mane = mesh(new THREE.BoxGeometry(0.12, 0.18, 0.9), dark, 0, 0.92, 0.05, root); mane.rotation.x = -0.1;
+      // a wild boar's build: heavy shoulders, the back sloping away to the haunches, a crest of bristles down the spine
+      const b = mesh(new THREE.IcosahedronGeometry(0.42, 1), hide, 0, 0.55, -0.12, root); b.scale.set(0.8, 0.78, 1.2);
+      mesh(new THREE.IcosahedronGeometry(0.4, 1), hide, 0, 0.62, 0.28, root).scale.set(0.92, 1.0, 0.95);
+      for (let i = 0; i < 9; i++) { const z = 0.5 - i * 0.12, y = 0.98 - i * 0.03 - (i > 5 ? (i - 5) * 0.03 : 0); const c = mesh(new THREE.ConeGeometry(0.035, 0.2 - i * 0.012, 4), dark, 0, y, z, root); c.rotation.x = -0.55; }
       const head = new THREE.Group(); head.position.set(0, 0.62, 0.62); root.add(head);
       mesh(new THREE.IcosahedronGeometry(0.24, 1), hide, 0, 0, 0, head).scale.set(0.9, 0.95, 1.2);
       const sn = mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.22, 7), hide, 0, -0.06, 0.25, head); sn.rotation.x = Math.PI / 2; mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 7).rotateX(Math.PI / 2), flat(0x8a5a4a), 0, -0.06, 0.36, head);
@@ -195,8 +197,8 @@ class RigBody {
     if (st === 'dead') { this.deadT += dt; this.obj.rotation.x = -Math.min(Math.PI / 2, this.deadT * 2.5 * this.deadT * 2); this.mixer.update(0); return; }
     const runV = (this.dress.scale) * 3.9, k = clamp(speed / (runV * 0.5), 0, 1);
     const A = this.acts; A.run && (A.run.setEffectiveWeight(k), A.run.timeScale = clamp(speed / runV, 0.4, 1.4)); A.idle && A.idle.setEffectiveWeight(1 - k);
-    const atk = st === 'attack' ? A.attack : null;
-    if (atk && this.atkT <= 0) { atk.reset(); atk.setEffectiveWeight(1); atk.timeScale = this.kind === 'giant' ? 0.7 : 1.1; atk.play(); this.atkT = atk.getClip().duration / atk.timeScale; }
+    const atk = st === 'attack' || st === 'slam' ? A.attack : null;   // (slam: the same blow, slow and heavy)
+    if (atk && this.atkT <= 0) { atk.reset(); atk.setEffectiveWeight(1); atk.timeScale = st === 'slam' ? 0.62 : this.kind === 'giant' ? 0.7 : 1.1; atk.play(); this.atkT = atk.getClip().duration / atk.timeScale; }
     if (this.atkT > 0) { this.atkT -= dt; if (this.atkT <= 0 && A.attack) A.attack.setEffectiveWeight(0); }
     this.mixer.update(dt);
   }
@@ -237,9 +239,9 @@ class ChimeraBody extends CarvedBody {
     this.t += dt; const { body, head, jaw, gn, tail, legs } = this.parts;
     if (st === 'dead') { this.deadT += dt; this.obj.rotation.z = Math.min(Math.PI / 2, this.deadT * 1.6); return; }
     const k = Math.min(1, speed / 4), f = 3 + speed * 0.9;
-    legs.forEach((l, i) => (l.rotation.x = Math.sin(this.t * f + (i === 0 || i === 3 ? 0 : Math.PI)) * 0.6 * k + (st === 'claw' && i < 2 ? -1.1 * Math.max(0, Math.sin(this.t * 10)) : 0)));
-    body.position.y = 1.55 + Math.abs(Math.sin(this.t * f)) * 0.08 * k; body.rotation.x = st === 'bite' ? -0.15 : 0;
-    head.rotation.x = st === 'bite' ? 0.3 : Math.sin(this.t * 1.1) * 0.05; jaw.rotation.x = st === 'bite' || st === 'attack' ? 0.4 + Math.sin(this.t * 18) * 0.2 : 0.05;
+    legs.forEach((l, i) => (l.rotation.x = st === 'leap' ? (i < 2 ? -0.9 : 0.9) : Math.sin(this.t * f + (i === 0 || i === 3 ? 0 : Math.PI)) * 0.6 * k + (st === 'claw' && i < 2 ? -1.1 * Math.max(0, Math.sin(this.t * 10)) : 0)));
+    body.position.y = (st === 'crouch' ? 1.2 : 1.55) + Math.abs(Math.sin(this.t * f)) * 0.08 * k; body.rotation.x = st === 'bite' ? -0.15 : st === 'breath' ? -0.12 : st === 'crouch' ? 0.12 : 0;
+    head.rotation.x = st === 'bite' ? 0.3 : st === 'breath' ? -0.25 : Math.sin(this.t * 1.1) * 0.05; jaw.rotation.x = st === 'breath' ? 0.75 : st === 'bite' || st === 'attack' ? 0.4 + Math.sin(this.t * 18) * 0.2 : 0.05;
     gn.rotation.z = Math.sin(this.t * 0.9) * 0.15; gn.rotation.x = st === 'roar' ? -0.4 : 0;
     tail.forEach((s, i) => { s.rotation.y = Math.sin(this.t * 2.5 - i * 0.6) * 0.25; s.rotation.x = (st === 'sting' ? -0.55 : -0.12) + Math.sin(this.t * 1.8 - i) * 0.05; });
   }

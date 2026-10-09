@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { camera } from '../render/core.js';
 import { heightAt } from '../world/gen.js';
+import { groundAt } from '../world/groundcut.js';
 import { colliders } from '../world/colliders.js';
 import { stormWallDepth, stormWallOut } from '../world/stormwall.js';
 import { input, down, hit } from '../input.js';
@@ -28,7 +29,7 @@ export class Player {
     this.onStrike = null; this.onStep = null; this.onToast = null;
     this.stats.onDeath = () => this.die();
   }
-  spawn(x, z) { this.pos.set(x, Math.max(heightAt(x, z), -SWIM_DEPTH), z); this.vel.set(0, 0, 0); this.hv.set(0, 0, 0); this.camInit = false; }
+  spawn(x, z) { this.pos.set(x, Math.max(groundAt(x, z), -SWIM_DEPTH), z); this.vel.set(0, 0, 0); this.hv.set(0, 0, 0); this.camInit = false; }
   get camForward() { return new THREE.Vector3(-Math.sin(this.camYaw) * Math.cos(this.camPitch), Math.sin(this.camPitch), -Math.cos(this.camYaw) * Math.cos(this.camPitch)); }
   // Start a strike (LMB). Costs stamina; the hit lands partway through the swing (onStrike)
   strike(kind, cost) {
@@ -45,7 +46,7 @@ export class Player {
       this.camYaw -= input.dx * 0.0022 * input.sens; this.camPitch = clamp(this.camPitch - input.dy * 0.0022 * input.sens, -1.25, 1.0);
       this.camDist = clamp(this.camDist + input.wheel * 0.6, 1.8, 11);
     }
-    const ground = heightAt(this.pos.x, this.pos.z);
+    const ground = groundAt(this.pos.x, this.pos.z);
     this.swimming = ground < -SWIM_DEPTH && this.pos.y <= -SWIM_DEPTH + 0.15;
     if (this.dead) { this.updateDead(dt); this.updateCamera(dt); return; }
     // ---- movement intent
@@ -99,7 +100,7 @@ export class Player {
       else this.onToast?.('Too tired to jump');
     }
     const wasAir = !this.onGround && this.vel.y < -6;
-    const g2 = heightAt(this.pos.x, this.pos.z), floor = Math.max(g2, -SWIM_DEPTH), fl = Math.max(floor, this.floorAt ? this.floorAt(this.pos) : -1e9);
+    const g2 = groundAt(this.pos.x, this.pos.z), floor = Math.max(g2, -SWIM_DEPTH), fl = Math.max(floor, this.floorAt ? this.floorAt(this.pos) : -1e9);
     if (this.swimming && g2 < -SWIM_DEPTH) { this.pos.y = lerp(this.pos.y, -SWIM_DEPTH, Math.min(1, dt * 6)); this.vel.y = 0; this.onGround = false; }
     else {
       this.vel.y -= GRAV * dt; this.pos.y += this.vel.y * dt;
@@ -134,7 +135,7 @@ export class Player {
   updateDead(dt) {
     this.deadT += dt;
     this.root.rotation.z = lerp(this.root.rotation.z, Math.PI / 2, Math.min(1, dt * 4));
-    this.vel.y -= GRAV * dt; this.pos.y = Math.max(this.pos.y + this.vel.y * dt, Math.max(heightAt(this.pos.x, this.pos.z), -SWIM_DEPTH) + 0.3);
+    this.vel.y -= GRAV * dt; this.pos.y = Math.max(this.pos.y + this.vel.y * dt, Math.max(groundAt(this.pos.x, this.pos.z), -SWIM_DEPTH) + 0.3);
     this.hero.update(dt, { speed: 0, onGround: true });
   }
   revive(x, z) { this.dead = false; this.root.rotation.set(0, this.yaw, 0); this.stats.revive(); this.spawn(x, z); }
@@ -151,8 +152,8 @@ export class Player {
     const off = new THREE.Vector3(Math.sin(this.camYaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(this.camYaw) * Math.cos(pitch)).multiplyScalar(dist);
     const want = target.clone().add(off);
     // keep the camera out of hills between it and the player
-    for (let i = 1; i <= 6; i++) { const p = target.clone().lerp(want, i / 6), g = heightAt(p.x, p.z) + 0.4; if (p.y < g) { want.y += g - p.y; } }
-    want.y = Math.max(want.y, heightAt(want.x, want.z) + 0.5, -0.6);
+    for (let i = 1; i <= 6; i++) { const p = target.clone().lerp(want, i / 6), g = groundAt(p.x, p.z) + 0.4; if (p.y < g) { want.y += g - p.y; } }
+    want.y = Math.max(want.y, groundAt(want.x, want.z) + 0.5, -0.6);
     // ...and out of walls and roofs: pull in to just in front of whatever is between
     const block = this.camBlock?.(target, want); if (block !== undefined && block !== null) { const dir = want.clone().sub(target); want.copy(target).add(dir.setLength(Math.max(0.6, block - 0.25))); }
     camera.position.lerp(want, Math.min(1, dt * (14 + k * 10))); camera.lookAt(target);

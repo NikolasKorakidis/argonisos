@@ -17,7 +17,7 @@ const store = () => { try { localStorage.setItem(KEY, JSON.stringify(SETTINGS));
 export const PRESETS = {
   low: { name: 'Low', scale: 1, post: false, bloom: false, shadow: 1024, soft: false, grass: 0.35, flowers: 0.4, far: 4000 },
   medium: { name: 'Medium', scale: 1.5, post: true, bloom: false, shadow: 2048, soft: false, grass: 0.65, flowers: 0.7, far: 5000 },
-  high: { name: 'High', scale: 2, post: true, bloom: true, shadow: 2048, soft: true, grass: 1, flowers: 1, far: 6000 },
+  high: { name: 'High', scale: 2, post: true, bloom: true, shadow: 4096, soft: true, grass: 1, flowers: 1, far: 6000 },
 };
 export const RES = [[0.6, '60%'], [0.75, '75%'], [0.85, '85%'], [1, '100%']];
 

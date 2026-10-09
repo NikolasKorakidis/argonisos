@@ -10,13 +10,13 @@ export const SCRIPT = `
 <li>Day 1, morning, empty-handed, in the meadows of <b>Pedias</b> at the heart of the island.</li>
 <li>Stones, branches, flowers and feathers lie in the grass. ${K('E')} picks them up.</li>
 <li><b>The Owl</b> comes after your first find. She flies alongside you with a <b>!</b> over her head until you talk to her (${K('E')}), tells you how the trial works, then flies off. She comes back whenever there is something new to know.</li>
-<li>Whatever you have held unlocks the recipes that use it (${K('C')}). First things: 1 branch → 2 wood; hammer (4 wood); crude club (6 wood); crude dagger (1 wood, 2 stone).</li>
-<li>Already on the map (${K('M')}): the <b>Ancient Temple</b> (pray there once a day for Zeus's Blessing; its fire keeps you warm) and an <b>abandoned house</b> whose chest holds rope, leather, olives, a dagger, resin and a torch.</li>
+<li>Whatever you have held unlocks the recipes that use it (${K('C')}). Fallen branches give 2 wood each when picked up. First things: hammer (4 wood); crude club (6 wood); crude dagger (1 wood, 2 stone).</li>
+<li>Already on the map (${K('M')}): an <b>abandoned house</b> whose chest holds rope, leather, olives, a dagger, resin and a torch. The <b>Ancient Temple</b> stands 230–320 m out in the meadows and appears on the map once you find it (pray there once a day for Zeus's Blessing; its fire keeps you warm).</li>
 </ul>
 
 <h3>2 · Getting set up</h3>
 <ul>
-<li><b>Rope</b> comes from leather at a workbench (1 leather → 10 rope; a workbench is 10 wood). <b>Leather</b> comes from animals: rabbits, deer and hogs. Deer also give <b>deer hides</b>, needed later.</li>
+<li><b>Rope</b> is twisted by hand from <b>fiber</b> (fiber bushes in both biomes, 3 per bush; 3 fiber → 2 rope), or made from leather at a workbench (1 leather → 10 rope; a workbench is 10 wood). <b>Leather</b> comes from animals: rabbits, deer and hogs. Deer also give <b>deer hides</b>, needed later.</li>
 <li><b>Hunting:</b> animals see a wide arc in front of them but only hear you behind. Sneak (${K('Ctrl')}) up from behind and strike: an unaware animal takes a sneak attack. When one notices you it freezes and stares for a moment before it bolts (or charges): that's your chance to strike or loose an arrow. Sprinting is heard from far off; grazing animals notice less.</li>
 <li>A <b>crude axe</b> (5 wood, 4 stone, 2 rope) fells trees: they topple and leave a log to split into wood (pines also give resin).</li>
 <li>No hunger. Health 25 and stamina 50, raised for a while by food (three slots): olives (olive trees, once a day), acorns (oaks), pomegranates, cooked meat (+40 health). Raw meat makes you sick: cook it on a cooking stand over a fire.</li>

@@ -3,7 +3,7 @@
 // camera-facing card painted from an atlas rendered once at start-up, a single draw call per block. Shader cut-offs at
 // NEAR_R and MID_R put each tree in exactly one band, so the hand-overs are seamless. Layout comes from the workers.
 import * as THREE from 'three';
-import { propGeo, propMat, leafMat, TREE_BUILDERS, mergeParts, rr, isLow as PROP_LOW } from './trees.js';
+import { propGeo, propMat, leafMat, TREE_BUILDERS, mergeParts, rr, isLow as PROP_LOW, A2C_FRAG } from './trees.js';
 import { SPECIES, STRIDE, CELL } from './flora.js';
 import { renderer, sun, hemi } from '../render/core.js';
 
@@ -29,8 +29,67 @@ TREE_BUILDERS.reeds = (v) => {                  // a clump of marsh reeds and bu
   return P;
 };
 
+// ---- ruins and shrubs of the old world (vertex-coloured like the trees; the far versions keep fewer pieces)
+// (vertex colours are lit like the trees' and come out several times brighter: these read as marble and stone in the sun)
+const MARBLE = 0x6f685b, MARBLE2 = 0x625b4f, STONE = 0x514a41, STONE2 = 0x5c5449, CLAY = 0x683321, GLAZE = 0x1a120d;
+const drum = (r, h) => {   // a fluted column drum
+  const lo = PROP_LOW(), g = new THREE.CylinderGeometry(r, r * 1.02, h, lo ? 10 : 32, 1);
+  if (!lo) { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const a = Math.atan2(p.getZ(i), p.getX(i)), f = 1 - 0.06 * (0.5 + 0.5 * Math.cos(a * 16)); p.setX(i, p.getX(i) * f); p.setZ(i, p.getZ(i) * f); } g.computeVertexNormals(); }   // 16 flutes, shaded
+  return g;
+};
+const pot = (s) => new THREE.LatheGeometry([[0, 0], [0.05, 0.02], [0.08, 0.12], [0.2, 0.32], [0.24, 0.5], [0.22, 0.66], [0.13, 0.78], [0.07, 0.84], [0.07, 1.02], [0.1, 1.05], [0, 1.06]].map(([r, y]) => new THREE.Vector2(r * s, y * s)), PROP_LOW() ? 6 : 12);
+TREE_BUILDERS.colfall = (v) => {
+  const P = [[new THREE.BoxGeometry(1.7, 0.35, 1.7).translate(0, 0.17, 0), STONE], [drum(0.42, 0.55).translate(0, 0.62, 0), MARBLE]];
+  for (let k = 0; k < 3; k++) P.push([drum(0.42, 0.85).rotateZ(Math.PI / 2).rotateY(rr(-0.15, 0.15)).translate(1.25 + k * 0.92, 0.4, rr(-0.1, 0.1) + (v ? k * 0.15 : 0)), k % 2 ? MARBLE2 : MARBLE]);
+  P.push([new THREE.CylinderGeometry(0.55, 0.42, 0.3, PROP_LOW() ? 8 : 20).rotateX(1.4).translate(-1.2, 0.42, 0.9), MARBLE], [new THREE.BoxGeometry(1.15, 0.22, 1.15).rotateX(1.4).translate(-1.45, 0.58, 0.9), MARBLE2]);
+  return P;
+};
+TREE_BUILDERS.colstand = (v) => {
+  const h = 2.4 + v * 0.9, P = [[new THREE.BoxGeometry(1.4, 0.3, 1.4).translate(0, 0.15, 0), STONE], [new THREE.BoxGeometry(1.1, 0.25, 1.1).translate(0, 0.42, 0), MARBLE2], [drum(0.38, h).translate(0, 0.55 + h / 2, 0), MARBLE]];
+  if (v) P.push([new THREE.CylinderGeometry(0.52, 0.36, 0.3, PROP_LOW() ? 8 : 20).translate(0, 0.55 + h + 0.15, 0), MARBLE], [new THREE.BoxGeometry(1.1, 0.22, 1.1).translate(0, 0.55 + h + 0.41, 0), MARBLE2]);
+  else P.push([drum(0.36, 0.5).rotateX(0.5).translate(0.05, 0.55 + h + 0.12, 0.08), MARBLE2], [drum(0.38, 0.8).rotateZ(Math.PI / 2).translate(1.1, 0.38, 0.6), MARBLE2]);
+  return P;
+};
+TREE_BUILDERS.herm = (v) => {
+  const P = [[new THREE.BoxGeometry(0.75, 0.18, 0.65).translate(0, 0.09, 0), STONE], [new THREE.BoxGeometry(0.38, 1.2, 0.32).translate(0, 0.78, 0), MARBLE], [new THREE.BoxGeometry(0.46, 0.12, 0.4).translate(0, 1.42, 0), MARBLE2],
+    [new THREE.IcosahedronGeometry(0.19, 1).scale(0.9, 1.1, 1).translate(0, 1.66, 0), MARBLE], [new THREE.ConeGeometry(0.11, 0.22, 6).rotateX(Math.PI).translate(0, 1.5, 0.11), MARBLE2]];
+  if (!PROP_LOW()) { P.push([new THREE.CylinderGeometry(0.16, 0.08, 0.08, 10).translate(0.32, 0.22, 0.35), CLAY]); for (let k = 0; k < 5; k++) P.push([new THREE.IcosahedronGeometry(0.04, 0).translate(0.25 + rr(-0.1, 0.1), 0.24, 0.35 + rr(-0.1, 0.1)), k % 2 ? 0xd8322a : 0xf2c230]); }
+  if (v) P.push([new THREE.TorusGeometry(0.17, 0.035, 5, 12).rotateX(Math.PI / 2).translate(0, 1.47, 0), 0x4f6e2c]);   // a laurel wreath
+  return P;
+};
+TREE_BUILDERS.amphorae = (v) => {
+  const P = [];
+  for (const [x, z, tilt, rot] of [[0, 0, 0.08, 0], [0.45, 0.25, 0.15, 1.2], [-0.3, 0.55, 1.45, 0.6 + v]]) { P.push([pot(1).rotateZ(tilt).rotateY(rot).translate(x, tilt > 1 ? 0.24 : 0, z), CLAY]); if (!PROP_LOW()) P.push([new THREE.CylinderGeometry(0.235, 0.24, 0.12, 12, 1, true).translate(0, 0.46, 0).rotateZ(tilt).rotateY(rot).translate(x, tilt > 1 ? 0.24 : 0, z), GLAZE]); }
+  if (!PROP_LOW()) for (let k = 0; k < 6; k++) P.push([new THREE.BoxGeometry(rr(0.08, 0.18), 0.02, rr(0.06, 0.14)).rotateY(rr(0, 3)).translate(rr(-0.6, 0.8), 0.01, rr(-0.5, 0.9)), CLAY]);
+  return P;
+};
+TREE_BUILDERS.wallruin = () => {
+  const P = [];
+  for (let j = 0; j < 3; j++) { let x = -1.15 + (j % 2) * 0.25; const end = 1.15 - j * rr(0.2, 0.5); while (x < end) { const w = rr(0.45, 0.75); if (j < 2 || rr(0, 1) < 0.7) P.push([new THREE.BoxGeometry(w - 0.03, 0.3, 0.62).translate(x + w / 2, 0.16 + j * 0.31, rr(-0.03, 0.03)), rr(0, 1) < 0.5 ? STONE : STONE2]); x += w; } }
+  return P;
+};
+TREE_BUILDERS.lavender = () => {
+  const P = [[new THREE.IcosahedronGeometry(0.36, 1).scale(1.3, 0.55, 1.3).translate(0, 0.16, 0), 0x6d7f4a]], n = PROP_LOW() ? 6 : 22;
+  for (let k = 0; k < n; k++) { const a = rr(0, 6.28), d = rr(0, 0.42), h = rr(0.45, 0.75), lean = rr(-0.2, 0.2);
+    if (!PROP_LOW()) P.push([new THREE.CylinderGeometry(0.008, 0.01, h, 3).translate(0, h / 2, 0).rotateZ(lean).rotateY(a).translate(Math.cos(a) * d, 0.1, Math.sin(a) * d), 0x6f8a4a]);
+    P.push([new THREE.ConeGeometry(0.035, 0.2, 4).rotateX(Math.PI).translate(0, h + 0.02, 0).rotateZ(lean).rotateY(a).translate(Math.cos(a) * d, 0.1, Math.sin(a) * d), k % 3 ? 0x8a6ccf : 0x7457c0]); }
+  return P;
+};
+TREE_BUILDERS.broom = () => {
+  const P = [], n = PROP_LOW() ? 3 : 6;
+  for (let k = 0; k < n; k++) { const a = (k / n) * 6.28, d = k ? 0.35 : 0; P.push([new THREE.IcosahedronGeometry(rr(0.32, 0.45), 1).scale(1, 1.2, 1).translate(Math.cos(a) * d, 0.42 + rr(0, 0.25), Math.sin(a) * d), k % 2 ? 0x5f7a2c : 0x6b8432]); }
+  for (let k = 0; k < (PROP_LOW() ? 5 : 26); k++) { const a = rr(0, 6.28), e = rr(0.2, 1.2); P.push([new THREE.IcosahedronGeometry(rr(0.06, 0.1), 0).translate(Math.cos(a) * Math.cos(e) * 0.6, 0.55 + Math.sin(e) * 0.45, Math.sin(a) * Math.cos(e) * 0.6), k % 3 ? 0xe8c42a : 0xf2d84a]); }
+  return P;
+};
+TREE_BUILDERS.myrtle = () => {
+  const P = [], n = PROP_LOW() ? 3 : 6;
+  for (let k = 0; k < n; k++) { const a = (k / n) * 6.28, d = k ? 0.4 : 0; P.push([new THREE.IcosahedronGeometry(rr(0.38, 0.55), 1).translate(Math.cos(a) * d, 0.55 + rr(0, 0.35), Math.sin(a) * d), k % 2 ? 0x3f5f2e : 0x46682f]); }
+  if (!PROP_LOW()) for (let k = 0; k < 18; k++) { const a = rr(0, 6.28), e = rr(0.1, 1.2); P.push([new THREE.IcosahedronGeometry(0.045, 0).translate(Math.cos(a) * Math.cos(e) * 0.75, 0.7 + Math.sin(e) * 0.55, Math.sin(a) * Math.cos(e) * 0.75), 0xf2efe6]); }
+  return P;
+};
+
 // ---- materials with the near/far cut-off (wind sway stays as in the base material)
-const VEG_U = { uVegC: { value: new THREE.Vector2() }, uNearR: { value: NEAR_R }, uMidR: { value: MID_R } };
+const VEG_U = { uVegC: { value: new THREE.Vector2() }, uNearR: { value: NEAR_R }, uMidR: { value: MID_R }, uFarR: { value: FAR_R } };
 const cutMats = new Map();
 function cut(mat, far) {
   const key = mat.uuid + (far ? 'f' : 'n'); if (cutMats.has(key)) return cutMats.get(key);
@@ -69,16 +128,18 @@ function buildAtlas() {
   renderer.setScissorTest(prev.sc); renderer.setRenderTarget(prev.rt); renderer.setClearColor(prev.cc, prev.ca); renderer.setViewport(0, 0, renderer.domElement.width / renderer.getPixelRatio(), renderer.domElement.height / renderer.getPixelRatio());
   ATLAS.tex = rt.texture;
 }
-const impMat = new THREE.MeshBasicMaterial({ alphaTest: 0.5, side: THREE.DoubleSide, color: 0xffffff });
+const impMat = new THREE.MeshBasicMaterial({ alphaTest: 0.5, side: THREE.DoubleSide, color: 0xffffff, alphaToCoverage: true });
 impMat.onBeforeCompile = (sh) => {
   Object.assign(sh.uniforms, VEG_U);
-  sh.vertexShader = 'uniform vec2 uVegC; uniform float uNearR, uMidR; attribute vec4 aTile; attribute vec3 aSize;\n' + sh.vertexShader
+  sh.fragmentShader = sh.fragmentShader.replace('#include <alphatest_fragment>', A2C_FRAG);
+  sh.vertexShader = 'uniform vec2 uVegC; uniform float uNearR, uMidR, uFarR; attribute vec4 aTile; attribute vec3 aSize;\n' + sh.vertexShader
     .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = aTile.xy + uv * aTile.zw;')
     .replace('#include <begin_vertex>', `
       vec3 c0 = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
       vec3 toC = cameraPosition - c0; toC.y = 0.0; vec3 rgt = normalize(vec3(toC.z, 0.0, -toC.x) + 1e-5);
       vec3 transformed = rgt * (position.x * aSize.x + aSize.z) + vec3(0.0, position.y * aSize.x + aSize.y, 0.0);
-      if (distance(c0.xz, uVegC) < uMidR) transformed *= 0.0;`);
+      float vd = distance(c0.xz, uVegC); if (vd < uMidR) transformed *= 0.0;
+      transformed *= 1.0 - smoothstep(uFarR * 0.78, uFarR * 0.98, vd);   // the forest thins out gently at the edge of the drawn world`);
 };
 impMat.customProgramCacheKey = () => 'vegImpostor';
 const quad = new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0);
@@ -148,7 +209,7 @@ export class Vegetation {
       const cell = { meshes: null }; this.near.set(key, cell);
       this.pool.post({ type: 'flora', cx, cz, n: 1 }).then((m) => {
         if (this.near.get(key) !== cell) return;
-        cell.items = m.items; cell.meshes = this.buildMeshes(m.items, false, cx, cz); this.onCell?.(key, m.items, cx, cz);
+        cell.items = m.items; cell.cx = cx; cell.cz = cz; cell.meshes = this.buildMeshes(m.items, false, cx, cz); for (const ms of cell.meshes) ms.userData.cell = cell; this.onCell?.(key, m.items, cx, cz);
       });
     }
     for (const [key, c] of this.near) { const [cx, cz] = key.split(',').map(Number); if (Math.hypot((cx + 0.5) * CELL - pos.x, (cz + 0.5) * CELL - pos.z) > NEAR_KEEP + CELL) this.dropCell(this.near, key); void c; }

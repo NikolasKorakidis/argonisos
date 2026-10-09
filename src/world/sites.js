@@ -1,6 +1,6 @@
 // Where the places of the trial stand. Found from the seed with the same pure functions in every thread (the terrain
 // workers import this too), so the ground under each site is flattened identically everywhere and trees keep off it.
-//   temple:   the Ancient Temple of Zeus, on a rise near where you wake: pray for his blessing, offer the bosses' heads
+//   temple:   the Ancient Temple of Zeus, on a rise out in the meadows: pray for his blessing, offer the bosses' heads
 //   house:    an abandoned farmhouse in the meadows, worth searching
 //   olives:   five ancient olive trees in Pedias with marks carved in their bark (three pieced together → the Labyrinth)
 //   labyrinth: the Minotaur's ruined arena, deep in Pedias
@@ -27,8 +27,8 @@ const clears = [];   // [x, z, r]: no trees or rocks inside
 function pad(s, r0, r1, kind, y = s.y) { s.y = y; s.r = r1; s.kind = kind; addPad(s.x, s.z, r0, r1, y); clears.push([s.x, s.z, r1 * 0.95]); return s; }
 
 {
-  // the Ancient Temple: a gentle rise 60-110 m from where you wake, in Pedias
-  const t = find({ r0: 60, r1: 110, score: (x, z, h, w, sl) => (w.p > 0.9 ? 0 : -99) + h * 0.15 - sl * 30 });
+  // the Ancient Temple: a gentle rise 230-320 m from where you wake, in Pedias, to be found by exploring
+  const t = find({ r0: 230, r1: 320, score: (x, z, h, w, sl) => (w.p > 0.9 ? 0 : -99) + h * 0.15 - sl * 30 });
   SITES.temple = pad(t, 18, 30, 'temple', t.y + 0.3);
   // an abandoned farmhouse, 160-260 m out, on flat meadow
   const hs = find({ r0: 160, r1: 260, salt: 2, score: (x, z, h, w, sl) => (w.p > 0.9 ? 0 : -99) - sl * 40 + (far([SITES.temple], x, z, 120) ? 0 : -99) });

@@ -13,11 +13,14 @@ import { SITES } from '../world/sites.js';
 import { WorldMap } from '../ui/map.js';
 import { Owl } from './owl.js';
 import { Guide } from './guide.js';
+import { BuildMenu } from '../ui/buildmenu.js';
+import { Occlusion } from '../render/occlusion.js';
 import { save, load, Graves } from './save.js';
 import { sound, updateAmbience } from '../audio/sound.js';
 import { LIGHT } from '../world/sky.js';
 import { WEATHER, flashSky } from '../world/weather.js';
 import { heightAt, biomeWeights } from '../world/gen.js';
+import { groundAt } from '../world/groundcut.js';
 import { heldModel, isLeftHanded } from '../player/held.js';
 import { updateFx } from '../render/fx.js';
 import { askLight, updateLights } from '../render/lights.js';
@@ -37,8 +40,11 @@ export function installGame(g) {
   g.map = new WorldMap(g);
   g.owl = new Owl(g);
   g.guide = new Guide(g);
+  g.buildMenu = new BuildMenu(g);
+  g.occlusion = new Occlusion(g);
   g.ITEMS = ITEMS; g.graves = new Graves(g); { const od = g.onDeath; g.onDeath = () => { g.graves.fall(); od?.(); }; }
   g.combat = new Combat(g);
+  g.pickups.landAt = (x, z, fy) => { const gy = Math.max(groundAt(x, z), -1.2); return fy === undefined ? gy : Math.max(gy, g.build.floorAt(x, z, fy + 0.3)); };
   player.floorAt = (p) => Math.max(g.build.floorAt(p.x, p.z, p.y), g.structures.floorAt(p.x, p.z, p.y));
   player.camBlock = (a, b) => g.build.rayBlock(a, b);
   g.underRoof = (p) => g.build.underRoof(p) || g.structures.underRoof(p);
@@ -52,9 +58,9 @@ export function installGame(g) {
   // ---- giving items: into the pack, the rest at your feet
   g.give = (id, n = 1, extra) => {
     const left = inv.add(id, n, extra); if (n - left > 0) hud.pickup(id, n - left);
-    if (left > 0) { g.pickups.drop(id, left, player.pos.x + (Math.random() - 0.5), player.pos.z + (Math.random() - 0.5), extra); hud.toast('Your pack is full'); }
+    if (left > 0) { g.pickups.drop(id, left, player.pos.x + (Math.random() - 0.5), player.pos.z + (Math.random() - 0.5), extra, player.pos.y); hud.toast('Your pack is full'); }
   };
-  hud.onDrop = (i) => { const s = inv.slots[i]; if (!s) return; if (s.worn) unequip(i); const d = inv.drop(i); const f = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)); g.pickups.drop(d.id, d.n, player.pos.x + f.x * 1.2, player.pos.z + f.z * 1.2, d.dur ? { dur: d.dur } : undefined); };
+  hud.onDrop = (i) => { const s = inv.slots[i]; if (!s) return; if (s.worn) unequip(i); const d = inv.drop(i); const f = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)); g.pickups.drop(d.id, d.n, player.pos.x + f.x * 1.2, player.pos.z + f.z * 1.2, d.dur ? { dur: d.dur } : undefined, player.pos.y); };
 
   // ---- equipment: one item in the right hand, a shield or bow in the left; armour in its own slots
   const worn = (slot) => inv.slots.findIndex((s) => s?.worn === slot);
@@ -104,7 +110,7 @@ export function installGame(g) {
     const f = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)), front = player.pos.clone().addScaledVector(f, 0.9);
     const owl = g.owl.interactable(player.pos); if (owl && g.owl.faced()) return owl;
     const p = g.pickups.nearest(front, 1.9);
-    if (p) { const id = p.kind === 'drop' ? p.item : KINDS[p.kind].item, n = p.kind === 'drop' ? p.n : 1; return { kind: 'pickup', p, label: `Pick up ${ITEMS[id].name}${n > 1 ? ` ×${n}` : ''}` }; }
+    if (p) { const K = KINDS[p.kind], id = p.kind === 'drop' ? p.item : K.item, n = p.kind === 'drop' ? p.n : 1; return { kind: 'pickup', p, label: `${K.verb || 'Pick up'} ${K.label || ITEMS[id].name}${n > 1 ? ` ×${n}` : ''}`, sub: K.label ? `+${K.n[0]} ${ITEMS[id].name.toLowerCase()}` : '' }; }
     const ow = g.owl.interactable(player.pos) || g.graves.interactable(player.pos); if (ow) return ow;
     const tr = g.trial.interactable(player.pos); if (tr) return tr;
     const s = g.build?.interactable?.(player.pos, f); if (s) return s;
@@ -120,7 +126,8 @@ export function installGame(g) {
 
   // ---- per frame
   g.update = (dt) => {
-    g.owl.update(dt); g.guide.update(dt);
+    g.altUsed = null;
+    g.owl.update(dt); g.guide.update(dt); g.buildMenu.update();
     if (g.owl.open) { hud.prompt(null); return; }
     if (hit('KeyM') || (hit('Escape') && g.map.open)) g.map.toggle();
     g.map.update(dt);
@@ -129,11 +136,12 @@ export function installGame(g) {
       if (!(g.ambT > 0)) { g.ambT = 0.5; const P = player.pos, bw = biomeWeights(P.x, P.z); let sea = 0; for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; if (heightAt(P.x + Math.cos(a) * 45, P.z + Math.sin(a) * 45) < -0.5) sea++; } g.amb = { forest: bw.y, marsh: bw.v, sea: sea / 8 }; } g.ambT -= dt;
       const roof = player.stats.has('underRoof');
       updateAmbience(dt, { wind: WEATHER.k.overcast * 0.8 + 0.1, rain: WEATHER.k.rain, night: LIGHT.night, dusk: LIGHT.dusk, fire: fd, roof: roof ? 1 : 0, inside: roof ? 0.6 : 0, ...g.amb }); }
-    if (hit('KeyC') && !g.map.open) hud.toggle(!hud.open);   // C opens and closes the pack and crafting, on whichever tab you left it
+    if (hit('KeyC') && !g.map.open && !g.buildMenu.open) hud.toggle(!hud.open);   // C opens and closes the pack and crafting, on whichever tab you left it
     if (input.uiOpen || player.dead) { hud.prompt(null); g.build.update(dt); g.creatures.update(dt); g.combat.update(dt); g.structures.update(dt); return; }
     const t = target();
-    if (!g.build.active && !(g.equippedTool('build') && g.build.aimPiece)) hud.prompt(t ? 'E' : null, t?.label, t?.sub);
+    if (!g.build.active && !(g.equippedTool('build') && g.build.aimPiece)) hud.prompt(t ? 'E' : null, t?.label, t?.sub, t?.alt);
     if (hit('KeyE')) g.interact();
+    if (t?.alt && hit(`Key${t.alt.key}`)) { t.alt.use(); g.altUsed = t.alt.key; }   // e.g. F: put out the fire (and not the boss power)
     // attack / use with LMB (the hammer and the bow have their own handlers)
     for (const b of input.clicks) {
       if (b !== 0) continue;
@@ -155,7 +163,7 @@ export function installGame(g) {
     for (const d of [...g.pickups.drops]) if (d.extra?.auto && Math.hypot(d.x - player.pos.x, d.z - player.pos.z) < 1.8 && Math.abs(d.y - player.pos.y) < 2) { g.pickups.take(d); g.give(d.item, d.n); g.sound('pick'); }
     if (g.torchLight?.parent) askLight(g.torchLight.getWorldPosition(new THREE.Vector3()), 7 + Math.sin(performance.now() * 0.02) * 0.6 + Math.random() * 0.4, 14);
   };
-  g.lateUpdate = (dt) => { updateFx(dt, camera); updateLights(); };
+  g.lateUpdate = (dt) => { updateFx(dt, camera); updateLights(); g.occlusion.update(dt); };
   hud.onToggle = (on) => { if (on) g.crafting.open(); };
   g.loaded = load(g);
   g.save = () => !player.dead && save(g);

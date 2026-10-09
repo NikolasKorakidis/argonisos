@@ -104,7 +104,12 @@ const SFX = {
   arrowHit: () => { noise(0.1, { type: 'lowpass', freq: 600, vol: 0.32, brown: true }); noise(0.05, { freq: 2000, q: 2, vol: 0.08 }); },
   arrowThud: () => { noise(0.08, { freq: 420, q: 2, vol: 0.16 }); tone(240, 0.12, { type: 'triangle', vol: 0.04, slide: 40 }); },
   alert: () => noise(0.2, { freq: 650, q: 2.5, vol: 0.09, slide: 350 }),
+  douse: () => { noise(0.9, { freq: 3000, q: 0.6, vol: 0.18, slide: -2000, attack: 0.02 }); noise(0.5, { type: 'lowpass', freq: 400, vol: 0.12, brown: true }); },
   kill: () => tone(90, 0.5, { type: 'triangle', vol: 0.12, slide: -40, wet: 0.3 }),
+  // the bosses: a ground-shaking slam, the Chimera's fire, a block of stone hurled through the air
+  slam: () => { noise(0.7, { type: 'lowpass', freq: 220, vol: 0.6, brown: true, wet: 0.5 }); tone(55, 0.8, { type: 'sine', vol: 0.3, slide: -25, wet: 0.4 }); noise(0.15, { freq: 900, q: 1, vol: 0.18, delay: 0.02 }); },
+  breath: () => { noise(1.5, { type: 'lowpass', freq: 900, vol: 0.32, brown: true, attack: 0.15, wet: 0.4 }); noise(1.4, { freq: 1800, q: 0.7, vol: 0.12, attack: 0.2, slide: -600 }); },
+  boulder: () => { noise(0.45, { freq: 500, q: 0.8, vol: 0.22, slide: 300, attack: 0.05 }); tone(80, 0.3, { type: 'triangle', vol: 0.1, slide: -30 }); },
   // thunder: a crack when it's close, then a long roll of rumbling bursts under the reverb
   thunder: (k = 1) => {
     const near = k > 0.9; if (near) { noise(0.25, { freq: 2200, q: 0.5, vol: 0.35 * k, wet: 0.6 }); noise(0.5, { type: 'lowpass', freq: 1200, vol: 0.4 * k, wet: 0.6, delay: 0.05 }); }

@@ -3,12 +3,13 @@
 // flower density come from a small ground texture around the player, re-baked by a worker as you travel.
 import * as THREE from 'three';
 import { scene } from '../render/core.js';
-import { windUniform } from './trees.js';
+import { windUniform, LIGHT_U } from './trees.js';
+import { cutList, onCutsChanged, CUT_EDGE, CUT_SLOPE } from './groundcut.js';
 
 let s0 = 4242; const rand = () => ((s0 = (s0 * 16807) % 2147483647) - 1) / 2147483646, rr = (a, b) => a + rand() * (b - a);
 export const GRASS = { mesh: null, flowers: [] };
 const TEX_N = 224, TEX_SIZE = 140;      // 0.62 m per texel over 140 m, re-centred when you move 25 m (the 76 m tile never runs off it)
-export const grassU = { uWind: windUniform, uCenter: { value: new THREE.Vector2() }, uTile: { value: 76 }, uHeight: { value: null },
+export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new THREE.Vector2() }, uTile: { value: 76 }, uHeight: { value: null },
   uOrigin: { value: new THREE.Vector2(-1e6, -1e6) }, uSize: { value: TEX_SIZE },
   uBaseA: { value: new THREE.Color(0x1d3a24) }, uBaseB: { value: new THREE.Color(0x3a4a1e) },
   uTipA: { value: new THREE.Color(0x7fae45) }, uTipB: { value: new THREE.Color(0xc9c35a) } };
@@ -19,7 +20,7 @@ export const grassU = { uWind: windUniform, uCenter: { value: new THREE.Vector2(
   const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 });
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, grassU);
-    sh.vertexShader = `uniform float uWind, uTile, uSize; uniform vec2 uCenter, uOrigin; uniform sampler2D uHeight; varying float vGH, vVar, vShade;\n` + sh.vertexShader
+    sh.vertexShader = `uniform float uWind, uTile, uSize; uniform vec2 uCenter, uOrigin; uniform sampler2D uHeight; varying float vGH, vVar, vShade, vGust; varying vec3 vWorld;\n` + sh.vertexShader
       .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0.0, 1.0, 0.0);')   // soft, uniform lighting like a painted field
       .replace('#include <begin_vertex>', `
         vec3 ip = instanceMatrix[3].xyz;
@@ -32,14 +33,20 @@ export const grassU = { uWind: windUniform, uCenter: { value: new THREE.Vector2(
         float a = rnd * 6.2831; p.xz = mat2(cos(a), -sin(a), sin(a), cos(a)) * p.xz;
         float gh = position.y / ${H.toFixed(2)};
         float gust = sin(uWind * 0.6 + wp.x * 0.05) * 0.5 + 0.5;
-        float bend = gh * gh * sc * (0.07 + gust * 0.1);
+        // gusts sweeping across the meadow: bands that bend the grass further and catch the light as they pass
+        float wave = smoothstep(0.6, 1.0, sin(dot(wp, vec2(0.045, 0.028)) - uWind * 1.25) * 0.5 + 0.5 + (fract(sin(dot(floor(wp / 11.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.25);
+        float bend = gh * gh * sc * (0.07 + gust * 0.1) * (1.0 + wave * 1.3);
         p.x += sin(uWind * 1.9 + wp.x * 0.35 + wp.y * 0.22) * bend;
         p.z += cos(uWind * 1.5 + wp.y * 0.3) * bend * 0.7;
         vec2 away = wp - uCenter; float pd = length(away), push = (1.0 - smoothstep(0.25, 1.5, pd)) * gh * sc;   // blades part around your legs
         p.xz += away / max(pd, 0.001) * push * 0.55; p.y *= 1.0 - push * 0.35;
         vec3 transformed = p + vec3(wp.x, hm.r - 0.03, wp.y) - ip;
-        vGH = gh; float fk = floor(hm.b * 0.5); vVar = hm.b - fk * 2.0; vShade = fk / 15.0;`);
-    sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB; varying float vGH, vVar, vShade;\n` + sh.fragmentShader
+        vGH = gh; float fk = floor(hm.b * 0.5); vVar = hm.b - fk * 2.0; vShade = fk / 15.0; vGust = wave; vWorld = p + vec3(wp.x, hm.r, wp.y);`);
+    sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; varying float vGH, vVar, vShade, vGust; varying vec3 vWorld;\n` + sh.fragmentShader
+      .replace('#include <tonemapping_fragment>', `gl_FragColor.rgb *= 1.0 + vGust * 0.2 * vGH;   // the gust's lighter band
+        float shine = pow(max(dot(normalize(vWorld - cameraPosition), uSunDir), 0.0), 4.0) * vGH * vGH;   // sun through the blade tips
+        gl_FragColor.rgb += diffuseColor.rgb * uSunCol * shine * 0.32;
+        #include <tonemapping_fragment>`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         float v = smoothstep(0.35, 0.7, vVar);
         diffuseColor.rgb = mix(mix(uBaseA, uBaseB, v), mix(uTipA, uTipB, v * 0.8), smoothstep(0.0, 1.0, vGH));
@@ -106,6 +113,7 @@ let pending = false, lastX = 1e9, lastZ = 1e9, cur = null;
 // rectangle (x, z, hw, hd, rot); they are stamped into the grass channel of the local ground texture.
 const clears = new Map();
 let restamp = false;
+onCutsChanged.add(() => { restamp = true; });
 export function clearGrass(key, shape) { if (shape) clears.set(key, shape); else clears.delete(key); restamp = true; }
 function stamp(c) {
   const { data, N, x0, z0, base } = c, k = TEX_SIZE / N;
@@ -121,6 +129,16 @@ function stamp(c) {
       else { const u = Math.abs(dx * cs - dz * sn) - s.hw, v = Math.abs(dx * sn + dz * cs) - s.hd; d = Math.max(u, v); }
       const f = Math.min(1, Math.max(0, (d - 0.1) / 0.5)), o = (j * N + i) * 4 + 1;   // none at all inside, fading back in just outside the edge
       data[o] = Math.min(data[o], data[o] * f); data[o + 2] *= f;   // grass and flowers both
+    }
+  }
+  // under and around floors the blades stand on the pressed-down ground (the same rule as the terrain shader)
+  for (const c of cutList()) {
+    const r = Math.hypot(c.hw, c.hd) + CUT_EDGE + 3, i0 = Math.max(0, Math.floor((c.x - r - x0) / k)), i1 = Math.min(N - 1, Math.ceil((c.x + r - x0) / k));
+    const j0 = Math.max(0, Math.floor((c.z - r - z0) / k)), j1 = Math.min(N - 1, Math.ceil((c.z + r - z0) / k));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const dx = x0 + (i + 0.5) * k - c.x, dz = z0 + (j + 0.5) * k - c.z, u = Math.abs(dx * c.cs - dz * c.sn) - c.hw, v = Math.abs(dx * c.sn + dz * c.cs) - c.hd;
+      const out = Math.max(u, v) > 0 ? Math.hypot(Math.max(u, 0), Math.max(v, 0)) : Math.max(u, v), o = (j * N + i) * 4;
+      data[o] = Math.min(data[o], c.y + CUT_SLOPE * Math.max(0, out - CUT_EDGE));
     }
   }
 }

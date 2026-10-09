@@ -1,15 +1,17 @@
 // Wildlife and monsters. Stats come from the data table (speeds converted from ft/s). Creatures spawn out of sight
 // around the player by biome and time of day, never close to a workbench, and fade away when you leave them far
-// behind. Levels 0-2 (shown as stars) add 25% health, damage and drops each.
+// behind. Levels 0-2 (shown as owls over the name) add 25% health, damage and drops each.
 //   passive: wander and graze, bolt when you come close or hurt them
 //   aggressive: attack when you come close (hogs) or as soon as they see you (dryads, giants, skeletons)
 //   Most of them won't come near a fire.
 import * as THREE from 'three';
 import { heightAt, biomeWeights } from '../world/gen.js';
+import { groundAt } from '../world/groundcut.js';
 import { makeBody, preloadBodies } from './models.js';
 import { burst, dust, addShake } from '../render/fx.js';
 import { camera } from '../render/core.js';
 import { stormWallDepth } from '../world/stormwall.js';
+import { icon } from '../ui/icons.js';
 
 const FT = 0.3048, clamp = (v, a, b) => Math.max(a, Math.min(b, v)), rr = (a, b) => a + Math.random() * (b - a), ri = (a, b) => Math.floor(rr(a, b + 1));
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
@@ -99,7 +101,7 @@ export class Creatures {
     dust(at, c.T.thunder === 'big' ? 30 : 14, 0xe8e8ff, c.T.thunder === 'big' ? 0.8 : 0.4); burst(at, { color: 0xbfd0ff, n: 16, speed: 4, size: 0.05, grav: -2 });
     if (c.pos.distanceTo(this.g.player.pos) < 25) { addShake(c.T.thunder === 'big' ? 0.5 : 0.15); this.g.flashSky?.(c.T.thunder === 'big' ? 0.5 : 0.18); }
     this.g.sound?.('thunder');
-    if (!c.summoned) for (const [id, a, b, ch] of c.T.drops) if (Math.random() < ch) { const n = Math.round(ri(a, b) * (1 + 0.25 * c.level)); if (n > 0) this.g.pickups.drop(id, n, c.pos.x + rr(-0.6, 0.6), c.pos.z + rr(-0.6, 0.6), { auto: true }); }
+    if (!c.summoned) for (const [id, a, b, ch] of c.T.drops) if (Math.random() < ch) { const n = Math.round(ri(a, b) * (1 + 0.25 * c.level)); if (n > 0) this.g.pickups.drop(id, n, c.pos.x + rr(-0.6, 0.6), c.pos.z + rr(-0.6, 0.6), { auto: true }, c.pos.y); }
     this.remove(c);
   }
   remove(c) { this.g.scene.remove(c.body.obj); c.body.dispose(); this.list.splice(this.list.indexOf(c), 1); this.plates.get(c)?.remove(); this.plates.delete(c); }
@@ -139,9 +141,10 @@ export class Creatures {
         const away = Math.atan2(c.pos.x - pp.x, c.pos.z - pp.z); face = away + Math.sin(c.t * 2) * 0.4; want = T.speed[1];
         if (c.t <= 0 && d > 25) { c.state = 'idle'; c.t = rr(2, 5); }
       } else if (c.state === 'chase' || c.state === 'attack') {
-        face = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z); want = T.speed[1] * (T.heavy ? 0.75 : 0.85);
+        const wp = g.structures?.navTarget?.(c.pos, pp) || pp;   // in the Labyrinth: round by the gaps in the rings
+        face = Math.atan2(wp.x - c.pos.x, wp.z - c.pos.z); want = T.speed[1] * (T.heavy ? 0.75 : 0.85);
         if (fire) { const away = Math.atan2(c.pos.x - fire.pos.x, c.pos.z - fire.pos.z); if (c.pos.distanceTo(fire.pos) < 6.5) { face = away; want = T.speed[0] * 1.5; } else if (d < 9) want = 0; }   // won't come into the firelight
-        if (d < T.reach + T.r * 0.5) { want = 0; if (c.atkCd <= 0) { c.state = 'attack'; c.atkT = T.heavy ? 1.1 : 0.55; c.atkCd = T.heavy ? 3.2 : rr(1.4, 2.2); c.hitDone = false; } }
+        if (d < T.reach + T.r * 0.5) { want = 0; if (c.atkCd <= 0 && !c.move) { c.state = 'attack'; c.atkT = T.heavy ? 1.1 : 0.55; c.atkCd = T.heavy ? 3.2 : rr(1.4, 2.2); c.hitDone = false; } }
         if (T.ranged && d > 5 && d < T.ranged.range && c.rangedCd <= 0) { c.rangedCd = T.ranged.every + rr(-1, 1); this.throwThorn(c); }
         if (d > 60 || (c.t < -30 && d > 30)) { c.state = 'idle'; c.t = rr(2, 4); }
       } else if (c.state === 'alert') {
@@ -155,15 +158,16 @@ export class Creatures {
         if (!c.hitDone && c.atkT < (T.heavy ? 0.45 : 0.25)) { c.hitDone = true; if (d < T.reach + T.r + 0.6 && !P.dead) g.combat.hitPlayer(c, T.dmg); else if (T.heavy) { dust(c.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), 3), 18); addShake(0.3); } this.hitBuildings(c); }
         if (c.atkT <= 0) c.state = 'chase';
       }
-      if (c.charge > 0) { want = 11; face = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z); }
+      // a boss move in progress steers: its own speed and heading (snapped for a charge), or a leap through the air
+      const ctl = c.ctl; if (ctl) { want = ctl.want; if (ctl.face !== undefined) face = ctl.face; if (ctl.snap) c.yaw = face; if (ctl.want === 0) c.speed *= 0.8; }
       // move: turn towards the wanted heading, accelerate, follow the ground, avoid deep water and the storm
       c.yaw += angDiff(face, c.yaw) * Math.min(1, dt * (T.heavy ? 2.5 : 6));
       c.speed += (want - c.speed) * Math.min(1, dt * 4);
       if (c.hitT > 0) c.speed *= 0.5;
-      const nx = c.pos.x + Math.sin(c.yaw) * c.speed * dt, nz = c.pos.z + Math.cos(c.yaw) * c.speed * dt, nh = heightAt(nx, nz);
+      const nx = ctl?.at ? ctl.at.x : c.pos.x + Math.sin(c.yaw) * c.speed * dt, nz = ctl?.at ? ctl.at.z : c.pos.z + Math.cos(c.yaw) * c.speed * dt, nh = heightAt(nx, nz);
       if (nh > (T.heavy ? -1.2 : 0.2) && stormWallDepth(nx, nz) === 0) { c.pos.x = nx; c.pos.z = nz; } else { c.wanderYaw = c.yaw + Math.PI; c.speed *= 0.3; if (c.state === 'flee') c.yaw += 1; }
       g.colliders.resolve(c.pos, T.r * 0.8, c.pos.y);
-      const fl = Math.max(heightAt(c.pos.x, c.pos.z), g.build?.floorAt(c.pos.x, c.pos.z, c.pos.y) ?? -1e9, -0.4); c.pos.y += (fl - c.pos.y) * Math.min(1, dt * 12);
+      const fl = Math.max(groundAt(c.pos.x, c.pos.z), g.build?.floorAt(c.pos.x, c.pos.z, c.pos.y) ?? -1e9, -0.4); if (ctl?.air !== undefined) c.pos.y = fl + ctl.air; else c.pos.y += (fl - c.pos.y) * Math.min(1, dt * 12);
       // stuck against a wall while chasing: hit it
       c.stuck = c.pos.distanceTo(c.lastP) < 0.05 * dt * 60 && want > 0.5 ? c.stuck + dt : 0; c.lastP.copy(c.pos);
       if (c.stuck > 1.2 && (c.state === 'chase') && c.atkCd <= 0) { c.state = 'attack'; c.atkT = 0.55; c.atkCd = 2; c.hitDone = false; c.stuck = 0; }
@@ -191,7 +195,7 @@ export class Creatures {
     for (const c of show) {
       if (c.boss) continue;
       let el = this.plates.get(c);
-      if (!el) { el = document.createElement('div'); el.className = 'plate'; el.innerHTML = `<b>${c.T.name}${'<i>★</i>'.repeat(c.level)}</b><span><u></u></span>`; this.box.appendChild(el); this.plates.set(c, el); }
+      if (!el) { el = document.createElement('div'); el.className = 'plate'; el.innerHTML = `<b>${c.T.name}${`<i class="lvl" title="Level ${c.level}">${icon('owl')}</i>`.repeat(c.level)}</b><span><u></u></span>`; /* an owl for each level (same levels as before) */ this.box.appendChild(el); this.plates.set(c, el); }
       v.copy(c.pos); v.y += c.T.h + 0.5; v.project(camera);
       if (v.z > 1) { el.style.display = 'none'; continue; }
       el.style.display = ''; el.style.transform = `translate(${(v.x * 0.5 + 0.5) * innerWidth}px, ${(-v.y * 0.5 + 0.5) * innerHeight}px) translate(-50%, -100%)`;

@@ -8,7 +8,7 @@ import { ITEMS } from './items.js';
 import { heightAt } from '../world/gen.js';
 import { camera, scene } from '../render/core.js';
 import { input } from '../input.js';
-import { burst, addShake } from '../render/fx.js';
+import { burst, dust, addShake } from '../render/fx.js';
 import { BOW_DUR, CLIPS } from '../player/hero.js';
 import { loadFBX, loadTex } from '../assets.js';
 
@@ -66,11 +66,13 @@ export class Combat {
   blockValue() { const l = this.g.inv.slots.find((s) => s?.worn === 'left' && ITEMS[s.id].type === 'shield'); if (l) return ITEMS[l.id].block; const r = this.g.held(); return r?.block ?? 0; }
   parryBonus() { const l = this.g.inv.slots.find((s) => s?.worn === 'left' && ITEMS[s.id].type === 'shield'); return (l ? ITEMS[l.id].parry : this.g.held()?.parry) || 1.5; }
   // ---- dryad thorns and other thrown things
-  throwAt(c, dmg) {
-    const m = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.4, 5).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x5d7a34, roughness: 0.7 }));
+  // (rock: a block of masonry, slower and heavier, that bursts into dust where it lands and catches you within a metre)
+  throwAt(c, dmg, o = {}) {
+    const m = o.rock ? new THREE.Mesh(new THREE.DodecahedronGeometry(0.45, 0), new THREE.MeshStandardMaterial({ color: 0x9a9080, roughness: 0.95, flatShading: true }))
+      : new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.4, 5).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x5d7a34, roughness: 0.7 }));
     const from = c.pos.clone().setY(c.pos.y + c.T.h * 0.75), to = this.g.player.pos.clone().setY(this.g.player.pos.y + 1.2);
-    const t = from.distanceTo(to) / 20, v = to.clone().sub(from).divideScalar(t); v.y += 0.5 * 9 * t;
-    m.position.copy(from); scene.add(m); this.thorns.push({ m, v, c, dmg, life: 3 });
+    const t = from.distanceTo(to) / (o.rock ? 14 : 20), v = to.clone().sub(from).divideScalar(t); v.y += 0.5 * 9 * t;
+    m.position.copy(from); m.castShadow = !!o.rock; scene.add(m); this.thorns.push({ m, v, c, dmg, life: 3, rock: o.rock });
   }
   // ---- the bow
   get bow() { return this.g.player.bow; }
@@ -143,10 +145,10 @@ export class Combat {
     }
     // thorns
     for (let i = this.thorns.length - 1; i >= 0; i--) {
-      const t = this.thorns[i]; t.life -= dt; t.v.y -= 9 * dt; t.m.position.addScaledVector(t.v, dt); t.m.lookAt(t.m.position.clone().add(t.v));
-      const pp = P.pos.clone().setY(P.pos.y + 1.1);
-      if (t.m.position.distanceTo(pp) < 0.6 && !P.dead) { this.hitPlayer(t.c, t.dmg); scene.remove(t.m); this.thorns.splice(i, 1); continue; }
-      if (t.life <= 0 || t.m.position.y < heightAt(t.m.position.x, t.m.position.z)) { scene.remove(t.m); this.thorns.splice(i, 1); }
+      const t = this.thorns[i]; t.life -= dt; t.v.y -= 9 * dt; t.m.position.addScaledVector(t.v, dt); if (t.rock) t.m.rotation.x += dt * 6; else t.m.lookAt(t.m.position.clone().add(t.v));
+      const pp = P.pos.clone().setY(P.pos.y + 1.1), landed = t.m.position.y < heightAt(t.m.position.x, t.m.position.z);
+      if (t.m.position.distanceTo(pp) < (t.rock ? 1.1 : 0.6) && !P.dead) { this.hitPlayer(t.c, t.dmg); if (t.rock) dust(t.m.position.clone(), 20, 0x9a9080, 0.8); scene.remove(t.m); this.thorns.splice(i, 1); continue; }
+      if (t.life <= 0 || landed) { if (t.rock) { dust(t.m.position.clone(), 24, 0x9a9080, 0.9); addShake(0.25); g.sound?.('thud'); } scene.remove(t.m); this.thorns.splice(i, 1); }
     }
   }
 }
