@@ -15,7 +15,7 @@ export function steps(g) {
   return [
     { t: 'Pick something up', h: `Stones, branches and flowers lie in the grass. Walk up to one and press ${K('E')}.`, done: () => inv.seen.size > 0 },
     { t: 'Talk to the Owl', h: `She's flying beside you with a <b>!</b> over her head. Face her and press ${K('E')}.`, done: () => g.owl.st.done.includes('intro') },
-    { t: 'Turn branches into wood', h: `Pick up a few branches, then ${K('C')} → <b>Wood ×2</b> (1 branch each).`, done: () => seen('wood') },
+    { t: 'Gather wood', h: 'Pick up fallen branches: each gives 2 wood.', done: () => seen('wood') },
     { t: 'Make a weapon', h: `${K('C')}: a <b>crude club</b> (6 wood) or a <b>crude dagger</b> (1 wood, 2 stone). Equip it from the hotbar (${K('1')}–${K('8')}).`, done: () => seen('crudeClub') || seen('crudeDagger') },
     { t: 'Search the abandoned house', h: 'It\'s on your map. The old chest inside holds rope, leather, a dagger and a torch.', done: () => tr().looted.includes('houseChest'), go: () => SITES.house },
     { t: 'Make a hammer', h: `${K('C')} → <b>Wooden Hammer</b> (4 wood).`, done: () => seen('hammer') },
@@ -27,7 +27,7 @@ export function steps(g) {
     { t: 'Put a roof over your workbench', h: 'Walls and thatch roofs need rope. Most workbench recipes need a roof over the bench.', done: () => g.build.placed.some((p) => p.id === 'workbench' && g.build.underRoof(p.pos, 1.2)) },
     { t: 'Make a bed and sleep', h: 'Build → <b>Bed</b> (8 wood, 2 leather) under a roof. Use it (E) to set your spawn; at night you can sleep.', done: () => !!g.S.bed },
     { t: 'Make a bow and arrows', h: 'At the roofed workbench: <b>Crude Bow</b> (10 wood, 4 rope, 1 leather) and <b>Crude Arrows</b> (5 wood, 1 feather → 10). The Minotaur is weak to piercing.', done: () => seen('crudeBow') && seen('crudeArrow') },
-    { t: 'Pray at the Ancient Temple', h: 'The altar before the temple steps: Zeus\'s Blessing, once a day.', done: () => tr().prayDay >= 1, go: () => SITES.temple },
+    { t: 'Find the Ancient Temple and pray', h: 'It stands on a rise out in the meadows. The altar before its steps gives Zeus\'s Blessing, once a day.', done: () => tr().prayDay >= 1, go: () => SITES.temple },
     { t: 'Copy the marks of three ancient olives', h: () => `Marked olive trees glow in Pedias. Each one you copy marks the next. <b>${tr().scraps.length} / 3</b>`, done: () => tr().scraps.length >= 3 || tr().revealed.labyrinth, go: () => nearest(P(), left('scraps')) },
     { t: 'Gather the Minotaur\'s tribute', h: () => `<b>${Math.min(5, inv.count('deerHide'))} / 5</b> deer hides (deer) · <b>${Math.min(10, inv.count('olive'))} / 10</b> olives (olive trees, once a day each).`, done: () => (has('deerHide', 5) && has('olive', 10)) || !!g.trial.boss || tr().down.minotaur },
     { t: 'Call the Minotaur', h: `Go to the Labyrinth and lay the tribute on its altar (${K('E')}). Eat well first.`, done: () => !!g.trial.boss || tr().down.minotaur, go: () => SITES.labyrinth },

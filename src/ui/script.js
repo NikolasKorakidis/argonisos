@@ -10,8 +10,8 @@ export const SCRIPT = `
 <li>Day 1, morning, empty-handed, in the meadows of <b>Pedias</b> at the heart of the island.</li>
 <li>Stones, branches, flowers and feathers lie in the grass. ${K('E')} picks them up.</li>
 <li><b>The Owl</b> comes after your first find. She flies alongside you with a <b>!</b> over her head until you talk to her (${K('E')}), tells you how the trial works, then flies off. She comes back whenever there is something new to know.</li>
-<li>Whatever you have held unlocks the recipes that use it (${K('C')}). First things: 1 branch → 2 wood; hammer (4 wood); crude club (6 wood); crude dagger (1 wood, 2 stone).</li>
-<li>Already on the map (${K('M')}): the <b>Ancient Temple</b> (pray there once a day for Zeus's Blessing; its fire keeps you warm) and an <b>abandoned house</b> whose chest holds rope, leather, olives, a dagger, resin and a torch.</li>
+<li>Whatever you have held unlocks the recipes that use it (${K('C')}). Fallen branches give 2 wood each when picked up. First things: hammer (4 wood); crude club (6 wood); crude dagger (1 wood, 2 stone).</li>
+<li>Already on the map (${K('M')}): an <b>abandoned house</b> whose chest holds rope, leather, olives, a dagger, resin and a torch. The <b>Ancient Temple</b> stands 230–320 m out in the meadows and appears on the map once you find it (pray there once a day for Zeus's Blessing; its fire keeps you warm).</li>
 </ul>
 
 <h3>2 · Getting set up</h3>

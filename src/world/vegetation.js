@@ -30,7 +30,7 @@ TREE_BUILDERS.reeds = (v) => {                  // a clump of marsh reeds and bu
 };
 
 // ---- materials with the near/far cut-off (wind sway stays as in the base material)
-const VEG_U = { uVegC: { value: new THREE.Vector2() }, uNearR: { value: NEAR_R }, uMidR: { value: MID_R } };
+const VEG_U = { uVegC: { value: new THREE.Vector2() }, uNearR: { value: NEAR_R }, uMidR: { value: MID_R }, uFarR: { value: FAR_R } };
 const cutMats = new Map();
 function cut(mat, far) {
   const key = mat.uuid + (far ? 'f' : 'n'); if (cutMats.has(key)) return cutMats.get(key);
@@ -72,13 +72,14 @@ function buildAtlas() {
 const impMat = new THREE.MeshBasicMaterial({ alphaTest: 0.5, side: THREE.DoubleSide, color: 0xffffff });
 impMat.onBeforeCompile = (sh) => {
   Object.assign(sh.uniforms, VEG_U);
-  sh.vertexShader = 'uniform vec2 uVegC; uniform float uNearR, uMidR; attribute vec4 aTile; attribute vec3 aSize;\n' + sh.vertexShader
+  sh.vertexShader = 'uniform vec2 uVegC; uniform float uNearR, uMidR, uFarR; attribute vec4 aTile; attribute vec3 aSize;\n' + sh.vertexShader
     .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = aTile.xy + uv * aTile.zw;')
     .replace('#include <begin_vertex>', `
       vec3 c0 = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
       vec3 toC = cameraPosition - c0; toC.y = 0.0; vec3 rgt = normalize(vec3(toC.z, 0.0, -toC.x) + 1e-5);
       vec3 transformed = rgt * (position.x * aSize.x + aSize.z) + vec3(0.0, position.y * aSize.x + aSize.y, 0.0);
-      if (distance(c0.xz, uVegC) < uMidR) transformed *= 0.0;`);
+      float vd = distance(c0.xz, uVegC); if (vd < uMidR) transformed *= 0.0;
+      transformed *= 1.0 - smoothstep(uFarR * 0.78, uFarR * 0.98, vd);   // the forest thins out gently at the edge of the drawn world`);
 };
 impMat.customProgramCacheKey = () => 'vegImpostor';
 const quad = new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0);

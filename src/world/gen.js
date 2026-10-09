@@ -63,7 +63,8 @@ export function landness(x, z) {
 
 // ---- Height (metres above sea level)
 export function rawHeight(x, z, w = biomeWeights(x, z)) {
-  const hp = 2.2 + fbm(x * 0.0032, z * 0.0032, 4) * 24 + (fbm(x * 0.017, z * 0.017, 2) - 0.5) * 3.5;          // meadows
+  const hp = 2.2 + fbm(x * 0.0032, z * 0.0032, 4) * 24 + (fbm(x * 0.017, z * 0.017, 2) - 0.5) * 3.5          // meadows,
+    + (fbm(x * 0.06 + 13, z * 0.06 - 7, 2) - 0.5) * 0.7;                                                     // with a gentle unevenness underfoot
   const rise = smooth(0.5, 0.78, w.r);                                                                         // foothills first, ridges deeper in
   const hy = 16 + rise * 18 + (ridged(x * 0.0027 + 4, z * 0.0027 - 2, 4) * 60 + fbm(x * 0.011, z * 0.011, 3) * 14) * (0.25 + 0.75 * rise);   // forest hills
   const hv = -0.15 + (fbm(x * 0.013 + 7, z * 0.013, 3) - 0.5) * 3.6 + (fbm(x * 0.05, z * 0.05, 2) - 0.5) * 0.8;    // marsh: islands and pools

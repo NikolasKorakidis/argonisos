@@ -27,7 +27,7 @@ export class WorldMap {
     addEventListener('pointerup', () => (drag = null));
     // compass
     const c = document.createElement('div'); c.id = 'compass'; c.innerHTML = '<div id="compassStrip"></div><i></i>'; document.getElementById('hud').appendChild(c); this.strip = c.querySelector('#compassStrip');
-    for (const k of ['temple', 'house']) this.know(SITES[k]);
+    this.know(SITES.house);   // the temple is found by exploring
   }
   know(s) { if (s && !this.st.known.includes(s.x.toFixed(0) + ',' + s.z.toFixed(0))) this.st.known.push(s.x.toFixed(0) + ',' + s.z.toFixed(0)); }
   isKnown(s) { return this.st.known.includes(s.x.toFixed(0) + ',' + s.z.toFixed(0)); }
@@ -54,7 +54,7 @@ export class WorldMap {
   }
   update(dt) {
     const P = this.g.player.pos; this.t = (this.t || 0) - dt;
-    if (this.t <= 0) { this.t = 0.5; this.uncover(P.x, P.z, SEEN_R); for (const s of this.sites()) if (!this.isKnown(s) && Math.hypot(s.x - P.x, s.z - P.z) < 45 && (s.kind === 'olive' || s.kind === 'cave' || s.kind === 'house')) { this.know(s); this.g.hud.toast(`Found: <b>${LABEL[s.kind]}</b>`); } if (this.open) this.draw(); }
+    if (this.t <= 0) { this.t = 0.5; this.uncover(P.x, P.z, SEEN_R); for (const s of this.sites()) if (!this.isKnown(s) && Math.hypot(s.x - P.x, s.z - P.z) < (s.kind === 'temple' ? 70 : 45) && (s.kind === 'olive' || s.kind === 'cave' || s.kind === 'house' || s.kind === 'temple')) { this.know(s); this.g.hud.toast(`Found: <b>${LABEL[s.kind]}</b>`); } if (this.open) this.draw(); }
     // compass: 1 px per 0.25°, cardinal points and known places
     const yaw = this.g.player.camYaw, W = this.strip.parentElement.clientWidth || 440, deg = (((yaw * 180) / Math.PI + 180) % 360 + 360) % 360, px = 2.4;
     let html = ''; const put = (bearing, label, cls) => { let d = bearing - deg; d = ((d + 540) % 360) - 180; if (Math.abs(d) > 90) return; html += `<span class="${cls}" style="left:${W / 2 - d * px}px">${label}</span>`; };

@@ -20,7 +20,7 @@ const vc = (o = {}) => new THREE.MeshStandardMaterial({ vertexColors: true, roug
 const SHOW = { stone: [1.7, 0.85], branch: [1.3, 1.15], lightstone: [1.5, 0.8], dandelion: [1.3, 0.55], moonflower: [1.3, 0.6], feather: [1.6, 0.55], bones: [1.4, 0.9], drop: [1, 0.7] };
 export const KINDS = {
   stone: { item: 'stone', n: [1, 1], model: () => ({ geo: merge([[new THREE.DodecahedronGeometry(0.2, 0).scale(1.2, 0.7, 1).translate(0, 0.1, 0), 0xb3ab9c], [new THREE.DodecahedronGeometry(0.12, 0).translate(0.22, 0.06, 0.1), 0x9a9286]]), mat: vc() }) },
-  branch: { item: 'branch', n: [1, 1], model: () => ({ geo: merge([[new THREE.CylinderGeometry(0.035, 0.055, 1.4, 5).rotateZ(Math.PI / 2).translate(0, 0.06, 0), 0x6e5238], [new THREE.CylinderGeometry(0.02, 0.03, 0.5, 4).rotateZ(Math.PI / 2 - 0.7).translate(0.25, 0.12, 0.08), 0x6e5238], [new THREE.CylinderGeometry(0.018, 0.025, 0.4, 4).rotateZ(Math.PI / 2 + 0.6).rotateY(0.8).translate(-0.3, 0.1, -0.05), 0x6e5238], [new THREE.IcosahedronGeometry(0.09, 0).translate(0.45, 0.16, 0.1), 0x5d7a34]]), mat: vc() }) },
+  branch: { item: 'wood', n: [2, 2], label: 'Branch', model: () => ({ geo: merge([[new THREE.CylinderGeometry(0.035, 0.055, 1.4, 5).rotateZ(Math.PI / 2).translate(0, 0.06, 0), 0x6e5238], [new THREE.CylinderGeometry(0.02, 0.03, 0.5, 4).rotateZ(Math.PI / 2 - 0.7).translate(0.25, 0.12, 0.08), 0x6e5238], [new THREE.CylinderGeometry(0.018, 0.025, 0.4, 4).rotateZ(Math.PI / 2 + 0.6).rotateY(0.8).translate(-0.3, 0.1, -0.05), 0x6e5238], [new THREE.IcosahedronGeometry(0.09, 0).translate(0.45, 0.16, 0.1), 0x5d7a34]]), mat: vc() }) },
   lightstone: { item: 'lightstone', n: [1, 2], model: () => ({ geo: merge([[new THREE.OctahedronGeometry(0.22, 0).scale(1, 1.3, 0.9).translate(0, 0.16, 0), 0xe8e2d0], [new THREE.OctahedronGeometry(0.13, 0).translate(0.2, 0.08, -0.12), 0xd9d2bc]]), mat: vc({ emissive: 0x6a6450, emissiveIntensity: 0.35, roughness: 0.5 }) }) },
   dandelion: { item: 'dandelion', n: [1, 2], model: () => ({ geo: merge([[new THREE.CylinderGeometry(0.012, 0.015, 0.35, 4).translate(0, 0.17, 0), 0x5d8a34], [new THREE.SphereGeometry(0.07, 6, 4).scale(1, 0.6, 1).translate(0, 0.36, 0), 0xf2d040], [new THREE.ConeGeometry(0.1, 0.06, 5).rotateX(Math.PI).translate(0, 0.03, 0), 0x4a7a2a]]), mat: vc() }) },
   moonflower: { item: 'moonflower', n: [1, 1], model: () => ({ geo: merge([[new THREE.CylinderGeometry(0.012, 0.015, 0.45, 4).translate(0, 0.22, 0), 0x4a6a4a], [new THREE.ConeGeometry(0.11, 0.14, 6, 1, true).rotateX(Math.PI).translate(0, 0.48, 0), 0xcfe0ff]]), mat: vc({ emissive: 0x6080c0, emissiveIntensity: 0.6, side: THREE.DoubleSide }) }) },
@@ -32,7 +32,7 @@ export const KINDS = {
 function counts(w, x, z) {
   const tree = fbm(x * 0.0075 + 21, z * 0.0075 - 4, 3);
   return {
-    stone: 2.5 * w.p + 3 * w.y, branch: (1 + tree * 3) * w.p + 4 * w.y, lightstone: 0.15 * w.p + 1.2 * w.y,
+    stone: 3.5 * w.p + 4 * w.y, branch: (1.6 + tree * 4) * w.p + 6 * w.y,   // starter materials: easy to come by lightstone: 0.15 * w.p + 1.2 * w.y,
     dandelion: 3 * w.p, moonflower: 0.6 * w.y, feather: 0.4 * w.p + 0.3 * w.y, bones: 0.25 * w.y,
   };
 }

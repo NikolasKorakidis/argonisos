@@ -12,7 +12,7 @@ const K = (k) => `<span class="kbd">${k}</span>`;
 export const TOPICS = {
   intro: [
     { title: 'The Trial', body: 'You wake on Nisos because Zeus wills it. This island is your trial: survive it, grow strong on it, and bring down the beasts that rule its lands.<br><br>I am the Owl. I will find you whenever there is something you should know.' },
-    { title: 'Everything Teaches', body: `Whatever you pick up shows you what it can become. A branch is wood; wood and stone make a club, a dagger, a hammer.<br><br>Press ${K('C')} to see what you can make, ${K('Tab')} for your pack, ${K('M')} for your map. The Ancient Temple of Zeus and an abandoned house are already marked on it.` },
+    { title: 'Everything Teaches', body: `Whatever you pick up shows you what it can become. Fallen branches give you wood; wood and stone make a club, a dagger, a hammer.<br><br>Press ${K('C')} to see what you can make, ${K('Tab')} for your pack, ${K('M')} for your map. An abandoned house is marked on it. Somewhere out in the meadows stands Zeus's temple: find it.` },
     { title: 'How You Move', body: `${K('WASD')} move · ${K('Shift')} sprint · ${K('Space')} jump · ${K('Ctrl')} sneak<br>${K('LMB')} strike · ${K('RMB')} block or draw the bow · ${K('E')} use · ${K('1')}–${K('8')} hotbar<br><br>Hunt with care: a beast that hasn't noticed you takes a sneak attack hard.` },
   ],
   night: [{ title: 'Night Is Coming', body: `Night and rain make you cold, and the cold slows your healing. Light a <b>campfire</b> (10 stone, 10 wood) and keep it fed with wood; rain drowns a fire that has no roof over it.<br><br>Make a <b>hammer</b> and hold ${K('RMB')} to build: walls, a roof, a <b>bed</b>. Sleep in it under a roof and the night passes, and you wake there if you fall.` }],
