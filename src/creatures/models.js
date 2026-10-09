@@ -195,8 +195,8 @@ class RigBody {
     if (st === 'dead') { this.deadT += dt; this.obj.rotation.x = -Math.min(Math.PI / 2, this.deadT * 2.5 * this.deadT * 2); this.mixer.update(0); return; }
     const runV = (this.dress.scale) * 3.9, k = clamp(speed / (runV * 0.5), 0, 1);
     const A = this.acts; A.run && (A.run.setEffectiveWeight(k), A.run.timeScale = clamp(speed / runV, 0.4, 1.4)); A.idle && A.idle.setEffectiveWeight(1 - k);
-    const atk = st === 'attack' ? A.attack : null;
-    if (atk && this.atkT <= 0) { atk.reset(); atk.setEffectiveWeight(1); atk.timeScale = this.kind === 'giant' ? 0.7 : 1.1; atk.play(); this.atkT = atk.getClip().duration / atk.timeScale; }
+    const atk = st === 'attack' || st === 'slam' ? A.attack : null;   // (slam: the same blow, slow and heavy)
+    if (atk && this.atkT <= 0) { atk.reset(); atk.setEffectiveWeight(1); atk.timeScale = st === 'slam' ? 0.62 : this.kind === 'giant' ? 0.7 : 1.1; atk.play(); this.atkT = atk.getClip().duration / atk.timeScale; }
     if (this.atkT > 0) { this.atkT -= dt; if (this.atkT <= 0 && A.attack) A.attack.setEffectiveWeight(0); }
     this.mixer.update(dt);
   }
@@ -237,9 +237,9 @@ class ChimeraBody extends CarvedBody {
     this.t += dt; const { body, head, jaw, gn, tail, legs } = this.parts;
     if (st === 'dead') { this.deadT += dt; this.obj.rotation.z = Math.min(Math.PI / 2, this.deadT * 1.6); return; }
     const k = Math.min(1, speed / 4), f = 3 + speed * 0.9;
-    legs.forEach((l, i) => (l.rotation.x = Math.sin(this.t * f + (i === 0 || i === 3 ? 0 : Math.PI)) * 0.6 * k + (st === 'claw' && i < 2 ? -1.1 * Math.max(0, Math.sin(this.t * 10)) : 0)));
-    body.position.y = 1.55 + Math.abs(Math.sin(this.t * f)) * 0.08 * k; body.rotation.x = st === 'bite' ? -0.15 : 0;
-    head.rotation.x = st === 'bite' ? 0.3 : Math.sin(this.t * 1.1) * 0.05; jaw.rotation.x = st === 'bite' || st === 'attack' ? 0.4 + Math.sin(this.t * 18) * 0.2 : 0.05;
+    legs.forEach((l, i) => (l.rotation.x = st === 'leap' ? (i < 2 ? -0.9 : 0.9) : Math.sin(this.t * f + (i === 0 || i === 3 ? 0 : Math.PI)) * 0.6 * k + (st === 'claw' && i < 2 ? -1.1 * Math.max(0, Math.sin(this.t * 10)) : 0)));
+    body.position.y = (st === 'crouch' ? 1.2 : 1.55) + Math.abs(Math.sin(this.t * f)) * 0.08 * k; body.rotation.x = st === 'bite' ? -0.15 : st === 'breath' ? -0.12 : st === 'crouch' ? 0.12 : 0;
+    head.rotation.x = st === 'bite' ? 0.3 : st === 'breath' ? -0.25 : Math.sin(this.t * 1.1) * 0.05; jaw.rotation.x = st === 'breath' ? 0.75 : st === 'bite' || st === 'attack' ? 0.4 + Math.sin(this.t * 18) * 0.2 : 0.05;
     gn.rotation.z = Math.sin(this.t * 0.9) * 0.15; gn.rotation.x = st === 'roar' ? -0.4 : 0;
     tail.forEach((s, i) => { s.rotation.y = Math.sin(this.t * 2.5 - i * 0.6) * 0.25; s.rotation.x = (st === 'sting' ? -0.55 : -0.12) + Math.sin(this.t * 1.8 - i) * 0.05; });
   }

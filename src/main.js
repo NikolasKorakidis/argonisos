@@ -17,6 +17,8 @@ import { input, endFrame, hit, down } from './input.js';
 import { Player } from './player/player.js';
 import { Inventory } from './game/inventory.js';
 import { ITEMS } from './game/items.js';
+import { cutTerrain, updateCuts } from './world/groundcut.js';
+import { LIGHT_U } from './world/trees.js';
 import { HUD } from './ui/hud.js';
 import { installGame } from './game/game.js';
 import { titleScreen, pauseMenu } from './ui/title.js';
@@ -27,6 +29,7 @@ const $ = (id) => document.getElementById(id);
 // ---- World
 const terrainMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, map: groundDetail, envMapIntensity: 0.4 });
 const pool = new WorkerPool(Math.max(2, Math.min(4, (navigator.hardwareConcurrency || 4) - 1)));
+cutTerrain(terrainMat);           // floors press the ground down under them
 const terrain = new Terrain(scene, terrainMat, pool);
 terrain.requestHeightTexture(1024, WORLD.SIZE).then(setHeightTexture);
 const veg = new Vegetation(scene, pool);
@@ -143,8 +146,9 @@ function loop() {
   updateWater(t, camera.position, LIGHT, skyDome, sunDir, moonDir);
   updateStormWall(t, LIGHT);
   followShadow(focus, lightDir);
+  LIGHT_U.uSunDir.value.copy(lightDir); LIGHT_U.uSunCol.value.copy(sun.color).multiplyScalar(sun.intensity * 0.32);
   terrain.update(camera.position);
-  veg.update(dt, focus); windUniform.value = t; updateGrass(pool, focus);
+  veg.update(dt, focus); windUniform.value = t; updateCuts(focus); updateGrass(pool, focus);
   game.lateUpdate?.(dt, t);
   hud.update(dt, clockText(), S.time >= DAY_FRACTION);
   render();

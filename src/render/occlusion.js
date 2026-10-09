@@ -57,7 +57,7 @@ export class Occlusion {
       if (veg.removed.has(`${c.cx},${c.cz},${i}`)) return;
       e.kind = 'tree'; e.cell = c; e.i = i;
       const single = veg.single(it[s], it[s + 1]); single.position.set(it[s + 2], it[s + 3], it[s + 4]); single.rotation.y = it[s + 5]; single.scale.setScalar(it[s + 6]);
-      e.mats = []; single.traverse((m) => { if (m.isMesh) { const cm = m.material.clone(); cm.transparent = true; cm.depthWrite = false; m.material = cm; m.castShadow = false; e.mats.push(cm); } });
+      e.mats = []; single.traverse((m) => { if (m.isMesh) { const cm = m.material.clone(); cm.transparent = true; cm.depthWrite = false; cm.alphaToCoverage = false;   /* (coverage + blending would dither) */ m.material = cm; m.castShadow = false; e.mats.push(cm); } });
       this.g.scene.add(single); e.single = single;
       e.meshes = c.meshes.filter((m) => m.userData.idx.includes(i)); for (const m of e.meshes) { const k = m.userData.idx.indexOf(i); m.getMatrixAt(k, _m); e.mtx = e.mtx || []; e.mtx.push(_m.clone()); m.setMatrixAt(k, _m.makeScale(0, 0, 0)); m.instanceMatrix.needsUpdate = true; }
     }

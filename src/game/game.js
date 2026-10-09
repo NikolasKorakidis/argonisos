@@ -20,6 +20,7 @@ import { sound, updateAmbience } from '../audio/sound.js';
 import { LIGHT } from '../world/sky.js';
 import { WEATHER, flashSky } from '../world/weather.js';
 import { heightAt, biomeWeights } from '../world/gen.js';
+import { groundAt } from '../world/groundcut.js';
 import { heldModel, isLeftHanded } from '../player/held.js';
 import { updateFx } from '../render/fx.js';
 import { askLight, updateLights } from '../render/lights.js';
@@ -43,6 +44,7 @@ export function installGame(g) {
   g.occlusion = new Occlusion(g);
   g.ITEMS = ITEMS; g.graves = new Graves(g); { const od = g.onDeath; g.onDeath = () => { g.graves.fall(); od?.(); }; }
   g.combat = new Combat(g);
+  g.pickups.landAt = (x, z, fy) => { const gy = Math.max(groundAt(x, z), -1.2); return fy === undefined ? gy : Math.max(gy, g.build.floorAt(x, z, fy + 0.3)); };
   player.floorAt = (p) => Math.max(g.build.floorAt(p.x, p.z, p.y), g.structures.floorAt(p.x, p.z, p.y));
   player.camBlock = (a, b) => g.build.rayBlock(a, b);
   g.underRoof = (p) => g.build.underRoof(p) || g.structures.underRoof(p);
@@ -56,9 +58,9 @@ export function installGame(g) {
   // ---- giving items: into the pack, the rest at your feet
   g.give = (id, n = 1, extra) => {
     const left = inv.add(id, n, extra); if (n - left > 0) hud.pickup(id, n - left);
-    if (left > 0) { g.pickups.drop(id, left, player.pos.x + (Math.random() - 0.5), player.pos.z + (Math.random() - 0.5), extra); hud.toast('Your pack is full'); }
+    if (left > 0) { g.pickups.drop(id, left, player.pos.x + (Math.random() - 0.5), player.pos.z + (Math.random() - 0.5), extra, player.pos.y); hud.toast('Your pack is full'); }
   };
-  hud.onDrop = (i) => { const s = inv.slots[i]; if (!s) return; if (s.worn) unequip(i); const d = inv.drop(i); const f = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)); g.pickups.drop(d.id, d.n, player.pos.x + f.x * 1.2, player.pos.z + f.z * 1.2, d.dur ? { dur: d.dur } : undefined); };
+  hud.onDrop = (i) => { const s = inv.slots[i]; if (!s) return; if (s.worn) unequip(i); const d = inv.drop(i); const f = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)); g.pickups.drop(d.id, d.n, player.pos.x + f.x * 1.2, player.pos.z + f.z * 1.2, d.dur ? { dur: d.dur } : undefined, player.pos.y); };
 
   // ---- equipment: one item in the right hand, a shield or bow in the left; armour in its own slots
   const worn = (slot) => inv.slots.findIndex((s) => s?.worn === slot);

@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { PIECES, PIECE } from './pieces.js';
 import { heightAt } from '../world/gen.js';
 import { clearGrass } from '../world/grass.js';
+import { setCut } from '../world/groundcut.js';
 import { camera } from '../render/core.js';
 import { input, hit } from '../input.js';
 import { burst, dust, addShake } from '../render/fx.js';
@@ -180,15 +181,28 @@ export class Build {
     for (const p of this.neighbours(def, pos, rot, self)) { const up = pos.y - p.pos.y > 0.3 ? V_LOSS : H_LOSS; s = Math.max(s, p.support * (1 - up)); }
     return { s, grounded: false };
   }
+  // Where two pieces share a surface (wall tops at a corner, a panel's overhang on the one below) the depth buffer can't
+  // tell them apart and they flicker. Each piece gets a small, fixed depth priority instead, so one always wins: roofs over
+  // gable ends over walls over beams over floors over furniture, and pieces of one kind at right angles (walls meeting at
+  // a corner) alternate.
+  depthRank(def, rot) {
+    const rank = { Floors: 1, Beams: 2, Fences: 2, Walls: 3 }[def.cat] ?? (def.cat === 'Roofs' ? (def.roof ? 5 : 4) : 0);
+    const alt = ((Math.round(rot / (Math.PI / 2)) % 2) + 2) % 2, k = rank * 2 + alt;
+    return { polygonOffset: k > 0, polygonOffsetFactor: -0.12 * k, polygonOffsetUnits: -k };
+  }
   place(id, pos, rot, opts = {}) {
     const def = PIECE[id], obj = new THREE.Group(); obj.position.copy(pos); obj.rotation.y = rot;
     const inner = new THREE.Group(); obj.add(inner);
     const p = { uid: opts.uid ?? 'pc' + this.seq++, id, def, obj, inner, pos: pos.clone(), rot, hp: opts.hp ?? def.hp, state: opts.state || {}, support: 1, grounded: false, mats: [] };
-    for (const { geo, mat } of def.build()) { const m2 = mat.clone(); p.mats.push(m2); const m = new THREE.Mesh(geo, m2); m.castShadow = m.receiveShadow = true; m.userData.piece = p; inner.add(m); this.meshes.push(m); }
+    const depth = this.depthRank(def, rot);
+    for (const { geo, mat } of def.build()) { const m2 = mat.clone(); Object.assign(m2, depth); p.mats.push(m2); const m = new THREE.Mesh(geo, m2); m.castShadow = m.receiveShadow = true; m.userData.piece = p; inner.add(m); this.meshes.push(m); }
     this.g.scene.add(obj);
     p.snaps = this.snapsOf(def, pos, rot); p.boxes = this.boxes(def, pos, rot);
     this.index(p, true); this.placed.push(p);
     this.addColliders(p);
+    // a floor near the ground presses it down under its boards (flat floors only: stairs keep the slope)
+    const ft = def.cat === 'Floors' && def.tops?.length === 1 && def.tops[0].y !== undefined ? def.tops[0] : null;
+    if (ft) { const c = toWorld(pos, rot, [(ft.x0 + ft.x1) / 2, 0, (ft.z0 + ft.z1) / 2]); setCut(p.uid, { x: c.x, z: c.z, hw: Math.abs(ft.x1 - ft.x0) / 2, hd: Math.abs(ft.z1 - ft.z0) / 2, rot, y: pos.y + ft.y - 0.3 }); }
     // grass doesn't grow through floors and furniture
     const bb = p.boxes.reduce((a, b) => a.union(b), new THREE.Box3()); if (bb.min.y < heightAt(pos.x, pos.z) + 1.2) clearGrass(p.uid, { x: pos.x, z: pos.z, hw: (def.tops?.[0] ? Math.abs(def.tops[0].x1 - def.tops[0].x0) / 2 : (def.solids?.[0]?.[3] ?? 1) / 2) + 0.35, hd: (def.tops?.[0] ? Math.abs(def.tops[0].z1 - def.tops[0].z0) / 2 : (def.solids?.[0]?.[5] ?? 1) / 2) + 0.35, rot });
     if (def.fire || def.torch) { p.state.fuel ??= def.fire ? 3 : 4; p.state.lit ??= true; this.addFlame(p); }
@@ -208,9 +222,9 @@ export class Build {
   }
   remove(p, refund) {
     this.g.scene.remove(p.obj); this.meshes = this.meshes.filter((m) => m.userData.piece !== p); this.index(p, false); this.placed.splice(this.placed.indexOf(p), 1);
-    this.g.colliders.removeGroup(p.uid); clearGrass(p.uid, null);
+    this.g.colliders.removeGroup(p.uid); clearGrass(p.uid, null); setCut(p.uid, null);
     if (refund) for (const [id, n] of Object.entries(p.def.mats)) this.g.give(id, n);
-    if (p.inv) for (const s of p.inv.slots) if (s) this.g.pickups.drop(s.id, s.n, p.pos.x + Math.random() - 0.5, p.pos.z + Math.random() - 0.5, s.dur ? { dur: s.dur } : undefined);
+    if (p.inv) for (const s of p.inv.slots) if (s) this.g.pickups.drop(s.id, s.n, p.pos.x + Math.random() - 0.5, p.pos.z + Math.random() - 0.5, s.dur ? { dur: s.dur } : undefined, p.pos.y);
     if (p.flame) p.flame = null;
     if (this.chest === p) this.closeChest();
   }

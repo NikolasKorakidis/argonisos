@@ -68,11 +68,17 @@ function mergeGeos(geos) {
 // A sloped slab from the eave (z = 0, y = 0) up to the ridge (z = -run, y = rise), width w along x, with a little overhang
 function slab(w, run, rise, t, mat, over = 0.3) {
   const len = Math.hypot(run, rise) + over, a = Math.atan2(rise, run);
-  const g = box(w, t, len, 0, 0, 0, 1 / 3).translate(0, t / 2, -len / 2 + over).rotateX(a);
+  const g = box(w, t, len, 0, 0, 0, 1 / 3).translate(0, t / 2, -len / 2 + over);
+  // thinner towards the ridge: a panel stacked above overlaps this one's top end with its overhang, and without the step
+  // the two thatch surfaces would lie in one plane and flicker
+  const q = g.attributes.position; for (let i = 0; i < q.count; i++) if (q.getY(i) > t / 2 && q.getZ(i) < -len / 2) q.setY(i, q.getY(i) - 0.04);
+  g.rotateX(a);
   return part(g, mat);
 }
 function triangle(base, height, t, mat) {   // a gable end: base along x at y = 0, apex at (0, height)
-  const s = new THREE.Shape(); s.moveTo(-base / 2, 0); s.lineTo(base / 2, 0); s.lineTo(0, height); s.closePath();
+  // its sloped edges sit 3 cm under the roof's underside (in the same plane they flickered against the thatch)
+  const b = base / 2, L = Math.hypot(b, height), d = 0.03, hb = b - (d * L) / height, hh = height - (d * L) / b;
+  const s = new THREE.Shape(); s.moveTo(-hb, 0); s.lineTo(hb, 0); s.lineTo(0, hh); s.closePath();
   const g = new THREE.ExtrudeGeometry(s, { depth: t, bevelEnabled: false }).translate(0, 0, -t / 2);
   const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 3, uv.getY(i) / 3);
   return part(g, mat);
@@ -109,8 +115,9 @@ export const PIECES = [
   ...[[6, 3, 'roof63', 'Thatch Roof 6×3', { wood: 2, rope: 1 }, 400], [6, 5, 'roof65', 'Thatch Roof 6×5', { wood: 2, rope: 1 }, 400], [9, 4, 'roof94', 'Thatch Roof 9×4', { wood: 4, rope: 2 }, 500]].map(([span, rise, id, name, mats, hp]) => {
     const run = span / 2;
     return { id, name, cat: 'Roofs', icon: 'roof', mats, hp, roofPitch: Math.atan2(rise, run),
-      parts: () => [slab(W, run, rise, 0.22, MAT.thatch), part(box(0.2, 0.2, Math.hypot(run, rise) + 0.3, -W / 2 + 0.1, 0, 0).translate(0, 0.1, -(Math.hypot(run, rise) + 0.3) / 2 + 0.3).rotateX(Math.atan2(rise, run)), MAT.beam),
-        part(box(0.2, 0.2, Math.hypot(run, rise) + 0.3, W / 2 - 0.1, 0, 0).translate(0, 0.1, -(Math.hypot(run, rise) + 0.3) / 2 + 0.3).rotateX(Math.atan2(rise, run)), MAT.beam)],
+      // rafters along both sides: a centimetre proud of the thatch's ends, a little below its underside and short of its
+      // eave and ridge, so no rafter face lies in a thatch face (they flickered against each other)
+      parts: () => [slab(W, run, rise, 0.22, MAT.thatch), ...[-1, 1].map((sd) => part(box(0.2, 0.2, Math.hypot(run, rise) + 0.26, sd * (W / 2 - 0.09), 0, 0).translate(0, 0.05, -(Math.hypot(run, rise) + 0.3) / 2 + 0.3).rotateX(Math.atan2(rise, run)), MAT.beam))],
       snaps: [[-W / 2, 0, 0], [W / 2, 0, 0], [0, 0, 0], [-W / 2, rise, -run], [W / 2, rise, -run], [0, rise, -run]], solids: [],
       tops: [{ x0: -1.5, x1: 1.5, z0: 0, z1: -run, y0: 0.25, y1: rise + 0.25 }], roof: true };
   }),
@@ -165,5 +172,13 @@ function stairs(rise, run) {
   for (let i = 0; i < n; i++) P.push(part(box(1.8, 0.08, run / n + 0.06, 0, (i + 1) * (rise / n) - 0.04, -(i + 0.5) * (run / n)), MAT.plank));
   return P;
 }
-for (const p of PIECES) { p.meshes = null; p.build = () => (p.meshes ||= merge(p.parts())); }
+// Trim (every part after the main panel) is grown by a couple of millimetres, a different amount per part, so that no two
+// parts of a piece ever share a face exactly: where they did (a wall's posts and top beam on its planks, a floor's edge
+// beams) the two surfaces flickered against each other
+function grow({ geo, mat }, k) {
+  const d = 0.0015 * k; geo.computeBoundingBox(); const b = geo.boundingBox, c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
+  const f = (n) => (n > 1e-4 ? (n + 2 * d) / n : 1);
+  return { geo: geo.translate(-c.x, -c.y, -c.z).scale(f(s.x), f(s.y), f(s.z)).translate(c.x, c.y, c.z), mat };
+}
+for (const p of PIECES) { p.meshes = null; p.build = () => (p.meshes ||= merge(p.parts().map((q, k) => (k && !p.door ? grow(q, k) : q)))); }
 export const PIECE = Object.fromEntries(PIECES.map((p) => [p.id, p]));

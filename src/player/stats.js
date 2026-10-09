@@ -16,6 +16,7 @@ export const CONDITIONS = {
   swift: { name: 'Swift', icon: 'swift', time: 60, desc: '+10% movement speed.' },
   claws: { name: "Chimera's Claws", icon: 'blessing', time: 300, desc: 'Your bare hands strike like claws.' },
   poisoned: { name: 'Poisoned', icon: 'spoiled', time: 6, desc: 'Losing health to venom.' },
+  burning: { name: 'Burning', icon: 'fire', time: 3, desc: 'Losing health to flames.' },
   stunned: { name: 'Stunned', icon: 'stunned', time: 4, desc: 'Cannot act.' },
   zeusBuff: { name: "Zeus's Favour", icon: 'zeus', time: 90, desc: 'Zeus lifts you up after death: +75% movement speed, 75% less stamina used.' },
   zeusBlessing: { name: "Zeus's Blessing", icon: 'blessing', time: 600, desc: '+30 health, +10% movement speed, +10% melee and bow damage, +10% block.' },

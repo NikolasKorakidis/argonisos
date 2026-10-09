@@ -3,7 +3,7 @@
 // camera-facing card painted from an atlas rendered once at start-up, a single draw call per block. Shader cut-offs at
 // NEAR_R and MID_R put each tree in exactly one band, so the hand-overs are seamless. Layout comes from the workers.
 import * as THREE from 'three';
-import { propGeo, propMat, leafMat, TREE_BUILDERS, mergeParts, rr, isLow as PROP_LOW } from './trees.js';
+import { propGeo, propMat, leafMat, TREE_BUILDERS, mergeParts, rr, isLow as PROP_LOW, A2C_FRAG } from './trees.js';
 import { SPECIES, STRIDE, CELL } from './flora.js';
 import { renderer, sun, hemi } from '../render/core.js';
 
@@ -69,9 +69,10 @@ function buildAtlas() {
   renderer.setScissorTest(prev.sc); renderer.setRenderTarget(prev.rt); renderer.setClearColor(prev.cc, prev.ca); renderer.setViewport(0, 0, renderer.domElement.width / renderer.getPixelRatio(), renderer.domElement.height / renderer.getPixelRatio());
   ATLAS.tex = rt.texture;
 }
-const impMat = new THREE.MeshBasicMaterial({ alphaTest: 0.5, side: THREE.DoubleSide, color: 0xffffff });
+const impMat = new THREE.MeshBasicMaterial({ alphaTest: 0.5, side: THREE.DoubleSide, color: 0xffffff, alphaToCoverage: true });
 impMat.onBeforeCompile = (sh) => {
   Object.assign(sh.uniforms, VEG_U);
+  sh.fragmentShader = sh.fragmentShader.replace('#include <alphatest_fragment>', A2C_FRAG);
   sh.vertexShader = 'uniform vec2 uVegC; uniform float uNearR, uMidR, uFarR; attribute vec4 aTile; attribute vec3 aSize;\n' + sh.vertexShader
     .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = aTile.xy + uv * aTile.zw;')
     .replace('#include <begin_vertex>', `

@@ -60,7 +60,7 @@ export class Graves {
   // on death: put everything you carry in a grave
   fall() { const P = this.g.player, slots = this.g.inv.slots.map((s) => (s ? { ...s, worn: undefined } : null)).filter(Boolean); if (!slots.length) return; this.make(P.pos.x, P.pos.y, P.pos.z, slots); this.g.inv.slots.fill(null); this.g.inv.onChange?.(); }
   interactable(pos) { for (const gr of this.list) if (Math.hypot(gr.x - pos.x, gr.z - pos.z) < 2.2) return { label: 'Take back your belongings', sub: 'Your grave', use: () => this.recover(gr) }; return null; }
-  recover(gr) { for (const s of gr.slots) { const left = this.g.inv.add(s.id, s.n, s.dur !== undefined ? { dur: s.dur } : {}); if (left) this.g.pickups.drop(s.id, left, gr.x, gr.z); } this.g.scene.remove(gr.grp); this.list.splice(this.list.indexOf(gr), 1); this.g.sound?.('reveal'); this.g.hud.toast('You take back what was yours'); }
+  recover(gr) { for (const s of gr.slots) { const left = this.g.inv.add(s.id, s.n, s.dur !== undefined ? { dur: s.dur } : {}); if (left) this.g.pickups.drop(s.id, left, gr.x, gr.z, undefined, gr.y); } this.g.scene.remove(gr.grp); this.list.splice(this.list.indexOf(gr), 1); this.g.sound?.('reveal'); this.g.hud.toast('You take back what was yours'); }
   update(dt) { const t = performance.now() * 0.001; for (const gr of this.list) gr.grp.children[2].material.opacity = 0.14 + Math.sin(t * 2) * 0.05; void dt; }
   toJSON() { return this.list.map((g) => ({ x: g.x, y: g.y, z: g.z, slots: g.slots })); }
   load(list) { for (const o of list) this.make(o.x, o.y, o.z, o.slots); }

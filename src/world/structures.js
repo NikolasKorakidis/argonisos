@@ -16,6 +16,14 @@ const marbleTex = canvasTex((g, n) => {
   for (let k = 0; k < 9; k++) { g.strokeStyle = `rgba(130,120,105,${0.12 + rnd() * 0.15})`; g.lineWidth = 0.6 + rnd() * 1.4; g.beginPath(); let x = rnd() * n, y = 0; g.moveTo(x, y); while (y < n) { x += rr(-14, 14); y += rr(8, 20); g.lineTo(x, y); } g.stroke(); }
   for (let i = 0; i < 300; i++) { g.fillStyle = `rgba(110,100,80,${rnd() * 0.08})`; g.fillRect(rnd() * n, rnd() * n, rr(1, 3), rr(1, 3)); }
 });
+// worn flagstones: irregular slabs in dusty greys with dark joints and a little moss
+const flagTex = canvasTex((g, n) => {
+  let fs = 99; const fr = () => ((fs = (fs * 16807) % 2147483647) - 1) / 2147483646;   // its own dice (the shared ones lay out the sites)
+  g.fillStyle = '#4a443a'; g.fillRect(0, 0, n, n); const rows = 4;
+  for (let r = 0; r < rows; r++) { const h = n / rows; let x = -fr() * 60; while (x < n) { const w = 90 + fr() * 80, v = 120 + fr() * 45; g.fillStyle = `rgb(${v},${v - 6},${v - 16})`; g.fillRect(x + 3, r * h + 3, w - 6, h - 6);
+    for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(70,62,50,${fr() * 0.18})`; g.beginPath(); g.arc(x + fr() * w, r * h + fr() * h, 1 + fr() * 5, 0, 7); g.fill(); }
+    if (fr() < 0.3) { g.fillStyle = 'rgba(80,100,50,.25)'; g.beginPath(); g.arc(x + fr() * w, r * h + fr() * h, 6 + fr() * 16, 0, 7); g.fill(); } x += w; } }
+});
 const stoneTex = canvasTex((g, n) => {
   g.fillStyle = '#6e665a'; g.fillRect(0, 0, n, n);
   const rows = 8; for (let r = 0; r < rows; r++) { const h = n / rows; let x = (r % 2) * rr(20, 50) - 40; while (x < n) { const w = rr(60, 130), v = 105 + rnd() * 55; g.fillStyle = `rgb(${v},${v - 8},${v - 22})`; g.fillRect(x + 2, r * h + 2, w - 4, h - 4);
@@ -31,7 +39,7 @@ const friezeTex = canvasTex((g, n) => {   // triglyphs and painted metopes
 }, 512);
 friezeTex.repeat.set(1, 2);
 export const SMAT = {
-  marble: new THREE.MeshStandardMaterial({ map: marbleTex, roughness: 0.5, color: 0xd9d2c4 }),
+  marble: new THREE.MeshStandardMaterial({ map: marbleTex, roughness: 0.5, color: 0xc8c0b1 }),   // (no brighter: in full sun it burned out to white)
   stone: new THREE.MeshStandardMaterial({ map: stoneTex, roughness: 0.95, color: 0xd8ccb8 }),
   moss: new THREE.MeshStandardMaterial({ map: mossTex, roughness: 1 }),
   tile: new THREE.MeshStandardMaterial({ map: tileTex, roughness: 0.85 }),
@@ -43,7 +51,10 @@ export const SMAT = {
   plaster: new THREE.MeshStandardMaterial({ color: 0xd8cbb0, roughness: 0.95, map: mossTex }),
   flame: new THREE.MeshBasicMaterial({ color: 0xffb050, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
   glyph: new THREE.MeshStandardMaterial({ color: 0xffe7a0, emissive: 0xffc860, emissiveIntensity: 1.6, transparent: true, opacity: 0.9 }),
+  flags: new THREE.MeshStandardMaterial({ map: flagTex, roughness: 0.95, color: 0xb9ab96 }),
+  bone: new THREE.MeshStandardMaterial({ color: 0xd9cfb4, roughness: 0.75 }),
 };
+const _nav = new THREE.Vector3();
 
 // ---- kit: every helper pushes [geometry, material] onto a list in site-local coordinates
 const uvBox = (w, h, d, s = 1 / 3) => { const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, nn = g.attributes.normal; for (let i = 0; i < uv.count; i++) { const ax = Math.abs(nn.getX(i)), ay = Math.abs(nn.getY(i)); uv.setXY(i, uv.getX(i) * (ax > 0.5 ? d : w) * s, uv.getY(i) * (ay > 0.5 ? d : h) * s); } return g; };
@@ -179,10 +190,14 @@ export class Structures {
   // ---- the Labyrinth: the Minotaur's ruined arena
   labyrinth(s) {
     const ctx = this.site(s, 0), P = ctx.P;
-    // three broken rings of wall with offset gaps, a ring of columns, a raised altar in the middle
+    // its own dice for the decoration, so the other sites (and their clues) come out as they always have
+    let ls = 1234; const lr = (a, b) => a + (((ls = (ls * 16807) % 2147483647) - 1) / 2147483646) * (b - a);
+    // three broken rings of wall with offset gaps, a ring of columns, a raised altar in the middle. The gaps are
+    // remembered, so the Minotaur and the dead can find their way through the rings (navTarget)
+    const gaps = { 22: [], 15: [], 9: [] };
     for (const [R, gap, ruin] of [[22, 0.3, 0.45], [15, 2.1, 0.35], [9, 4.2, 0.25]]) {
       const n = Math.ceil(R * 0.9);
-      for (let i = 0; i < n; i++) { const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2; if (Math.abs(Math.sin((a0 - gap) / 2)) < 0.12) continue;
+      for (let i = 0; i < n; i++) { const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2; if (Math.abs(Math.sin((a0 - gap) / 2)) < 0.12) { gaps[R].push([a0, a1]); continue; }
         const x0 = Math.cos(a0) * R, z0 = Math.sin(a0) * R, x1 = Math.cos(a1) * R, z1 = Math.sin(a1) * R, h = 3.2 * (1 - ruin * Math.abs(Math.sin(i * 1.7 + R))); rubble(P, x0, z0, x1, z1, h, SMAT.stone, 0.15); this.wall(ctx, x0, z0, x1, z1, h, 0.42); }
     }
     for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2 + 0.3, x = Math.cos(a) * 18.5, z = Math.sin(a) * 18.5, br = i % 3 === 1 ? rr(0.25, 0.6) : 0; column(P, x, 0, z, 5.5, 0.5, SMAT.marble, br); this.solid(ctx, x, z, 0.55); }
@@ -193,7 +208,37 @@ export class Structures {
     this.solid(ctx, 0, 0, 1.3, top + 1);
     this.stepTops(ctx, 5, 5, 3, 0.35);
     this.uses.push({ kind: 'summon', boss: 'minotaur', at: this.w(ctx, 0, 1.4), r: 3.2, center: this.w(ctx, 0, 0) });
-    this.labyrinthCtx = ctx; this.finish(ctx, { r: 10 });
+    // the arena floor: worn flagstones from the outer wall in
+    const floor = new THREE.CylinderGeometry(23.4, 23.4, 0.08, 72, 1).translate(0, 0.04, 0), fu = floor.attributes.uv, fp = floor.attributes.position;
+    for (let i = 0; i < fu.count; i++) fu.setXY(i, fp.getX(i) / 2.4, fp.getZ(i) / 2.4);
+    P.push([floor, SMAT.flags]);
+    // the gate: two great pillars at the outer gap, a lintel, and the bull's horns over the way in
+    const [g0, g1] = gaps[22][0], gp = [g0, g1].map((a) => [Math.cos(a) * 22, Math.sin(a) * 22]);
+    for (const [x, z] of gp) { column(P, x, 0, z, 6.2, 0.7, SMAT.stone); this.solid(ctx, x, z, 0.75); }
+    const gl = Math.hypot(gp[1][0] - gp[0][0], gp[1][1] - gp[0][1]) + 1.6, gx = (gp[0][0] + gp[1][0]) / 2, gz = (gp[0][1] + gp[1][1]) / 2, ga = Math.atan2(gp[1][1] - gp[0][1], gp[1][0] - gp[0][0]);
+    P.push([uvBox(gl, 0.9, 1.3).rotateY(-ga).translate(gx, 6.6, gz), SMAT.stone]);
+    for (const sx of [-1, 1]) P.push([new THREE.TorusGeometry(1.5, 0.2, 6, 14, Math.PI * 0.8).rotateZ(sx > 0 ? -0.2 : Math.PI + 0.2).rotateY(-ga).translate(gx + Math.cos(ga) * sx * 0.7, 7.6, gz + Math.sin(ga) * sx * 0.7), SMAT.bronze]);
+    // braziers either side of the inner gaps, lighting the way to the altar
+    for (const R of [15, 9]) { const [a0, a1] = gaps[R][0]; for (const a of [a0 - 0.12, a1 + 0.12]) { const x = Math.cos(a) * (R - 1.1), z = Math.sin(a) * (R - 1.1);
+      P.push([new THREE.CylinderGeometry(0.22, 0.3, 1.1, 8).translate(x, 0.55, z), SMAT.stone], [new THREE.CylinderGeometry(0.42, 0.24, 0.3, 10).translate(x, 1.25, z), SMAT.bronze]); this.fire(ctx, x, 1.35, z, 0.8); this.solid(ctx, x, z, 0.45); } }
+    // bones of those who came before, along the corridors
+    for (let i = 0; i < 22; i++) {
+      const R = i % 2 ? lr(10.5, 13.5) : lr(16.5, 20.5), a = lr(0, Math.PI * 2), x = Math.cos(a) * R, z = Math.sin(a) * R;
+      for (let k = 0; k < 4; k++) P.push([new THREE.CylinderGeometry(0.035, 0.03, lr(0.35, 0.6), 5).rotateZ(Math.PI / 2).rotateY(lr(0, 6.3)).translate(x + lr(-0.4, 0.4), 0.11, z + lr(-0.4, 0.4)), SMAT.bone]);
+      if (i % 3 === 0) { P.push([new THREE.IcosahedronGeometry(0.15, 1).scale(1, 0.9, 1.2).translate(x, 0.2, z), SMAT.bone], [new THREE.BoxGeometry(0.16, 0.06, 0.12).translate(x, 0.09, z + 0.12), SMAT.bone]); }
+    }
+    this.lab = { c: this.w(ctx, 0, 0), gaps };
+    this.labyrinthCtx = ctx; this.finish(ctx, { r: 23.5 });
+  }
+  // A waypoint for something inside the Labyrinth trying to reach a point on the other side of a ring of wall: the
+  // middle of that ring's gap (and once there, a step through it). Null when the way is open.
+  navTarget(from, to) {
+    const L = this.lab; if (!L) return null;
+    const band = (p) => { const r = Math.hypot(p.x - L.c.x, p.z - L.c.z); return r < 9 ? 0 : r < 15 ? 1 : r < 22 ? 2 : r < 30 ? 3 : -1; };
+    const bf = band(from), bt = band(to); if (bf < 0 || bt < 0 || bf === bt || (bf === 3 && bt === 3)) return null;
+    const R = [9, 15, 22][bt > bf ? bf : bf - 1], [a0, a1] = L.gaps[R][0], a = (a0 + a1) / 2, gx = L.c.x + Math.cos(a) * R, gz = L.c.z + Math.sin(a) * R;
+    if (Math.hypot(from.x - gx, from.z - gz) > 2.2) return _nav.set(gx, from.y, gz);
+    const R2 = R + (bt > bf ? 3 : -3); return _nav.set(L.c.x + Math.cos(a) * R2, from.y, L.c.z + Math.sin(a) * R2);   // through it
   }
   // ---- the Chimera's shrine: a sunken, overgrown court of dark stone
   shrine(s) {

@@ -45,8 +45,55 @@ export function treeDensity(x, z, h, w) {
   const valtos = 1 / 160;
   return w.p * pedias + w.y * yleos + w.v * valtos;
 }
-// Lay out one cell: returns a flat Float32Array of [species, variant, x, y, z, rotY, scale] per item
+// Lay out one cell: returns a flat Float32Array of [species, variant, x, y, z, rotY, scale] per item. Trees are kept out of
+// rocks and boulders (their own cell's and the neighbours'): one standing in a rock is moved just clear of it, staying in
+// its cell and keeping its place in the list (felled trees are remembered by index); if it can't, it isn't drawn.
 export function layoutCell(cx, cz) {
+  const it = rawCell(cx, cz).slice(), rocks = rocksAround(cx, cz), x0 = cx * CELL, z0 = cz * CELL;
+  for (let i = 0; i < it.length; i += STRIDE) {
+    const sp = SPECIES[it[i]]; if (sp.res !== 'tree') continue;
+    const tr = sp.col * it[i + 6];
+    for (let pass = 0; pass < 3; pass++) {
+      let moved = false;
+      for (let k = 0; k < rocks.length; k += 3) {
+        const dx = it[i + 2] - rocks[k], dz = it[i + 4] - rocks[k + 1], d = Math.hypot(dx, dz), need = rocks[k + 2] + tr + 0.3;
+        if (d >= need) continue;
+        const a = d > 1e-3 ? Math.atan2(dz, dx) : hash2(i, k) * 6.283;
+        it[i + 2] = Math.min(x0 + CELL - 0.05, Math.max(x0 + 0.05, rocks[k] + Math.cos(a) * need));
+        it[i + 4] = Math.min(z0 + CELL - 0.05, Math.max(z0 + 0.05, rocks[k + 1] + Math.sin(a) * need)); moved = true;
+      }
+      if (!moved) break;
+    }
+    if (obstructed(rocks, it[i + 2], it[i + 4], tr)) it[i + 6] = 0;   // nowhere to go in its cell
+    else it[i + 3] = heightAt(it[i + 2], it[i + 4]) - 0.05;
+  }
+  return it;
+}
+const obstructed = (list, x, z, r) => { for (let k = 0; k < list.length; k += 3) if (Math.hypot(x - list[k], z - list[k + 1]) < list[k + 2] + r + 0.25) return true; return false; };
+// raw layouts, cached (neighbouring cells are asked for again and again)
+const RAW = new Map();
+function rawCell(cx, cz) {
+  const k = cx + ',' + cz; let r = RAW.get(k);
+  if (!r) { r = layoutRaw(cx, cz); RAW.set(k, r); if (RAW.size > 160) RAW.delete(RAW.keys().next().value); }
+  return r;
+}
+// rocks and boulders in a cell and its eight neighbours, as a flat [x, z, radius, ...]
+function rocksAround(cx, cz) {
+  const out = [];
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const it = rawCell(cx + i, cz + j); for (let o = 0; o < it.length; o += STRIDE) { const sp = SPECIES[it[o]]; if (sp.res === 'rock') out.push(it[o + 2], it[o + 4], sp.col * it[o + 6]); } }
+  return out;
+}
+// everything solid around a cell (rocks and tree trunks where they finally stand), for things laid out on the ground
+const SOLID = new Map();
+export function solidsAround(cx, cz) {
+  const k = cx + ',' + cz; let out = SOLID.get(k); if (out) return out;
+  out = rocksAround(cx, cz);
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const it = layoutCell(cx + i, cz + j); for (let o = 0; o < it.length; o += STRIDE) { const sp = SPECIES[it[o]]; if (sp.res === 'tree' && it[o + 6] > 0) out.push(it[o + 2], it[o + 4], sp.col * it[o + 6]); } }
+  SOLID.set(k, out); if (SOLID.size > 80) SOLID.delete(SOLID.keys().next().value);
+  return out;
+}
+export const insideSolid = (list, x, z, r) => obstructed(list, x, z, r);
+function layoutRaw(cx, cz) {
   const out = [], x0 = cx * CELL, z0 = cz * CELL, STEP = 4, w = { p: 0, y: 0, v: 0, r: 0 };
   let k = 0;
   const rnd = () => hash2(cx * 7919 + (k++), cz * 104729 - k * 31);

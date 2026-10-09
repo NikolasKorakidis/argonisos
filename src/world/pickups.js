@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { heightAt, biomeWeights, hash2, fbm } from './gen.js';
 import { clearGrass } from './grass.js';
 import { siteClear } from './sites.js';
+import { solidsAround, insideSolid } from './flora.js';
+import { cutLimit, onCutsChanged } from './groundcut.js';
 
 const CELL = 64, RANGE = 110, REGROW_DAYS = 3;
 const rnd = (a, b) => hash2(a * 13.37 + b * 0.71, b * 7.13 - a * 1.9);
@@ -45,12 +47,12 @@ function counts(w, x, z) {
 export function layoutPickups(cx, cz) {
   const out = [], x0 = cx * CELL, z0 = cz * CELL, w = biomeWeights(x0 + 32, z0 + 32, { p: 0, y: 0, v: 0, r: 0 });
   if (w.v > 0.4) return out;
-  const C = counts(w, x0 + 32, z0 + 32); let k = 0;
+  const C = counts(w, x0 + 32, z0 + 32), solid = solidsAround(cx, cz); let k = 0;
   for (const [kind, n] of Object.entries(C)) {
     const whole = Math.floor(n) + (rnd(cx * 31 + k, cz * 17 - k) < n % 1 ? 1 : 0);
     for (let i = 0; i < whole; i++, k++) {
       const x = x0 + rnd(cx + k * 3.1, cz - k) * CELL, z = z0 + rnd(cx - k * 1.7, cz + k * 2.3) * CELL, h = heightAt(x, z);
-      if (h < 0.8 || siteClear(x, z)) continue;
+      if (h < 0.8 || siteClear(x, z) || insideSolid(solid, x, z, 0.35)) continue;   // never inside a rock or a trunk
       const s = Math.hypot(heightAt(x + 1, z) - h, heightAt(x, z + 1) - h); if (s > 0.8) continue;
       out.push({ id: `${cx},${cz},${k}`, kind, x, z, y: h, rot: rnd(k, cx + cz) * 6.28 });
     }
@@ -64,7 +66,7 @@ export class Pickups {
     this.drops = [];                                                     // { id, item, n, x, y, z, extra }
     this.meshes = {}; this.dirty = true; this.day = 1; this.seq = 0;
     for (const [k, K] of Object.entries(KINDS)) { const { geo, mat } = K.model(); const m = new THREE.InstancedMesh(geo, mat, 1024); m.count = 0; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; scene.add(m); this.meshes[k] = m; }
-    this.visible = [];
+    this.visible = []; onCutsChanged.add(() => { this.dirty = true; });
     // a patch of bare earth and pebbles under each one, tilted to the slope
     const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
     const gr = x.createRadialGradient(64, 64, 4, 64, 64, 62); gr.addColorStop(0, 'rgba(112,92,64,0.95)'); gr.addColorStop(0.55, 'rgba(104,86,58,0.75)'); gr.addColorStop(1, 'rgba(96,80,54,0)'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
@@ -94,7 +96,8 @@ export class Pickups {
       if (np < 2048) { nrm.set(heightAt(p.x - 0.5, p.z) - heightAt(p.x + 0.5, p.z), 1, heightAt(p.x, p.z - 0.5) - heightAt(p.x, p.z + 0.5)).normalize(); qq.setFromUnitVectors(up, nrm).multiply(q);
         v.set(p.x, p.y + 0.03, p.z); this.patch.setMatrixAt(np++, m4.compose(v, qq, ss.setScalar(rad))); }
     };
-    for (const list of this.cells.values()) for (const p of list) if (!this.isTaken(p.id)) put(p.kind, p);
+    // (natural ones under a floor you've built stay hidden: the ground there is pressed down below the boards)
+    for (const list of this.cells.values()) for (const p of list) if (!this.isTaken(p.id) && cutLimit(p.x, p.z) > p.y - 0.05) put(p.kind, p);
     for (const d of this.drops) put('drop', d);
     // keep the grass short round everything lying about, so it can be found
     const keep = new Set(this.visible.map((p) => 'pk' + p.id));
@@ -116,7 +119,8 @@ export class Pickups {
     if (v.kind === 'drop') { this.drops.splice(this.drops.indexOf(v), 1); return [v.item, v.n, v.extra]; }
     this.taken.set(v.id, this.day); const K = KINDS[v.kind]; return [K.item, K.n[0] + Math.floor(rnd(v.x, v.z) * (K.n[1] - K.n[0] + 1))];
   }
-  drop(item, n, x, z, extra) { const y = Math.max(heightAt(x, z), -1.2); const d = { id: 'd' + this.seq++, kind: 'drop', item, n, x, y, z, rot: Math.random() * 6.28, extra }; this.drops.push(d); this.dirty = true; return d; }
+  // fromY: the height it falls from (the player, a creature, a chest), so it lands on a floor rather than the ground below it
+  drop(item, n, x, z, extra, fromY) { const y = this.landAt ? this.landAt(x, z, fromY) : Math.max(heightAt(x, z), -1.2); const d = { id: 'd' + this.seq++, kind: 'drop', item, n, x, y, z, rot: Math.random() * 6.28, extra }; this.drops.push(d); this.dirty = true; return d; }
   toJSON() { return { taken: [...this.taken], drops: this.drops }; }
   load(o) { this.taken = new Map(o.taken); this.drops = o.drops || []; this.dirty = true; }
 }
