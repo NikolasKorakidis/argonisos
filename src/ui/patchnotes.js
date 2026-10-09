@@ -26,12 +26,22 @@ export const PATCHES = [
         'Floors you build press the ground down beneath them: no more grass or earth poking through your boards on a slope.',
         'The Labyrinth has been rebuilt: a paved arena, a great horned gate, braziers lighting the way in, and the bones of those who came before.',
       ] },
+      { t: 'Places of the trial', icon: 'temple', items: [
+        '<b>The Ancient Temple of Zeus</b> has been rebuilt inside and out: the gods on painted pediments, gilded palmettes, a paved sacred way between cypresses and votive statues, and inside a painted hall under a ceiling of golden stars, with a dark pool before an ivory-and-gold Zeus lit by bronze tripods.',
+        '<b>The abandoned farmhouse</b> is a real Greek farmstead now: whitewashed walls, half its tiled roof fallen in, a walled yard with a well, a clay oven, storage jars and an olive, a vine over the door, and inside the hearth, a loom and the shelves the family left.',
+        '<b>The Giant caves</b> are great rocky outcrops with moss on top and stalactites within. The giant\'s fire burns inside with his supper on the spit, and the carving stands on a stele at the back.',
+        '<b>The Chimera\'s shrine</b> is a dark, sunken court of mossy flagstones among fallen, ivy-grown columns, with mist on the stones, tripod fires, and the beast itself in black stone on the altar, its eyes burning.',
+        'The marked olive trees carry their marks on a small stele, with offerings at its foot.',
+        'Ruins lie across the land: fallen and standing columns, roadside herms, caches of amphorae and old walls (break them up for stone). Lavender, broom and myrtle grow on the hillsides.',
+        'Fixed: the rocks of the Giant caves were broken into shards with the sky showing through.',
+      ] },
       { t: 'Bosses and creatures', icon: 'bull', items: [
         '<b>The Minotaur</b> fights with everything he has: a bull charge you can see coming (if he runs into a wall he is dazed: strike!), a slam of his labrys that shakes the ground, blocks of stone thrown at anyone keeping their distance, a war cry that stuns, and quick follow-up swings. Below half health he becomes enraged.',
         'The Minotaur and the dead now find their way through the gaps in the Labyrinth\'s walls instead of getting stuck on them.',
         '<b>The Chimera</b> breathes fire (and sets you burning) and pounces on you from afar, as well as clawing and stinging anyone behind it.',
         'Animals see in front of them and only hear behind them. When they spot you they freeze for a moment of alarm before they run, so careful hunters get their chance.',
         'Stronger creatures are marked with owls over their name instead of stars.',
+        'Wild boars have the build of a boar: heavy shoulders and a crest of bristles.',
       ] },
       { t: 'Building', icon: 'hammer', items: [
         'Snapping is far steadier: pieces snap to the closest fitting point, keep their snap while you aim, and never snap to the workbench or furniture.',

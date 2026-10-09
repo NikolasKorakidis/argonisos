@@ -25,6 +25,16 @@ export const SPECIES = [
   { name: 'rock', s: [0.5, 2.4], res: 'rock', col: 0.95, h: 0.85 },
   { name: 'boulder', s: [2.2, 4.5], res: 'rock', col: 0.95, h: 0.8 },
   { name: 'reeds', s: [0.8, 1.3], res: 'reed' },
+  // (added later, at the end so the species numbers above never change) the old world between the trees: ruins you can
+  // break up for stone, and the shrubs of a Greek hillside
+  { name: 'colfall', s: [0.9, 1.15], res: 'rock', col: 1.0, h: 0.7 },
+  { name: 'colstand', s: [0.85, 1.15], res: 'rock', col: 0.55, h: 3.2 },
+  { name: 'herm', s: [0.95, 1.05], res: 'rock', col: 0.45, h: 1.7 },
+  { name: 'amphorae', s: [0.9, 1.1] },
+  { name: 'wallruin', s: [0.9, 1.15], res: 'rock', col: 1.1, h: 1.0 },
+  { name: 'lavender', s: [0.8, 1.25] },
+  { name: 'broom', s: [0.8, 1.25] },
+  { name: 'myrtle', s: [0.8, 1.3] },
 ];
 export const SP = Object.fromEntries(SPECIES.map((s, i) => [s.name, i]));
 const MIX = {
@@ -116,6 +126,18 @@ function layoutRaw(cx, cz) {
     const mix = w.v > 0.5 ? MIX.swamp : w.y > w.p ? MIX.forest : grove > 0.3 ? MIX.grove : MIX.meadow;
     const sp = pick(mix, r3), S = SPECIES[sp].s;
     out.push(sp, Math.floor(r4 * 3), x, h - 0.05, z, rnd() * 6.283, S[0] + (S[1] - S[0]) * rnd());
+  }
+  // the old world between the trees: Mediterranean shrubs, and here and there a ruin (a fallen column, a herm by the way,
+  // a stub of wall, a cache of jars). Laid out last, with dice of their own, so nothing laid out before them moves.
+  { const cw = biomeWeights(x0 + 32, z0 + 32, { p: 0, y: 0, v: 0, r: 0 }), h2 = (k) => hash2(cx * 7907 + Math.round(k * 1000), cz * 104723 + Math.round(k * 7919) + 3);   // (the hash takes whole numbers)
+    const place = (k) => { const x = x0 + h2(k) * CELL, z = z0 + h2(k + 0.5) * CELL, h = heightAt(x, z); if (h < 1.6 || siteClear(x, z)) return null; return Math.hypot(heightAt(x + 1.5, z) - h, heightAt(x, z + 1.5) - h) / 1.5 > 0.5 ? null : { x, z, h }; };
+    if (cw.v < 0.4) {
+      const n = Math.round(cw.p * 16 + cw.y * 5);
+      for (let k = 0; k < n; k++) { const q = place(k * 2 + 1); if (!q) continue; const r = h2(k * 2 + 1.3), sp = cw.p > cw.y ? (r < 0.4 ? SP.lavender : r < 0.72 ? SP.broom : SP.myrtle) : SP.myrtle, S = SPECIES[sp].s;
+        out.push(sp, 0, q.x, q.h - 0.05, q.z, h2(k + 7) * 6.283, S[0] + (S[1] - S[0]) * h2(k + 9)); }
+      if (h2(99) < cw.p * 0.4 + cw.y * 0.12) { const q = place(101); if (q) { const r = h2(103), sp = cw.y > cw.p ? (r < 0.6 ? SP.colfall : SP.wallruin) : r < 0.28 ? SP.colfall : r < 0.46 ? SP.colstand : r < 0.66 ? SP.herm : r < 0.82 ? SP.amphorae : SP.wallruin, S = SPECIES[sp].s;
+        out.push(sp, Math.floor(h2(105) * 2), q.x, q.h - 0.04, q.z, h2(107) * 6.283, S[0] + (S[1] - S[0]) * h2(109)); } }
+    }
   }
   return new Float32Array(out);
 }

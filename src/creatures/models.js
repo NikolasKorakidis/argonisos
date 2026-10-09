@@ -89,8 +89,10 @@ class HogBody extends CarvedBody {
   constructor(scale = 1) {
     super((g) => {
       const hide = flat(0x4e3a2c), dark = flat(0x2e221a), tusk = flat(0xf0e6d0), root = new THREE.Group(); root.scale.setScalar(scale); g.add(root);
-      const b = mesh(new THREE.IcosahedronGeometry(0.42, 1), hide, 0, 0.55, 0, root); b.scale.set(0.85, 0.85, 1.45);
-      const mane = mesh(new THREE.BoxGeometry(0.12, 0.18, 0.9), dark, 0, 0.92, 0.05, root); mane.rotation.x = -0.1;
+      // a wild boar's build: heavy shoulders, the back sloping away to the haunches, a crest of bristles down the spine
+      const b = mesh(new THREE.IcosahedronGeometry(0.42, 1), hide, 0, 0.55, -0.12, root); b.scale.set(0.8, 0.78, 1.2);
+      mesh(new THREE.IcosahedronGeometry(0.4, 1), hide, 0, 0.62, 0.28, root).scale.set(0.92, 1.0, 0.95);
+      for (let i = 0; i < 9; i++) { const z = 0.5 - i * 0.12, y = 0.98 - i * 0.03 - (i > 5 ? (i - 5) * 0.03 : 0); const c = mesh(new THREE.ConeGeometry(0.035, 0.2 - i * 0.012, 4), dark, 0, y, z, root); c.rotation.x = -0.55; }
       const head = new THREE.Group(); head.position.set(0, 0.62, 0.62); root.add(head);
       mesh(new THREE.IcosahedronGeometry(0.24, 1), hide, 0, 0, 0, head).scale.set(0.9, 0.95, 1.2);
       const sn = mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.22, 7), hide, 0, -0.06, 0.25, head); sn.rotation.x = Math.PI / 2; mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 7).rotateX(Math.PI / 2), flat(0x8a5a4a), 0, -0.06, 0.36, head);

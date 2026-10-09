@@ -45,7 +45,7 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
     sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; varying float vGH, vVar, vShade, vGust; varying vec3 vWorld;\n` + sh.fragmentShader
       .replace('#include <tonemapping_fragment>', `gl_FragColor.rgb *= 1.0 + vGust * 0.2 * vGH;   // the gust's lighter band
         float shine = pow(max(dot(normalize(vWorld - cameraPosition), uSunDir), 0.0), 4.0) * vGH * vGH;   // sun through the blade tips
-        gl_FragColor.rgb += diffuseColor.rgb * uSunCol * shine * 0.5;
+        gl_FragColor.rgb += diffuseColor.rgb * uSunCol * shine * 0.32;
         #include <tonemapping_fragment>`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         float v = smoothstep(0.35, 0.7, vVar);
