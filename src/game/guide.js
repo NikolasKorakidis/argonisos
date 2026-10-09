@@ -21,7 +21,7 @@ export function steps(g) {
     { t: 'Make a hammer', h: `${K('C')} → <b>Wooden Hammer</b> (4 wood).`, done: () => seen('hammer') },
     { t: 'Build a workbench', h: `Hammer in hand, ${K('RMB')} → Build → <b>Workbench</b> (10 wood). Aim, ${K('LMB')} to place.`, done: () => placed('workbench') },
     { t: 'Hunt a deer', h: `Deer give leather and <b>deer hides</b> (you'll need 5 for the Minotaur). Sneak (${K('Ctrl')}) up close: an unaware animal takes a sneak attack.`, done: () => seen('deerHide') },
-    { t: 'Make a crude axe', h: `${K('C')} → <b>Crude Axe</b>: 5 wood, 4 stone, 2 rope. Out of rope? 1 leather → 10 rope at the workbench.`, done: () => seen('crudeAxe') },
+    { t: 'Make a crude axe', h: `${K('C')} → <b>Crude Axe</b>: 5 wood, 4 stone, 2 rope. Out of rope? Gather <b>fiber bushes</b> (3 fiber → 2 rope by hand), or 1 leather → 10 rope at the workbench.`, done: () => seen('crudeAxe') },
     { t: 'Fell a tree', h: 'Axe in hand, strike a tree until it falls, then split the log for wood.', done: () => g.harvest.stumps.length > 0 },
     { t: 'Build a campfire', h: `Build → <b>Campfire</b> (10 stone, 10 wood). It keeps you warm and cooks meat on a cooking stand.`, done: () => placed('campfire') },
     { t: 'Put a roof over your workbench', h: 'Walls and thatch roofs need rope. Most workbench recipes need a roof over the bench.', done: () => g.build.placed.some((p) => p.id === 'workbench' && g.build.underRoof(p.pos, 1.2)) },

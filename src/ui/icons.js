@@ -9,6 +9,7 @@ const circ = (x, y, r, c = K) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${c
 const ell = (x, y, rx, ry, c = K, a = 0) => `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${c}" transform="rotate(${a} ${x} ${y})"/>`;
 
 Object.assign(ICONS, {
+  fiber: ln('M18 54 q4 -22 -2 -44 M26 54 q2 -24 4 -46 M34 54 q0 -22 8 -42 M42 54 q-2 -20 10 -38', K, 2.6) + fill('M14 40 h34 v7 h-34z', O) + ln('M14 40 h34 v7 h-34z', K, 2),
   log: fill('M6 26 h46 a8 10 0 0 1 0 20 h-46z') + ell(52, 36, 8, 10, O) + inc('M52 30 a3 5 0 1 1 -0.1 0 M52 27 a6 9 0 0 1 3 9', 1.3) + inc('M12 32 h30 M16 40 h22', 1.2),
   leather: fill('M10 18 q12 -8 22 0 q10 -8 22 0 q-4 16 2 30 q-14 6 -24 -2 q-12 8 -24 2 q6 -14 2 -30z', O) + ln('M10 18 q12 -8 22 0 q10 -8 22 0 q-4 16 2 30 q-14 6 -24 -2 q-12 8 -24 2 q6 -14 2 -30z', K, 2.4),
   lightstone: fill('M14 44 L22 18 L38 10 L52 24 L48 46 L30 54z', C) + ln('M14 44 L22 18 L38 10 L52 24 L48 46 L30 54z', K, 2.6) + ln('M22 18 L32 30 L38 10 M32 30 L30 54 M32 30 L52 24', K, 1.4),

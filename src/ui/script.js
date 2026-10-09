@@ -16,7 +16,7 @@ export const SCRIPT = `
 
 <h3>2 · Getting set up</h3>
 <ul>
-<li><b>Rope</b> comes from leather at a workbench (1 leather → 10 rope; a workbench is 10 wood). <b>Leather</b> comes from animals: rabbits, deer and hogs. Deer also give <b>deer hides</b>, needed later.</li>
+<li><b>Rope</b> is twisted by hand from <b>fiber</b> (fiber bushes in both biomes, 3 per bush; 3 fiber → 2 rope), or made from leather at a workbench (1 leather → 10 rope; a workbench is 10 wood). <b>Leather</b> comes from animals: rabbits, deer and hogs. Deer also give <b>deer hides</b>, needed later.</li>
 <li><b>Hunting:</b> animals see a wide arc in front of them but only hear you behind. Sneak (${K('Ctrl')}) up from behind and strike: an unaware animal takes a sneak attack. When one notices you it freezes and stares for a moment before it bolts (or charges): that's your chance to strike or loose an arrow. Sprinting is heard from far off; grazing animals notice less.</li>
 <li>A <b>crude axe</b> (5 wood, 4 stone, 2 rope) fells trees: they topple and leave a log to split into wood (pines also give resin).</li>
 <li>No hunger. Health 25 and stamina 50, raised for a while by food (three slots): olives (olive trees, once a day), acorns (oaks), pomegranates, cooked meat (+40 health). Raw meat makes you sick: cook it on a cooking stand over a fire.</li>

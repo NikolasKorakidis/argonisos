@@ -108,7 +108,7 @@ export function installGame(g) {
     const f = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)), front = player.pos.clone().addScaledVector(f, 0.9);
     const owl = g.owl.interactable(player.pos); if (owl && g.owl.faced()) return owl;
     const p = g.pickups.nearest(front, 1.9);
-    if (p) { const K = KINDS[p.kind], id = p.kind === 'drop' ? p.item : K.item, n = p.kind === 'drop' ? p.n : 1; return { kind: 'pickup', p, label: `Pick up ${K.label || ITEMS[id].name}${n > 1 ? ` ×${n}` : ''}`, sub: K.label ? `+${K.n[0]} ${ITEMS[id].name.toLowerCase()}` : '' }; }
+    if (p) { const K = KINDS[p.kind], id = p.kind === 'drop' ? p.item : K.item, n = p.kind === 'drop' ? p.n : 1; return { kind: 'pickup', p, label: `${K.verb || 'Pick up'} ${K.label || ITEMS[id].name}${n > 1 ? ` ×${n}` : ''}`, sub: K.label ? `+${K.n[0]} ${ITEMS[id].name.toLowerCase()}` : '' }; }
     const ow = g.owl.interactable(player.pos) || g.graves.interactable(player.pos); if (ow) return ow;
     const tr = g.trial.interactable(player.pos); if (tr) return tr;
     const s = g.build?.interactable?.(player.pos, f); if (s) return s;
