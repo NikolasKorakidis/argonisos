@@ -51,7 +51,8 @@ veg.onCell = (key, items, cx, cz) => {
 };
 
 // ---- State
-export const S = { time: 0.06, day: 1, timeScale: 1, debug: false, fly: false, flySpeed: 40, bed: null };
+// (still: for the screenshot tests, hold the wind, water and clouds at one moment so pictures can be compared)
+export const S = { time: 0.06, day: 1, timeScale: 1, debug: false, fly: false, flySpeed: 40, bed: null, still: false };
 const SPAWN = { x: 6, z: 4 };
 
 // ---- Player, pack and HUD
@@ -128,7 +129,7 @@ const clockText = () => { const t = S.time, h = t < DAY_FRACTION ? 6 + (t / DAY_
 const clock = new THREE.Clock(); let fpsT = 0, frames = 0, fps = 60, atmo = { overcast: 0, dark: 0 };
 function loop() {
   requestAnimationFrame(loop);
-  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  const dt = Math.min(clock.getDelta(), 0.05), t = S.still ? 100 : clock.elapsedTime;
   if (!game.paused) S.time += dt * S.timeScale / DAY_SECONDS; if (S.time >= 1) { S.time -= 1; S.day++; hud.toast(`<b>Day ${S.day}</b> dawns`); }
   // keys
   const busy = !game.started || game.paused;

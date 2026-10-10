@@ -43,7 +43,7 @@ const server = http.createServer((req, res) => {
 // editors and scripts often write a file in several steps: wait for things to settle, then reload once
 let timer = null;
 fs.watch(ROOT, { recursive: true }, (_, name) => {
-  if (!name || /(^|[\\/])(\.git|node_modules)([\\/]|$)|\.DS_Store$|~$|\.swp$/.test(name)) return;
+  if (!name || /(^|[\\/])(\.git|node_modules|tests[\\/]reports)([\\/]|$)|\.DS_Store$|~$|\.swp$/.test(name)) return;
   clearTimeout(timer);
   timer = setTimeout(() => {
     console.log(`${new Date().toLocaleTimeString()}  changed ${name}, reloading ${clients.size} page(s)`);
