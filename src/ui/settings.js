@@ -3,7 +3,8 @@
 // and you hold Esc for two seconds to leave fullscreen. Where it doesn't (Safari, Firefox), Esc leaves fullscreen and
 // the game puts it back on your next click.
 import * as THREE from 'three';
-import { renderer, composer, bloom, sun, camera, GFX } from '../render/core.js';
+import { renderer, composer, bloom, sun, camera, GFX, setScale } from '../render/core.js';
+import { ATMO } from '../render/atmosphere.js';
 import { GRASS } from '../world/grass.js';
 import { setVolume, setMusicVolume } from '../audio/sound.js';
 import { input } from '../input.js';
@@ -23,9 +24,9 @@ export const RES = [[0.6, '60%'], [0.75, '75%'], [0.85, '85%'], [1, '100%']];
 
 export function applyGraphics() {
   const Q = PRESETS[SETTINGS.graphics] || PRESETS.high;
-  GFX.level = SETTINGS.graphics; GFX.post = Q.post; bloom.enabled = Q.bloom;
+  GFX.level = SETTINGS.graphics; GFX.post = Q.post; bloom.enabled = Q.bloom; ATMO.rays.value = Q.bloom ? 1 : 0;   // (shafts of sun on High)
   GFX.scale = Math.min(devicePixelRatio, Q.scale) * SETTINGS.res;
-  renderer.setPixelRatio(GFX.scale); renderer.setSize(innerWidth, innerHeight); composer.setPixelRatio(GFX.scale); composer.setSize(innerWidth, innerHeight);
+  setScale();   // (times the automatic resolution factor)
   const type = Q.soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   if (renderer.shadowMap.type !== type || sun.shadow.mapSize.x !== Q.shadow) { renderer.shadowMap.type = type; sun.shadow.mapSize.set(Q.shadow, Q.shadow); sun.shadow.map?.dispose(); sun.shadow.map = null; }
   if (GRASS.mesh) GRASS.mesh.count = Math.floor(GRASS.mesh.instanceMatrix.count * Q.grass);

@@ -6,7 +6,8 @@
 //   labyrinth: the Minotaur's ruined arena, deep in Pedias
 //   caves:    four Giant caves in the Yleos hills, one carving in each (three together → the Chimera's shrine)
 //   chimera:  the Chimera's shrine, deep in the Yleos forest
-import { heightAt, biomeWeights, addPad, hash2, WORLD } from './gen.js';
+//   peak:     Olympos, one great snowy mountain in the far hills, placed last and kept clear of all the others
+import { heightAt, biomeWeights, addPad, hash2, WORLD, PEAK, setPeak, landness } from './gen.js';
 
 const slopeAt = (x, z) => Math.hypot(heightAt(x + 2, z) - heightAt(x - 2, z), heightAt(x, z + 2) - heightAt(x, z - 2)) / 4;
 const _w = { p: 0, y: 0, v: 0, r: 0 };
@@ -22,7 +23,7 @@ function find({ r0, r1, a0 = 0, a1 = Math.PI * 2, n = 260, score, salt = 0 }) {
 }
 const far = (list, x, z, d) => list.every((s) => Math.hypot(s.x - x, s.z - z) > d);
 
-export const SITES = { temple: null, house: null, olives: [], labyrinth: null, caves: [], chimera: null };
+export const SITES = { temple: null, house: null, olives: [], labyrinth: null, caves: [], chimera: null, peak: null };
 const clears = [];   // [x, z, r]: no trees or rocks inside
 function pad(s, r0, r1, kind, y = s.y) { s.y = y; s.r = r1; s.kind = kind; addPad(s.x, s.z, r0, r1, y); clears.push([s.x, s.z, r1 * 0.95]); return s; }
 
@@ -49,6 +50,17 @@ function pad(s, r0, r1, kind, y = s.y) { s.y = y; s.r = r1; s.kind = kind; addPa
   // the Chimera's shrine: deep in the forest, on fairly level ground
   const C = find({ r0: 750, r1: 1150, salt: 30, score: (x, z, h, w, sl) => (w.y > 0.92 ? 0 : -99) - sl * 30 + (far(SITES.caves, x, z, 200) ? 0 : -99) });
   SITES.chimera = pad(C, 22, 36, 'chimera');
+  // Olympos: deep in the hills, inland, as far as it can stand from every other site; switched on only now, so the
+  // ground under the sites above was measured without it and nothing moved
+  let pk = null, best = -1;
+  for (let i = 0; i < 2400; i++) {
+    const a = (Math.floor(i / 6) / 400) * Math.PI * 2, r = [1150, 1080, 1010, 950, 900, 850][i % 6], x = Math.cos(a) * r, z = Math.sin(a) * r;
+    if (biomeWeights(x, z, _w).y < 0.85 || landness(x, z) < 2.2) continue;
+    const d = Math.min(...[SITES.temple, SITES.house, SITES.labyrinth, SITES.chimera, ...SITES.olives, ...SITES.caves].filter(Boolean).map((s) => Math.hypot(s.x - x, s.z - z)));
+    if (d > PEAK.r + 60 && d > best) { best = d; pk = { x, z }; }
+  }
+  // (a small flat top for the cairn and the altar, a few metres under the point)
+  if (pk) { setPeak(pk.x, pk.z); const y = heightAt(pk.x, pk.z) - 5; addPad(pk.x, pk.z, 6, 18, y); SITES.peak = { x: pk.x, z: pk.z, y, kind: 'peak', r: 12 }; clears.push([pk.x, pk.z, 9]); }
 }
 // Nothing grows here (flora and ground pickups ask)
 export function siteClear(x, z) { for (const [cx, cz, r] of clears) if ((x - cx) * (x - cx) + (z - cz) * (z - cz) < r * r) return true; return false; }

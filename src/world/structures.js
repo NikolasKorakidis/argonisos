@@ -59,6 +59,7 @@ export const SMAT = {
   bone: new THREE.MeshStandardMaterial({ color: 0xd9cfb4, roughness: 0.75 }),
 };
 const _nav = new THREE.Vector3();
+const VIEW_R = { temple: 1700, labyrinth: 1400, chimera: 1200, house: 1000, peak: 600, olive: 700, cave: 900 };   // how far off each kind of site is drawn
 
 // ---- kit: every helper pushes [geometry, material] onto a list in site-local coordinates
 const uvBox = (w, h, d, s = 1 / 3) => { const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, nn = g.attributes.normal; for (let i = 0; i < uv.count; i++) { const ax = Math.abs(nn.getX(i)), ay = Math.abs(nn.getY(i)); uv.setXY(i, uv.getX(i) * (ax > 0.5 ? d : w) * s, uv.getY(i) * (ay > 0.5 ? d : h) * s); } return g; };
@@ -122,7 +123,9 @@ export class Structures {
     this.build();
   }
   // register helpers (site-local → world, sites only rotate about y)
-  site(s, rot = 0) { const grp = new THREE.Group(); grp.position.set(s.x, s.y, s.z); grp.rotation.y = rot; this.g.scene.add(grp); this.groups.push(grp); return { grp, s, rot, P: [] }; }
+  site(s, rot = 0) { const grp = new THREE.Group(); grp.position.set(s.x, s.y, s.z); grp.rotation.y = rot; grp.userData.viewR = VIEW_R[s.kind] ?? 800; this.g.scene.add(grp); this.groups.push(grp); return { grp, s, rot, P: [] }; }
+  // sites far off are not drawn at all (the haze has them long before): checked twice a second
+  cull(cam, dt) { this.cullT = (this.cullT || 0) - dt; if (this.cullT > 0) return; this.cullT = 0.5; for (const g of this.groups) g.visible = g.position.distanceTo(cam) < g.userData.viewR * (1 + Math.max(0, cam.y - 60) / 200); }
   w(ctx, x, z, y = 0) { const c = Math.cos(ctx.rot), sn = Math.sin(ctx.rot); return new THREE.Vector3(ctx.s.x + x * c + z * sn, ctx.s.y + y, ctx.s.z - x * sn + z * c); }
   solid(ctx, x, z, r, h = 99, y = 0) { const p = this.w(ctx, x, z, y); this.solids.push({ x: p.x, z: p.z, r, y: p.y, h }); }
   wall(ctx, x0, z0, x1, z1, h, t = 0.45) { const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.ceil(len / (t * 1.4))); for (let i = 0; i <= n; i++) this.solid(ctx, x0 + (x1 - x0) * (i / n), z0 + (z1 - z0) * (i / n), t, h); }
@@ -144,6 +147,7 @@ export class Structures {
     if (S.chimera) this.shrine(S.chimera);
     S.olives.forEach((o, i) => this.olive(o, i));
     S.caves.forEach((c, i) => this.cave(c, i));
+    if (S.peak) this.summit(S.peak);
     const col = this.solids.map((c) => ({ ...c, ref: { site: true } })); this.g.colliders.addGroup('sites', col);
   }
   // ---- the Ancient Temple of Zeus: a Doric peripteros on its stepped platform. Outside: painted pediments with the gods
@@ -436,6 +440,20 @@ export class Structures {
     glyphs.position.set(0, 1.25 * Math.cos(0.12) + 0.175 * Math.sin(0.12), -2.6 + 0.175 * Math.cos(0.12) - 1.25 * Math.sin(0.12) + 0.012); glyphs.rotation.x = -0.12; ctx.grp.add(glyphs);
     this.uses.push({ kind: 'carving', id: 'cave' + i, at: this.w(ctx, 0, -2.2), r: 2.4, glyphs, cave: s });
     this.finish(ctx, { r: 6 });
+  }
+  // ---- the summit of Olympos: a cairn of stones, a little marble altar with a fire that never goes out, and the bronze
+  // eagle of Zeus on a column, looking out over the whole island
+  summit(s) {
+    const ctx = this.site(s, 0.3), P = ctx.P, lr = dice(77);
+    for (let k = 0; k < 14; k++) { const a = lr() * 6.28, r = lr() * 1.1, y = 0.2 + Math.floor(k / 5) * 0.5; boulder(P, -3 + Math.cos(a) * r * (1 - y / 2), y, 1.5 + Math.sin(a) * r * (1 - y / 2), 0.35 + lr() * 0.2, SMAT.rock); }
+    P.push([uvBox(1.6, 0.9, 1.0).translate(1.5, 0.45, -0.5), SMAT.marble], [uvBox(1.8, 0.14, 1.2).translate(1.5, 0.97, -0.5), SMAT.marble]);
+    tripod(P, 1.5, 1.04, -0.5, 0.6); this.fire(ctx, 1.5, 1.7, -0.5, 0.8);
+    column(P, -0.5, 0, -2.6, 3.2, 0.32, SMAT.marble);
+    const ey = 3.3, E = GMAT.bronze;   // the eagle, wings half spread
+    P.push([new THREE.SphereGeometry(0.32, 10, 8).scale(0.8, 0.9, 1.4).translate(-0.5, ey + 0.35, -2.6), E], [new THREE.SphereGeometry(0.16, 8, 6).translate(-0.5, ey + 0.72, -2.25), E], [new THREE.ConeGeometry(0.07, 0.2, 5).rotateX(Math.PI / 2).translate(-0.5, ey + 0.68, -2.06), GMAT.gold]);
+    for (const sx of [-1, 1]) P.push([new THREE.BoxGeometry(1.3, 0.05, 0.5).translate(sx * 0.65, 0, 0).rotateZ(sx * 0.45).translate(-0.5 + sx * 0.18, ey + 0.55, -2.65), E]);
+    this.solid(ctx, -3, 1.5, 1.2); this.solid(ctx, 1.5, -0.5, 1.0, 1.2); this.solid(ctx, -0.5, -2.6, 0.4);
+    this.finish(ctx, { r: 4 });
   }
   // ---- queries
   // ground height at a site-local point, relative to the site (for things standing beyond its levelled pad)

@@ -17,7 +17,7 @@ const TREE_DROPS = {
   qtree: [['feather', 0.3, 1, 2]], plane: [['feather', 0.4, 1, 2]], holm: [['acornSeed', 0.3, 1, 1]],
 };
 const FRUIT = { olive: ['olive', 3, 5], pomegranate: ['pomegranate', 2, 3], oak: ['acorn', 2, 4] };
-const treeHP = (name, s) => (BIG.has(name) ? 110 : SMALL.has(name) ? 40 : 70) * s;
+const treeHP = (name, s) => (name === 'titan' ? 420 : BIG.has(name) ? 110 : SMALL.has(name) ? 40 : 70) * s;   // (a giant of the old forest takes a long while)
 const woodOf = (name, s) => Math.round((BIG.has(name) ? 9 : SMALL.has(name) ? 3 : 6) * s);
 const rockHP = (name, s) => (name === 'boulder' ? 70 : 30) * s;
 

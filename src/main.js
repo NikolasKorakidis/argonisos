@@ -1,6 +1,6 @@
 // Argonisos: the trial of Zeus. Entry point: builds the world and the player, runs the frame loop.
 import * as THREE from 'three';
-import { renderer, scene, camera, render, followShadow, groundDetail, sun } from './render/core.js';
+import { renderer, scene, camera, render, followShadow, groundDetail, sun, GPU, ADAPT, adaptResolution } from './render/core.js';
 import { Terrain } from './world/terrain.js';
 import { WorkerPool } from './world/pool.js';
 import { Vegetation } from './world/vegetation.js';
@@ -19,6 +19,10 @@ import { Inventory } from './game/inventory.js';
 import { ITEMS } from './game/items.js';
 import { cutTerrain, updateCuts } from './world/groundcut.js';
 import { LIGHT_U } from './world/trees.js';
+import { updateGiantwood, GIANTWOOD } from './world/giantwood.js';
+import { updateAmbient } from './world/ambient.js';
+import { PEAK } from './world/gen.js';
+import { updateAtmosphere } from './render/atmosphere.js';
 import { HUD } from './ui/hud.js';
 import { installGame } from './game/game.js';
 import { titleScreen, pauseMenu } from './ui/title.js';
@@ -142,6 +146,10 @@ function loop() {
   const focus = S.fly ? camera.position : player.pos;
   updateSky(S.time, dt, t, atmo.overcast, atmo.dark);
   atmo = updateWeather(dt, focus, LIGHT, (k) => setTimeout(() => game.sound?.('thunder', Math.min(1.5, k * 0.6)), 300 + k * 900));
+  // high up the air clears: from the hills, and from the top of Olympos, you see out across the island
+  const up = Math.min(1.6, Math.max(0, (camera.position.y - 60) / 160)), clear = Math.min(1, Math.max(0, (camera.position.y - 90) / 140));
+  scene.fog.near = (scene.fog.near + (300 - scene.fog.near) * clear) * (1 + up); scene.fog.far = (scene.fog.far + (2400 - scene.fog.far) * clear) * (1 + up * 1.4);   // (above the forest's own haze)
+  updateGiantwood(dt, focus, camera, lightDir, LIGHT.day);
   fogSky(Math.min(1, Math.max(0, 1 - scene.fog.far / 1400, atmo.overcast)));
   updateWater(t, camera.position, LIGHT, skyDome, sunDir, moonDir);
   updateStormWall(t, LIGHT);
@@ -151,12 +159,21 @@ function loop() {
   veg.update(dt, focus); windUniform.value = t; updateCuts(focus); updateGrass(pool, focus);
   game.lateUpdate?.(dt, t);
   hud.update(dt, clockText(), S.time >= DAY_FRACTION);
-  render();
+  veg.cull(camera, focus);   // the near trees worth drawing this frame
+  game.structures?.cull(camera.position, dt);
+  const bw = biomeWeights(focus.x, focus.z);
+  // pollen in the sunny meadows, fireflies at dusk and by night, leaves in the woods, snow blowing on the summit
+  const wet = 1 - Math.min(1, WEATHER.k.rain * 1.5), snowK = PEAK.on ? Math.min(1, Math.max(0, (camera.position.y - 215) / 50)) : 0;
+  updateAmbient(dt, camera.position, { pollen: LIGHT.day * bw.p * wet * (1 - atmo.overcast * 0.7), firefly: (LIGHT.dusk * 0.6 + LIGHT.night) * (bw.p + bw.y * 0.7) * wet,
+    leaf: (0.35 + LIGHT.day * 0.65) * Math.min(1, bw.y * 1.2 + GIANTWOOD.k), snow: snowK }, t);
+  updateAtmosphere(camera, { dt, wp: bw.p, wy: bw.y + bw.v, night: LIGHT.night, giant: GIANTWOOD.k, sunDir, sunCol: sun.color, sunK: Math.min(1.4, sun.intensity / 2.4), fogCol: scene.fog.color, day: LIGHT.day, dusk: LIGHT.dusk, overcast: atmo.overcast, rays: 1,
+    mist: Math.min(1, LIGHT.mist + (WEATHER.k.fog || 0) * 0.4) * (S.fly ? 0.5 : 1), mistDen: 0.01 + biomeWeights(focus.x, focus.z).y * 0.012, ground: Math.min(heightAt(focus.x, focus.z), 60) });   // (mist lies in the valleys: from a summit you look down on it)
+  render(); adaptResolution(dt, terrain.pending > 0 || !game.started);
   endFrame();
   frames++; fpsT += dt; if (fpsT > 0.5) { fps = frames / fpsT; frames = 0; fpsT = 0; }
   if (S.debug) {
     const p = focus, w = biomeWeights(p.x, p.z);
-    $('dbg').textContent = `${BIOME_NAMES[biomeAt(p.x, p.z)]} (P ${w.p.toFixed(2)} Y ${w.y.toFixed(2)} V ${w.v.toFixed(2)}) · ${p.x.toFixed(0)}, ${p.z.toFixed(0)} h ${heightAt(p.x, p.z).toFixed(1)} · ${fps.toFixed(0)} fps · patches ${terrain.drawn} (${terrain.pending}) · veg ${veg.near.size}/${veg.far.size} · ${WEATHER.type}`;
+    $('dbg').textContent = `${BIOME_NAMES[biomeAt(p.x, p.z)]} (P ${w.p.toFixed(2)} Y ${w.y.toFixed(2)} V ${w.v.toFixed(2)}) · ${p.x.toFixed(0)}, ${p.z.toFixed(0)} h ${heightAt(p.x, p.z).toFixed(1)} · ${fps.toFixed(0)} fps · patches ${terrain.drawn} (${terrain.pending}) · veg ${veg.near.size}/${veg.far.size} · ${WEATHER.type} · ${renderer.info.render.calls} draws · ${(renderer.info.render.triangles / 1e6).toFixed(2)}M tris · GPU ${GPU.ok ? GPU.ms.toFixed(1) + ' ms' : 'n/a'} · res ${Math.round(ADAPT.k * 100)}%`;
   }
 }
 loop();

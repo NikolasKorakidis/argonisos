@@ -28,9 +28,14 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
         vec4 hm = texture2D(uHeight, (wp - uOrigin) / uSize);
         float rnd = fract(sin(dot(ip.xz, vec2(12.9898, 78.233))) * 43758.5453);
         float fade = 1.0 - smoothstep(0.6, 1.0, length(wp - uCenter) / (uTile * 0.5));
-        float sc = hm.g * fade * (0.55 + rnd * 0.62);
-        vec3 p = position; p.y *= sc; p.x *= step(0.01, sc);
-        float a = rnd * 6.2831; p.xz = mat2(cos(a), -sin(a), sin(a), cos(a)) * p.xz;
+        // further out fewer blades, each a little wider, so the meadow reads the same with far less to draw (Ghost of
+        // Tsushima's trick); a blade seen edge-on is widened so it doesn't thin away to a line
+        float keep = mix(1.0, 0.42, smoothstep(10.0, 34.0, length(wp - uCenter))), r2 = fract(rnd * 91.73);
+        float sc = hm.g * fade * (0.55 + rnd * 0.62) * step(r2, keep);
+        vec3 p = position; p.y *= sc; p.x *= step(0.01, sc) / sqrt(keep);
+        float a = rnd * 6.2831; vec2 bn = vec2(sin(a), cos(a)), tv = normalize(cameraPosition.xz - wp + 1e-4);
+        p.x *= 1.0 + (1.0 - abs(dot(bn, tv))) * 0.9;
+        p.xz = mat2(cos(a), -sin(a), sin(a), cos(a)) * p.xz;
         float gh = position.y / ${H.toFixed(2)};
         float gust = sin(uWind * 0.6 + wp.x * 0.05) * 0.5 + 0.5;
         // gusts sweeping across the meadow: bands that bend the grass further and catch the light as they pass
@@ -41,7 +46,8 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
         vec2 away = wp - uCenter; float pd = length(away), push = (1.0 - smoothstep(0.25, 1.5, pd)) * gh * sc;   // blades part around your legs
         p.xz += away / max(pd, 0.001) * push * 0.55; p.y *= 1.0 - push * 0.35;
         vec3 transformed = p + vec3(wp.x, hm.r - 0.03, wp.y) - ip;
-        vGH = gh; float fk = floor(hm.b * 0.5); vVar = hm.b - fk * 2.0; vShade = fk / 15.0; vGust = wave; vWorld = p + vec3(wp.x, hm.r, wp.y);`);
+        vGH = gh; float fk = floor(hm.b * 0.5); vVar = hm.b - fk * 2.0; vShade = fk / 15.0;
+        vVar = clamp(vVar + (fract(sin(dot(floor(wp / 2.7), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.3, 0.0, 1.0);   // colour in clumps vGust = wave; vWorld = p + vec3(wp.x, hm.r, wp.y);`);
     sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; varying float vGH, vVar, vShade, vGust; varying vec3 vWorld;\n` + sh.fragmentShader
       .replace('#include <tonemapping_fragment>', `gl_FragColor.rgb *= 1.0 + vGust * 0.2 * vGH;   // the gust's lighter band
         float shine = pow(max(dot(normalize(vWorld - cameraPosition), uSunDir), 0.0), 4.0) * vGH * vGH;   // sun through the blade tips

@@ -5,6 +5,7 @@
 //   Pedias  — the fertile heart: rolling meadows, olive groves, golden fields, 2–30 m. Where every chosen one wakes up.
 //   Yleos   — a ring of dark forested hills around it, 30–100 m, misty valleys and ridges.
 //   Valtos  — a swamp sector in the south-west running down to the sea, mostly at water level. Sealed by Zeus.
+//   Olympos — one great peak rising out of the far hills, rock above the trees and snow on its head (see PEAK).
 //   The sea all around, with beaches and bays.
 // Biome borders are domain-warped so they wander like real ones; heights blend across them so there are no seams.
 
@@ -61,6 +62,18 @@ export function landness(x, z) {
   return (1 + n - r) / 0.12;
 }
 
+// ---- The peak: one great mountain in the far hills of Yleos, its head above the treeline and white with snow. sites.js
+// places it once the trial's sites are laid out (so none of them moves) and only then switches it on.
+export const PEAK = { on: false, x: 0, z: 0, r: 420, h: 340, snow: 284 };
+export function setPeak(x, z) { PEAK.x = x; PEAK.z = z; PEAK.on = true; }
+export function peakHeight(x, z) {
+  if (!PEAK.on) return 0;
+  const dx = x - PEAK.x, dz = z - PEAK.z, d = Math.hypot(dx, dz) / PEAK.r; if (d >= 1) return 0;
+  const a = Math.atan2(dz, dx), spurs = 0.5 + 0.5 * Math.sin(a * 5 + fbm(x * 0.004, z * 0.004, 2) * 6);   // ridges running down from the summit
+  const body = Math.pow(1 - d, 1.7) * (0.84 + 0.16 * spurs * smooth(0, 0.35, d));
+  return PEAK.h * (body + (ridged(x * 0.011, z * 0.011, 3) - 0.5) * 0.1 * (1 - d) * smooth(0, 0.2, d));
+}
+
 // ---- Height (metres above sea level)
 export function rawHeight(x, z, w = biomeWeights(x, z)) {
   const hp = 2.2 + fbm(x * 0.0032, z * 0.0032, 4) * 24 + (fbm(x * 0.017, z * 0.017, 2) - 0.5) * 3.5          // meadows,
@@ -68,7 +81,7 @@ export function rawHeight(x, z, w = biomeWeights(x, z)) {
   const rise = smooth(0.5, 0.78, w.r);                                                                         // foothills first, ridges deeper in
   const hy = 16 + rise * 18 + (ridged(x * 0.0027 + 4, z * 0.0027 - 2, 4) * 60 + fbm(x * 0.011, z * 0.011, 3) * 14) * (0.25 + 0.75 * rise);   // forest hills
   const hv = -0.15 + (fbm(x * 0.013 + 7, z * 0.013, 3) - 0.5) * 3.6 + (fbm(x * 0.05, z * 0.05, 2) - 0.5) * 0.8;    // marsh: islands and pools
-  let h = w.p * hp + w.y * hy + w.v * hv;
+  let h = w.p * hp + w.y * hy + w.v * hv + peakHeight(x, z) * (1 - w.v);
   const L = landness(x, z);
   const beach = 0.6 + fbm(x * 0.02, z * 0.02, 2) * 1.6;
   if (L < 1.6) h = lerp(lerp(-24, beach, smooth(-1.4, 0.15, L)), h, smooth(0.15, 1.6, L));   // shelf → beach → land
@@ -98,7 +111,7 @@ const PAL = {
   meadow: C(0x5b8a32), meadow2: C(0x6f9a3a), golden: C(0xb0a24e), dry: C(0x8f8a42),
   forest: C(0x2c4223), moss: C(0x3a5527), needles: C(0x4a3b29),
   mud: C(0x3e3826), marshMoss: C(0x4b5530), reedy: C(0x5d6a36),
-  sand: C(0xd9c48e), wetSand: C(0xb8a272), seabed: C(0x9c8c62), rock: C(0x7f786d), rock2: C(0x6a645b),
+  sand: C(0xd9c48e), wetSand: C(0xb8a272), seabed: C(0x9c8c62), rock: C(0x7f786d), rock2: C(0x6a645b), snow: C(0xbcc4ce), scree: C(0x7d776d),   // (snow a little blue-grey: pure white burned out in the sun)
 };
 const mix3 = (o, a, t) => { o[0] += (a[0] - o[0]) * t; o[1] += (a[1] - o[1]) * t; o[2] += (a[2] - o[2]) * t; return o; };
 export function groundColor(x, z, h, slope, w = biomeWeights(x, z), out = [0, 0, 0]) {
@@ -118,6 +131,12 @@ export function groundColor(x, z, h, slope, w = biomeWeights(x, z), out = [0, 0,
   // rock on steep faces and high ridges
   const rocky = smooth(0.55, 0.85, slope) + smooth(85, 100, h + fbm(x * 0.02, z * 0.02, 2) * 10) * 0.6;
   if (rocky > 0) mix3(out, fbm(x * 0.08, z * 0.08, 2) > 0.5 ? PAL.rock : PAL.rock2, clamp(rocky, 0, 1));
+  // on the peak: pale scree above the trees, then snow lying wherever the rock is not too steep to hold it
+  if (PEAK.on && h > 150) {
+    const n = fbm(x * 0.015 + 4, z * 0.015, 3);
+    mix3(out, PAL.scree, smooth(170, 220, h + n * 30) * (1 - smooth(0.7, 1, slope)) * 0.6);
+    mix3(out, PAL.snow, smooth(PEAK.snow - 25, PEAK.snow + 15, h + (n - 0.5) * 50) * (1 - smooth(0.85, 1.25, slope)));
+  }
   const j = 0.94 + hash2(Math.floor(x * 2), Math.floor(z * 2)) * 0.08;   // tiny per-vertex jitter breaks banding
   out[0] *= j; out[1] *= j; out[2] *= j;
   return out;

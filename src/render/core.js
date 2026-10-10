@@ -1,18 +1,17 @@
-// Renderer, scene, camera, lights and post-processing. The colour grade (saturation, warm push, teal shadows) lives
-// inside tone mapping, so every material runs it for free.
+// Renderer, scene, camera, lights and post-processing. A light base grade (saturation, warm push, teal shadows) lives
+// inside tone mapping (AgX), so every material runs it for free; the grade for each place and hour is in the atmosphere pass.
 import * as THREE from 'three';
 import { EffectComposer } from '../../jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from '../../jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../../jsm/postprocessing/UnrealBloomPass.js';
-import { ShaderPass } from '../../jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from '../../jsm/postprocessing/OutputPass.js';
-import { VignetteShader } from '../../jsm/shaders/VignetteShader.js';
+import { AtmospherePass } from './atmosphere.js';
 
 THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace('vec3 CustomToneMapping( vec3 color ) { return color; }',
   `vec3 CustomToneMapping( vec3 color ) {
     float l = dot(color, vec3(0.2126, 0.7152, 0.0722));
     color = max(mix(vec3(l), color, 1.12) * vec3(1.04, 1.0, 0.93) + (1.0 - smoothstep(0.0, 0.5, l)) * vec3(-0.012, 0.01, 0.03), 0.0);
-    return ACESFilmicToneMapping(color); }`);
+    return AgXToneMapping(color * 1.15); }`);   // (AgX: holds bright snow, marble and sky without burning out, and keeps the grass's depth)
 
 export const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -34,11 +33,14 @@ scene.add(sun, sun.target);
 
 export const GFX = { level: 'high', post: true, scale: Math.min(devicePixelRatio, 2) };
 
-export const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 }));
+// (the scene's depth is kept with its colour, for the atmosphere pass)
+const sceneRT = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 }); sceneRT.depthTexture = new THREE.DepthTexture(innerWidth, innerHeight);
+export const composer = new EffectComposer(renderer, sceneRT);
 composer.setPixelRatio(GFX.scale); composer.setSize(innerWidth, innerHeight);
 composer.addPass(new RenderPass(scene, camera));
+export const atmosphere = new AtmospherePass(); composer.addPass(atmosphere);
 export const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.18, 0.5, 0.92); composer.addPass(bloom);
-const vignette = new ShaderPass(VignetteShader); vignette.uniforms.offset.value = 0.95; vignette.uniforms.darkness.value = 1.15; composer.addPass(vignette);
+// (the vignette lives in the atmosphere pass now: one full-screen pass fewer)
 composer.addPass(new OutputPass());
 
 addEventListener('resize', () => {
@@ -46,7 +48,36 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
 });
 
-export function render() { if (GFX.post) composer.render(); else renderer.render(scene, camera); }
+// Render one frame, timing it on the GPU where the browser allows (EXT_disjoint_timer_query_webgl2): GPU.ms, smoothed.
+// renderer.info counts the whole frame (all passes), reset here each frame.
+const gl = renderer.getContext(), timer = gl.getExtension('EXT_disjoint_timer_query_webgl2'), queries = [];
+export const GPU = { ms: 0, ok: !!timer };
+renderer.info.autoReset = false;
+export function render() {
+  renderer.info.reset();
+  let q = null; if (timer && queries.length < 4) { q = gl.createQuery(); gl.beginQuery(timer.TIME_ELAPSED_EXT, q); }
+  if (GFX.post) composer.render(); else renderer.render(scene, camera);
+  if (q) { gl.endQuery(timer.TIME_ELAPSED_EXT); queries.push(q); }
+  while (queries.length && gl.getQueryParameter(queries[0], gl.QUERY_RESULT_AVAILABLE)) {
+    const done = queries.shift(), ns = gl.getQueryParameter(done, gl.QUERY_RESULT); gl.deleteQuery(done);
+    if (!gl.getParameter(timer.GPU_DISJOINT_EXT)) GPU.ms += (ns / 1e6 - GPU.ms) * 0.1;
+  }
+}
+// Resolution that follows the frame time: when frames run long the picture is drawn a little smaller (down to 70%), and
+// when the GPU has room again it climbs back. Steps of 10%, at most one every two seconds, with a dead band in between so
+// it never hunts; it never goes above the resolution chosen in the settings.
+// (Decided on the frame time alone: some browsers' GPU timers report the whole frame interval, not the GPU's work. While
+// the world is still streaming in it waits; and a step it had to leave for being too slow isn't retried for 20 s.)
+export const ADAPT = { on: true, k: 1, t: 3, frame: 16.7, until: {} };
+export function adaptResolution(dt, loading) {
+  ADAPT.frame += (Math.min(dt, 0.1) * 1000 - ADAPT.frame) * 0.05; ADAPT.t -= dt; if (!ADAPT.on || ADAPT.t > 0) return;
+  if (loading) { ADAPT.t = 1; return; }
+  const now = performance.now(), slow = ADAPT.frame > 19.5, up = Math.min(1, +(ADAPT.k + 0.1).toFixed(1)), roomy = ADAPT.frame < 17.3 && !(ADAPT.until[up] > now);
+  const k = slow ? Math.max(0.7, +(ADAPT.k - 0.1).toFixed(1)) : roomy ? up : ADAPT.k;
+  if (slow && k !== ADAPT.k) ADAPT.until[ADAPT.k] = now + 20000;
+  if (k !== ADAPT.k) { ADAPT.k = k; ADAPT.t = 2.5; setScale(); } else ADAPT.t = 0.5;
+}
+export function setScale() { const s = GFX.scale * ADAPT.k; renderer.setPixelRatio(s); composer.setPixelRatio(s); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); }
 
 // Keep the sun's shadow box centred on the player, snapped to shadow-map texels so edges don't shimmer as you move
 const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
