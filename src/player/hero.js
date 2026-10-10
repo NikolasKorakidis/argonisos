@@ -2,6 +2,7 @@
 // a rate matched to ground speed; one-shots (jump, strike, punch, draw / sheathe, the bow) are sampled straight from
 // their tracks and blended over it: whole body when standing, upper body only while moving.
 import * as THREE from 'three';
+import { FootIK } from './footik.js';
 import { loadFBX, loadTex } from '../assets.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
@@ -103,7 +104,8 @@ export class Hero {
     if (hipsY && lw > 0.001 && S.hips) S.hips.bone.position.y = lerp(S.hips.bone.position.y, S.hips.interp.evaluate(time)[1], lw);
   }
   // Drive the rig every frame. st: { speed, sprinting, onGround, jumped, moveRel (walk direction relative to facing while
-  // aiming), swing (1 → 0 while striking), swingKind ('punch' | 'tool'), equip ({ kind: 'equip'|'disarm', t }), bow, aimPt, swimming }
+  // aiming), swing (1 → 0 while striking), swingKind ('punch' | 'tool'), equip ({ kind: 'equip'|'disarm', t }), bow, aimPt, swimming,
+  // ground (x, z, y → the surface height there) and rootY (where the body stands), for setting the feet on the ground }
   update(dt, st) {
     if (!this.mixer) return;
     const C = CLIPS, idle = this.act('idle', C.disarm, 0.97), run = this.act('run', C.run), sprint = this.act('sprint', C.sprint);
@@ -139,6 +141,12 @@ export class Hero {
     if (st.swimming && B.mixamorigHips) B.mixamorigHips.rotateX(0.9);
     // a closed fist round a held handle (the clips leave the hand open)
     if (this.gripR) for (const f of ['Index', 'Middle', 'Ring', 'Pinky']) for (let k = 1; k <= 3; k++) { const b = B['mixamorigRightHand' + f + k]; if (b) b.rotation.x += 1.2; }
+    // feet on the real ground: the hips drop for the lower foot, the legs bend, planted feet follow the slope
+    if (st.ground) {
+      this.ik ||= new FootIK(B, st.ground);
+      this.wrap.position.y += this.ik.plan(dt, st.rootY, st.onGround && !st.swimming && jumpT === 0);
+      this.root.updateMatrixWorld(true); this.ik.solve(st.rootY);
+    }
   }
   // Bow states: equip → ready → draw (hold RMB) → aim (full draw) → lower → ready → disarm
   poseBow(b, aimPt, sprinting) {

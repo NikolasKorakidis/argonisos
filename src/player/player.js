@@ -66,14 +66,17 @@ export class Player {
       this.sprinting = canSprint;
       const base = this.swimming ? SWIM * S.skillK('swimming') : canSprint ? SPRINT * S.skillK('sprinting') : this.sneaking ? SNEAK : aiming ? 2.2 : RUN;
       want.multiplyScalar(base * S.speedK * (1 + this.speedMod) * (this.overweight && !this.swimming ? 0.6 : 1) * (this.blocking ? 0.5 : 1));
-    }
+      // the lie of the land: slower and leaning in up a slope, a little quicker leaning back down one
+      if (this.onGround && !this.swimming) { const d = want.clone().normalize(), e = 0.7; this.slope = clamp((this.groundHere(this.pos.x + d.x * e, this.pos.z + d.z * e) - this.groundHere(this.pos.x - d.x * e, this.pos.z - d.z * e)) / (2 * e), -1, 1);
+        want.multiplyScalar(this.slope > 0 ? 1 - 0.35 * Math.min(this.slope, 0.8) : 1 + 0.12 * Math.min(-this.slope, 0.6)); }
+    } else this.slope = 0;
     // momentum: accelerate into a run, ease to a stop, little air control
     const acc = !this.onGround && !this.swimming ? 2.5 : want.lengthSq() ? 11 : 14;
     this.hv.x += (want.x - this.hv.x) * Math.min(1, acc * dt); this.hv.z += (want.z - this.hv.z) * Math.min(1, acc * dt);
     let speed = Math.hypot(this.hv.x, this.hv.z); if (speed < 0.05) { speed = 0; this.hv.set(0, 0, 0); }
     this.speed = speed;
     // stamina for sprinting and swimming, skill XP by distance (12.5 xp per 10 ft sprinted / 5 ft swum)
-    if (this.sprinting && speed > 3) { S.drain(5, dt, 'sprinting'); this.sprintD += speed * dt; if (this.sprintD > 3.05) { this.sprintD = 0; S.train('sprinting', 12.5); } }
+    if (this.sprinting && speed > 3) { S.drain(5 * (1 + clamp(this.slope || 0, 0, 0.8)), dt, 'sprinting'); this.sprintD += speed * dt; if (this.sprintD > 3.05) { this.sprintD = 0; S.train('sprinting', 12.5); } }
     if (this.swimming && speed > 0.3) { S.drain(5, dt, 'swimming'); this.swimD += speed * dt; if (this.swimD > 1.52) { this.swimD = 0; S.train('swimming', 12.5); } }
     if (this.sneaking && speed > 0.3) { S.drain(5, dt, 'sneaking'); this.sneakD = (this.sneakD || 0) + speed * dt; if (this.sneakD > 3.05) { this.sneakD = 0; S.train('sneaking', 12.5); } }
     if (this.sneaking && S.stamina <= 0.5) this.sneaking = false;
@@ -121,16 +124,18 @@ export class Player {
     if (this.equip) { this.equip.t += dt / 0.9; if (this.equip.t >= 1) { this.equip.done?.(); this.equip = null; } }
     // ---- body lean and bank into turns
     const yawRate = angDiff(this.yaw, this.lastYaw) / Math.max(dt, 1e-3); this.lastYaw = this.yaw;
-    this.lean = lerp(this.lean, this.onGround ? clamp(speed / 8, 0, 1) * 0.09 : 0, Math.min(1, dt * 6));
+    this.lean = lerp(this.lean, this.onGround ? clamp(speed / 8, 0, 1) * 0.09 + clamp(this.slope || 0, -0.6, 0.6) * 0.22 * clamp(speed / 3, 0, 1) : 0, Math.min(1, dt * 6));
     this.bank = lerp(this.bank, clamp(-yawRate * 0.03 * clamp(speed / 5, 0, 1), -0.12, 0.12), Math.min(1, dt * 6));
     this.root.rotation.set(this.lean, this.yaw, this.bank);
     this.hero.wrap.position.y = this.sneaking ? -0.12 : 0;
     // ---- animation
     let moveRel = 0; if (this.aiming && speed > 0.3) moveRel = angDiff(Math.atan2(this.hv.x, this.hv.z), this.yaw);
     this.hero.update(dt, { speed, sprinting: this.sprinting, onGround: this.onGround || this.swimming, jumped: this.jumped, swimming: this.swimming, moveRel,
-      swing: this.swing, swingKind: this.swingKind, equip: this.equip, bow: this.bow, aimPt: this.aimPt });
+      swing: this.swing, swingKind: this.swingKind, equip: this.equip, bow: this.bow, aimPt: this.aimPt, ground: this.groundFn ||= (x, z, y) => this.groundHere(x, z, y), rootY: this.pos.y });
     this.updateCamera(dt);
   }
+  // what you'd stand on at (x, z): the ground (pressed down under floors), or a floor, step or stair within reach of y
+  groundHere(x, z, y = this.pos.y) { return Math.max(groundAt(x, z), -SWIM_DEPTH, this.floorAt ? this.floorAt({ x, z, y }) : -1e9); }
   get aiming() { return !!this.bow && (this.bow.st === 'draw' || this.bow.st === 'aim'); }
   updateDead(dt) {
     this.deadT += dt;

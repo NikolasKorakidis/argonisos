@@ -3,6 +3,7 @@
 // Mixamo rig (so they share its run and strike clips) dressed in bark, stone-grey hide or bleached bone: stand-ins until
 // their own models arrive. Every body exposes the same small interface: obj, animate(state, speed, dt), flash(k), dispose().
 import * as THREE from 'three';
+import { FootIK } from '../player/footik.js';
 import { clone as cloneSkinned } from '../../jsm/utils/SkeletonUtils.js';
 import { loadGLB, loadFBX } from '../assets.js';
 import { CLIPS } from '../player/hero.js';
@@ -201,6 +202,13 @@ class RigBody {
     if (atk && this.atkT <= 0) { atk.reset(); atk.setEffectiveWeight(1); atk.timeScale = st === 'slam' ? 0.62 : this.kind === 'giant' ? 0.7 : 1.1; atk.play(); this.atkT = atk.getClip().duration / atk.timeScale; }
     if (this.atkT > 0) { this.atkT -= dt; if (this.atkT <= 0 && A.attack) A.attack.setEffectiveWeight(0); }
     this.mixer.update(dt);
+  }
+  // feet on the ground (see FootIK): after animate(), with the ground under the creature
+  feet(dt, ground, rootY, active) {
+    if (!this.ready || !this.bones) return;
+    const off = this.mixer._accuIndex + 1; for (const b of this.mixer._bindings) b.binding.setValue(b.buffer, off * b.valueSize);   // (the mixer skips unchanged bones: start from the clip's pose)
+    this.ik ||= new FootIK(this.bones, ground); const m = this.obj.children[0];
+    m.position.y = this.ik.plan(dt, rootY, active); this.obj.updateMatrixWorld(true); this.ik.solve(rootY);
   }
   flash(k) { for (const m of this.mats) m.emissive?.setRGB(k * 0.6 + (this.kind === 'skeleton' ? 0.19 : 0), this.kind === 'skeleton' ? 0.15 : 0, this.kind === 'skeleton' ? 0.09 : 0); }
   dispose() { this.gone = true; }
