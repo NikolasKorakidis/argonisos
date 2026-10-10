@@ -52,6 +52,7 @@ export const PATCHES = [
         'No more flickering where pieces meet: roof joints, gable ends, wall corners and floors all render cleanly.',
         'Grass no longer grows through your floors.',
         'Anything standing between the camera and you (walls, buildings, trees) turns see-through and comes back when the view is clear.',
+        'Fixed: a tree between the camera and you pulsed in and out instead of staying see-through.',
       ] },
       { t: 'Survival and crafting', icon: 'fire', items: [
         'The cooking stand takes all your raw meat and fish at once, and each piece cooks on its own.',
@@ -73,6 +74,7 @@ export const PATCHES = [
       ] },
       { t: 'Graphics and sound', icon: 'blessing', items: [
         '<b>Smoother everywhere</b>: trees and plants are now drawn in a handful of batches instead of hundreds of pieces, only what is in view is drawn, and far-off places are skipped. The forest is drawn with half the work it took before. If a frame still runs long, the picture quietly drops a little in resolution and climbs back when it can.',
+        'Fixed: long sessions slowly used up more and more graphics memory as creatures came and went and logs were split. The game now stays steady however long you play.',
         'Clouds cast soft shadows that drift across the land with the wind.',
         'Every place and hour has its own colour: warm and golden in the meadows, cool and green in the forest and under the giants, amber at sunrise and sunset, blue at night. A new tone curve keeps snow, marble and bright skies from burning out.',
         'Trees, rocks and ruins shade the ground and the grass beneath them, and hollows lie a little darker.',
@@ -88,6 +90,10 @@ export const PATCHES = [
         'The fir trees of Yleos have been rebuilt with drooping boughs.',
         'Sharper shadows on High graphics, clouds with shape and shade, and marble and stone that no longer burn out to white in full sun.',
         'Fixed: the bow was held the wrong way round.',
+      ] },
+      { t: 'Behind the scenes', icon: 'goal', items: [
+        'Every update is now checked by an automatic playthrough of the whole trial, from the first stone to the Chimera\'s head, plus checks on building, combat, movement, frame rate and how each part of the island looks.',
+        'A tireless bot now plays the game on its own (exploring, fighting, building, swimming, dying and saving) and reports anything that breaks. It has already found the graphics memory and tree flicker problems fixed above.',
       ] },
     ],
   },
