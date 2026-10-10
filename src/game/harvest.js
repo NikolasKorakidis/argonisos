@@ -110,7 +110,7 @@ export class Harvest {
     log.hp -= this.dmg(item, 'slash') * player.stats.damageK('axe'); player.stats.train('axe', 12.5);
     burst(at, { color: 0xd9b07a, n: 10, speed: 3, size: 0.06 }); addShake(0.2); this.g.sound?.('chop');
     if (log.hp > 0) return true;
-    this.g.scene.remove(log.mesh); this.g.colliders.removeGroup(log.id); this.logs.splice(this.logs.indexOf(log), 1); clearGrass(log.id, null);
+    this.g.scene.remove(log.mesh); log.mesh.traverse((o) => { o.geometry.dispose(); if (o.material !== trunkMat) o.material.dispose(); }); this.g.colliders.removeGroup(log.id); this.logs.splice(this.logs.indexOf(log), 1); clearGrass(log.id, null);
     dust(log.mesh.position, 16, 0xc8a878, 0.4);
     const k = player.stats.skillK('gathering');
     this.g.give('wood', Math.round(log.wood * k));

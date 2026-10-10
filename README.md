@@ -11,6 +11,16 @@ npm run dev   # then open http://localhost:8000
 The dev server reloads open pages when a file changes. three.js r160 is vendored, so it runs offline.
 `index.html?play` skips the title screen (handy for testing).
 
+## Test
+```bash
+npm install && npx playwright install chromium   # once
+npm test              # every suite: the whole trial end to end, building, features, movement, bosses, performance, looks
+npm run test:quick    # the fast ones only
+npm run playtest -- --minutes 20   # a bot plays on its own and writes a report of what went wrong
+```
+The tests play the real game in headless Chrome on the GPU. Reports, screenshots and diffs land in `tests/reports/`.
+After a change meant to alter the look, check `tests/reports/visual.html`, then `npm run test:update`.
+
 ## The trial
 - **Explore.** A 2.9 km island: the meadows of **Pedias** in the middle, the dark forest hills of **Yleos** around them,
   and the marsh of **Valtos**, sealed this milestone behind Zeus's storm wall.

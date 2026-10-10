@@ -6,3 +6,6 @@ concept/*
 !concept/nature.webp
 !concept/world-characters.webp
 .DS_Store
+# Test tooling: installed packages and the reports, screenshots and diffs each run writes
+node_modules/
+tests/reports/

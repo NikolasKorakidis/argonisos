@@ -39,10 +39,13 @@ export class Occlusion {
     for (const p of g.build.near(c.x, c.z, 14)) for (const m of p.inner.children) out.push(m);
     for (const grp of g.structures.groups) if (grp.position.distanceTo(c) < 70) for (const m of grp.children) if (m.isMesh) out.push(m);
     for (const b of g.veg.batches.values()) if (b.meshes[0].count) out.push(...b.meshes);
+    // a faded tree is out of its batch: its stand-in copy has to keep catching the ray, or it would pop back and fade again
+    for (const e of this.faded.values()) if (e.kind === 'tree') e.single.traverse((m) => { if (m.isMesh) out.push(m); });
     return out;
   }
   keyOf(hit) {
     const o = hit.object;
+    if (o.userData.fadeKey) return o.userData.fadeKey;
     if (o.userData.piece) return 'p:' + o.userData.piece.uid;
     if (o.userData.batch && hit.instanceId !== undefined) { const t = this.g.veg.treeAt(o, hit.instanceId); hit.tree = t; return `t:${t.cell.cx},${t.cell.cz},${t.i}`; }
     if (o.parent && this.g.structures.groups.includes(o.parent)) return 's:' + o.uuid;
@@ -57,7 +60,7 @@ export class Occlusion {
       if (veg.removed.has(`${c.cx},${c.cz},${i}`)) return;
       e.kind = 'tree'; e.cell = c; e.i = i;
       const single = veg.single(it[s], it[s + 1]); single.position.set(it[s + 2], it[s + 3], it[s + 4]); single.rotation.y = it[s + 5]; single.scale.setScalar(it[s + 6]);
-      e.mats = []; single.traverse((m) => { if (m.isMesh) { const cm = m.material.clone(); cm.transparent = true; cm.depthWrite = false; cm.alphaToCoverage = false;   /* (coverage + blending would dither) */ m.material = cm; m.castShadow = false; e.mats.push(cm); } });
+      e.mats = []; single.traverse((m) => { if (m.isMesh) { const cm = m.material.clone(); cm.transparent = true; cm.depthWrite = false; cm.alphaToCoverage = false;   /* (coverage + blending would dither) */ m.material = cm; m.castShadow = false; m.userData.fadeKey = key; e.mats.push(cm); } });
       this.g.scene.add(single); e.single = single;
       veg.hideTree(c, i, true);
     }
