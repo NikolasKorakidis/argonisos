@@ -14,7 +14,8 @@ export default {
     await t.step('…(hidden in its batch, a faded copy stands in)', `const e = [...g.occlusion.faded.values()].find((e) => e.kind === 'tree'); return (e && window._t.c.hidden?.has(window._t.i)) || 'faded: ' + [...g.occlusion.faded.keys()].join(',');`);
     await t.step('…turn the camera away', `P.camYaw = Math.PI; return true;`);
     await t.wait(1500);
-    await t.step('…(restored, no faded copies left)', `return (!window._t.c.hidden?.has(window._t.i) && g.occlusion.faded.size === 0) || 'still hidden';`);
+    // (from the other side another tree may stand in the way and fade: only this one has to come back)
+    await t.step('…(restored: back in its batch, no faded copy)', `const k = 't:' + window._t.c.cx + ',' + window._t.c.cz + ',' + window._t.i; return (!window._t.c.hidden?.has(window._t.i) && !g.occlusion.faded.has(k)) || 'still hidden';`);
     await t.step('felling a tree takes it out of its batch', `const tr = window._t, n = () => [...AG.veg.batches.values()].reduce((a, b) => a + b.n, 0); const before = n(); AG.veg.remove(tr.c.cx, tr.c.cz, tr.i); AG.veg.cull(AG.camera, P.pos); const after = n(); return after === before - 1 || before + ' → ' + after;`);
     await t.step('a site building between the camera and the hero fades', `const H = AG.game.SITES.house; const grp = g.structures.groups.reduce((a, b) => (Math.hypot(b.position.x - H.x, b.position.z - H.z) < Math.hypot(a.position.x - H.x, a.position.z - H.z) ? b : a)); const box = new AG.THREE.Box3().setFromObject(grp), c = box.getCenter(new V()), sz = box.getSize(new V()); window._grp = grp; window._orig = grp.children.filter((m) => m.isMesh).map((m) => m.material); P.spawn(c.x, c.z - sz.z / 2 - 2); P.camYaw = 0; P.camDist = 7; return true;`);
     await t.wait(1500);

@@ -12,6 +12,8 @@ export const ATMO = {
   mistCol: { value: new THREE.Color(0.7, 0.75, 0.8) }, mistAmt: { value: 0 }, mistBase: { value: 0 }, mistH: { value: 14 }, mistDen: { value: 0.012 },
   hazeCol: { value: new THREE.Color(1, 0.75, 0.5) }, hazeAmt: { value: 0 }, rayAmt: { value: 0.5 }, rays: { value: 1 },
   vigOffset: { value: 0.95 }, vigDark: { value: 1.15 },
+  // a soft blur on what lies far off, so the end of the view melts into the haze instead of ending in a sharp line
+  texel: { value: new THREE.Vector2(1 / 1280, 1 / 720) }, blurNear: { value: 600 }, blurFar: { value: 1100 }, blurAmt: { value: 1 },
   // the grade (white balance, saturation, a tint in the shadows) and the cloud shadows drifting over the land
   gTint: { value: new THREE.Color(1, 1, 1) }, gSat: { value: 1 }, gShadow: { value: new THREE.Color(0, 0, 0) },
   cloudOff: { value: new THREE.Vector2() }, cloudCover: { value: 0.4 }, cloudK: { value: 0 },
@@ -24,7 +26,7 @@ export class AtmospherePass extends Pass {
       uniforms: ATMO, depthTest: false, depthWrite: false,
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: `uniform sampler2D tDiffuse, tDepth; uniform mat4 projInv, camWorld; uniform vec3 camPos, sunDir, sunCol, mistCol, hazeCol;
-        uniform vec2 sunUV, cloudOff; uniform float sunVis, mistAmt, mistBase, mistH, mistDen, hazeAmt, rayAmt, rays, vigOffset, vigDark, gSat, cloudCover, cloudK;
+        uniform vec2 sunUV, cloudOff, texel; uniform float blurNear, blurFar, blurAmt, sunVis, mistAmt, mistBase, mistH, mistDen, hazeAmt, rayAmt, rays, vigOffset, vigDark, gSat, cloudCover, cloudK;
         uniform vec3 gTint, gShadow; varying vec2 vUv;
         float h12(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h12(i), h12(i + vec2(1, 0)), f.x), mix(h12(i + vec2(0, 1)), h12(i + vec2(1, 1)), f.x), f.y); }
@@ -33,6 +35,9 @@ export class AtmospherePass extends Pass {
           vec4 col = texture2D(tDiffuse, vUv); float d = texture2D(tDepth, vUv).x;
           if (d < 0.99999) {
             vec3 P = worldAt(vUv, d), V = P - camPos; float dist = length(V); vec3 vd = V / max(dist, 1e-3);
+            // far off, a soft blur (eight taps round a ring that widens with distance)
+            float bk = blurAmt * smoothstep(blurNear, blurFar, dist);
+            if (bk > 0.02) { vec3 acc = col.rgb; for (int i = 0; i < 8; i++) { float a = float(i) * 0.7854 + 0.39; acc += texture2D(tDiffuse, vUv + vec2(cos(a), sin(a)) * texel * 2.4 * bk).rgb; } col.rgb = acc / 9.0; }
             float toSun = max(dot(vd, sunDir), 0.0);
             // cloud shadows: soft patches of shade drifting across the land with the wind
             if (cloudK > 0.001) { vec2 q = (P.xz + cloudOff) * 0.0035; float n = vn(q) * 0.65 + vn(q * 2.3 + 7.1) * 0.35;
@@ -63,7 +68,7 @@ export class AtmospherePass extends Pass {
     this.fsQuad = new FullScreenQuad(this.material);
   }
   render(renderer, writeBuffer, readBuffer) {
-    ATMO.tDiffuse.value = readBuffer.texture; ATMO.tDepth.value = readBuffer.depthTexture;
+    ATMO.tDiffuse.value = readBuffer.texture; ATMO.tDepth.value = readBuffer.depthTexture; ATMO.texel.value.set(1 / readBuffer.width, 1 / readBuffer.height);
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer); if (this.clear) renderer.clear();
     this.fsQuad.render(renderer);
   }
@@ -90,6 +95,7 @@ export function updateAtmosphere(camera, o) {
   ATMO.sunDir.value.copy(o.sunDir).normalize();
   ATMO.sunCol.value.copy(o.sunCol).multiplyScalar(o.sunK);
   ATMO.mistCol.value.copy(o.fogCol).lerp(o.sunCol, 0.15 * o.day).multiplyScalar(0.9 + 0.3 * o.day);
+  if (o.fogFar) { ATMO.blurFar.value = o.fogFar * 0.85; ATMO.blurNear.value = o.fogFar * 0.4; }   // (with the fog: high up, where it clears, the blur moves out too)
   ATMO.mistAmt.value = o.mist; ATMO.mistBase.value = o.ground - 6; ATMO.mistDen.value = o.mistDen;
   ATMO.hazeCol.value.copy(o.sunCol).multiplyScalar(0.35 * o.sunK); ATMO.hazeAmt.value = (0.25 + o.dusk * 0.9) * o.day;
   // the sun on the screen, and how strongly its shafts show (only with the sun up, ahead of you, and not behind cloud)

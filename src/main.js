@@ -167,7 +167,7 @@ function loop() {
   const wet = 1 - Math.min(1, WEATHER.k.rain * 1.5), snowK = PEAK.on ? Math.min(1, Math.max(0, (camera.position.y - 215) / 50)) : 0;
   updateAmbient(dt, camera.position, { pollen: LIGHT.day * bw.p * wet * (1 - atmo.overcast * 0.7), firefly: (LIGHT.dusk * 0.6 + LIGHT.night) * (bw.p + bw.y * 0.7) * wet,
     leaf: (0.35 + LIGHT.day * 0.65) * Math.min(1, bw.y * 1.2 + GIANTWOOD.k), snow: snowK }, t);
-  updateAtmosphere(camera, { dt, wp: bw.p, wy: bw.y + bw.v, night: LIGHT.night, giant: GIANTWOOD.k, sunDir, sunCol: sun.color, sunK: Math.min(1.4, sun.intensity / 2.4), fogCol: scene.fog.color, day: LIGHT.day, dusk: LIGHT.dusk, overcast: atmo.overcast, rays: 1,
+  updateAtmosphere(camera, { dt, fogFar: scene.fog.far, wp: bw.p, wy: bw.y + bw.v, night: LIGHT.night, giant: GIANTWOOD.k, sunDir, sunCol: sun.color, sunK: Math.min(1.4, sun.intensity / 2.4), fogCol: scene.fog.color, day: LIGHT.day, dusk: LIGHT.dusk, overcast: atmo.overcast, rays: 1,
     mist: Math.min(1, LIGHT.mist + (WEATHER.k.fog || 0) * 0.4) * (S.fly ? 0.5 : 1), mistDen: 0.01 + biomeWeights(focus.x, focus.z).y * 0.012, ground: Math.min(heightAt(focus.x, focus.z), 60) });   // (mist lies in the valleys: from a summit you look down on it)
   render(); adaptResolution(dt, terrain.pending > 0 || !game.started);
   endFrame();

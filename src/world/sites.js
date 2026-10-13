@@ -7,7 +7,7 @@
 //   caves:    four Giant caves in the Yleos hills, one carving in each (three together → the Chimera's shrine)
 //   chimera:  the Chimera's shrine, deep in the Yleos forest
 //   peak:     Olympos, one great snowy mountain in the far hills, placed last and kept clear of all the others
-import { heightAt, biomeWeights, addPad, hash2, WORLD, PEAK, setPeak, landness } from './gen.js';
+import { heightAt, biomeWeights, addPad, hash2, WORLD, PEAK, setPeak, landness, setDetail } from './gen.js';
 
 const slopeAt = (x, z) => Math.hypot(heightAt(x + 2, z) - heightAt(x - 2, z), heightAt(x, z + 2) - heightAt(x, z - 2)) / 4;
 const _w = { p: 0, y: 0, v: 0, r: 0 };
@@ -61,6 +61,7 @@ function pad(s, r0, r1, kind, y = s.y) { s.y = y; s.r = r1; s.kind = kind; addPa
   }
   // (a small flat top for the cairn and the altar, a few metres under the point)
   if (pk) { setPeak(pk.x, pk.z); const y = heightAt(pk.x, pk.z) - 5; addPad(pk.x, pk.z, 6, 18, y); SITES.peak = { x: pk.x, z: pk.z, y, kind: 'peak', r: 12 }; clears.push([pk.x, pk.z, 9]); }
+  setDetail(true);   // the ground's small bumps, now that nothing will be placed by its height (see detail() in gen.js)
 }
 // Nothing grows here (flora and ground pickups ask)
 export function siteClear(x, z) { for (const [cx, cz, r] of clears) if ((x - cx) * (x - cx) + (z - cz) * (z - cz) < r * r) return true; return false; }

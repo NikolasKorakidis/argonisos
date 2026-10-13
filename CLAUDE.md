@@ -36,6 +36,9 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   trees and pickups by index within their cell. Append new species or pickup kinds at the end, with their own hash,
   so existing indices don't shift. Never draw from a shared random sequence in a way that changes the order for code
   after it (`greek.js` textures have their own dice for this reason).
+- **Heights change once the sites are placed.** The Olympos peak and the small-scale ground detail (`PEAK.on`,
+  `DETAIL.on` in `gen.js`) switch on at the end of `sites.js`, so they can't move sites. Anything that picks places by
+  height must run before that, or accept the final heights. Ground detail finer than ~6 m won't match the 2 m terrain mesh.
 - **The ground isn't just `heightAt`.** Floors press the terrain down (`groundcut.js`): use `groundAt(x, z)` for where
   things stand, `player.groundHere(x, z, y)` to include floors and stairs, and `pickups.landAt` for dropped items.
 - **Vegetation is batched.** Near trees are one `InstancedMesh` per species and variant across all cells, re-packed every

@@ -4,7 +4,8 @@ export default {
   name: 'Building',
   async run(t) {
     const house = (order) => `AG.S.freeBuild = true; for (const q of [...B.placed]) B.remove(q, false);
-      const x0 = 20 + (${order === 'gables' ? 30 : 0}), z0 = 10, y0 = Math.max(...[[-3, -3], [3, -3], [-3, 3], [3, 3], [0, 0]].map(([a, c]) => AG.heightAt(x0 + a, z0 + c))) + 0.05; P.spawn(x0, z0 + 1);
+      const x0 = 20 + (${order === 'gables' ? 30 : 0}), z0 = 10, y0 = AG.heightAt(x0, z0) + 0.05;   // (the floor rests on the ground at the middle corner all four tiles share; higher ground under it is pressed down)
+  P.spawn(x0, z0 + 1);
       const out = []; const put = (id, x, y, z, r = 0) => { const def = B.piece(id), pos = new V(x0 + x, y0 + y, z0 + z); const why = B.invalid(def, pos, r, true, { terrain: false }); if (why) out.push(id + ': ' + why); else B.place(id, pos, r); };
       for (const [x, z] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) put('floor', x, 0, z);
       put('wall', -1.5, 0, -3); put('wall', 1.5, 0, -3); put('wall', -3, 0, -1.5, Math.PI / 2); put('wall', -3, 0, 1.5, Math.PI / 2); put('wall', 3, 0, -1.5, Math.PI / 2); put('wall', 3, 0, 1.5, Math.PI / 2); put('wall', -1.5, 0, 3); put('doorframe', 1.5, 0, 3); put('door', 0.8, 0, 3);
@@ -22,5 +23,15 @@ export default {
     await t.step('a floor next to the house is allowed', `${aim} const why = B.invalid(B.piece('floor'), new V(x0 + 4.5, y0, z0 - 1.5), 0, true, {}); return why === null || why;`);
     await t.step('nothing snaps to the workbench', `${aim} for (const q of [...B.placed]) B.remove(q, false); AG.S.freeBuild = true; const wx = x0 + 40, wz = z0, wy = AG.heightAt(wx, wz); const wb = B.place('workbench', new V(wx, wy, wz), 0); P.spawn(wx + 4, wz); B.select('beamV'); B.lastSnap = null; AG.camera.position.set(wx + 4, wy + 2, wz); AG.camera.lookAt(wx + 0.1, wy + 0.2, wz + 0.1); AG.camera.updateMatrixWorld(); AG.scene.updateMatrixWorld(true); const r = B.placeGhost(); return (r && r.pos.distanceTo(wb.pos) > 0.05) || 'the beam snapped onto the workbench';`);
     await t.step('the ghost keeps its snap while the aim wobbles (no flicker)', `${aim} for (const q of [...B.placed]) B.remove(q, false); const h = window._h; const fy = AG.heightAt(h.x0, h.z0) + 0.05; B.place('floor', new V(h.x0, fy, h.z0), 0); P.spawn(h.x0 - 5, h.z0); B.select('floor'); B.lastSnap = null; const seen = new Set(); for (let i = 0; i < 24; i++) { const j = Math.sin(i * 1.7) * 0.35; AG.camera.position.set(h.x0 - 5, fy + 2.5, h.z0 + j); AG.camera.lookAt(h.x0 + 2.7 + j * 0.5, fy, h.z0 + 0.4 + j); AG.camera.updateMatrixWorld(); AG.scene.updateMatrixWorld(true); const r = B.placeGhost(); seen.add(r.pos.x.toFixed(2) + ',' + r.pos.z.toFixed(2)); } return seen.size === 1 || 'switched between ' + [...seen].join(' | ');`);
+    // tester feedback (11 Oct): a thatch panel wouldn't go in between two others. Aiming into the gap, the aim passes
+    // through it and lands on the floor below, so snapping has to look along the line of aim, not just where it lands
+    const wide = `AG.S.freeBuild = true; for (const q of [...B.placed]) B.remove(q, false); const x0 = window._h.x0 - 25, z0 = window._h.z0, y0 = Math.max(...[[-5, -3], [5, -3], [-5, 3], [5, 3], [0, 0]].map(([a, c]) => AG.heightAt(x0 + a, z0 + c))) + 0.05;
+      const put = (id, x, y, z, r = 0) => B.place(id, new V(x0 + x, y0 + y, z0 + z), r);
+      for (const x of [-3, 0, 3]) for (const z of [-1.5, 1.5]) put('floor', x, 0, z);
+      for (const x of [-3, 0, 3]) { put('wall', x, 0, -3); put('wall', x, 0, 3); } for (const z of [-1.5, 1.5]) { put('wall', -4.5, 0, z, Math.PI / 2); put('wall', 4.5, 0, z, Math.PI / 2); }
+      put('roof63', -3, 3, -3, Math.PI); put('roof63', 3, 3, -3, Math.PI); window._w = { x0, z0, y0 };`;
+    await t.step('a thatch panel snaps into the gap between two others', `${wide} P.spawn(x0, z0 - 5); g.give('hammer'); g.useSlot(inv.slots.findIndex((s) => s?.id === 'hammer')); B.select('roof63'); B.rot = Math.PI; B.lastSnap = null;
+      const res = []; for (const [cx, cy, tx, ty] of [[0.6, 6, 0, 4.2], [-0.5, 5, 0.3, 4.6], [1.2, 7, -0.4, 4.0]]) { AG.camera.position.set(x0 + cx, y0 + cy, z0 - 8); AG.camera.lookAt(x0 + tx, y0 + ty, z0 - 1.6); AG.camera.updateMatrixWorld(); AG.scene.updateMatrixWorld(true); B.lastSnap = null; const r = B.placeGhost(); res.push(r && !r.why && Math.abs(r.pos.x - x0) < 0.05 && Math.abs(r.pos.y - (y0 + 3)) < 0.05 && Math.abs(r.pos.z - (z0 - 3)) < 0.05 ? 'ok' : r ? [r.pos.x - x0, r.pos.y - y0, r.pos.z - z0].map((v) => v.toFixed(2)).join(',') + ' ' + r.why : 'no ghost'); }
+      return res.every((x) => x === 'ok') || res.join(' | ');`);
   },
 };

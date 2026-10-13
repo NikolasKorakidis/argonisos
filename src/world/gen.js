@@ -74,6 +74,17 @@ export function peakHeight(x, z) {
   return PEAK.h * (body + (ridged(x * 0.011, z * 0.011, 3) - 0.5) * 0.1 * (1 - d) * smooth(0, 0.2, d));
 }
 
+// The lie of the land up close: bumps and dips of a few metres to a few tens of metres on top of the broad hills, so the
+// ground is never smooth underfoot (stronger in the forest hills, gentler in the meadows, faint in the marsh). Switched
+// on once the sites are laid out (sites.js), so it can't move them; their pads stay flat. Nothing finer than ~6 m: the
+// nearest terrain is drawn with a vertex every 2 m, and the ground you walk on must match the ground you see.
+export const DETAIL = { on: false };
+export function setDetail(on) { DETAIL.on = on; }
+function detail(x, z, w) {
+  const big = noise(x * 0.04 + 31.7, z * 0.04 - 12.9) - 0.5, mid = noise(x * 0.09 - 5.3, z * 0.09 + 44.1) - 0.5, fine = noise(x * 0.16 + 70.2, z * 0.16 - 3.4) - 0.5;
+  return w.p * (big * 5 + mid * 2 + fine * 0.6) + w.y * (big * 8 + mid * 2.8 + fine * 0.8) + w.v * (big * 0.8 + mid * 0.4);
+}
+
 // ---- Height (metres above sea level)
 export function rawHeight(x, z, w = biomeWeights(x, z)) {
   const hp = 2.2 + fbm(x * 0.0032, z * 0.0032, 4) * 24 + (fbm(x * 0.017, z * 0.017, 2) - 0.5) * 3.5          // meadows,
@@ -83,6 +94,7 @@ export function rawHeight(x, z, w = biomeWeights(x, z)) {
   const hv = -0.15 + (fbm(x * 0.013 + 7, z * 0.013, 3) - 0.5) * 3.6 + (fbm(x * 0.05, z * 0.05, 2) - 0.5) * 0.8;    // marsh: islands and pools
   let h = w.p * hp + w.y * hy + w.v * hv + peakHeight(x, z) * (1 - w.v);
   const L = landness(x, z);
+  if (DETAIL.on) h += detail(x, z, w) * smooth(1.6, 3.2, L);   // (the beaches stay smooth)
   const beach = 0.6 + fbm(x * 0.02, z * 0.02, 2) * 1.6;
   if (L < 1.6) h = lerp(lerp(-24, beach, smooth(-1.4, 0.15, L)), h, smooth(0.15, 1.6, L));   // shelf → beach → land
   return h;
