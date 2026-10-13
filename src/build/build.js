@@ -23,6 +23,26 @@ const ghostOk = new THREE.MeshStandardMaterial({ color: 0x7fe08a, transparent: t
 const ghostBad = new THREE.MeshStandardMaterial({ color: 0xff6a5a, transparent: true, opacity: 0.45, depthWrite: false, emissive: 0x8a2a1a, emissiveIntensity: 0.6 });
 const supportColor = (s, grounded) => (grounded ? 0x3a6cff : s > 0.7 ? 0x3fd060 : s > 0.4 ? 0xe8d040 : 0xff4a2a);
 const toLocal = (p, wx, wz) => { const dx = wx - p.pos.x, dz = wz - p.pos.z, c = Math.cos(-p.rot), s = Math.sin(-p.rot); return [dx * c + dz * s, -dx * s + dz * c]; };   // inverse of a yaw rotation
+// How far along a ray it first meets a piece placed at pos, rot (its surfaces and solid parts), or null
+const _lr = new THREE.Ray(), _p0 = new THREE.Vector3(), _p1 = new THREE.Vector3(), _p2 = new THREE.Vector3(), _p3 = new THREE.Vector3(), _hb = new THREE.Box3(), _hv = new THREE.Vector3();
+function crossT(def, pos, rot, o, dir) {
+  const c = Math.cos(-rot), s = Math.sin(-rot), lx = o.x - pos.x, lz = o.z - pos.z;   // the ray in the piece's own frame
+  _lr.origin.set(lx * c + lz * s, o.y - pos.y, -lx * s + lz * c); _lr.direction.set(dir.x * c + dir.z * s, dir.y, -dir.x * s + dir.z * c);
+  let best = null; const take = (h) => { if (h) { const t = h.distanceTo(_lr.origin); if (best === null || t < best) best = t; } };
+  for (const t of def.tops || []) {
+    const ya = t.y ?? t.y0, yb = t.y ?? t.y1; _p0.set(t.x0, ya, t.z0); _p1.set(t.x1, ya, t.z0); _p2.set(t.x1, yb, t.z1); _p3.set(t.x0, yb, t.z1);
+    take(_lr.intersectTriangle(_p0, _p1, _p2, false, _hv)); take(_lr.intersectTriangle(_p0, _p2, _p3, false, _hv));
+  }
+  for (const b of def.solids || []) { _hb.setFromCenterAndSize(_p0.set(b[0], b[1], b[2]), _p1.set(b[3], b[4], b[5])); take(_lr.intersectBox(_hb, _hv)); }
+  return best;
+}
+// The middle of a piece in its own frame (its surfaces and solid parts, else its snap points), for judging snap spots
+function centreOf(def) {
+  const pts = [];
+  for (const t of def.tops || []) pts.push([(t.x0 + t.x1) / 2, ((t.y ?? t.y0) + (t.y ?? t.y1)) / 2, (t.z0 + t.z1) / 2]);
+  for (const b of def.solids || []) pts.push([b[0], b[1], b[2]]);
+  const src = pts.length ? pts : def.snaps; return [0, 1, 2].map((k) => src.reduce((a, p) => a + p[k], 0) / src.length);
+}
 const toWorld = (pos, rot, l, out = new THREE.Vector3()) => { const c = Math.cos(rot), s = Math.sin(rot); return out.set(pos.x + l[0] * c + l[2] * s, pos.y + l[1], pos.z - l[0] * s + l[2] * c); };
 
 export class Build {
@@ -79,9 +99,26 @@ export class Build {
   }
   snapsOf(def, pos, rot) { return def.snaps.map((s) => toWorld(pos, rot, s)); }
   placeGhost() {
-    const def = this.ghostDef, a = this.aim(); if (!a) { this.ghost.visible = false; return null; }
+    const def = this.ghostDef; let a = this.aim();
+    // aiming at open sky (say, into the gap between two roof panels): structural pieces still snap along the line of aim
+    if (!a) { if (def.equip) { this.ghost.visible = false; return null; } a = { p: _ray.ray.origin.clone().addScaledVector(_ray.ray.direction, 9), d: 9, air: true }; }
     this.ghost.visible = true;
     let pos = a.p.clone();
+    // a cooking stand goes right over a campfire: aim at the fire, or close to it, and it settles over it
+    if (def.cook) {
+      const fire = a.piece?.def.fire ? a.piece : [...this.near(pos.x, pos.z, 2)].find((p) => p.def.fire && Math.hypot(p.pos.x - pos.x, p.pos.z - pos.z) < 1.2);
+      if (fire) {
+        this.ghost.position.copy(fire.pos); this.ghost.rotation.y = fire.rot; this.lastSnap = null;
+        const why = this.invalid(def, fire.pos, fire.rot, true, a); for (const m of this.ghost.children) m.material = why ? ghostBad : ghostOk;
+        return { pos: fire.pos.clone(), rot: fire.rot, why, snapped: true };
+      }
+    }
+    // The line of aim, from about where the hero stands to where it lands. Snap spots are judged by how close the piece
+    // would sit to this line, not to the point it lands on: aim into a gap and the line passes through the gap and lands
+    // on whatever is behind, but the piece you want is still right on it.
+    const o = _ray.ray.origin, dir = _ray.ray.direction, t0 = Math.max(0, _v.copy(this.g.player.pos).sub(o).dot(dir) - 1.5), t1 = Math.max(t0, a.d ?? o.distanceTo(a.p));
+    const onLine = (q) => { const t = Math.min(t1, Math.max(t0, _v.copy(q).sub(o).dot(dir))); return { off: _v.copy(o).addScaledVector(dir, t).distanceTo(q), t }; };
+    const centre = def.centre ||= centreOf(def), _c = new THREE.Vector3();
     // Only structural pieces are snap anchors: never the workbench, campfire, bed, chest or other furniture. Equipment
     // itself doesn't snap at all; it goes where you aim.
     const structural = (p) => !p.def.equip, snapping = !def.equip;
@@ -94,13 +131,16 @@ export class Build {
     // snap: try putting each of the ghost's points on each point of what's built nearby, score each placement (the most
     // points lined up first, then nearest where you aim), and take the best one that's actually allowed
     const local = snapping ? def.snaps : [], targets = [];
-    if (snapping) for (const p of this.near(pos.x, pos.z, 9)) if (structural(p)) for (const s of p.snaps) if (s.distanceTo(pos) < 5) targets.push(s);
+    if (snapping) { const P = this.g.player.pos; for (const p of this.near(P.x, P.z, REACH + 4)) if (structural(p)) for (const s of p.snaps) if (onLine(s).off < 5) targets.push(s); }
     const cands = [];
     // (against a structure a quarter turn is tried too, but it only wins if it lines up clearly more points)
     for (const [r2, pen] of anchor ? [[rot, 0], [rot + Math.PI / 2, 2.5], [rot - Math.PI / 2, 2.5]] : [[rot, 0]]) {
       const c = Math.cos(r2), sn = Math.sin(r2);
       for (const s of targets) for (const l of local) {
-        const cand = new THREE.Vector3(s.x - (l[0] * c + l[2] * sn), s.y - l[1], s.z - (-l[0] * sn + l[2] * c)), d = cand.distanceTo(pos); if (d > 1.7) continue;
+        const cand = new THREE.Vector3(s.x - (l[0] * c + l[2] * sn), s.y - l[1], s.z - (-l[0] * sn + l[2] * c));
+        const L = onLine(_c.set(cand.x + centre[0] * c + centre[2] * sn, cand.y + centre[1], cand.z - centre[0] * sn + centre[2] * c)); if (L.off > 1.7) continue;
+        // a spot the line of aim passes right through, well before it lands, is what you're pointing at: nearest first
+        const x = crossT(def, cand, r2, o, dir), d = x !== null && x > t0 && x < t1 - 0.6 ? -100 + x : L.off;
         let match = 0; for (const m of local) { const wx = cand.x + m[0] * c + m[2] * sn, wy = cand.y + m[1], wz = cand.z - m[0] * sn + m[2] * c; if (targets.some((t) => Math.abs(t.x - wx) + Math.abs(t.y - wy) + Math.abs(t.z - wz) < 0.2)) match++; }
         if (cands.some((q) => q.pos.distanceTo(cand) < 0.02 && Math.abs(q.rot - r2) < 0.01)) continue;
         cands.push({ pos: cand, rot: r2, score: d - 1.6 * (match - 1) + pen });
@@ -267,8 +307,14 @@ export class Build {
       if (dist < bd) { bd = dist; best = p; }
     }
     if (!best) return null;
-    // a cooking stand over a fire: E goes to the stand when there's meat to put on or food to take off
-    if (best.def.fire) { const st = [...this.near(best.pos.x, best.pos.z, 2)].find((q) => q.def.cook && q.pos.distanceTo(best.pos) < 1.5); if (st && (st.state.cook.length || this.g.inv.count('rawMeat') || this.g.inv.count('rawFish'))) best = st; }
+    // a cooking stand over a fire: E goes to the stand only when it has something to do (food to take off, or meat to put
+    // on over a burning fire); otherwise to the fire, so you can always light it or feed it, meat in your pack or not
+    const stand = best.def.cook ? best : best.def.fire ? [...this.near(best.pos.x, best.pos.z, 2)].find((q) => q.def.cook && q.pos.distanceTo(best.pos) < 1.5) : null;
+    const hearth = stand && (best.def.fire ? best : [...this.near(stand.pos.x, stand.pos.z, 2)].find((q) => q.def.fire && q.pos.distanceTo(stand.pos) < 1.5));
+    if (stand && hearth) {
+      const st = stand.state.cook, ready = st.some((c) => c.t >= c.need), raw = this.g.inv.count('rawMeat') + this.g.inv.count('rawFish');
+      best = ready || (hearth.state.lit && raw && st.length < stand.def.cook) ? stand : hearth;
+    }
     const p = best, d = p.def, inv = this.g.inv;
     if (d.door) return { label: p.state.open ? 'Close' : 'Open', sub: d.name, use: () => { this.setDoor(p, !p.state.open); this.g.sound?.('door'); } };
     if (d.fire) return { label: p.state.lit ? `Add wood (${Math.ceil(p.state.fuel)}/10)` : inv.count('wood') ? 'Light the fire' : 'Needs wood to light', sub: 'Campfire', alt: this.douseAction(p), use: () => {

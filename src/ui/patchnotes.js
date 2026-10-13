@@ -4,6 +4,21 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-2', name: 'Patch 2', title: 'Hearth and Hillside', date: '13 October 2026',
+    intro: 'Fixes for what our testers found in Patch 1: building roofs and cooking over the fire work the way they should, and the land itself is rougher underfoot.',
+    sections: [
+      { t: 'Building and cooking', icon: 'hammer', items: [
+        'Fixed: a thatch roof panel would not go into the gap between two others. Aim into the gap and it snaps in. Every piece now snaps to what you aim through, not to whatever lies behind it.',
+        'Fixed: the cooking stand could not be placed over a campfire. Aim at the fire, or close to it, and the stand settles right over it.',
+        'Fixed: with a cooking stand over a campfire, E only offered to cook if you carried meat. E now lights or feeds the fire, and goes to the stand only when there is food to take off, or meat to cook over a burning fire. F still puts the fire out.',
+      ] },
+      { t: 'The world', icon: 'temple', items: [
+        'The ground is rougher underfoot: small rises and dips on top of the rolling hills, gentle in the meadows and stronger in the forest hills. The ground around the temple, the Labyrinth and the other sites stays level.',
+        'Far-off land now blurs softly into the haze, so the end of the view no longer ends in a sharp line.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-1', name: 'Patch 1', title: 'The Trial Awakens', date: '9 October 2026',
     intro: 'The first big update to Argonisos: a better world to explore, a smoother building game, livelier bosses and a fresher look. Thank you to everyone who played and told us what felt wrong. Here is everything we changed.',
     sections: [
