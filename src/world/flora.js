@@ -30,11 +30,15 @@ export const SPECIES = [
   { name: 'colfall', s: [0.9, 1.15], res: 'rock', col: 1.0, h: 0.7 },
   { name: 'colstand', s: [0.85, 1.15], res: 'rock', col: 0.55, h: 3.2 },
   { name: 'herm', s: [0.95, 1.05], res: 'rock', col: 0.45, h: 1.7 },
-  { name: 'amphorae', s: [0.9, 1.1] },
+  { name: 'amphorae', s: [0.9, 1.1], noShadow: true },
   { name: 'wallruin', s: [0.9, 1.15], res: 'rock', col: 1.1, h: 1.0 },
-  { name: 'lavender', s: [0.8, 1.25] },
-  { name: 'broom', s: [0.8, 1.25] },
-  { name: 'myrtle', s: [0.8, 1.3] },
+  { name: 'lavender', s: [0.8, 1.25], noShadow: true },
+  { name: 'broom', s: [0.8, 1.25], noShadow: true },
+  { name: 'myrtle', s: [0.8, 1.3], noShadow: true },
+  // the giant forest: trunks like columns, a canopy thirty metres up, ferns beneath; and red-leaved bushes in the hills
+  { name: 'titan', s: [0.9, 1.15], res: 'tree', col: 1.25 },
+  { name: 'fern', s: [0.7, 1.05], noShadow: true },
+  { name: 'redbush', s: [0.8, 1.2], noShadow: true },
 ];
 export const SP = Object.fromEntries(SPECIES.map((s, i) => [s.name, i]));
 const MIX = {
@@ -46,8 +50,15 @@ const MIX = {
 const pick = (mix, r) => { let t = 0; for (const [, w] of mix) t += w; let a = r * t; for (const [n, w] of mix) { a -= w; if (a <= 0) return SP[n]; } return SP[mix[0][0]]; };
 
 // Trees per square metre at a point (0 where nothing can grow)
+// Where the giant forest stands: long stretches of the belt where the meadows give way to the forested hills
+const _tw = { p: 0, y: 0, v: 0, r: 0 };
+export function titanBand(x, z, w = biomeWeights(x, z, _tw)) {
+  const edge = smooth(0.1, 0.32, w.y) * smooth(0.86, 0.62, w.y) * (1 - w.v);
+  return edge * smooth(0.44, 0.58, fbm(x * 0.0016 + 77, z * 0.0016 - 31, 3));
+}
 export function treeDensity(x, z, h, w) {
   if (h < 1.6 && w.v < 0.5) return 0;
+  if (h > 150) return smooth(205, 150, h) * treeDensity(x, z, 140, w);   // the treeline on Olympos
   const grove = smooth(0.52, 0.68, fbm(x * 0.0075 + 21, z * 0.0075 - 4, 3));
   const pedias = (1 / 900) + grove * (1 / 70);
   const clearing = smooth(0.38, 0.28, fbm(x * 0.01 - 3, z * 0.01 + 6, 3));      // forest glades
@@ -61,7 +72,8 @@ export function treeDensity(x, z, h, w) {
 export function layoutCell(cx, cz) {
   const it = rawCell(cx, cz).slice(), rocks = rocksAround(cx, cz), x0 = cx * CELL, z0 = cz * CELL;
   for (let i = 0; i < it.length; i += STRIDE) {
-    const sp = SPECIES[it[i]]; if (sp.res !== 'tree') continue;
+    const sp = SPECIES[it[i]]; if (sp.res !== 'tree' || it[i] === SP.titan) continue;
+    if (titanBand(it[i + 2], it[i + 4]) > 0.35 && hash2(cx * 131 + i, cz * 977 - i) < 0.75) { it[i + 6] = 0; continue; }   // the giants' shade: the understory thins out
     const tr = sp.col * it[i + 6];
     for (let pass = 0; pass < 3; pass++) {
       let moved = false;
@@ -90,7 +102,7 @@ function rawCell(cx, cz) {
 // rocks and boulders in a cell and its eight neighbours, as a flat [x, z, radius, ...]
 function rocksAround(cx, cz) {
   const out = [];
-  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const it = rawCell(cx + i, cz + j); for (let o = 0; o < it.length; o += STRIDE) { const sp = SPECIES[it[o]]; if (sp.res === 'rock') out.push(it[o + 2], it[o + 4], sp.col * it[o + 6]); } }
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const it = rawCell(cx + i, cz + j); for (let o = 0; o < it.length; o += STRIDE) { const sp = SPECIES[it[o]]; if (sp.res === 'rock' || it[o] === SP.titan) out.push(it[o + 2], it[o + 4], sp.col * it[o + 6] + (it[o] === SP.titan ? 1.2 : 0)); } }
   return out;
 }
 // everything solid around a cell (rocks and tree trunks where they finally stand), for things laid out on the ground
@@ -103,6 +115,27 @@ export function solidsAround(cx, cz) {
   return out;
 }
 export const insideSolid = (list, x, z, r) => obstructed(list, x, z, r);
+// What shades the ground in a rectangle (for the terrain and grass to bake in): [x, z, radius, strength, ...] for every
+// tree (a canopy-sized pool of shade), giant (a wide, deep one), rock and ruin (a tight one at its foot)
+export function shadeAround(x0, z0, x1, z1) {
+  const out = [];
+  for (let cz = Math.floor((z0 - 12) / CELL); cz <= Math.floor((z1 + 12) / CELL); cz++) for (let cx = Math.floor((x0 - 12) / CELL); cx <= Math.floor((x1 + 12) / CELL); cx++) {
+    const it = layoutCell(cx, cz);
+    for (let o = 0; o < it.length; o += STRIDE) { const sp = SPECIES[it[o]], s = it[o + 6]; if (s <= 0 || !sp.res) continue;
+      if (it[o] === SP.titan) out.push(it[o + 2], it[o + 4], 10 * s, 0.45);
+      else if (sp.res === 'tree') out.push(it[o + 2], it[o + 4], 1.6 + sp.col * s * 3.4, 0.3);
+      else if (sp.res === 'rock') out.push(it[o + 2], it[o + 4], 0.6 + sp.col * s * 1.25, 0.32); }
+  }
+  return out;
+}
+// add up the shade from such a list over a grid (x0, z0, cell size k, nx × nz), into occ[]
+export function bakeShade(list, x0, z0, k, nx, nz, occ) {
+  for (let t = 0; t < list.length; t += 4) {
+    const x = list[t], z = list[t + 1], R = list[t + 2], S = list[t + 3];
+    const i0 = Math.max(0, Math.floor((x - R - x0) / k)), i1 = Math.min(nx - 1, Math.ceil((x + R - x0) / k)), j0 = Math.max(0, Math.floor((z - R - z0) / k)), j1 = Math.min(nz - 1, Math.ceil((z + R - z0) / k));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const dx = x0 + i * k - x, dz = z0 + j * k - z, q = (dx * dx + dz * dz) / (R * R); if (q < 1) occ[j * nx + i] += S * (1 - q) * (1 - q); }
+  }
+}
 function layoutRaw(cx, cz) {
   const out = [], x0 = cx * CELL, z0 = cz * CELL, STEP = 4, w = { p: 0, y: 0, v: 0, r: 0 };
   let k = 0;
@@ -133,11 +166,20 @@ function layoutRaw(cx, cz) {
     const place = (k) => { const x = x0 + h2(k) * CELL, z = z0 + h2(k + 0.5) * CELL, h = heightAt(x, z); if (h < 1.6 || siteClear(x, z)) return null; return Math.hypot(heightAt(x + 1.5, z) - h, heightAt(x, z + 1.5) - h) / 1.5 > 0.5 ? null : { x, z, h }; };
     if (cw.v < 0.4) {
       const n = Math.round(cw.p * 16 + cw.y * 5);
-      for (let k = 0; k < n; k++) { const q = place(k * 2 + 1); if (!q) continue; const r = h2(k * 2 + 1.3), sp = cw.p > cw.y ? (r < 0.4 ? SP.lavender : r < 0.72 ? SP.broom : SP.myrtle) : SP.myrtle, S = SPECIES[sp].s;
+      for (let k = 0; k < n; k++) { const q = place(k * 2 + 1); if (!q) continue; const r = h2(k * 2 + 1.3), sp = cw.p > cw.y ? (r < 0.42 ? SP.lavender : r < 0.58 ? SP.broom : SP.myrtle) : SP.myrtle, S = SPECIES[sp].s;
         out.push(sp, 0, q.x, q.h - 0.05, q.z, h2(k + 7) * 6.283, S[0] + (S[1] - S[0]) * h2(k + 9)); }
       if (h2(99) < cw.p * 0.4 + cw.y * 0.12) { const q = place(101); if (q) { const r = h2(103), sp = cw.y > cw.p ? (r < 0.6 ? SP.colfall : SP.wallruin) : r < 0.28 ? SP.colfall : r < 0.46 ? SP.colstand : r < 0.66 ? SP.herm : r < 0.82 ? SP.amphorae : SP.wallruin, S = SPECIES[sp].s;
         out.push(sp, Math.floor(h2(105) * 2), q.x, q.h - 0.04, q.z, h2(107) * 6.283, S[0] + (S[1] - S[0]) * h2(109)); } }
     }
+    // the giant forest: one great tree in every 13 m square where the band is strong, ferns underneath
+    for (let j = 0; j < 5; j++) for (let i = 0; i < 5; i++) {
+      const k = 200 + j * 5 + i, x = x0 + (i + 0.2 + h2(k) * 0.6) * 12.8, z = z0 + (j + 0.2 + h2(k + 0.5) * 0.6) * 12.8, b = titanBand(x, z);
+      if (b < 0.15 || h2(k + 0.25) > b * 1.1) continue; const h = heightAt(x, z); if (h < 2 || h > 140 || siteClear(x, z)) continue;
+      const S = SPECIES[SP.titan].s; out.push(SP.titan, Math.floor(h2(k + 0.75) * 3), x, h - 0.3, z, h2(k + 0.6) * 6.283, S[0] + (S[1] - S[0]) * h2(k + 0.7));
+    }
+    const bc = titanBand(x0 + 32, z0 + 32), nf = Math.round(bc * 26 + cw.y * (1 - bc) * 6);
+    for (let k = 0; k < nf; k++) { const q = place(400 + k * 2); if (!q || q.h > 160) continue; const S = SPECIES[SP.fern].s; out.push(SP.fern, 0, q.x, q.h - 0.05, q.z, h2(401 + k * 2) * 6.283, S[0] + (S[1] - S[0]) * h2(402 + k * 2)); }
+    if (cw.y > 0.3 && cw.v < 0.3) for (let k = 0; k < 3; k++) { if (h2(500 + k) > cw.y * 0.5) continue; const q = place(510 + k * 2); if (!q || q.h > 160) continue; const S = SPECIES[SP.redbush].s; out.push(SP.redbush, 0, q.x, q.h - 0.05, q.z, h2(511 + k) * 6.283, S[0] + (S[1] - S[0]) * h2(512 + k)); }
   }
   return new Float32Array(out);
 }

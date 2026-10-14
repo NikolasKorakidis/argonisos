@@ -17,7 +17,7 @@ const TREE_DROPS = {
   qtree: [['feather', 0.3, 1, 2]], plane: [['feather', 0.4, 1, 2]], holm: [['acornSeed', 0.3, 1, 1]],
 };
 const FRUIT = { olive: ['olive', 3, 5], pomegranate: ['pomegranate', 2, 3], oak: ['acorn', 2, 4] };
-const treeHP = (name, s) => (BIG.has(name) ? 110 : SMALL.has(name) ? 40 : 70) * s;
+const treeHP = (name, s) => (name === 'titan' ? 420 : BIG.has(name) ? 110 : SMALL.has(name) ? 40 : 70) * s;   // (a giant of the old forest takes a long while)
 const woodOf = (name, s) => Math.round((BIG.has(name) ? 9 : SMALL.has(name) ? 3 : 6) * s);
 const rockHP = (name, s) => (name === 'boulder' ? 70 : 30) * s;
 
@@ -110,7 +110,7 @@ export class Harvest {
     log.hp -= this.dmg(item, 'slash') * player.stats.damageK('axe'); player.stats.train('axe', 12.5);
     burst(at, { color: 0xd9b07a, n: 10, speed: 3, size: 0.06 }); addShake(0.2); this.g.sound?.('chop');
     if (log.hp > 0) return true;
-    this.g.scene.remove(log.mesh); this.g.colliders.removeGroup(log.id); this.logs.splice(this.logs.indexOf(log), 1); clearGrass(log.id, null);
+    this.g.scene.remove(log.mesh); log.mesh.traverse((o) => { o.geometry.dispose(); if (o.material !== trunkMat) o.material.dispose(); }); this.g.colliders.removeGroup(log.id); this.logs.splice(this.logs.indexOf(log), 1); clearGrass(log.id, null);
     dust(log.mesh.position, 16, 0xc8a878, 0.4);
     const k = player.stats.skillK('gathering');
     this.g.give('wood', Math.round(log.wood * k));

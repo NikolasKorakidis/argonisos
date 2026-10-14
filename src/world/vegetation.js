@@ -75,31 +75,27 @@ TREE_BUILDERS.lavender = () => {
     P.push([new THREE.ConeGeometry(0.035, 0.2, 4).rotateX(Math.PI).translate(0, h + 0.02, 0).rotateZ(lean).rotateY(a).translate(Math.cos(a) * d, 0.1, Math.sin(a) * d), k % 3 ? 0x8a6ccf : 0x7457c0]); }
   return P;
 };
-TREE_BUILDERS.broom = () => {
-  const P = [], n = PROP_LOW() ? 3 : 6;
-  for (let k = 0; k < n; k++) { const a = (k / n) * 6.28, d = k ? 0.35 : 0; P.push([new THREE.IcosahedronGeometry(rr(0.32, 0.45), 1).scale(1, 1.2, 1).translate(Math.cos(a) * d, 0.42 + rr(0, 0.25), Math.sin(a) * d), k % 2 ? 0x5f7a2c : 0x6b8432]); }
-  for (let k = 0; k < (PROP_LOW() ? 5 : 26); k++) { const a = rr(0, 6.28), e = rr(0.2, 1.2); P.push([new THREE.IcosahedronGeometry(rr(0.06, 0.1), 0).translate(Math.cos(a) * Math.cos(e) * 0.6, 0.55 + Math.sin(e) * 0.45, Math.sin(a) * Math.cos(e) * 0.6), k % 3 ? 0xe8c42a : 0xf2d84a]); }
-  return P;
-};
-TREE_BUILDERS.myrtle = () => {
-  const P = [], n = PROP_LOW() ? 3 : 6;
-  for (let k = 0; k < n; k++) { const a = (k / n) * 6.28, d = k ? 0.4 : 0; P.push([new THREE.IcosahedronGeometry(rr(0.38, 0.55), 1).translate(Math.cos(a) * d, 0.55 + rr(0, 0.35), Math.sin(a) * d), k % 2 ? 0x3f5f2e : 0x46682f]); }
-  if (!PROP_LOW()) for (let k = 0; k < 18; k++) { const a = rr(0, 6.28), e = rr(0.1, 1.2); P.push([new THREE.IcosahedronGeometry(0.045, 0).translate(Math.cos(a) * Math.cos(e) * 0.75, 0.7 + Math.sin(e) * 0.55, Math.sin(a) * Math.cos(e) * 0.75), 0xf2efe6]); }
-  return P;
-};
 
 // ---- materials with the near/far cut-off (wind sway stays as in the base material)
 const VEG_U = { uVegC: { value: new THREE.Vector2() }, uNearR: { value: NEAR_R }, uMidR: { value: MID_R }, uFarR: { value: FAR_R } };
 const cutMats = new Map();
+// Between bands a tree doesn't pop from one version to the next: across a few metres each pixel is drawn by exactly
+// one of them, chosen by a fixed screen pattern, so one dissolves into the other.
+const NF = 6, MF = 12;
+const DITHER = 'float igN(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }\n';
 function cut(mat, far) {
   const key = mat.uuid + (far ? 'f' : 'n'); if (cutMats.has(key)) return cutMats.get(key);
   const m = mat.clone(), base = mat.onBeforeCompile;
   m.onBeforeCompile = (sh, r) => {
     base?.call(m, sh, r);
     Object.assign(sh.uniforms, VEG_U);
-    sh.vertexShader = 'uniform vec2 uVegC; uniform float uNearR, uMidR;\n' + sh.vertexShader.replace('#include <project_vertex>',
-      `{ vec2 ic = (modelMatrix * instanceMatrix[3]).xz; float dd = distance(ic, uVegC); if (${far ? 'dd < uNearR || dd >= uMidR' : 'dd >= uNearR'}) transformed *= 0.0; }
+    sh.vertexShader = 'uniform vec2 uVegC; uniform float uNearR, uMidR; varying float vKeepLo, vKeepHi;\n' + sh.vertexShader.replace('#include <project_vertex>',
+      `{ vec2 ic = (modelMatrix * instanceMatrix[3]).xz; float dd = distance(ic, uVegC), fn = 1.0 - smoothstep(uNearR - ${NF}.0, uNearR + ${NF}.0, dd);
+        ${far ? `float fo = 1.0 - smoothstep(uMidR - ${MF}.0, uMidR + ${MF}.0, dd); vKeepLo = fn; vKeepHi = fo; if (fn >= 0.999 || fo <= 0.001) transformed *= 0.0;`
+              : 'vKeepLo = 0.0; vKeepHi = fn; if (fn <= 0.001) transformed *= 0.0;'} }
       #include <project_vertex>`);
+    sh.fragmentShader = 'varying float vKeepLo, vKeepHi;\n' + DITHER + sh.fragmentShader.replace('#include <clipping_planes_fragment>',
+      '{ float n = igN(gl_FragCoord.xy); if (n < vKeepLo || n >= vKeepHi) discard; }\n#include <clipping_planes_fragment>');
   };
   m.customProgramCacheKey = () => key;
   cutMats.set(key, m); return m;
@@ -113,7 +109,7 @@ function buildAtlas() {
   const hl = new THREE.HemisphereLight(0xbfdcff, 0x3f6a5a, 0.8); sc.add(hl);
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100), I = new THREE.Matrix4();
   const prev = { rt: renderer.getRenderTarget(), cc: renderer.getClearColor(new THREE.Color()), ca: renderer.getClearAlpha(), sc: renderer.getScissorTest() };
-  renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.setScissorTest(true);
+  renderer.setRenderTarget(rt); renderer.setClearColor(0x3c4a30, 0); renderer.clear(); renderer.setScissorTest(true);   // (a leafy clear colour: shrunk far away, the edges blend to green, not black)
   SPECIES.forEach((sp, i) => {
     const P = propGeo(sp.name, 0), g = new THREE.Group(), a = new THREE.InstancedMesh(P.geo, propMat, 1); a.setMatrixAt(0, I); g.add(a);
     if (P.cards) { const l = new THREE.InstancedMesh(P.cards, P.cardMat || leafMat, 1); l.setMatrixAt(0, I); g.add(l); }
@@ -131,18 +127,19 @@ function buildAtlas() {
 const impMat = new THREE.MeshBasicMaterial({ alphaTest: 0.5, side: THREE.DoubleSide, color: 0xffffff, alphaToCoverage: true });
 impMat.onBeforeCompile = (sh) => {
   Object.assign(sh.uniforms, VEG_U);
-  sh.fragmentShader = sh.fragmentShader.replace('#include <alphatest_fragment>', A2C_FRAG);
-  sh.vertexShader = 'uniform vec2 uVegC; uniform float uNearR, uMidR, uFarR; attribute vec4 aTile; attribute vec3 aSize;\n' + sh.vertexShader
+  sh.fragmentShader = 'varying float vImpKeep;\n' + DITHER + sh.fragmentShader.replace('#include <alphatest_fragment>', A2C_FRAG).replace('#include <clipping_planes_fragment>', '{ if (igN(gl_FragCoord.xy) < vImpKeep) discard; }\n#include <clipping_planes_fragment>');
+  sh.vertexShader = 'uniform vec2 uVegC; uniform float uNearR, uMidR, uFarR; attribute vec4 aTile; attribute vec3 aSize; varying float vImpKeep;\n' + sh.vertexShader
     .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = aTile.xy + uv * aTile.zw;')
     .replace('#include <begin_vertex>', `
       vec3 c0 = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
       vec3 toC = cameraPosition - c0; toC.y = 0.0; vec3 rgt = normalize(vec3(toC.z, 0.0, -toC.x) + 1e-5);
       vec3 transformed = rgt * (position.x * aSize.x + aSize.z) + vec3(0.0, position.y * aSize.x + aSize.y, 0.0);
-      float vd = distance(c0.xz, uVegC); if (vd < uMidR) transformed *= 0.0;
+      float vd = distance(c0.xz, uVegC); vImpKeep = 1.0 - smoothstep(uMidR - 12.0, uMidR + 12.0, vd); if (vImpKeep >= 0.999) transformed *= 0.0;
       transformed *= 1.0 - smoothstep(uFarR * 0.78, uFarR * 0.98, vd);   // the forest thins out gently at the edge of the drawn world`);
 };
 impMat.customProgramCacheKey = () => 'vegImpostor';
 const quad = new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0);
+const _pm = new THREE.Matrix4(), _fr = new THREE.Frustum(), _sp = new THREE.Sphere();
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
 function matrixOf(items, i, hidden) {
   const o = i * STRIDE; _e.set(0, items[o + 5], 0); _q.setFromEuler(_e); _p.set(items[o + 2], items[o + 3], items[o + 4]); _s.setScalar(hidden ? 0 : items[o + 6]);
@@ -153,6 +150,8 @@ export class Vegetation {
   constructor(scene, pool) {
     this.scene = scene; this.pool = pool; this.group = new THREE.Group(); this.group.name = 'vegetation'; scene.add(this.group);
     this.near = new Map(); this.far = new Map(); this.timer = 0; this.removed = new Set();   // removed: "cx,cz,i" of felled trees
+    this.batches = new Map(); this.nearDirty = false;   // the near band, batched (see rebuildNear)
+    this.mids = new Map(); this.midDirty = false;        // and the mid band, batched the same way (rebuildMid)
     this.onCell = null;            // callback(cellKey, items, cx, cz, added) so gameplay can index harvestable things
   }
   // Build every species once up front (a second or two on the loading screen) so nothing hitches later
@@ -163,29 +162,6 @@ export class Vegetation {
     for (const t of [3000, 9000]) setTimeout(buildAtlas, t);   // again once the imported trees' leaf textures have loaded
   }
   geoFor(sp, v) { return propGeo(SPECIES[sp].name, v); }
-  buildMeshes(items, far, cx, cz, ids) {
-    const hidden = new Set(); if (far && ids) for (const [id, i] of ids) if (this.removed.has(id)) hidden.add(i);
-    const groups = new Map();
-    for (let i = 0; i < items.length / STRIDE; i++) {
-      const sp = items[i * STRIDE], v = items[i * STRIDE + 1];
-      const P = this.geoFor(sp, v), key = far && !P.leafFar ? 'sp' + sp : sp + ':' + v;      // far: one draw per species (variants share the light mesh)
-      (groups.get(key) || groups.set(key, { P, idx: [] }).get(key)).idx.push(i);
-    }
-    const meshes = [];
-    for (const { P, idx } of groups.values()) {
-      const geo = far ? P.lo : P.geo;
-      const im = new THREE.InstancedMesh(geo, cut(propMat, far), idx.length);
-      idx.forEach((i, k) => im.setMatrixAt(k, matrixOf(items, i, far ? hidden.has(i) : this.removed.has(`${cx},${cz},${i}`))));
-      im.castShadow = !far; im.receiveShadow = true; im.computeBoundingSphere(); meshes.push(im); im.userData.idx = idx;
-      if (P.cards && (!far || P.leafFar)) {
-        const lm = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, far), idx.length);
-        idx.forEach((i, k) => lm.setMatrixAt(k, matrixOf(items, i, far ? hidden.has(i) : this.removed.has(`${cx},${cz},${i}`))));
-        lm.castShadow = !far; lm.receiveShadow = true; lm.computeBoundingSphere(); meshes.push(lm); lm.userData.idx = idx;
-      }
-    }
-    for (const m of meshes) this.group.add(m);
-    return meshes;
-  }
   // all of a block's trees as impostor cards: one instanced mesh
   buildImpostors(items, hidden) {
     const n = items.length / STRIDE, im = new THREE.InstancedMesh(quad, impMat, n), tile = new Float32Array(n * 4), size = new Float32Array(n * 3);
@@ -197,7 +173,7 @@ export class Vegetation {
     const g = quad.clone(); g.setAttribute('aTile', new THREE.InstancedBufferAttribute(tile, 4)); g.setAttribute('aSize', new THREE.InstancedBufferAttribute(size, 3)); im.geometry = g;
     im.castShadow = false; im.receiveShadow = false; im.computeBoundingSphere(); im.boundingSphere.radius += 30; this.group.add(im); return im;
   }
-  dropCell(map, key) { const c = map.get(key); if (!c) return; for (const m of c.meshes || []) { this.group.remove(m); m.dispose(); } if (c.imp) { this.group.remove(c.imp); c.imp.geometry.dispose(); c.imp.dispose(); } map.delete(key); if (map === this.near) this.onCell?.(key, null); }
+  dropCell(map, key) { const c = map.get(key); if (!c) return; if (map === this.near) this.nearDirty = true; else if (c.mid) this.midDirty = true; for (const m of c.meshes || []) { this.group.remove(m); m.dispose(); } if (c.imp) { this.group.remove(c.imp); c.imp.geometry.dispose(); c.imp.dispose(); } map.delete(key); if (map === this.near) this.onCell?.(key, null); }
   update(dt, pos) {
     VEG_U.uVegC.value.set(pos.x, pos.z);
     this.timer -= dt; if (this.timer > 0) return; this.timer = 0.25;
@@ -209,31 +185,31 @@ export class Vegetation {
       const cell = { meshes: null }; this.near.set(key, cell);
       this.pool.post({ type: 'flora', cx, cz, n: 1 }).then((m) => {
         if (this.near.get(key) !== cell) return;
-        cell.items = m.items; cell.cx = cx; cell.cz = cz; cell.meshes = this.buildMeshes(m.items, false, cx, cz); for (const ms of cell.meshes) ms.userData.cell = cell; this.onCell?.(key, m.items, cx, cz);
+        cell.items = m.items; cell.cx = cx; cell.cz = cz; this.nearDirty = true; this.onCell?.(key, m.items, cx, cz);
       });
     }
     for (const [key, c] of this.near) { const [cx, cz] = key.split(',').map(Number); if (Math.hypot((cx + 0.5) * CELL - pos.x, (cz + 0.5) * CELL - pos.z) > NEAR_KEEP + CELL) this.dropCell(this.near, key); void c; }
-    // far blocks
-    const R = Math.ceil(FAR_R / FAR), fcx = Math.floor(pos.x / FAR), fcz = Math.floor(pos.z / FAR), per = FAR / CELL;
+    // far blocks (further out the higher you stand: from the top of Olympos the forests reach to the coast)
+    const farR = FAR_R + Math.min(1, Math.max(0, (pos.y - 60) / 220)) * 700; VEG_U.uFarR.value = farR;
+    const R = Math.ceil(farR / FAR), fcx = Math.floor(pos.x / FAR), fcz = Math.floor(pos.z / FAR), per = FAR / CELL;
     for (let j = -R; j <= R; j++) for (let i = -R; i <= R; i++) {
       const bx = fcx + i, bz = fcz + j, key = bx + ',' + bz;
-      if (this.far.has(key) || Math.hypot((bx + 0.5) * FAR - pos.x, (bz + 0.5) * FAR - pos.z) > FAR_R + FAR * 0.7) continue;
+      if (this.far.has(key) || Math.hypot((bx + 0.5) * FAR - pos.x, (bz + 0.5) * FAR - pos.z) > farR + FAR * 0.7) continue;
       const blk = { meshes: null }; this.far.set(key, blk);
       this.pool.post({ type: 'flora', cx: bx * per, cz: bz * per, n: per }).then((m) => {
         if (this.far.get(key) !== blk) return;
         // items come cell by cell, in order: recover each one's "cx,cz,i" id
         const ids = new Map(), cnt = new Map();
         for (let i = 0; i < m.items.length / STRIDE; i++) { const ck = Math.floor(m.items[i * STRIDE + 2] / CELL) + ',' + Math.floor(m.items[i * STRIDE + 4] / CELL), k = cnt.get(ck) || 0; cnt.set(ck, k + 1); ids.set(ck + ',' + k, i); }
-        blk.items = m.items; blk.ids = ids; blk.bx = bx; blk.bz = bz;
+        blk.items = m.items; blk.ids = ids; blk.bx = bx; blk.bz = bz; blk.idOf = []; for (const [id, i] of ids) blk.idOf[i] = id; this.midDirty = true;
         const hidden = new Set(); for (const [id, i] of ids) if (this.removed.has(id)) hidden.add(i); blk.imp = this.buildImpostors(m.items, hidden);
       });
     }
     for (const [key, blk] of this.far) {
       const [bx, bz] = key.split(',').map(Number), d = Math.hypot((bx + 0.5) * FAR - pos.x, (bz + 0.5) * FAR - pos.z);
-      if (d > FAR_R + FAR * 1.4) { this.dropCell(this.far, key); continue; }
+      if (d > farR + FAR * 1.4) { this.dropCell(this.far, key); continue; }
       if (!blk.items) continue;
-      if (d < MID_R + FAR * 0.75 && !blk.meshes) blk.meshes = this.buildMeshes(blk.items, true, null, null, blk.ids);
-      else if (d > MID_R + FAR * 1.1 && blk.meshes) { for (const m of blk.meshes) { this.group.remove(m); m.dispose(); } blk.meshes = null; }
+      const inMid = d < MID_R + FAR * 0.75; if (inMid !== !!blk.mid) { blk.mid = inMid; this.midDirty = true; }
     }
     // impostors take their light from the sky
     const k = Math.min(1.15, Math.max(0.06, (sun.intensity * 0.3 + hemi.intensity) / 1.55)); impMat.color.setScalar(k);
@@ -241,13 +217,108 @@ export class Vegetation {
   // Remove one tree/rock (felled or mined): hidden in its near cell and far block now, and remembered for when they are rebuilt
   remove(cx, cz, i) {
     const key = cx + ',' + cz; this.removed.add(`${cx},${cz},${i}`);
-    const c = this.near.get(key);
-    if (c?.meshes) for (const m of c.meshes) { const k = m.userData.idx.indexOf(i); if (k >= 0) { m.setMatrixAt(k, matrixOf(c.items, i, true)); m.instanceMatrix.needsUpdate = true; } }
+    if (this.near.has(key)) this.nearDirty = true;
     const per = FAR / CELL, bkey = Math.floor(cx / per) + ',' + Math.floor(cz / per), b = this.far.get(bkey);
     const fi = b?.ids?.get(`${cx},${cz},${i}`);
-    if (fi !== undefined && b.meshes) for (const m of b.meshes) { const k = m.userData.idx.indexOf(fi); if (k >= 0) { m.setMatrixAt(k, matrixOf(b.items, fi, true)); m.instanceMatrix.needsUpdate = true; } }
+    if (fi !== undefined && b.mid) this.midDirty = true;
     if (fi !== undefined && b.imp) { b.imp.setMatrixAt(fi, _m.makeScale(0, 0, 0)); b.imp.instanceMatrix.needsUpdate = true; }
   }
+  // ---- The near band, batched. One instanced mesh per species-and-variant (and one for its leaf cards, sharing the same
+  // instance buffer) holds the trees of every near cell together: a few dozen draws instead of several hundred. The full
+  // list is rebuilt when cells come and go or a tree falls; each frame the trees in view, and every tree within the
+  // shadow box round you (so shadows still fall from behind the camera), are packed to the front and only those drawn.
+  rebuildNear() {
+    this.nearDirty = false;
+    const groups = new Map();
+    for (const cell of this.near.values()) {
+      const it = cell.items; if (!it) continue;
+      for (let i = 0; i < it.length / STRIDE; i++) { const o = i * STRIDE; if (it[o + 6] <= 0 || this.removed.has(`${cell.cx},${cell.cz},${i}`)) continue;
+        const key = it[o] + ':' + it[o + 1]; (groups.get(key) || groups.set(key, []).get(key)).push(cell, i); }
+    }
+    for (const [key, b] of this.batches) if (!groups.has(key)) b.n = 0;
+    for (const [key, refs] of groups) {
+      const n = refs.length / 2, [sp, v] = key.split(':').map(Number); let b = this.batches.get(key);
+      if (!b || b.cap < n) {
+        if (b) for (const m of b.meshes) { this.group.remove(m); m.dispose(); }
+        const P = this.geoFor(sp, v), cap = Math.ceil(n * 1.4) + 16, sh = !SPECIES[sp].noShadow;
+        const trunk = new THREE.InstancedMesh(P.geo, cut(propMat, false), cap), meshes = [trunk];
+        if (P.cards) { const lm = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, false), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
+        P.geo.computeBoundingSphere(); const bs = P.geo.boundingSphere.clone(); if (P.cards) { P.cards.computeBoundingSphere(); bs.union(P.cards.boundingSphere); }
+        b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), refs: [], slot: new Int32Array(cap), n: 0 };
+        for (const m of meshes) { m.castShadow = sh; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; m.userData.batch = b; this.group.add(m); }
+        this.batches.set(key, b);
+      }
+      b.n = n; b.refs = refs;
+      for (let k = 0; k < n; k++) { const it = refs[k * 2].items, o = refs[k * 2 + 1] * STRIDE, sc = it[o + 6];
+        matrixOf(it, refs[k * 2 + 1], false); b.mats.set(_m.elements, k * 16);
+        b.cen[k * 4] = it[o + 2] + b.sphere.center.x * sc; b.cen[k * 4 + 1] = it[o + 3] + b.sphere.center.y * sc; b.cen[k * 4 + 2] = it[o + 4] + b.sphere.center.z * sc; b.cen[k * 4 + 3] = b.sphere.radius * sc; }
+    }
+  }
+  // The mid band (light versions, out to MID_R): every block in reach together, one batch per species (the variants share
+  // the light mesh unless their leaves show that far), packed per frame like the near band
+  rebuildMid() {
+    this.midDirty = false;
+    const groups = new Map();
+    for (const blk of this.far.values()) {
+      if (!blk.mid || !blk.items) continue; const it = blk.items;
+      for (let i = 0; i < it.length / STRIDE; i++) { const o = i * STRIDE; if (it[o + 6] <= 0 || this.removed.has(blk.idOf[i])) continue;
+        const sp = it[o], v = it[o + 1], P = this.geoFor(sp, v), key = P.leafFar ? sp + ':' + v : 'sp' + sp; (groups.get(key) || groups.set(key, []).get(key)).push(blk, i); }
+    }
+    for (const [key, b] of this.mids) if (!groups.has(key)) b.n = 0;
+    for (const [key, refs] of groups) {
+      const n = refs.length / 2; let b = this.mids.get(key);
+      if (!b || b.cap < n) {
+        if (b) for (const m of b.meshes) { this.group.remove(m); m.dispose(); }
+        const it0 = refs[0].items, o0 = refs[1] * STRIDE, P = this.geoFor(it0[o0], it0[o0 + 1]), cap = Math.ceil(n * 1.3) + 32;
+        const trunk = new THREE.InstancedMesh(P.lo, cut(propMat, true), cap), meshes = [trunk];
+        if (P.cards && P.leafFar) { const lm = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, true), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
+        P.lo.computeBoundingSphere(); const bs = P.lo.boundingSphere.clone(); if (meshes[1]) { P.cards.computeBoundingSphere(); bs.union(P.cards.boundingSphere); }
+        b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), refs: [], n: 0 };
+        for (const m of meshes) { m.castShadow = false; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; this.group.add(m); }
+        this.mids.set(key, b);
+      }
+      b.n = n; b.refs = refs;
+      for (let k = 0; k < n; k++) { const it = refs[k * 2].items, i = refs[k * 2 + 1], o = i * STRIDE, sc = it[o + 6];
+        matrixOf(it, i, false); b.mats.set(_m.elements, k * 16);
+        b.cen[k * 4] = it[o + 2] + b.sphere.center.x * sc; b.cen[k * 4 + 1] = it[o + 3] + b.sphere.center.y * sc; b.cen[k * 4 + 2] = it[o + 4] + b.sphere.center.z * sc; b.cen[k * 4 + 3] = b.sphere.radius * sc; }
+    }
+  }
+  // per frame, after the camera has moved: pack the trees worth drawing to the front of each batch
+  cull(camera, pos) {
+    if (this.nearDirty) this.rebuildNear();
+    _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _fr.setFromProjectionMatrix(_pm);
+    const nr = NEAR_R + NF, keep2 = 48 * 48;
+    for (const b of this.batches.values()) {
+      const dst = b.meshes[0].instanceMatrix.array; let m = 0;
+      for (let k = 0; k < b.n; k++) {
+        const x = b.cen[k * 4], y = b.cen[k * 4 + 1], z = b.cen[k * 4 + 2], r = b.cen[k * 4 + 3], dx = x - pos.x, dz = z - pos.z, d2 = dx * dx + dz * dz;
+        if (d2 > (nr + r) * (nr + r)) continue;                                            // beyond the near band: the mid band draws it
+        const cell = b.refs[k * 2]; if (cell.hidden && cell.hidden.has(b.refs[k * 2 + 1])) continue;   // faded out of the way of the camera
+        if (d2 > keep2) { _sp.center.set(x, y, z); _sp.radius = r; if (!_fr.intersectsSphere(_sp)) continue; }
+        for (let e = 0; e < 16; e++) dst[m * 16 + e] = b.mats[k * 16 + e];
+        b.slot[m++] = k;
+      }
+      for (const mesh of b.meshes) { mesh.count = m; mesh.boundingSphere = null; }
+      b.meshes[0].instanceMatrix.needsUpdate = true;
+    }
+    if (this.midDirty) this.rebuildMid();
+    const lo = NEAR_R - NF, hi = MID_R + MF;
+    for (const b of this.mids.values()) {
+      const dst = b.meshes[0].instanceMatrix.array; let m = 0;
+      for (let k = 0; k < b.n; k++) {
+        const x = b.cen[k * 4], y = b.cen[k * 4 + 1], z = b.cen[k * 4 + 2], r = b.cen[k * 4 + 3], dx = x - pos.x, dz = z - pos.z, d2 = dx * dx + dz * dz;
+        const inner = Math.max(0, lo - r); if (d2 < inner * inner || d2 > (hi + r) * (hi + r)) continue;
+        _sp.center.set(x, y, z); _sp.radius = r; if (!_fr.intersectsSphere(_sp)) continue;
+        for (let e = 0; e < 16; e++) dst[m * 16 + e] = b.mats[k * 16 + e];
+        m++;
+      }
+      for (const mesh of b.meshes) mesh.count = m;
+      b.meshes[0].instanceMatrix.needsUpdate = true;
+    }
+  }
+  // which tree an instance hit by a ray belongs to: { cell, i }
+  treeAt(mesh, instanceId) { const b = mesh.userData.batch; if (!b) return null; const k = b.slot[instanceId]; return { cell: b.refs[k * 2], i: b.refs[k * 2 + 1] }; }
+  hideTree(cell, i, on) { if (on) (cell.hidden ||= new Set()).add(i); else cell.hidden?.delete(i); }
   // One tree or rock as its own little object (for felling animations): instanced meshes of count 1 in a group
   single(sp, v) {
     const P = this.geoFor(sp, v), g = new THREE.Group(), I = new THREE.Matrix4();

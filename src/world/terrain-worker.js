@@ -1,7 +1,7 @@
 // Terrain worker: builds terrain patches (positions, normals, colours, uvs) off the main thread so streaming the world
 // never stutters. Also bakes the world height texture used by the water shader.
 import { heightAt, biomeWeights, groundColor, fbm } from './gen.js';
-import { layoutCell, CELL } from './flora.js';
+import { layoutCell, CELL, shadeAround, bakeShade } from './flora.js';
 import './sites.js';   // registers the flattened ground under the trial's sites
 
 function patch({ id, x0, z0, size, res }) {
@@ -11,6 +11,8 @@ function patch({ id, x0, z0, size, res }) {
   const m = n + 2, H = new Float32Array(m * m);
   for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) H[j * m + i] = heightAt(x0 + (i - 1) * step, z0 + (j - 1) * step);
   let minH = 1e9, maxH = -1e9; const c = [0, 0, 0], w = { p: 0, y: 0, v: 0, r: 0 };
+  // baked shade (near patches): pools of shade under the trees and at the foot of rocks, computed once here
+  const occ = new Float32Array(n * n); if (size <= 128) bakeShade(shadeAround(x0, z0, x0 + size, z0 + size), x0, z0, step, n, n, occ);
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const k = j * n + i, x = x0 + i * step, z = z0 + j * step, h = H[(j + 1) * m + i + 1];
     const hl = H[(j + 1) * m + i], hr = H[(j + 1) * m + i + 2], hd = H[j * m + i + 1], hu = H[(j + 2) * m + i + 1];
@@ -18,7 +20,9 @@ function patch({ id, x0, z0, size, res }) {
     pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z; nor[k * 3] = nx; nor[k * 3 + 1] = ny; nor[k * 3 + 2] = nz;
     const slope = Math.sqrt(Math.max(0, 1 - ny * ny)) / Math.max(ny, 0.05);   // rise over run
     biomeWeights(x, z, w); groundColor(x, z, h, slope, w, c);
-    col[k * 3] = c[0]; col[k * 3 + 1] = c[1]; col[k * 3 + 2] = c[2];
+    const cav = Math.max(-0.05, Math.min(0.1, ((hl + hr + hd + hu) / 4 - h) * 0.25 / Math.max(step, 1)));   // hollows a touch darker, ridges a touch lighter
+    const ao = (1 - Math.min(0.45, occ[k])) * (1 - cav);
+    col[k * 3] = c[0] * ao; col[k * 3 + 1] = c[1] * ao; col[k * 3 + 2] = c[2] * ao;
     uv[k * 2] = x / 3; uv[k * 2 + 1] = z / 3;
     if (h < minH) minH = h; if (h > maxH) maxH = h;
   }
@@ -52,6 +56,7 @@ self.onmessage = (e) => {
   else if (msg.type === 'heightTex') { const r = heightTexture(msg); self.postMessage({ type: 'heightTex', ...r }, [r.data.buffer]); }
   else if (msg.type === 'grassTex') {      // local ground texture for the grass carpet: R height, G grass amount, B tint variation, A flowers
     const { N, x0, z0, size } = msg, data = new Float32Array(N * N * 4), w = { p: 0, y: 0, v: 0, r: 0 };
+    const occ = new Float32Array(N * N), kk = size / N; bakeShade(shadeAround(x0, z0, x0 + size, z0 + size), x0 + kk / 2, z0 + kk / 2, kk, N, N, occ);   // the grass shaded under trees too
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
       const x = x0 + (i + 0.5) / N * size, z = z0 + (j + 0.5) / N * size, h = heightAt(x, z), k = (j * N + i) * 4;
       biomeWeights(x, z, w);
@@ -59,7 +64,8 @@ self.onmessage = (e) => {
       let g = Math.min(1, Math.max(0, (h - 1.4) / 0.8)) * Math.min(1, Math.max(0, (1.15 - sl) / 0.45));
       g *= w.p * 1 + w.y * 0.45 + w.v * (h > 0.4 ? 0.55 : 0);
       g *= Math.min(1, Math.max(0, (fbm(x * 0.05 + 3, z * 0.05, 2) - 0.22) / 0.1));
-      data[k] = h; data[k + 1] = g; data[k + 2] = Math.min(0.99, Math.max(0, fbm(x * 0.03 + 9, z * 0.03 - 4, 2))) + Math.round(Math.min(1, w.y + w.v * 0.6) * 15) * 2;   // tint, plus the forest shade packed above it
+      g *= Math.min(1, Math.max(0, (190 - h) / 40));   // none on the bare rock and snow of the peak
+      data[k] = h; data[k + 1] = g; data[k + 2] = Math.min(0.99, Math.max(0, fbm(x * 0.03 + 9, z * 0.03 - 4, 2))) + Math.round(Math.min(1, w.y + w.v * 0.6 + occ[j * N + i] * 1.3) * 15) * 2;   // tint, plus the forest shade packed above it
       data[k + 3] = Math.min(1, Math.max(0, (fbm(x * 0.07, z * 0.07 + 5, 2) - 0.42) * 3)) * (w.p * 1 + w.y * 0.2);
     }
     self.postMessage({ type: 'grassTex', id: msg.id, data, N, x0, z0, size }, [data.buffer]);

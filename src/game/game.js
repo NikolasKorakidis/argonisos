@@ -125,9 +125,13 @@ export function installGame(g) {
   };
 
   // ---- per frame
+  // reaching the top of Olympos
+  const olympos = (P) => { const pk = SITES.peak; if (!pk) return; const d = Math.hypot(P.x - pk.x, P.z - pk.z);
+    if (d < 40 && P.y > pk.y - 25 && !g.atPeak) { g.atPeak = true; hud.region('Olympos', 'The seat of Zeus. All Argonisos lies below you'); sound('reveal'); } else if (d > 140) g.atPeak = false; };
   g.update = (dt) => {
     g.altUsed = null;
     g.owl.update(dt); g.guide.update(dt); g.buildMenu.update();
+    olympos(player.pos);
     if (g.owl.open) { hud.prompt(null); return; }
     if (hit('KeyM') || (hit('Escape') && g.map.open)) g.map.toggle();
     g.map.update(dt);

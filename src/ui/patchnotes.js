@@ -4,6 +4,21 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-2', name: 'Patch 2', title: 'Hearth and Hillside', date: '13 October 2026',
+    intro: 'Fixes for what our testers found in Patch 1: building roofs and cooking over the fire work the way they should, and the land itself is rougher underfoot.',
+    sections: [
+      { t: 'Building and cooking', icon: 'hammer', items: [
+        'Fixed: a thatch roof panel would not go into the gap between two others. Aim into the gap and it snaps in. Every piece now snaps to what you aim through, not to whatever lies behind it.',
+        'Fixed: the cooking stand could not be placed over a campfire. Aim at the fire, or close to it, and the stand settles right over it.',
+        'Fixed: with a cooking stand over a campfire, E only offered to cook if you carried meat. E now lights or feeds the fire, and goes to the stand only when there is food to take off, or meat to cook over a burning fire. F still puts the fire out.',
+      ] },
+      { t: 'The world', icon: 'temple', items: [
+        'The ground is rougher underfoot: small rises and dips on top of the rolling hills, gentle in the meadows and stronger in the forest hills. The ground around the temple, the Labyrinth and the other sites stays level.',
+        'Far-off land now blurs softly into the haze, so the end of the view no longer ends in a sharp line.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-1', name: 'Patch 1', title: 'The Trial Awakens', date: '9 October 2026',
     intro: 'The first big update to Argonisos: a better world to explore, a smoother building game, livelier bosses and a fresher look. Thank you to everyone who played and told us what felt wrong. Here is everything we changed.',
     sections: [
@@ -18,6 +33,9 @@ export const PATCHES = [
         '<b>A new title screen</b>, and these patch notes.',
       ] },
       { t: 'The world', icon: 'temple', items: [
+        '<b>Olympos</b>: one great mountain now rises out of the far hills of Yleos, bare rock above the trees and snow on its head. Climb it: from the summit, by the altar fire and the bronze eagle of Zeus, the whole island lies below you.',
+        '<b>The giant forest</b>: where the meadows give way to the hills, long stretches of enormous trees, their trunks like columns and their crowns thirty metres up. Walk through their shade between ferns, with shafts of sun slanting down through the canopy.',
+        'New bushes and ferns across the land (beautiful free models by Quaternius), and here and there a bush with leaves turned rust-red.',
         'More fallen branches and stones to pick up, and a branch now gives you 2 wood directly.',
         'The Ancient Temple of Zeus stands further out in the meadows. Explore to find it.',
         'The meadows roll gently instead of lying perfectly flat.',
@@ -49,6 +67,7 @@ export const PATCHES = [
         'No more flickering where pieces meet: roof joints, gable ends, wall corners and floors all render cleanly.',
         'Grass no longer grows through your floors.',
         'Anything standing between the camera and you (walls, buildings, trees) turns see-through and comes back when the view is clear.',
+        'Fixed: a tree between the camera and you pulsed in and out instead of staying see-through.',
       ] },
       { t: 'Survival and crafting', icon: 'fire', items: [
         'The cooking stand takes all your raw meat and fish at once, and each piece cooks on its own.',
@@ -62,13 +81,34 @@ export const PATCHES = [
         'The Owl flies beside you and shows a <b>!</b> when she has something to say. She comes back at the important moments of your trial.',
         'Each marked olive tree you copy points you towards the next, and so does each cave carving.',
       ] },
+      { t: 'Moving through the world', icon: 'jump', items: [
+        '<b>Feet on the ground</b>: your hero\'s feet now find the real ground under them. On hillsides, steps, stairs and the temple platform each foot plants where it should, the hips drop to let the lower leg reach, and a planted foot follows the slope. No more floating or sinking feet.',
+        'Hills matter: you slow down and lean in going up a slope, and pick up a little speed leaning back coming down. Sprinting uphill costs more stamina.',
+        'The Minotaur, the giants, the dryads and the dead plant their feet the same way, and they now climb steps at the shrines instead of walking through them.',
+        'Deer, foxes, rabbits, boars and the Chimera tilt with the ground they stand on, nose up a hill and down it going down.',
+      ] },
       { t: 'Graphics and sound', icon: 'blessing', items: [
+        '<b>Smoother everywhere</b>: trees and plants are now drawn in a handful of batches instead of hundreds of pieces, only what is in view is drawn, and far-off places are skipped. The forest is drawn with half the work it took before. If a frame still runs long, the picture quietly drops a little in resolution and climbs back when it can.',
+        'Fixed: long sessions slowly used up more and more graphics memory as creatures came and went and logs were split. The game now stays steady however long you play.',
+        'Clouds cast soft shadows that drift across the land with the wind.',
+        'Every place and hour has its own colour: warm and golden in the meadows, cool and green in the forest and under the giants, amber at sunrise and sunset, blue at night. A new tone curve keeps snow, marble and bright skies from burning out.',
+        'Trees, rocks and ruins shade the ground and the grass beneath them, and hollows lie a little darker.',
+        'The meadows look fuller: grass blades no longer thin to lines when seen side-on, their colour varies in clumps, and distant grass is drawn more cleverly.',
+        'Pollen drifts over the meadows by day, fireflies blink at dusk and through the night, leaves spin down in the forests, and snow blows across the summit of Olympos.',
+        'Trees no longer pop between their near and far forms: one dissolves into the other.',
+        '<b>Day and night, smoothed out</b>: the light no longer steps as the sun moves, and the shadows no longer swing across the ground when the moon takes over.',
+        '<b>Sunrises and sunsets</b> glow around the sun, with a pink band in the sky opposite. In the morning a mist lies in the low ground and burns off as the day warms.',
+        'Haze glows when you look towards the sun, and shafts of light break past trees, trunks and ridges.',
         'Day turns to night smoothly, and a new soundscape and music follow the time of day, the weather and the biome.',
         'Grass sways in gusts that sweep across the meadows, and glows where the sun shines through it.',
         'Leaves glow with the sun behind them, and tree edges no longer shimmer as you move.',
         'The fir trees of Yleos have been rebuilt with drooping boughs.',
         'Sharper shadows on High graphics, clouds with shape and shade, and marble and stone that no longer burn out to white in full sun.',
         'Fixed: the bow was held the wrong way round.',
+      ] },
+      { t: 'Behind the scenes', icon: 'goal', items: [
+        'Every update is now checked by an automatic playthrough of the whole trial, from the first stone to the Chimera\'s head, plus checks on building, combat, movement, frame rate and how each part of the island looks.',
+        'A tireless bot now plays the game on its own (exploring, fighting, building, swimming, dying and saving) and reports anything that breaks. It has already found the graphics memory and tree flicker problems fixed above.',
       ] },
     ],
   },

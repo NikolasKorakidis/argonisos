@@ -3,12 +3,24 @@
 // Mixamo rig (so they share its run and strike clips) dressed in bark, stone-grey hide or bleached bone: stand-ins until
 // their own models arrive. Every body exposes the same small interface: obj, animate(state, speed, dt), flash(k), dispose().
 import * as THREE from 'three';
+import { FootIK } from '../player/footik.js';
 import { clone as cloneSkinned } from '../../jsm/utils/SkeletonUtils.js';
 import { loadGLB, loadFBX } from '../assets.js';
 import { CLIPS } from '../player/hero.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const flat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, flatShading: true, ...o });
+// When a creature goes, free what its body put on the GPU: the geometry built for it, its own materials and its
+// skeleton's bone texture. The loaded models' geometry and materials are shared by every body made from them (marked
+// shared) and stay; textures belong to the shared TEX set and stay too.
+const share = (root) => root.traverse((o) => { if (o.geometry) o.geometry.userData.shared = true; for (const m of [].concat(o.material || [])) m.userData.shared = true; });
+function free(obj) {
+  obj.traverse((o) => {
+    if (o.isSkinnedMesh) o.skeleton.dispose();
+    if (o.geometry && !o.geometry.userData.shared) o.geometry.dispose();
+    for (const m of [].concat(o.material || [])) if (!m.userData.shared) m.dispose();
+  });
+}
 const mesh = (g, m, x = 0, y = 0, z = 0, parent) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = true; o.receiveShadow = true; parent?.add(o); return o; };
 function canvasTex(draw, n = 256) { const c = document.createElement('canvas'); c.width = c.height = n; draw(c.getContext('2d'), n); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t; }
 let sd = 11; const r = () => ((sd = (sd * 16807) % 2147483647) - 1) / 2147483646;
@@ -27,7 +39,7 @@ function packTemplate(kind) {
   return (tpl[kind] ||= loadGLB(A.file).then((gl) => {
     const root = gl.scene; root.updateMatrixWorld(true);
     const size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3()); root.scale.multiplyScalar(A.len / Math.max(size.x, size.z));
-    root.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; } });
+    root.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; } }); share(root);
     const clips = {}; for (const c of gl.animations) clips[c.name.replace('Attack_Headbutt', 'Attack')] = c;
     return { root, clips };
   }));
@@ -37,7 +49,7 @@ class PackBody {
     this.obj = new THREE.Group(); this.mixer = null; this.acts = {}; this.cur = null; this.mats = []; this.speedRef = kind === 'fox' ? 6 : 7.6;
     packTemplate(kind).then((T) => {
       if (this.gone) return; const m = cloneSkinned(T.root); m.scale.multiplyScalar(scale);
-      m.traverse((o) => { if (o.isMesh) { o.material = [].concat(o.material).map((mt) => { const c = mt.clone(); this.mats.push(c); return c; }); if (o.material.length === 1) o.material = o.material[0]; } });
+      m.traverse((o) => { if (o.isMesh) { o.material = [].concat(o.material).map((mt) => { const c = mt.clone(); c.userData.shared = false; this.mats.push(c); return c; }); if (o.material.length === 1) o.material = o.material[0]; } });
       this.obj.add(m); this.mixer = new THREE.AnimationMixer(m);
       for (const [k, clip] of Object.entries(T.clips)) this.acts[k] = this.mixer.clipAction(clip);
       for (const k of ['Death', 'Attack', 'Idle_HitReact1']) if (this.acts[k]) { this.acts[k].setLoop(THREE.LoopOnce); this.acts[k].clampWhenFinished = true; }
@@ -56,14 +68,14 @@ class PackBody {
     a.timeScale = rate; this.mixer.update(dt);
   }
   flash(k) { for (const m of this.mats) { m.emissive?.setRGB(k * 0.6, 0, 0); } }
-  dispose() { this.gone = true; }
+  dispose() { this.gone = true; this.mixer?.stopAllAction(); free(this.obj); }
 }
 
 // ---- carved bodies with procedural motion
 class CarvedBody {
   constructor(build) { this.obj = new THREE.Group(); this.t = Math.random() * 10; this.parts = build(this.obj); this.mats = []; this.obj.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); this.mats.push(o.material); } }); this.deadT = 0; }
   flash(k) { for (const m of this.mats) m.emissive?.setRGB(k * 0.6, 0, 0); }
-  dispose() {}
+  dispose() { free(this.obj); }
 }
 class RabbitBody extends CarvedBody {
   constructor() {
@@ -147,7 +159,7 @@ const RIG = { s: 1, ready: null };
 function rigTemplate() {
   return (RIG.ready ||= loadFBX('hero_rig').then((obj) => {
     const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3()); RIG.s = 1.95 / size.y; obj.scale.setScalar(RIG.s);
-    obj.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; } }); obj.animations = [];
+    obj.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; } }); obj.animations = []; share(obj);
     return obj;
   }));
 }
@@ -202,8 +214,15 @@ class RigBody {
     if (this.atkT > 0) { this.atkT -= dt; if (this.atkT <= 0 && A.attack) A.attack.setEffectiveWeight(0); }
     this.mixer.update(dt);
   }
+  // feet on the ground (see FootIK): after animate(), with the ground under the creature
+  feet(dt, ground, rootY, active) {
+    if (!this.ready || !this.bones) return;
+    const off = this.mixer._accuIndex + 1; for (const b of this.mixer._bindings) b.binding.setValue(b.buffer, off * b.valueSize);   // (the mixer skips unchanged bones: start from the clip's pose)
+    this.ik ||= new FootIK(this.bones, ground); const m = this.obj.children[0];
+    m.position.y = this.ik.plan(dt, rootY, active); this.obj.updateMatrixWorld(true); this.ik.solve(rootY);
+  }
   flash(k) { for (const m of this.mats) m.emissive?.setRGB(k * 0.6 + (this.kind === 'skeleton' ? 0.19 : 0), this.kind === 'skeleton' ? 0.15 : 0, this.kind === 'skeleton' ? 0.09 : 0); }
-  dispose() { this.gone = true; }
+  dispose() { this.gone = true; this.mixer?.stopAllAction(); free(this.obj); }
 }
 
 const SMATgold = () => new THREE.MeshStandardMaterial({ color: 0xc9973a, roughness: 0.35, metalness: 0.8 });

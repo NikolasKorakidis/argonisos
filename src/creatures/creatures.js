@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { heightAt, biomeWeights } from '../world/gen.js';
 import { groundAt } from '../world/groundcut.js';
+const QUAD = new Set(['deer', 'fox', 'rabbit', 'hog', 'chimera']);   // bodies that tilt with the ground
 import { makeBody, preloadBodies } from './models.js';
 import { burst, dust, addShake } from '../render/fx.js';
 import { camera } from '../render/core.js';
@@ -38,7 +39,7 @@ export class Creatures {
   spawn(type, x, z, o = {}) {
     const T = TYPES[type], level = o.level ?? (Math.random() < 0.12 ? (Math.random() < 0.25 ? 2 : 1) : 0), k = 1 + 0.25 * level;
     const body = makeBody(type, level), y = Math.max(heightAt(x, z), -0.3);
-    body.obj.position.set(x, y, z); this.g.scene.add(body.obj);
+    body.obj.position.set(x, y, z); body.obj.rotation.order = 'YXZ'; this.g.scene.add(body.obj);
     const c = { type, T, body, level, hp: rr(...T.hp) * k, max: 0, pos: body.obj.position, yaw: Math.random() * 6.28, speed: 0, state: 'idle', t: Math.random() * 4, target: null, home: new THREE.Vector3(x, y, z),
       atkCd: rr(0.5, 1.5), rangedCd: rr(2, 4), hitT: 0, flash: 0, aware: !!o.aware, dmgK: k, deadT: 0, boss: o.boss, summoned: o.summoned, vy: 0, stuck: 0, lastP: new THREE.Vector3(x, y, z) };
     c.max = c.hp; this.list.push(c); return c;
@@ -167,15 +168,21 @@ export class Creatures {
       const nx = ctl?.at ? ctl.at.x : c.pos.x + Math.sin(c.yaw) * c.speed * dt, nz = ctl?.at ? ctl.at.z : c.pos.z + Math.cos(c.yaw) * c.speed * dt, nh = heightAt(nx, nz);
       if (nh > (T.heavy ? -1.2 : 0.2) && stormWallDepth(nx, nz) === 0) { c.pos.x = nx; c.pos.z = nz; } else { c.wanderYaw = c.yaw + Math.PI; c.speed *= 0.3; if (c.state === 'flee') c.yaw += 1; }
       g.colliders.resolve(c.pos, T.r * 0.8, c.pos.y);
-      const fl = Math.max(groundAt(c.pos.x, c.pos.z), g.build?.floorAt(c.pos.x, c.pos.z, c.pos.y) ?? -1e9, -0.4); if (ctl?.air !== undefined) c.pos.y = fl + ctl.air; else c.pos.y += (fl - c.pos.y) * Math.min(1, dt * 12);
+      const fl = Math.max(this.groundAt(c.pos.x, c.pos.z, c.pos.y), -0.4); if (ctl?.air !== undefined) c.pos.y = fl + ctl.air; else c.pos.y += (fl - c.pos.y) * Math.min(1, dt * 12);
       // stuck against a wall while chasing: hit it
       c.stuck = c.pos.distanceTo(c.lastP) < 0.05 * dt * 60 && want > 0.5 ? c.stuck + dt : 0; c.lastP.copy(c.pos);
       if (c.stuck > 1.2 && (c.state === 'chase') && c.atkCd <= 0) { c.state = 'attack'; c.atkT = 0.55; c.atkCd = 2; c.hitDone = false; c.stuck = 0; }
       c.body.obj.rotation.y = c.yaw;
+      // four-footed creatures lie along the slope they stand on: nose up a hill, down it going down
+      if (QUAD.has(c.type)) { const e = T.r * 1.3 + 0.3, fx = Math.sin(c.yaw) * e, fz = Math.cos(c.yaw) * e, rise = this.groundAt(c.pos.x + fx, c.pos.z + fz, c.pos.y) - this.groundAt(c.pos.x - fx, c.pos.z - fz, c.pos.y);
+        c.pitch = (c.pitch || 0) + (-Math.atan2(rise, 2 * e) * (ctl?.air !== undefined ? 0 : 1) - (c.pitch || 0)) * Math.min(1, dt * 8); c.body.obj.rotation.x = c.pitch; }
       c.body.animate(special && special !== 'run' ? special : c.state === 'attack' ? 'attack' : c.hitT > 0 ? 'hit' : c.state, c.speed, dt);
+      c.body.feet?.(dt, this.groundFn ||= (x, z, y) => this.groundAt(x, z, y), c.pos.y, ctl?.air === undefined && c.hitT <= 0);
     }
     this.updatePlates();
   }
+  // what a creature stands on: the ground, or a floor or a site's steps within reach
+  groundAt(x, z, y) { const g = this.g; return Math.max(groundAt(x, z), g.build?.floorAt(x, z, y) ?? -1e9, g.structures?.floorAt(x, z, y) ?? -1e9); }
   hitBuildings(c) {
     const B = this.g.build; if (!B) return; const f = new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw));
     const hit = this.g.colliders.pick(c.pos.x, c.pos.z, f.x, f.z, c.T.reach + c.T.r, (k) => k.ref?.piece); if (hit) B.damage(hit.ref.piece, rr(c.T.dmg[0], c.T.dmg[1]) * c.dmgK * (c.T.heavy ? 2 : 1));
