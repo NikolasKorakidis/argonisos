@@ -36,6 +36,26 @@ function crossT(def, pos, rot, o, dir) {
   for (const b of def.solids || []) { _hb.setFromCenterAndSize(_p0.set(b[0], b[1], b[2]), _p1.set(b[3], b[4], b[5])); take(_lr.intersectBox(_hb, _hv)); }
   return best;
 }
+// A piece's surfaces ('top': [{x0,x1,z0,z1,y|y0,y1}]) or solid parts ('solid': [[cx,cy,cz,w,h,d]]) as rectangles turned
+// with the piece (centre, half sizes along the piece's own axes, its angle) with a height range, shrunk by `inset`
+function rects(list, pos, rot, inset, kind) {
+  return (list || []).map((q) => {
+    const top = kind === 'top', lx = top ? (q.x0 + q.x1) / 2 : q[0], lz = top ? (q.z0 + q.z1) / 2 : q[2], c = toWorld(pos, rot, [lx, 0, lz]);
+    const hx = Math.max(0.02, (top ? Math.abs(q.x1 - q.x0) : q[3]) / 2 - inset), hz = Math.max(0.02, (top ? Math.abs(q.z1 - q.z0) : q[5]) / 2 - inset);   // (a thin wall stays a sliver, not nothing)
+    const ya = top ? (q.y ?? q.y0) : q[1] - q[4] / 2 + inset, yb = top ? (q.y ?? q.y1) : q[1] + q[4] / 2 - inset;
+    return { x: c.x, z: c.z, hx, hz, rot, y0: pos.y + Math.min(ya, yb) - (top ? 0.25 : 0), y1: pos.y + Math.max(ya, yb) + (top ? 0.05 : 0) };
+  }).filter((r) => r.y1 > r.y0);
+}
+// Do two turned rectangles overlap (separating axes: each one's two sides), with their height ranges overlapping too?
+function rectsMeet(a, b) {
+  if (a.y1 <= b.y0 || b.y1 <= a.y0) return false;
+  const dx = b.x - a.x, dz = b.z - a.z;
+  for (const r of [a.rot, b.rot]) for (const [ux, uz] of [[Math.cos(r), -Math.sin(r)], [Math.sin(r), Math.cos(r)]]) {
+    const ext = (q) => q.hx * Math.abs(Math.cos(q.rot) * ux - Math.sin(q.rot) * uz) + q.hz * Math.abs(Math.sin(q.rot) * ux + Math.cos(q.rot) * uz);
+    if (Math.abs(dx * ux + dz * uz) >= ext(a) + ext(b)) return false;
+  }
+  return true;
+}
 // The middle of a piece in its own frame (its surfaces and solid parts, else its snap points), for judging snap spots
 function centreOf(def) {
   const pts = [];
@@ -196,12 +216,13 @@ export class Build {
   // Would this sit on (or half over) a piece of the same kind? Floors, roofs and beams have no body, so overlaps between
   // them are caught here: the same spot, or their surfaces overlapping by more than a sliver
   duplicate(def, pos, rot) {
-    const inset = (b) => { b.min.x += 0.2; b.max.x -= 0.2; b.min.z += 0.2; b.max.z -= 0.2; b.min.y -= 0.05; b.max.y += 0.05; return b; };   // shrink sideways only: a floor's surface is thin
-    const mine = this.snapsOf(def, pos, rot), A = this.boxes({ tops: def.tops }, pos, rot).map(inset);
+    // (surfaces shrunk sideways by 0.2 m, so pieces meeting edge to edge don't count; turned with the piece, so a floor
+    // at any angle leaves room for the next one beside it)
+    const mine = this.snapsOf(def, pos, rot), A = rects(def.tops, pos, rot, 0.2, 'top');
     for (const p of this.near(pos.x, pos.z, 6)) {
       if (p.id !== def.id) continue;
       if (mine.every((m) => p.snaps.some((q) => q.distanceTo(m) < 0.15))) return true;
-      for (const b of this.boxes({ tops: p.def.tops }, p.pos, p.rot)) { const bb = inset(b); for (const a of A) if (!a.isEmpty() && !bb.isEmpty() && a.intersectsBox(bb)) return true; }
+      const B = rects(p.def.tops, p.pos, p.rot, 0.2, 'top'); for (const a of A) for (const b of B) if (rectsMeet(a, b)) return true;
     }
     return false;
   }
@@ -211,8 +232,8 @@ export class Build {
   solidBoxes(def, pos, rot) { return this.boxes({ solids: def.solids }, pos, rot); }
   overlaps(def, pos, rot) {
     if (def.door) return false;
-    const A = this.solidBoxes(def, pos, rot).map((b) => b.clone().expandByScalar(-0.15));
-    for (const p of this.near(pos.x, pos.z, 8)) { if (p.def.door) continue; for (const b of this.solidBoxes(p.def, p.pos, p.rot)) { const bb = b.clone().expandByScalar(-0.15); for (const a of A) if (!a.isEmpty() && !bb.isEmpty() && a.intersectsBox(bb)) return true; } }
+    const A = rects(def.solids, pos, rot, 0.15, 'solid');   // (shrunk 0.15 m all round, and turned with each piece)
+    for (const p of this.near(pos.x, pos.z, 8)) { if (p.def.door) continue; const B = rects(p.def.solids, p.pos, p.rot, 0.15, 'solid'); for (const a of A) for (const b of B) if (rectsMeet(a, b)) return true; }
     return false;
   }
   supportFor(def, pos, rot, self) {

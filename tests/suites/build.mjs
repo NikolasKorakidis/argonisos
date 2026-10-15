@@ -33,5 +33,25 @@ export default {
     await t.step('a thatch panel snaps into the gap between two others', `${wide} P.spawn(x0, z0 - 5); g.give('hammer'); g.useSlot(inv.slots.findIndex((s) => s?.id === 'hammer')); B.select('roof63'); B.rot = Math.PI; B.lastSnap = null;
       const res = []; for (const [cx, cy, tx, ty] of [[0.6, 6, 0, 4.2], [-0.5, 5, 0.3, 4.6], [1.2, 7, -0.4, 4.0]]) { AG.camera.position.set(x0 + cx, y0 + cy, z0 - 8); AG.camera.lookAt(x0 + tx, y0 + ty, z0 - 1.6); AG.camera.updateMatrixWorld(); AG.scene.updateMatrixWorld(true); B.lastSnap = null; const r = B.placeGhost(); res.push(r && !r.why && Math.abs(r.pos.x - x0) < 0.05 && Math.abs(r.pos.y - (y0 + 3)) < 0.05 && Math.abs(r.pos.z - (z0 - 3)) < 0.05 ? 'ok' : r ? [r.pos.x - x0, r.pos.y - y0, r.pos.z - z0].map((v) => v.toFixed(2)).join(',') + ' ' + r.why : 'no ghost'); }
       return res.every((x) => x === 'ok') || res.join(' | ');`);
+    // playtest (15 Oct): beside a floor laid at an angle, the next tile was refused as "Already built here": the check used
+    // boxes squared to north and south, and a turned floor's box reaches into the tile next to it
+    const turned = `AG.S.freeBuild = true; for (const q of [...B.placed]) B.remove(q, false); const r = 30 * Math.PI / 180, x0 = window._h.x0 + 60, z0 = window._h.z0, y0 = AG.heightAt(x0, z0) + 0.03; P.spawn(x0 - 4, z0);
+      const at = (dx, dz, dy = 0) => new V(x0 + dx * Math.cos(r) + dz * Math.sin(r), y0 + dy, z0 - dx * Math.sin(r) + dz * Math.cos(r)); B.place('floor', at(0, 0), r);`;
+    await t.step('beside a floor laid at 30°, a tile fits on every side', `${turned} const bad = [[3, 0], [-3, 0], [0, 3], [0, -3]].map(([a, c]) => B.invalid(B.piece('floor'), at(a, c), r, true, {})).filter(Boolean); return bad.length === 0 || bad.join(', ');`);
+    await t.step('…but not on the same spot, or half over it', `${turned} const why = [[0, 0], [1.5, 0], [0, -1.2]].map(([a, c]) => B.invalid(B.piece('floor'), at(a, c), r, true, {})); return why.every((w) => w === 'Already built here') || why.join(', ');`);
+    await t.step('walls at 30°: side by side is fine, crossing one is refused', `${turned} B.place('wall', at(-1.5, -1.5), r); const ok = B.invalid(B.piece('wall'), at(1.5, -1.5), r, true, {}), cross = B.invalid(B.piece('wall'), at(-1.5, -1.5), r + Math.PI / 2, true, {}); return (ok === null && cross === 'Something is in the way') || 'beside: ' + ok + ', crossing: ' + cross;`);
+    await t.step('aiming beside a floor laid at 30°, the ghost snaps there and is allowed', `${turned} g.give('hammer'); g.useSlot(inv.slots.findIndex((s) => s?.id === 'hammer')); B.select('floor'); B.rot = r; B.lastSnap = null; const want = at(3, 0);
+      AG.camera.position.set(x0 - 4, y0 + 4, z0 - 3); AG.camera.lookAt(want.x, want.y, want.z); AG.camera.updateMatrixWorld(); AG.scene.updateMatrixWorld(true); const g2 = B.placeGhost();
+      return (g2 && !g2.why && g2.pos.distanceTo(want) < 0.05) || (g2 ? g2.why + ' at ' + g2.pos.distanceTo(want).toFixed(2) + ' m from the spot beside' : 'no ghost');`);
+    // playtest (15 Oct): a roof panel aimed at the top of a wall kept going down onto the floor instead
+    const walls = `AG.S.freeBuild = true; for (const q of [...B.placed]) B.remove(q, false); const x0 = window._h.x0 + 90, z0 = window._h.z0, y0 = AG.heightAt(x0, z0) + 0.05;
+      const put = (id, x, y, z, r = 0) => B.place(id, new V(x0 + x, y0 + y, z0 + z), r);
+      for (const [x, z] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) put('floor', x, 0, z);
+      put('wall', -1.5, 0, -3); put('wall', 1.5, 0, -3); put('wall', -1.5, 0, 3); put('wall', 1.5, 0, 3); for (const z of [-1.5, 1.5]) { put('wall', -3, 0, z, Math.PI / 2); put('wall', 3, 0, z, Math.PI / 2); }
+      g.give('hammer'); g.useSlot(inv.slots.findIndex((s) => s?.id === 'hammer')); B.select('roof63'); B.rot = Math.PI;
+      const aim = (px, pz, cx, cy, cz, tx, ty, tz) => { P.spawn(x0 + px, z0 + pz); B.lastSnap = null; AG.camera.position.set(x0 + cx, y0 + cy, z0 + cz); AG.camera.lookAt(x0 + tx, y0 + ty, z0 + tz); AG.camera.updateMatrixWorld(); AG.scene.updateMatrixWorld(true); const r = B.placeGhost(); return r ? { y: r.pos.y - y0, z: r.pos.z - z0, x: r.pos.x - x0, why: r.why } : null; };
+      const onTop = (r) => r && !r.why && Math.abs(r.y - 3) < 0.05 && Math.abs(r.z + 3) < 0.05 ? 'ok' : r ? 'at ' + [r.x, r.y, r.z].map((v) => v.toFixed(2)).join(',') + (r.why ? ' (' + r.why + ')' : '') : 'no ghost';`;
+    await t.step('from outside, a roof panel aimed at the top of a wall goes on the wall', `${walls} const res = [[-0.4, 2.9], [0.6, 3.0], [1.2, 2.7], [-1.6, 3.1]].map(([tx, ty]) => onTop(aim(tx, -7, tx + 0.5, 3.6, -13, tx, ty, -3))); return res.every((x) => x === 'ok') || res.join(' | ');`);
+    await t.step('from inside, a roof panel aimed at the top of a wall goes on the wall', `${walls} const res = [[-0.6, 2.95], [0.8, 3.0], [1.3, 2.8]].map(([tx, ty]) => onTop(aim(0, 1.5, 0.3, 2.4, 2.5, tx, ty, -3))); return res.every((x) => x === 'ok') || res.join(' | ');`);
   },
 };
