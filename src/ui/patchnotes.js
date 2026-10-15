@@ -4,6 +4,23 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-3', name: 'Patch 3', title: 'Square and True', date: '15 October 2026',
+    intro: 'A building patch: pieces now go where you aim, at any angle, from inside or out.',
+    sections: [
+      { t: 'Building', icon: 'hammer', items: [
+        'Fixed: next to a floor or wall built at an angle, the next piece was refused with "Already built here". Pieces fit side by side at any angle now.',
+        'Fixed: roof panels kept going down onto the floor instead of onto the wall you aimed at. Aim at the top of a wall, from outside or inside (even just over its top edge), and the panel sits on it.',
+        'Fixed: doors could hang in the air off a corner. A door now only goes into a door frame. Aim at the frame from either side and it settles into the opening, hinged on the side your turn chooses.',
+        'New pieces line up with the building you aim at, even when you aim at the ground just past its edge.',
+        'A floor laid off the top of a wall (for an upper storey) comes out toward you, inside the house, instead of straddling the wall.',
+        'Pieces must stand on the ground or attach to your building. Nothing can be left floating against the side of a wall.',
+      ] },
+      { t: 'Behind the scenes', icon: 'goal', items: [
+        'Building is now checked by over 70 automatic tests that aim at a house from inside and out, square and turned at an angle, plus 300 random aims every run, so these problems stay fixed.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-2', name: 'Patch 2', title: 'Hearth and Hillside', date: '13 October 2026',
     intro: 'Fixes for what our testers found in Patch 1: building roofs and cooking over the fire work the way they should, and the land itself is rougher underfoot.',
     sections: [
