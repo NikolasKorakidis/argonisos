@@ -14,9 +14,13 @@ export const PATCHES = [
         'New pieces line up with the building you aim at, even when you aim at the ground just past its edge.',
         'A floor laid off the top of a wall (for an upper storey) comes out toward you, inside the house, instead of straddling the wall.',
         'Pieces must stand on the ground or attach to your building. Nothing can be left floating against the side of a wall.',
+        'Fixed: stairs never attached properly to an upper floor. Stairs now snap by the middle of each end to the middle of a floor\'s edge. Aim at the edge you want them to reach, or at the spot where they should start, and they run between the two. Stairs can no longer come up through the middle of a floor.',
+        'Fences and stockades follow the ground: a fence line now runs up a hill instead of sinking into it.',
+        'Fixed: in a one-room building, aiming at the spot for a wall across the room could put the wall on the near side instead.',
       ] },
       { t: 'Behind the scenes', icon: 'goal', items: [
         'Building is now checked by over 70 automatic tests that aim at a house from inside and out, square and turned at an angle, plus 300 random aims every run, so these problems stay fixed.',
+        'An automatic builder now puts up a two-storey house with a terrace and outside stairs, a four-storey tower, a long hall and a fenced yard, aiming at every single piece the way you do. Then it walks up the stairs.',
       ] },
     ],
   },

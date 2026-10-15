@@ -85,6 +85,7 @@ function triangle(base, height, t, mat) {   // a gable end: base along x at y = 
 }
 
 // ---- the pieces
+// (stairs also snap at the middle of each end, to the middle of a floor's edge, and are aimed with either end: aimAt)
 // snaps: [x,y,z] local snap points. solids: boxes [cx,cy,cz,w,h,d] that block movement. tops: surfaces to stand on,
 // { x0,x1,z0,z1, y } (flat) or with y0/y1 for a slope along z (y at z0 → y at z1). roof: tops that count as shelter.
 const W = 3, T = 0.2;
@@ -126,9 +127,9 @@ export const PIECES = [
     parts: () => [triangle(span, rise, T, MAT.plank), part(box(span, 0.22, 0.26, 0, 0.11, 0), MAT.beam)],
     snaps: [[-span / 2, 0, 0], [span / 2, 0, 0], [0, 0, 0], [-span / 2 + 3, 0, 0], [span / 2 - 3, 0, 0], [0, rise, 0]], solids: [[0, rise / 3, 0, span * 0.66, rise * 0.66, T + 0.1]] })),
   { id: 'stairs', name: 'Wooden Stairs Short', cat: 'Floors', icon: 'stairs', mats: { wood: 2, rope: 1 }, hp: 400,
-    parts: () => stairs(1.5, 2), snaps: [[-1, 0, 0], [1, 0, 0], [-1, 1.5, -2], [1, 1.5, -2]], solids: [], tops: [{ x0: -1, x1: 1, z0: 0, z1: -2, y0: 0, y1: 1.5 }] },
+    parts: () => stairs(1.5, 2), snaps: [[-1, 0, 0], [1, 0, 0], [-1, 1.5, -2], [1, 1.5, -2], [0, 0, 0], [0, 1.5, -2]], aimAt: [[0, 0, 0], [0, 1.5, -2]], solids: [], tops: [{ x0: -1, x1: 1, z0: 0, z1: -2, y0: 0, y1: 1.5 }] },
   { id: 'stairsLong', name: 'Wooden Stairs Long', cat: 'Floors', icon: 'stairs', mats: { wood: 4, rope: 2 }, hp: 600,
-    parts: () => stairs(3, 4), snaps: [[-1, 0, 0], [1, 0, 0], [-1, 3, -4], [1, 3, -4]], solids: [], tops: [{ x0: -1, x1: 1, z0: 0, z1: -4, y0: 0, y1: 3 }] },
+    parts: () => stairs(3, 4), snaps: [[-1, 0, 0], [1, 0, 0], [-1, 3, -4], [1, 3, -4], [0, 0, 0], [0, 3, -4]], aimAt: [[0, 0, 0], [0, 3, -4]], solids: [], tops: [{ x0: -1, x1: 1, z0: 0, z1: -4, y0: 0, y1: 3 }] },
   { id: 'fence', name: 'Wooden Fence 2m', cat: 'Fences', icon: 'fence', mats: { wood: 2, rope: 1 }, hp: 300,
     parts: () => [part(box(0.14, 1.2, 0.14, -0.95, 0.6, 0), MAT.beam), part(box(0.14, 1.2, 0.14, 0.95, 0.6, 0), MAT.beam), part(box(2, 0.1, 0.06, 0, 0.45, 0), MAT.plank), part(box(2, 0.1, 0.06, 0, 0.95, 0), MAT.plank)],
     snaps: [[-1, 0, 0], [1, 0, 0]], solids: [[0, 0.6, 0, 2, 1.2, 0.2]] },

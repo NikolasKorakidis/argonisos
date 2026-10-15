@@ -48,7 +48,7 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   roof panel's lower edge; a floor's whole surface) comes to where the aim lands, or to the line of aim metres before it;
   lining up more points only breaks ties. Gaps between pieces of the same kind are found by the line passing through
   them; doors only go into door frames; pieces must stand on the ground or share a snap point. Overlap and contact tests
-  use the pieces' real, turned outlines. **Run `node tests/run.mjs placement build` after any change to `build.js`.**
+  use the pieces' real, turned outlines. **Run `node tests/run.mjs placement build structures` after any change to `build.js` or `pieces.js`.** Stairs snap and are aimed by the middles of their ends (`aimAt`); fences on the ground follow it.
 - **Building pieces need support.** One not held up from the ground collapses on the next recompute; tests that need a
   roof build walls under it.
 - Vertex-coloured site models come out several times brighter under the lighting than their palette suggests: keep
