@@ -68,9 +68,9 @@ self.onmessage = (e) => {
       g *= Math.min(1, Math.max(0, (190 - h) / 40));   // none on the bare rock and snow of the peak
       data[k] = h; data[k + 1] = g; data[k + 2] = Math.min(0.99, Math.max(0, fbm(x * 0.03 + 9, z * 0.03 - 4, 2))) + Math.round(Math.min(1, w.y + w.v * 0.6 + occ[j * N + i] * 1.3) * 15) * 2;   // tint, plus the forest shade packed above it
       data[k + 3] = Math.min(1, Math.max(0, (fbm(x * 0.07, z * 0.07 + 5, 2) - 0.42) * 3)) * (w.p * 1 + w.y * 0.2);
-      // tall grass: patches tens of metres across where it grows waist high, with denser cores in them taller than the
-      // hero; mostly in the meadows, some in the marsh, fewer in the forest (packed into the whole part of G)
-      const tall = smooth(0.58, 0.72, fbm(x * 0.011 + 50, z * 0.011 - 30, 3)) * (0.35 + 0.65 * smooth(0.5, 0.78, fbm(x * 0.045 - 7, z * 0.045 + 19, 2))) * (w.p + w.v * 0.8 + w.y * 0.45);
+      // taller grass: patches here and there, 20-40 m across, where it grows up to 0.7x the hero's height; mostly in the
+      // meadows, some in the marsh, fewer in the forest (packed into the whole part of G)
+      const tall = smooth(0.62, 0.7, fbm(x * 0.032 + 50, z * 0.032 - 30, 3)) * (w.p + w.v * 0.8 + w.y * 0.45);
       if (data[k + 1] > 0) data[k + 1] = Math.min(0.999, data[k + 1]) + 2 * Math.round(Math.min(1, tall) * 7);
       if (isRock(x, z)) { data[k + 1] = -1; data[k + 3] = 0; }   // bare rock: no grass, no flowers (-1, so blades stop halfway to the next texel)
     }
