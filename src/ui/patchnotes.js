@@ -4,6 +4,26 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-4', name: 'Patch 4', title: 'Woods and Stone', date: '15 October 2026',
+    intro: 'A new look for the land: real woods and open meadows, bare rock where the ground is steep, and a mist that lets the game draw far less in the distance.',
+    sections: [
+      { t: 'The world', icon: 'temple', items: [
+        '<b>The woods of Pedias</b>: trees now grow together in woods of every size, from small islands to great forest belts along the hills, with wide open meadow between. No tree stands alone or in a pair out in the open.',
+        '<b>Tall trees</b>: every tree has a clear trunk, its crown starting well above your head, so in a wood you can see between the trunks.',
+        'Small orchards of olive, pomegranate and fig trees dot the meadows, so tribute fruit is still near at hand.',
+        '<b>Bare rock</b>: wherever the ground is steeper than about 25°, it is bare rock. No grass, flowers, bushes or trees grow there, and only loose stones lie about, in little heaps.',
+        'Fixed: lightstone never lay on the ground. Now it does, mostly in the forest hills.',
+      ] },
+      { t: 'Graphics and performance', icon: 'blessing', items: [
+        '<b>A mist hangs around you</b> beyond about 100 metres, rising a little above the tallest things near you (trees, giants, buildings), with the sky clear above it. Behind it the game draws far less: about half the trees, a tenth of the big rocks and none of the small plants, and the farmhouse, caves and olive markers only once you come near. The great landmarks stay in sight. Everything comes back as you approach.',
+        'The edges of the screen soften around the centre of your view, where you are looking, which hides the simpler detail in the distance.',
+      ] },
+      { t: 'Saves', icon: 'goal', items: [
+        'The land has changed, so a world saved before this patch keeps your pack, buildings and progress, but its felled trees and gathered items grow back.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-3', name: 'Patch 3', title: 'Square and True', date: '15 October 2026',
     intro: 'A building patch: pieces now go where you aim, at any angle, from inside or out.',
     sections: [

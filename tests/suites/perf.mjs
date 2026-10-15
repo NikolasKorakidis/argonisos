@@ -14,6 +14,7 @@ const WHERE = ['meadow', 'forest', 'giantwood', 'temple', 'labyrinth', 'summit',
 export default {
   name: 'Performance',
   slow: true,
+  order: 0,   // (run early: timings and pictures suffer once the GPU has been busy for minutes)
   viewport: { w: 1280, h: 720 },
   async run(t) {
     const rows = {};

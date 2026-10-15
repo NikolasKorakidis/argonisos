@@ -39,6 +39,16 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
 - **Heights change once the sites are placed.** The Olympos peak and the small-scale ground detail (`PEAK.on`,
   `DETAIL.on` in `gen.js`) switch on at the end of `sites.js`, so they can't move sites. Anything that picks places by
   height must run before that, or accept the final heights. Ground detail finer than ~6 m won't match the 2 m terrain mesh.
+- **One slope rule** (`slopeGrade`, `ROCK_GRADE` 47% / ~25°, `isRock` in `gen.js`) decides bare rock in the ground colour,
+  where nothing grows (grass texture, flora layout) and that only stones lie on rock (pickups). Use it; don't measure
+  slope another way for any of these.
+- **The meadows' trees grow only in woods** (`pediasWood` in `flora.js`); no tree may stand alone or in a pair there.
+  Tree crowns start above 2.9 m (1.5× the hero) at their smallest size (`tests/suites/woods.mjs` checks it).
+- **The player's mist** (`atmosphere.js`: clear to `MIST_R0` 100 m, 70% by `MIST_R1` 170 m, ceiling from `tallestNear`)
+  hides how much less is drawn behind it (`farKeep`/`keepTo` in `vegetation.js`, `FAR_R` 600, minor sites' `VIEW_R`).
+  Change them together. The focus blur is the `focus` uniform.
+- Saves remember felled trees and pickups by their place in the layout: bump `WORLD_LAYOUT` in `save.js` whenever flora
+  or pickup layout changes.
 - **The ground isn't just `heightAt`.** Floors press the terrain down (`groundcut.js`): use `groundAt(x, z)` for where
   things stand, `player.groundHere(x, z, y)` to include floors and stairs, and `pickups.landAt` for dropped items.
 - **Vegetation is batched.** Near trees are one `InstancedMesh` per species and variant across all cells, re-packed every

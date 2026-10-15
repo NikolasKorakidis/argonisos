@@ -22,6 +22,7 @@ for (const f of files) {
   suites.push(s);
 }
 if (!suites.length) { console.log('No suites match', names.join(' ')); process.exit(1); }
+suites.sort((a, b) => (a.order ?? 50) - (b.order ?? 50));   // (timing-sensitive suites first, while the machine is fresh)
 fs.mkdirSync(REPORTS, { recursive: true });
 
 const server = await serve(), browser = suites.some((s) => !s.node) ? await launch(flags.has('--headed')) : null, out = [], t0 = Date.now();

@@ -59,7 +59,9 @@ export const SMAT = {
   bone: new THREE.MeshStandardMaterial({ color: 0xd9cfb4, roughness: 0.75 }),
 };
 const _nav = new THREE.Vector3();
-const VIEW_R = { temple: 1700, labyrinth: 1400, chimera: 1200, house: 1000, peak: 600, olive: 700, cave: 900 };   // how far off each kind of site is drawn
+// how far off each kind of site is drawn: the landmarks you find your way by far out under the mist, the minor sites
+// (the farmhouse, the olive markers, the caves) only a little way beyond it
+const VIEW_R = { temple: 1700, labyrinth: 1400, chimera: 1200, house: 220, peak: 600, olive: 220, cave: 220 };
 
 // ---- kit: every helper pushes [geometry, material] onto a list in site-local coordinates
 const uvBox = (w, h, d, s = 1 / 3) => { const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, nn = g.attributes.normal; for (let i = 0; i < uv.count; i++) { const ax = Math.abs(nn.getX(i)), ay = Math.abs(nn.getY(i)); uv.setXY(i, uv.getX(i) * (ax > 0.5 ? d : w) * s, uv.getY(i) * (ay > 0.5 ? d : h) * s); } return g; };
@@ -126,6 +128,12 @@ export class Structures {
   site(s, rot = 0) { const grp = new THREE.Group(); grp.position.set(s.x, s.y, s.z); grp.rotation.y = rot; grp.userData.viewR = VIEW_R[s.kind] ?? 800; this.g.scene.add(grp); this.groups.push(grp); return { grp, s, rot, P: [] }; }
   // sites far off are not drawn at all (the haze has them long before): checked twice a second
   cull(cam, dt) { this.cullT = (this.cullT || 0) - dt; if (this.cullT > 0) return; this.cullT = 0.5; for (const g of this.groups) g.visible = g.position.distanceTo(cam) < g.userData.viewR * (1 + Math.max(0, cam.y - 60) / 200); }
+  // the top of the tallest site building within r of pos (for the mist's ceiling), or -Infinity
+  tallestNear(pos, r) {
+    let top = -Infinity;
+    for (const g of this.groups) { if (Math.hypot(g.position.x - pos.x, g.position.z - pos.z) > r + 30) continue; g.userData.top ??= new THREE.Box3().setFromObject(g).max.y; top = Math.max(top, g.userData.top); }
+    return top;
+  }
   w(ctx, x, z, y = 0) { const c = Math.cos(ctx.rot), sn = Math.sin(ctx.rot); return new THREE.Vector3(ctx.s.x + x * c + z * sn, ctx.s.y + y, ctx.s.z - x * sn + z * c); }
   solid(ctx, x, z, r, h = 99, y = 0) { const p = this.w(ctx, x, z, y); this.solids.push({ x: p.x, z: p.z, r, y: p.y, h }); }
   wall(ctx, x0, z0, x1, z1, h, t = 0.45) { const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.ceil(len / (t * 1.4))); for (let i = 0; i <= n; i++) this.solid(ctx, x0 + (x1 - x0) * (i / n), z0 + (z1 - z0) * (i / n), t, h); }

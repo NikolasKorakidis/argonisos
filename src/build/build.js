@@ -237,6 +237,8 @@ export class Build {
     if (pos.y < -0.8) return 'Too deep in the water';
     return null;
   }
+  // the top of the tallest piece you've built within r of pos (for the mist's ceiling), or -Infinity
+  tallestNear(pos, r) { let top = -Infinity; for (const p of this.near(pos.x, pos.z, r)) for (const b of p.boxes) top = Math.max(top, b.max.y); return top; }
   // the door frame whose opening a door at pos, rot fills (hinged at either side), if any
   doorFrameAt(pos, rot) {
     for (const p of this.near(pos.x, pos.z, 3)) { if (p.id !== 'doorframe') continue; for (const [side, turn] of [[-0.7, 0], [0.7, Math.PI]]) { const w = toWorld(p.pos, p.rot, [side, 0, 0]), dr = Math.atan2(Math.sin(rot - p.rot - turn), Math.cos(rot - p.rot - turn)); if (w.distanceTo(pos) < 0.05 && Math.abs(dr) < 0.05) return p; } }

@@ -126,7 +126,7 @@ if (new URLSearchParams(location.search).has('play')) game.started = true; else 
 const clockText = () => { const t = S.time, h = t < DAY_FRACTION ? 6 + (t / DAY_FRACTION) * 15 : (21 + ((t - DAY_FRACTION) / (1 - DAY_FRACTION)) * 9) % 24; return `Day ${S.day} · ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 6) * 10).padStart(2, '0')}`; };
 
 // ---- Loop
-const clock = new THREE.Clock(); let fpsT = 0, frames = 0, fps = 60, atmo = { overcast: 0, dark: 0 };
+const clock = new THREE.Clock(); let fpsT = 0, frames = 0, fps = 60, atmo = { overcast: 0, dark: 0 }, mistT = 0, mistAim = 30, mistTop = 30;
 function loop() {
   requestAnimationFrame(loop);
   const dt = Math.min(clock.getDelta(), 0.05), t = S.still ? 100 : clock.elapsedTime;
@@ -167,7 +167,11 @@ function loop() {
   const wet = 1 - Math.min(1, WEATHER.k.rain * 1.5), snowK = PEAK.on ? Math.min(1, Math.max(0, (camera.position.y - 215) / 50)) : 0;
   updateAmbient(dt, camera.position, { pollen: LIGHT.day * bw.p * wet * (1 - atmo.overcast * 0.7), firefly: (LIGHT.dusk * 0.6 + LIGHT.night) * (bw.p + bw.y * 0.7) * wet,
     leaf: (0.35 + LIGHT.day * 0.65) * Math.min(1, bw.y * 1.2 + GIANTWOOD.k), snow: snowK }, t);
-  updateAtmosphere(camera, { dt, fogFar: scene.fog.far, wp: bw.p, wy: bw.y + bw.v, night: LIGHT.night, giant: GIANTWOOD.k, sunDir, sunCol: sun.color, sunK: Math.min(1.4, sun.intensity / 2.4), fogCol: scene.fog.color, day: LIGHT.day, dusk: LIGHT.dusk, overcast: atmo.overcast, rays: 1,
+  // the player's mist: its ceiling a little over the tallest thing standing near you (trees, giants, buildings), eased so
+  // it doesn't jump, and never lower than a few metres over the ground you stand on
+  mistT -= dt; if (mistT <= 0) { mistT = 0.25; const g0 = heightAt(focus.x, focus.z); mistAim = Math.min(g0 + 40, Math.max(g0 + 8, veg.tallestNear(focus, 110) + 4, game.structures?.tallestNear(focus, 110) ?? -Infinity, game.build?.tallestNear(focus, 110) ?? -Infinity)); }   // (at most 40 m up: a tree up on a hill mustn't lift it over the sky)
+  mistTop += (mistAim - mistTop) * (S.still ? 1 : Math.min(1, dt * 0.6));   // (screenshot tests: settled at once)
+  updateAtmosphere(camera, { dt, player: focus, mistTop, fogFar: scene.fog.far, wp: bw.p, wy: bw.y + bw.v, night: LIGHT.night, giant: GIANTWOOD.k, sunDir, sunCol: sun.color, sunK: Math.min(1.4, sun.intensity / 2.4), fogCol: scene.fog.color, day: LIGHT.day, dusk: LIGHT.dusk, overcast: atmo.overcast, rays: 1,
     mist: Math.min(1, LIGHT.mist + (WEATHER.k.fog || 0) * 0.4) * (S.fly ? 0.5 : 1), mistDen: 0.01 + biomeWeights(focus.x, focus.z).y * 0.012, ground: Math.min(heightAt(focus.x, focus.z), 60) });   // (mist lies in the valleys: from a summit you look down on it)
   render(); adaptResolution(dt, terrain.pending > 0 || !game.started);
   endFrame();

@@ -9,7 +9,17 @@ import { renderer, sun, hemi } from '../render/core.js';
 
 export const NEAR_R = 75;                     // full-detail radius
 export const MID_R = 260;                     // light meshes out to here, impostors beyond
-const NEAR_KEEP = NEAR_R + CELL * 1.5, FAR = 256, FAR_R = 1000;
+const NEAR_KEEP = NEAR_R + CELL * 1.5, FAR = 256, FAR_R = 600;
+// Behind the player's mist (tester feedback, 15 Oct; see atmosphere.js) the distant land is drawn with much less: from
+// MIST_R0 out to MIST_R1 things drop away one by one (each at its own distance, so there's no ring where they vanish),
+// until only a share of each kind is left: half the trees and ruins, a tenth of the big rocks, none of the small stuff.
+// Coming closer, they come back the same way.
+export const MIST_R0 = 100, MIST_R1 = 170;
+const SMALL = new Set(['lavender', 'broom', 'myrtle', 'fern', 'redbush', 'amphorae', 'herm', 'reeds']);
+const farKeep = (sp) => { const n = SPECIES[sp].name; return SMALL.has(n) ? 0 : n === 'rock' || n === 'boulder' ? 0.1 : 0.5; };
+const dice = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
+// how far off this one is still drawn (Infinity: always, as one of the share that stays)
+const keepTo = (sp, x, z) => { const k = farKeep(sp), h = dice(x, z); return h < k ? Infinity : MIST_R0 + (MIST_R1 - MIST_R0) * ((h - k) / (1 - k)); };
 
 // ---- extra species the new world needs
 TREE_BUILDERS.pomegranate = (v) => {            // a small, bushy tree with glossy leaves and red fruit
@@ -146,6 +156,11 @@ function matrixOf(items, i, hidden) {
   return _m.compose(_p, _q, _s);
 }
 
+const TOPS = [];
+function speciesTop(veg, sp) {   // how tall a species stands at scale 1 (its first variant)
+  if (TOPS[sp] === undefined) { const P = veg.geoFor(sp, 0); P.geo.computeBoundingBox(); let t = P.geo.boundingBox.max.y; if (P.cards) { P.cards.computeBoundingBox(); t = Math.max(t, P.cards.boundingBox.max.y); } TOPS[sp] = t; }
+  return TOPS[sp];
+}
 export class Vegetation {
   constructor(scene, pool) {
     this.scene = scene; this.pool = pool; this.group = new THREE.Group(); this.group.name = 'vegetation'; scene.add(this.group);
@@ -168,7 +183,7 @@ export class Vegetation {
     for (let i = 0; i < n; i++) {
       const o = i * STRIDE, T = ATLAS.tiles[items[o]], s = items[o + 6];
       tile.set([T.u, T.v, T.du, T.dv], i * 4); size.set([T.size * s, T.y0 * s, T.x0 * s], i * 3);
-      _m.makeTranslation(items[o + 2], items[o + 3], items[o + 4]); if (hidden.has(i)) _m.scale(_s.setScalar(0)); im.setMatrixAt(i, _m);
+      _m.makeTranslation(items[o + 2], items[o + 3], items[o + 4]); if (hidden.has(i) || keepTo(items[o], items[o + 2], items[o + 4]) < Infinity) _m.scale(_s.setScalar(0)); im.setMatrixAt(i, _m);   // (far beyond the mist: only the share that stays)
     }
     const g = quad.clone(); g.setAttribute('aTile', new THREE.InstancedBufferAttribute(tile, 4)); g.setAttribute('aSize', new THREE.InstancedBufferAttribute(size, 3)); im.geometry = g;
     im.castShadow = false; im.receiveShadow = false; im.computeBoundingSphere(); im.boundingSphere.radius += 30; this.group.add(im); return im;
@@ -273,14 +288,15 @@ export class Vegetation {
         const trunk = new THREE.InstancedMesh(P.lo, cut(propMat, true), cap), meshes = [trunk];
         if (P.cards && P.leafFar) { const lm = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, true), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
         P.lo.computeBoundingSphere(); const bs = P.lo.boundingSphere.clone(); if (meshes[1]) { P.cards.computeBoundingSphere(); bs.union(P.cards.boundingSphere); }
-        b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), refs: [], n: 0 };
+        b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), refs: [], n: 0 };
         for (const m of meshes) { m.castShadow = false; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; this.group.add(m); }
         this.mids.set(key, b);
       }
       b.n = n; b.refs = refs;
       for (let k = 0; k < n; k++) { const it = refs[k * 2].items, i = refs[k * 2 + 1], o = i * STRIDE, sc = it[o + 6];
         matrixOf(it, i, false); b.mats.set(_m.elements, k * 16);
-        b.cen[k * 4] = it[o + 2] + b.sphere.center.x * sc; b.cen[k * 4 + 1] = it[o + 3] + b.sphere.center.y * sc; b.cen[k * 4 + 2] = it[o + 4] + b.sphere.center.z * sc; b.cen[k * 4 + 3] = b.sphere.radius * sc; }
+        b.cen[k * 4] = it[o + 2] + b.sphere.center.x * sc; b.cen[k * 4 + 1] = it[o + 3] + b.sphere.center.y * sc; b.cen[k * 4 + 2] = it[o + 4] + b.sphere.center.z * sc; b.cen[k * 4 + 3] = b.sphere.radius * sc;
+        const kt = keepTo(it[o], it[o + 2], it[o + 4]); b.keep[k] = kt * kt; }
     }
   }
   // per frame, after the camera has moved: pack the trees worth drawing to the front of each batch
@@ -307,7 +323,7 @@ export class Vegetation {
       const dst = b.meshes[0].instanceMatrix.array; let m = 0;
       for (let k = 0; k < b.n; k++) {
         const x = b.cen[k * 4], y = b.cen[k * 4 + 1], z = b.cen[k * 4 + 2], r = b.cen[k * 4 + 3], dx = x - pos.x, dz = z - pos.z, d2 = dx * dx + dz * dz;
-        const inner = Math.max(0, lo - r); if (d2 < inner * inner || d2 > (hi + r) * (hi + r)) continue;
+        const inner = Math.max(0, lo - r); if (d2 < inner * inner || d2 > (hi + r) * (hi + r) || d2 > b.keep[k]) continue;   // (and dropped away behind the mist)
         _sp.center.set(x, y, z); _sp.radius = r; if (!_fr.intersectsSphere(_sp)) continue;
         for (let e = 0; e < 16; e++) dst[m * 16 + e] = b.mats[k * 16 + e];
         m++;
@@ -315,6 +331,14 @@ export class Vegetation {
       for (const mesh of b.meshes) mesh.count = m;
       b.meshes[0].instanceMatrix.needsUpdate = true;
     }
+  }
+  // the top of the tallest tree or rock within r of pos (for the mist's ceiling), or -Infinity
+  tallestNear(pos, r) {
+    let top = -Infinity; const r2 = r * r;
+    for (const c of this.near.values()) { const it = c.items; if (!it) continue;
+      for (let o = 0, i = 0; o < it.length; o += STRIDE, i++) { if (!(it[o + 6] > 0)) continue; const dx = it[o + 2] - pos.x, dz = it[o + 4] - pos.z; if (dx * dx + dz * dz > r2) continue;
+        const t = it[o + 3] + speciesTop(this, it[o]) * it[o + 6]; if (t > top && !this.removed.has(c.cx + ',' + c.cz + ',' + i)) top = t; } }
+    return top;
   }
   // which tree an instance hit by a ray belongs to: { cell, i }
   treeAt(mesh, instanceId) { const b = mesh.userData.batch; if (!b) return null; const k = b.slot[instanceId]; return { cell: b.refs[k * 2], i: b.refs[k * 2 + 1] }; }

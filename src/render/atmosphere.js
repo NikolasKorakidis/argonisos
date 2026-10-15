@@ -4,6 +4,7 @@
 // sky shows through). All in linear light, before bloom and tone mapping.
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from '../../jsm/postprocessing/Pass.js';
+import { MIST_R0, MIST_R1 } from '../world/vegetation.js';
 
 export const ATMO = {
   tDiffuse: { value: null }, tDepth: { value: null },
@@ -14,6 +15,13 @@ export const ATMO = {
   vigOffset: { value: 0.95 }, vigDark: { value: 1.15 },
   // a soft blur on what lies far off, so the end of the view melts into the haze instead of ending in a sharp line
   texel: { value: new THREE.Vector2(1 / 1280, 1 / 720) }, blurNear: { value: 600 }, blurFar: { value: 1100 }, blurAmt: { value: 1 },
+  // the focus (tester feedback, 15 Oct): sharp round the crosshair, softening toward the edges of the screen, so the
+  // cheaper detail at the edges of your view isn't noticed (focus: the blur radius in pixels at the screen's edge)
+  focus: { value: 3 }, aspect: { value: 16 / 9 },
+  // the player's mist (tester feedback, 15 Oct): clear for MIST_R0 round the hero, thickening to mzAmt by MIST_R1 and
+  // staying there, up to a ceiling (mzTop) a little over the tallest thing standing near; above it the sky stays clear.
+  // It hides how much less is drawn out there (see vegetation.js).
+  mzC: { value: new THREE.Vector2() }, mzR0: { value: MIST_R0 }, mzR1: { value: MIST_R1 }, mzAmt: { value: 0.7 }, mzTop: { value: 30 }, mzSoft: { value: 10 }, mzCol: { value: new THREE.Color(0.7, 0.75, 0.8) },
   // the grade (white balance, saturation, a tint in the shadows) and the cloud shadows drifting over the land
   gTint: { value: new THREE.Color(1, 1, 1) }, gSat: { value: 1 }, gShadow: { value: new THREE.Color(0, 0, 0) },
   cloudOff: { value: new THREE.Vector2() }, cloudCover: { value: 0.4 }, cloudK: { value: 0 },
@@ -25,19 +33,24 @@ export class AtmospherePass extends Pass {
     this.material = new THREE.ShaderMaterial({
       uniforms: ATMO, depthTest: false, depthWrite: false,
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: `uniform sampler2D tDiffuse, tDepth; uniform mat4 projInv, camWorld; uniform vec3 camPos, sunDir, sunCol, mistCol, hazeCol;
-        uniform vec2 sunUV, cloudOff, texel; uniform float blurNear, blurFar, blurAmt, sunVis, mistAmt, mistBase, mistH, mistDen, hazeAmt, rayAmt, rays, vigOffset, vigDark, gSat, cloudCover, cloudK;
+      fragmentShader: `uniform sampler2D tDiffuse, tDepth; uniform mat4 projInv, camWorld; uniform vec3 camPos, sunDir, sunCol, mistCol, hazeCol, mzCol;
+        uniform vec2 sunUV, cloudOff, texel, mzC; uniform float blurNear, blurFar, blurAmt, focus, aspect, mzR0, mzR1, mzAmt, mzTop, mzSoft, sunVis, mistAmt, mistBase, mistH, mistDen, hazeAmt, rayAmt, rays, vigOffset, vigDark, gSat, cloudCover, cloudK;
         uniform vec3 gTint, gShadow; varying vec2 vUv;
         float h12(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h12(i), h12(i + vec2(1, 0)), f.x), mix(h12(i + vec2(0, 1)), h12(i + vec2(1, 1)), f.x), f.y); }
         vec3 worldAt(vec2 uv, float d) { vec4 v = projInv * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0); v /= v.w; return (camWorld * v).xyz; }
         void main() {
           vec4 col = texture2D(tDiffuse, vUv); float d = texture2D(tDepth, vUv).x;
+          // the blur: the focus (growing from the crosshair toward the edges of the screen) and, far off, a little more
+          // with distance; eight taps round a ring that widens with both
+          float bk = focus * smoothstep(0.15, 0.85, length((vUv - 0.5) * vec2(aspect, 1.0)));
+          vec3 P = worldAt(vUv, min(d, 0.9999)); float dist = length(P - camPos);
+          if (d < 0.99999) bk = max(bk, 2.4 * blurAmt * smoothstep(blurNear, blurFar, dist));
+          if (bk > 0.05) { vec3 acc = col.rgb; float n = 1.0; for (int i = 0; i < 8; i++) { float a = float(i) * 0.7854 + 0.39; acc += texture2D(tDiffuse, vUv + vec2(cos(a), sin(a)) * texel * bk).rgb; n += 1.0; }
+            if (bk > 1.5) for (int i = 0; i < 6; i++) { float a = float(i) * 1.0472; acc += texture2D(tDiffuse, vUv + vec2(cos(a), sin(a)) * texel * bk * 0.5).rgb; n += 1.0; }   // (an inner ring for the wider blur, so it stays smooth)
+            col.rgb = acc / n; }
           if (d < 0.99999) {
-            vec3 P = worldAt(vUv, d), V = P - camPos; float dist = length(V); vec3 vd = V / max(dist, 1e-3);
-            // far off, a soft blur (eight taps round a ring that widens with distance)
-            float bk = blurAmt * smoothstep(blurNear, blurFar, dist);
-            if (bk > 0.02) { vec3 acc = col.rgb; for (int i = 0; i < 8; i++) { float a = float(i) * 0.7854 + 0.39; acc += texture2D(tDiffuse, vUv + vec2(cos(a), sin(a)) * texel * 2.4 * bk).rgb; } col.rgb = acc / 9.0; }
+            vec3 V = P - camPos; vec3 vd = V / max(dist, 1e-3);
             float toSun = max(dot(vd, sunDir), 0.0);
             // cloud shadows: soft patches of shade drifting across the land with the wind
             if (cloudK > 0.001) { vec2 q = (P.xz + cloudOff) * 0.0035; float n = vn(q) * 0.65 + vn(q * 2.3 + 7.1) * 0.35;
@@ -51,6 +64,12 @@ export class AtmospherePass extends Pass {
             // haze glowing towards the sun, deeper with distance
             col.rgb += hazeCol * pow(toSun, 5.0) * (1.0 - exp(-dist / 900.0)) * hazeAmt;
           }
+          // the player's mist: how far out from the hero (across the ground) and how high; for the sky, where the line of
+          // sight is when it reaches the far edge of the mist, so only the band low over the horizon is covered
+          float mh = mzR1, mp;
+          if (d < 0.99999) { mh = length(P.xz - mzC); mp = P.y; }
+          else { vec3 rd = normalize(P - camPos); mp = camPos.y + rd.y * (mzR1 / max(length(rd.xz), 1e-3)); mh = mzR1; }
+          col.rgb = mix(col.rgb, mzCol, mzAmt * smoothstep(mzR0, mzR1, mh) * (1.0 - smoothstep(mzTop - mzSoft, mzTop + mzSoft, mp)));
           // shafts of sun: march towards the sun on the screen, gathering light wherever the sky shows through
           if (sunVis > 0.001 && rays > 0.5) {
             vec2 st = (sunUV - vUv) / float(${SAMPLES}) * 0.92, uv = vUv; float lit = 0.0, w = 1.0, tot = 0.0;
@@ -68,7 +87,7 @@ export class AtmospherePass extends Pass {
     this.fsQuad = new FullScreenQuad(this.material);
   }
   render(renderer, writeBuffer, readBuffer) {
-    ATMO.tDiffuse.value = readBuffer.texture; ATMO.tDepth.value = readBuffer.depthTexture; ATMO.texel.value.set(1 / readBuffer.width, 1 / readBuffer.height);
+    ATMO.tDiffuse.value = readBuffer.texture; ATMO.tDepth.value = readBuffer.depthTexture; ATMO.texel.value.set(1 / readBuffer.width, 1 / readBuffer.height); ATMO.aspect.value = readBuffer.width / readBuffer.height;
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer); if (this.clear) renderer.clear();
     this.fsQuad.render(renderer);
   }
@@ -96,6 +115,9 @@ export function updateAtmosphere(camera, o) {
   ATMO.sunCol.value.copy(o.sunCol).multiplyScalar(o.sunK);
   ATMO.mistCol.value.copy(o.fogCol).lerp(o.sunCol, 0.15 * o.day).multiplyScalar(0.9 + 0.3 * o.day);
   if (o.fogFar) { ATMO.blurFar.value = o.fogFar * 0.85; ATMO.blurNear.value = o.fogFar * 0.4; }   // (with the fog: high up, where it clears, the blur moves out too)
+  if (o.player) ATMO.mzC.value.set(o.player.x, o.player.z);
+  if (o.mistTop !== undefined) ATMO.mzTop.value = o.mistTop;
+  ATMO.mzCol.value.copy(o.fogCol).lerp(o.sunCol, 0.08 * o.day);
   ATMO.mistAmt.value = o.mist; ATMO.mistBase.value = o.ground - 6; ATMO.mistDen.value = o.mistDen;
   ATMO.hazeCol.value.copy(o.sunCol).multiplyScalar(0.35 * o.sunK); ATMO.hazeAmt.value = (0.25 + o.dusk * 0.9) * o.day;
   // the sun on the screen, and how strongly its shafts show (only with the sun up, ahead of you, and not behind cloud)
