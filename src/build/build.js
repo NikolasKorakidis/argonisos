@@ -36,6 +36,36 @@ function crossT(def, pos, rot, o, dir) {
   for (const b of def.solids || []) { _hb.setFromCenterAndSize(_p0.set(b[0], b[1], b[2]), _p1.set(b[3], b[4], b[5])); take(_lr.intersectBox(_hb, _hv)); }
   return best;
 }
+// A piece's surfaces ('top': [{x0,x1,z0,z1,y|y0,y1}]) or solid parts ('solid': [[cx,cy,cz,w,h,d]]) as rectangles turned
+// with the piece (centre, half sizes along the piece's own axes, its angle) with a height range, shrunk by `inset`
+function rects(list, pos, rot, inset, kind) {
+  return (list || []).map((q) => {
+    const top = kind === 'top', lx = top ? (q.x0 + q.x1) / 2 : q[0], lz = top ? (q.z0 + q.z1) / 2 : q[2], c = toWorld(pos, rot, [lx, 0, lz]);
+    const hx = Math.max(0.02, (top ? Math.abs(q.x1 - q.x0) : q[3]) / 2 - inset), hz = Math.max(0.02, (top ? Math.abs(q.z1 - q.z0) : q[5]) / 2 - inset);   // (a thin wall stays a sliver, not nothing)
+    const ya = top ? (q.y ?? q.y0) : q[1] - q[4] / 2 + inset, yb = top ? (q.y ?? q.y1) : q[1] + q[4] / 2 - inset;
+    return { x: c.x, z: c.z, hx, hz, rot, y0: pos.y + Math.min(ya, yb) - (top ? 0.25 : 0), y1: pos.y + Math.max(ya, yb) + (top ? 0.05 : 0) };
+  }).filter((r) => r.y1 > r.y0);
+}
+// Do two turned rectangles overlap (separating axes: each one's two sides), with their height ranges overlapping too?
+function rectsMeet(a, b) {
+  if (a.y1 <= b.y0 || b.y1 <= a.y0) return false;
+  const dx = b.x - a.x, dz = b.z - a.z;
+  for (const r of [a.rot, b.rot]) for (const [ux, uz] of [[Math.cos(r), -Math.sin(r)], [Math.sin(r), Math.cos(r)]]) {
+    const ext = (q) => q.hx * Math.abs(Math.cos(q.rot) * ux - Math.sin(q.rot) * uz) + q.hz * Math.abs(Math.sin(q.rot) * ux + Math.cos(q.rot) * uz);
+    if (Math.abs(dx * ux + dz * uz) >= ext(a) + ext(b)) return false;
+  }
+  return true;
+}
+// How far a point is from a piece placed at pos, rot: for a flat piece (a floor, a beam laid level) from the nearest point
+// of its surface, so aiming anywhere on or just past where a tile would lie counts; for anything else from its reference
+// point (a wall's foot, a roof panel's lower edge), which is what you aim with
+function flatReach(def, pos, rot, q) {
+  if (def.aimAt) return Math.min(...def.aimAt.map((l) => toWorld(pos, rot, l).distanceTo(q)));   // (stairs: by either end)
+  const t = def.tops?.length === 1 && def.tops[0].y !== undefined ? def.tops[0] : null; if (!t) return pos.distanceTo(q);
+  const c = Math.cos(-rot), s = Math.sin(-rot), dx = q.x - pos.x, dz = q.z - pos.z, lx = dx * c + dz * s, lz = -dx * s + dz * c;
+  const ex = Math.max(Math.min(t.x0, t.x1) - lx, 0, lx - Math.max(t.x0, t.x1)), ez = Math.max(Math.min(t.z0, t.z1) - lz, 0, lz - Math.max(t.z0, t.z1));
+  return Math.hypot(ex, q.y - pos.y - t.y, ez) + 0.25 * Math.hypot(dx, dz);   // (of two tiles under the aim, the one centred nearer)
+}
 // The middle of a piece in its own frame (its surfaces and solid parts, else its snap points), for judging snap spots
 function centreOf(def) {
   const pts = [];
@@ -119,31 +149,58 @@ export class Build {
     const o = _ray.ray.origin, dir = _ray.ray.direction, t0 = Math.max(0, _v.copy(this.g.player.pos).sub(o).dot(dir) - 1.5), t1 = Math.max(t0, a.d ?? o.distanceTo(a.p));
     const onLine = (q) => { const t = Math.min(t1, Math.max(t0, _v.copy(q).sub(o).dot(dir))); return { off: _v.copy(o).addScaledVector(dir, t).distanceTo(q), t }; };
     const centre = def.centre ||= centreOf(def), _c = new THREE.Vector3();
+    // a door goes only into a door frame: aim at the frame (or through its opening) and it settles in, hinged on the side
+    // your turn chooses; anywhere else it's refused, so it can never hang in the air off a corner
+    if (def.door) {
+      let frame = a.piece?.id === 'doorframe' ? a.piece : null, bd = 1.1;
+      if (!frame) for (const p of this.near(this.g.player.pos.x, this.g.player.pos.z, REACH + 4)) if (p.id === 'doorframe') { const off = onLine(toWorld(p.pos, p.rot, [0, 1.15, 0])).off; if (off < bd) { bd = off; frame = p; } }
+      let dpos = pos, drot = this.rot, why = 'Doors go in a door frame';
+      if (frame) { const flip = Math.abs(Math.atan2(Math.sin(this.rot - frame.rot), Math.cos(this.rot - frame.rot))) > Math.PI / 2; drot = frame.rot + (flip ? Math.PI : 0); dpos = toWorld(frame.pos, frame.rot, [flip ? 0.7 : -0.7, 0, 0]); why = this.invalid(def, dpos, drot, true, a); }
+      this.ghost.position.copy(dpos); this.ghost.rotation.y = drot; this.lastSnap = null; for (const m of this.ghost.children) m.material = why ? ghostBad : ghostOk;
+      return { pos: dpos.clone(), rot: drot, why, snapped: !!frame };
+    }
     // Only structural pieces are snap anchors: never the workbench, campfire, bed, chest or other furniture. Equipment
     // itself doesn't snap at all; it goes where you aim.
     const structural = (p) => !p.def.equip, snapping = !def.equip;
     // near a structure, turn with its grid: the ghost takes the nearest quarter-turn to your chosen angle, relative to
     // the piece you're aiming at (or the nearest piece)
     let rot = this.rot, anchor = snapping && a.piece && structural(a.piece) ? a.piece : null;
-    if (snapping && !anchor) { let bd2 = 4; for (const p of this.near(pos.x, pos.z, 4)) { if (!structural(p)) continue; const d = p.pos.distanceTo(pos); if (d < bd2) { bd2 = d; anchor = p; } } }
+    // (or the piece nearest the line of aim: aim at the ground just past a floor and you still mean to line up with it)
+    if (snapping && !anchor) { let bd2 = 4; const P = this.g.player.pos; for (const p of this.near(P.x, P.z, REACH + 4)) { if (!structural(p)) continue; const d = Math.min(p.pos.distanceTo(pos), onLine(p.pos).off); if (d < bd2) { bd2 = d; anchor = p; } } }
     if (anchor) rot = anchor.rot + Math.round((this.rot - anchor.rot) / (Math.PI / 2)) * (Math.PI / 2);
     this.aligned = !!anchor;
-    // snap: try putting each of the ghost's points on each point of what's built nearby, score each placement (the most
-    // points lined up first, then nearest where you aim), and take the best one that's actually allowed
-    const local = snapping ? def.snaps : [], targets = [];
-    if (snapping) { const P = this.g.player.pos; for (const p of this.near(P.x, P.z, REACH + 4)) if (structural(p)) for (const s of p.snaps) if (onLine(s).off < 5) targets.push(s); }
+    // snap: try putting each of the ghost's points on each point of what's built nearby, and score each placement by how
+    // near its own reference point (a wall's foot, a roof panel's lower edge, a floor's middle) comes to where you aim,
+    // lining up more points only breaking near-ties; then take the best one that's actually allowed
+    const local = snapping ? def.snaps : [], targets = [], kin = new Set();   // (kin: points on pieces of this same kind)
+    if (snapping) { const P = this.g.player.pos; for (const p of this.near(P.x, P.z, REACH + 4)) if (structural(p)) for (const s of p.snaps) if (onLine(s).off < 6) { targets.push(s); if (p.id === def.id) kin.add(s); } }
+    // a flat piece aimed at the face of a wall or post (a floor laid off the top of a wall) comes out toward you, half a
+    // tile back along your aim, rather than straddling the wall
+    const flatAim = a.n && Math.abs(a.n.y) < 0.5 ? pos.clone().addScaledVector(_v.set(dir.x, 0, dir.z).normalize(), -0.75) : pos;
+    const sloped = !def.aimAt && (def.tops || []).some((t) => t.y === undefined && t.y0 !== t.y1);   // (roof panels: see the gap rule below)
+    // fences and stockades aimed at the ground follow the ground: they join the last one end to end across the ground,
+    // whatever its height, and each stands on the ground where it is (so a fence line runs up a hill, not into it)
+    const onGround = def.cat === 'Fences' && a.terrain;
     const cands = [];
-    // (against a structure a quarter turn is tried too, but it only wins if it lines up clearly more points)
+    // (against a structure a quarter turn is tried too, but it only wins if it's clearly where you aim)
     for (const [r2, pen] of anchor ? [[rot, 0], [rot + Math.PI / 2, 2.5], [rot - Math.PI / 2, 2.5]] : [[rot, 0]]) {
       const c = Math.cos(r2), sn = Math.sin(r2);
       for (const s of targets) for (const l of local) {
         const cand = new THREE.Vector3(s.x - (l[0] * c + l[2] * sn), s.y - l[1], s.z - (-l[0] * sn + l[2] * c));
-        const L = onLine(_c.set(cand.x + centre[0] * c + centre[2] * sn, cand.y + centre[1], cand.z - centre[0] * sn + centre[2] * c)); if (L.off > 1.7) continue;
-        // a spot the line of aim passes right through, well before it lands, is what you're pointing at: nearest first
-        const x = crossT(def, cand, r2, o, dir), d = x !== null && x > t0 && x < t1 - 0.6 ? -100 + x : L.off;
-        let match = 0; for (const m of local) { const wx = cand.x + m[0] * c + m[2] * sn, wy = cand.y + m[1], wz = cand.z - m[0] * sn + m[2] * c; if (targets.some((t) => Math.abs(t.x - wx) + Math.abs(t.y - wy) + Math.abs(t.z - wz) < 0.2)) match++; }
         if (cands.some((q) => q.pos.distanceTo(cand) < 0.02 && Math.abs(q.rot - r2) < 0.01)) continue;
-        cands.push({ pos: cand, rot: r2, score: d - 1.6 * (match - 1) + pen });
+        let match = 0, kins = 0; for (const m of local) { const wx = cand.x + m[0] * c + m[2] * sn, wy = cand.y + m[1], wz = cand.z - m[0] * sn + m[2] * c, at = (t) => Math.abs(t.x - wx) + Math.abs(t.y - wy) + Math.abs(t.z - wz) < 0.2; if (targets.some(at)) match++; for (const t of kin) if (at(t)) { kins++; break; } }
+        // Filling a gap between roof panels (a sloped piece between two others, four points shared with them):
+        // aim into the gap and the line passes through where the piece belongs and lands on whatever is behind, so if it
+        // passes right through, well before it lands, that spot wins (nearest first)
+        const x = kins >= 4 && sloped ? crossT(def, cand, r2, o, dir) : null, gap = x !== null && x > t0 && x < t1 - 0.6 && !this.blocked(def, cand, r2);
+        // (aim just over the top of a wall and the line grazes it, then lands on the far wall: a reference point the line
+        // passes close by, metres before it lands, counts as where you aimed; smoothly, so the ghost never jumps between
+        // two spots as the aim moves a hair, and near where the line lands only the landing point counts)
+        const L = onLine(cand); let d = onGround ? Math.hypot(cand.x - pos.x, cand.z - pos.z) : Math.min(flatReach(def, cand, r2, flatAim), 2 * L.off + Math.max(0, 3 - (t1 - L.t)));
+        // (stairs aimed by their top end come down toward you from there; aimed by their foot, they climb away from you)
+        if (def.aimAt) { const mid = toWorld(cand, r2, centre), away = (mid.x - pos.x) * dir.x + (mid.z - pos.z) * dir.z > 0, top = toWorld(cand, r2, def.aimAt[1]).distanceTo(pos) < cand.distanceTo(pos); if (top === away) d += 0.5; if (!top && cand.y - this.g.player.pos.y > 1.5) d += 0.8; }   // (and from below, stairs that bring you up to what you aim at, not ones starting up there)
+        if (!gap && d > 1.7) continue;
+        cands.push({ pos: cand, rot: r2, score: (gap ? -100 + x : d) - 0.3 * (match - 1) + pen });
       }
     }
     cands.sort((x, y) => x.score - y.score);
@@ -151,10 +208,10 @@ export class Build {
     const last = this.lastSnap, keep = last && cands.find((q) => q.pos.distanceTo(last.pos) < 0.02 && Math.abs(q.rot - last.rot) < 0.01 && q.score <= (cands[0]?.score ?? 0) + 0.6);
     let best = null;
     if (keep && !this.blocked(def, keep.pos, keep.rot)) best = keep;
-    else for (const q of cands.slice(0, 8)) if (!this.blocked(def, q.pos, q.rot)) { best = q; break; }
+    else for (const q of cands) if (!this.blocked(def, q.pos, q.rot)) { best = q; break; }   // (all of them: near a big house the first few can all be taken)
     if (!best && cands.length) best = cands[0];   // nothing free: show the best one (it will be red)
     this.lastSnap = best;
-    if (best) { pos = best.pos.clone(); rot = best.rot; }
+    if (best) { pos = best.pos.clone(); rot = best.rot; if (onGround) pos.y = Math.min(...def.snaps.map((l) => { const w = toWorld(pos, rot, l); return heightAt(w.x, w.z); })); }
     // a floor laid on the ground sits on its highest corner, so the ground doesn't poke up through it
     else if (a.terrain && def.cat === 'Floors' && def.tops) { const t = def.tops[0]; let top = -1e9; for (const [lx, lz] of [[t.x0, t.z0], [t.x1, t.z0], [t.x0, t.z1], [t.x1, t.z1], [0, 0]]) { const w = toWorld(pos, rot, [lx, 0, lz]); top = Math.max(top, heightAt(w.x, w.z)); } pos.y = top + 0.03; }
     this.ghost.position.copy(pos); this.ghost.rotation.y = rot;
@@ -167,12 +224,24 @@ export class Build {
     const P = this.g.player;
     if (pos.distanceTo(P.pos) > REACH) return 'Too far away';
     if (!this.g.inv.has(def.mats) && !this.g.S.freeBuild) return 'Missing materials';
+    if (def.door && !this.doorFrameAt(pos, rot)) return 'Doors go in a door frame';
     if (def.equip && !snapped && !(a.terrain || (a.piece && a.piece.def.tops))) return 'Place it on the ground or a floor';
     if (def.equip && a.terrain && Math.abs(heightAt(pos.x, pos.z) - pos.y) > 0.4) return 'Too steep here';
+    // building pieces stand on the ground or snap onto what's built (sharing a point with it): never just leaning on the
+    // side of something in mid-air
+    if (!def.equip && !def.door && !this.grounded(def, pos, rot) && !this.snapsOf(def, pos, rot).some((m) => [...this.near(pos.x, pos.z, 8)].some((p) => p.snaps.some((q) => q.distanceTo(m) < 0.05)))) return 'Attach it to your building';
     const sup = this.supportFor(def, pos, rot); if (sup.s < MIN_SUPPORT) return 'Nothing holds it up';
     if (this.overlaps(def, pos, rot)) return 'Something is in the way';
     if (this.duplicate(def, pos, rot)) return 'Already built here';
+    if (this.throughFloor(def, pos, rot)) return 'Something is in the way';
     if (pos.y < -0.8) return 'Too deep in the water';
+    return null;
+  }
+  // the top of the tallest piece you've built within r of pos (for the mist's ceiling), or -Infinity
+  tallestNear(pos, r) { let top = -Infinity; for (const p of this.near(pos.x, pos.z, r)) for (const b of p.boxes) top = Math.max(top, b.max.y); return top; }
+  // the door frame whose opening a door at pos, rot fills (hinged at either side), if any
+  doorFrameAt(pos, rot) {
+    for (const p of this.near(pos.x, pos.z, 3)) { if (p.id !== 'doorframe') continue; for (const [side, turn] of [[-0.7, 0], [0.7, Math.PI]]) { const w = toWorld(p.pos, p.rot, [side, 0, 0]), dr = Math.atan2(Math.sin(rot - p.rot - turn), Math.cos(rot - p.rot - turn)); if (w.distanceTo(pos) < 0.05 && Math.abs(dr) < 0.05) return p; } }
     return null;
   }
   grounded(def, pos, rot) { for (const s of def.snaps) { const w = toWorld(pos, rot, s, _v); if (w.y - heightAt(w.x, w.z) < 0.35) return true; } return false; }
@@ -192,27 +261,41 @@ export class Build {
     for (const t of def.tops || []) { const pts = [[t.x0, t.y ?? t.y0, t.z0], [t.x1, t.y ?? t.y1, t.z1], [t.x0, t.y ?? t.y1, t.z1], [t.x1, t.y ?? t.y0, t.z0]].map((l) => toWorld(pos, rot, l)); const bb = new THREE.Box3().setFromPoints(pts); bb.min.y -= 0.2; out.push(bb); }
     return out;
   }
-  touch(def, pos, rot, p) { const A = this.boxes(def, pos, rot), B = p.boxes; for (const a of A) for (const b of B) if (a.clone().expandByScalar(0.06).intersectsBox(b)) return true; return false; }
+  // (their real, turned outlines, grown by 6 cm: boxes squared to north and south would let a piece near a turned house
+  // count as touching it while it hangs in the air)
+  touch(def, pos, rot, p) {
+    const A = [...rects(def.solids, pos, rot, -0.06, 'solid'), ...rects(def.tops, pos, rot, -0.06, 'top')], B = [...rects(p.def.solids, p.pos, p.rot, -0.06, 'solid'), ...rects(p.def.tops, p.pos, p.rot, -0.06, 'top')];
+    for (const a of A) for (const b of B) if (rectsMeet(a, b)) return true; return false;
+  }
   // Would this sit on (or half over) a piece of the same kind? Floors, roofs and beams have no body, so overlaps between
   // them are caught here: the same spot, or their surfaces overlapping by more than a sliver
   duplicate(def, pos, rot) {
-    const inset = (b) => { b.min.x += 0.2; b.max.x -= 0.2; b.min.z += 0.2; b.max.z -= 0.2; b.min.y -= 0.05; b.max.y += 0.05; return b; };   // shrink sideways only: a floor's surface is thin
-    const mine = this.snapsOf(def, pos, rot), A = this.boxes({ tops: def.tops }, pos, rot).map(inset);
+    // (surfaces shrunk sideways by 0.2 m, so pieces meeting edge to edge don't count; turned with the piece, so a floor
+    // at any angle leaves room for the next one beside it)
+    const mine = this.snapsOf(def, pos, rot), A = rects(def.tops, pos, rot, 0.2, 'top');
     for (const p of this.near(pos.x, pos.z, 6)) {
       if (p.id !== def.id) continue;
       if (mine.every((m) => p.snaps.some((q) => q.distanceTo(m) < 0.15))) return true;
-      for (const b of this.boxes({ tops: p.def.tops }, p.pos, p.rot)) { const bb = inset(b); for (const a of A) if (!a.isEmpty() && !bb.isEmpty() && a.intersectsBox(bb)) return true; }
+      const B = rects(p.def.tops, p.pos, p.rot, 0.2, 'top'); for (const a of A) for (const b of B) if (rectsMeet(a, b)) return true;
     }
     return false;
   }
-  blocked(def, pos, rot) { return this.overlaps(def, pos, rot) || this.duplicate(def, pos, rot); }
+  blocked(def, pos, rot) { return this.overlaps(def, pos, rot) || this.duplicate(def, pos, rot) || this.throughFloor(def, pos, rot); }
+  // stairs mustn't pass through a floor (ending in the middle of one, coming up from beneath it): a floor or other
+  // surface crossing the stairs anywhere between their two ends, which may rest on floors
+  throughFloor(def, pos, rot) {
+    if (!def.aimAt) return false;
+    const rise = def.aimAt[1][1], A = rects(def.tops, pos, rot, 0.3, 'top').map((r) => ({ ...r, y0: pos.y + 0.15, y1: pos.y + rise - 0.05 }));
+    for (const p of this.near(pos.x, pos.z, 6)) { if (p.def.aimAt) continue; for (const b of rects(p.def.tops, p.pos, p.rot, 0, 'top')) for (const a of A) if (rectsMeet(a, b)) return true; }
+    return false;
+  }
   // Only real bodies collide (walls, posts, furniture): the space under a sloped roof or over a floor doesn't count, so
   // gable ends, awnings and roofs can go in in any order
   solidBoxes(def, pos, rot) { return this.boxes({ solids: def.solids }, pos, rot); }
   overlaps(def, pos, rot) {
     if (def.door) return false;
-    const A = this.solidBoxes(def, pos, rot).map((b) => b.clone().expandByScalar(-0.15));
-    for (const p of this.near(pos.x, pos.z, 8)) { if (p.def.door) continue; for (const b of this.solidBoxes(p.def, p.pos, p.rot)) { const bb = b.clone().expandByScalar(-0.15); for (const a of A) if (!a.isEmpty() && !bb.isEmpty() && a.intersectsBox(bb)) return true; } }
+    const A = rects(def.solids, pos, rot, 0.15, 'solid');   // (shrunk 0.15 m all round, and turned with each piece)
+    for (const p of this.near(pos.x, pos.z, 8)) { if (p.def.door) continue; const B = rects(p.def.solids, p.pos, p.rot, 0.15, 'solid'); for (const a of A) for (const b of B) if (rectsMeet(a, b)) return true; }
     return false;
   }
   supportFor(def, pos, rot, self) {

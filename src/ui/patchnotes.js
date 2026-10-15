@@ -4,6 +4,49 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-4', name: 'Patch 4', title: 'Woods and Stone', date: '15 October 2026',
+    intro: 'A new look for the land: real woods and open meadows, bare rock where the ground is steep, and a mist that lets the game draw far less in the distance.',
+    sections: [
+      { t: 'The world', icon: 'temple', items: [
+        '<b>The woods of Pedias</b>: trees now grow together in woods of every size, from small islands to great forest belts along the hills, with wide open meadow between. No tree stands alone or in a pair out in the open.',
+        '<b>Taller grass</b>: here and there are patches where the grass all stands taller, up to your waist and chest, ripening golden at the tips. Most are in the meadows, some in the marsh and the forest.',
+        'Grass no longer grows in or over rocks, boulders, tree trunks, shrubs or ruins: a little clear ground is left round each, as round things lying on the ground.',
+        '<b>Tall trees</b>: every tree has a clear trunk, its crown starting well above your head, so in a wood you can see between the trunks.',
+        'Small orchards of olive, pomegranate and fig trees dot the meadows, so tribute fruit is still near at hand.',
+        '<b>Bare rock</b>: wherever the ground is steeper than about 25°, it is bare rock. No grass, flowers, bushes or trees grow there, and only loose stones lie about, in little heaps.',
+        'Fixed: lightstone never lay on the ground. Now it does, mostly in the forest hills.',
+      ] },
+      { t: 'Graphics and performance', icon: 'blessing', items: [
+        '<b>A mist hangs around you</b> beyond about 100 metres, rising a little above the tallest things near you (trees, giants, buildings), with the sky clear above it. Behind it the game draws far less: about half the trees, a tenth of the big rocks and none of the small plants, and the farmhouse, caves and olive markers only once you come near. The great landmarks stay in sight. Everything comes back as you approach.',
+        'The edges of the screen soften around the centre of your view, where you are looking, which hides the simpler detail in the distance.',
+      ] },
+      { t: 'Saves', icon: 'goal', items: [
+        'The land has changed, so a world saved before this patch keeps your pack, buildings and progress, but its felled trees and gathered items grow back.',
+      ] },
+    ],
+  },
+  {
+    id: 'patch-3', name: 'Patch 3', title: 'Square and True', date: '15 October 2026',
+    intro: 'A building patch: pieces now go where you aim, at any angle, from inside or out.',
+    sections: [
+      { t: 'Building', icon: 'hammer', items: [
+        'Fixed: next to a floor or wall built at an angle, the next piece was refused with "Already built here". Pieces fit side by side at any angle now.',
+        'Fixed: roof panels kept going down onto the floor instead of onto the wall you aimed at. Aim at the top of a wall, from outside or inside (even just over its top edge), and the panel sits on it.',
+        'Fixed: doors could hang in the air off a corner. A door now only goes into a door frame. Aim at the frame from either side and it settles into the opening, hinged on the side your turn chooses.',
+        'New pieces line up with the building you aim at, even when you aim at the ground just past its edge.',
+        'A floor laid off the top of a wall (for an upper storey) comes out toward you, inside the house, instead of straddling the wall.',
+        'Pieces must stand on the ground or attach to your building. Nothing can be left floating against the side of a wall.',
+        'Fixed: stairs never attached properly to an upper floor. Stairs now snap by the middle of each end to the middle of a floor\'s edge. Aim at the edge you want them to reach, or at the spot where they should start, and they run between the two. Stairs can no longer come up through the middle of a floor.',
+        'Fences and stockades follow the ground: a fence line now runs up a hill instead of sinking into it.',
+        'Fixed: in a one-room building, aiming at the spot for a wall across the room could put the wall on the near side instead.',
+      ] },
+      { t: 'Behind the scenes', icon: 'goal', items: [
+        'Building is now checked by over 70 automatic tests that aim at a house from inside and out, square and turned at an angle, plus 300 random aims every run, so these problems stay fixed.',
+        'An automatic builder now puts up a two-storey house with a terrace and outside stairs, a four-storey tower, a long hall and a fenced yard, aiming at every single piece the way you do. Then it walks up the stairs.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-2', name: 'Patch 2', title: 'Hearth and Hillside', date: '13 October 2026',
     intro: 'Fixes for what our testers found in Patch 1: building roofs and cooking over the fire work the way they should, and the land itself is rougher underfoot.',
     sections: [

@@ -63,5 +63,11 @@ export default {
     const after = await t.eval(`const r = { loaded: g.loaded, ...(() => { ${snap} })() }; g.save = () => false; localStorage.removeItem('argonisos.world.v1'); return r;`);
     const diff = before ? Object.keys(before).filter((k) => before[k] !== after[k]) : ['(save failed)'];
     t.check('save, reload: the pack (with durability), the trial, the buildings, stumps and spawn point come back', after.loaded && !diff.length, `loaded ${after.loaded}; ` + diff.map((k) => `${k}: ${String(before?.[k]).slice(0, 150)} → ${String(after[k]).slice(0, 150)}`).join(' ; '));
+    // an older save (from before the woods and bare rock, 15 Oct) keeps the pack, but its felled trees and gathered
+    // pickups pointed at a land that has changed: they come back
+    const old = await t.eval(`const { save } = await import('/src/game/save.js'); g.save = () => false; save(g); const d = JSON.parse(localStorage.getItem('argonisos.world.v1')); d.world = undefined; d.harvest.removed = ['0,0,3']; d.pickups.taken = [['0,0,1', 1]]; localStorage.setItem('argonisos.world.v1', JSON.stringify(d)); return JSON.stringify(inv.toJSON());`);
+    await t.page.reload(); await t.page.waitForFunction(() => window.AG?.player.hero.model && AG.terrain.pending === 0, null, { timeout: 120000 });
+    const later = await t.eval(`const r = { inv: JSON.stringify(inv.toJSON()), removed: AG.veg.removed.size, taken: g.pickups.taken.size }; g.save = () => false; localStorage.removeItem('argonisos.world.v1'); return r;`);
+    t.check('an older save keeps the pack, while its felled trees and gathered pickups come back', later.inv === old && later.removed === 0 && later.taken === 0, JSON.stringify({ sameInv: later.inv === old, removed: later.removed, taken: later.taken }));
   },
 };

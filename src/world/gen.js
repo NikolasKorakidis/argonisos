@@ -117,13 +117,21 @@ export function heightAt(x, z) {
   return h;
 }
 
+// ---- Steepness: one measure for everything that depends on it (bare rock on steep ground, where plants may grow, what
+// lies about), so they can never disagree. Grade is rise over run, measured across 8 m (4 m either side), so a hillside
+// counts and a hummock doesn't. Above ROCK_GRADE (47%, about 25°) the ground is bare rock: no grass, flowers, bushes or
+// trees grow there, and only stones lie on it.
+export const ROCK_GRADE = 0.47;
+export function slopeGrade(x, z) { return Math.hypot(heightAt(x + 4, z) - heightAt(x - 4, z), heightAt(x, z + 4) - heightAt(x, z - 4)) / 8; }
+export const isRock = (x, z) => heightAt(x, z) > 0.3 && slopeGrade(x, z) > ROCK_GRADE;
+
 // ---- Ground colour (linear-ish RGB 0..1), from biome weights, height, slope and a few noise layers
 const C = (hex) => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
 const PAL = {
   meadow: C(0x5b8a32), meadow2: C(0x6f9a3a), golden: C(0xb0a24e), dry: C(0x8f8a42),
   forest: C(0x2c4223), moss: C(0x3a5527), needles: C(0x4a3b29),
   mud: C(0x3e3826), marshMoss: C(0x4b5530), reedy: C(0x5d6a36),
-  sand: C(0xd9c48e), wetSand: C(0xb8a272), seabed: C(0x9c8c62), rock: C(0x7f786d), rock2: C(0x6a645b), snow: C(0xbcc4ce), scree: C(0x7d776d),   // (snow a little blue-grey: pure white burned out in the sun)
+  soil: C(0x6b5a3f), sand: C(0xd9c48e), wetSand: C(0xb8a272), seabed: C(0x9c8c62), rock: C(0x7f786d), rock2: C(0x6a645b), snow: C(0xbcc4ce), scree: C(0x7d776d),   // (snow a little blue-grey: pure white burned out in the sun)
 };
 const mix3 = (o, a, t) => { o[0] += (a[0] - o[0]) * t; o[1] += (a[1] - o[1]) * t; o[2] += (a[2] - o[2]) * t; return o; };
 export function groundColor(x, z, h, slope, w = biomeWeights(x, z), out = [0, 0, 0]) {
@@ -140,9 +148,15 @@ export function groundColor(x, z, h, slope, w = biomeWeights(x, z), out = [0, 0,
   const sandy = (1 - w.v * 0.9) * smooth(2.6 + fbm(x * 0.03, z * 0.03, 2) * 1.2, 1.2, h);
   mix3(out, h < 0.3 ? PAL.wetSand : PAL.sand, sandy);
   if (h < -0.6) mix3(out, PAL.seabed, smooth(-0.6, -4, h));
-  // rock on steep faces and high ridges
-  const rocky = smooth(0.55, 0.85, slope) + smooth(85, 100, h + fbm(x * 0.02, z * 0.02, 2) * 10) * 0.6;
-  if (rocky > 0) mix3(out, fbm(x * 0.08, z * 0.08, 2) > 0.5 ? PAL.rock : PAL.rock2, clamp(rocky, 0, 1));
+  // bare rock on steep ground (the slope rule above): broken up by noise into patches of exposed rock of different
+  // greys, with stony soil showing here and there, never one flat colour; just below the limit a fringe of bare earth,
+  // patchy too, so the edge is ragged rather than a line
+  const gr = h > 0.3 ? slopeGrade(x, z) : 0;
+  if (gr > ROCK_GRADE - 0.12) {
+    const n = fbm(x * 0.09 + 17, z * 0.09 - 3, 3);
+    if (gr > ROCK_GRADE) { const rk = PAL.rock2.slice(); mix3(rk, PAL.rock, smooth(0.35, 0.65, n)); mix3(rk, PAL.scree, smooth(0.55, 0.8, fbm(x * 0.21 + 3, z * 0.21, 2)) * 0.6); mix3(rk, PAL.soil, smooth(0.42, 0.25, n) * 0.45); mix3(out, rk, 0.82 + 0.18 * smooth(ROCK_GRADE, ROCK_GRADE + 0.2, gr)); }
+    else mix3(out, PAL.soil, smooth(ROCK_GRADE - 0.12, ROCK_GRADE, gr) * smooth(0.38, 0.62, n) * 0.7);
+  }
   // on the peak: pale scree above the trees, then snow lying wherever the rock is not too steep to hold it
   if (PEAK.on && h > 150) {
     const n = fbm(x * 0.015 + 4, z * 0.015, 3);

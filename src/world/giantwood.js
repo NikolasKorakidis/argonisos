@@ -22,8 +22,8 @@ const _d = new THREE.Vector3(), _q = new THREE.Quaternion(), UP = new THREE.Vect
 let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 
 // after the sky and weather have set the light for this frame: dim it under the canopy, move the shafts and motes
-export function updateGiantwood(dt, pos, cam, lightDir, day) {
-  const target = titanBand(pos.x, pos.z); GIANTWOOD.k = lerp(GIANTWOOD.k, target, Math.min(1, dt * 0.8)); const k = GIANTWOOD.k;
+export function updateGiantwood(dt, pos, cam, lightDir, day, still = false) {   // (still: screenshot tests, the shade settled at once and the dust held still)
+  const target = titanBand(pos.x, pos.z); GIANTWOOD.k = lerp(GIANTWOOD.k, target, still ? 1 : Math.min(1, dt * 0.8)); const k = GIANTWOOD.k; if (still) dt = 0;
   if (k > 0.01) {
     sun.intensity *= 1 - 0.62 * k; hemi.intensity *= 1 - 0.5 * k; scene.environmentIntensity *= 1 - 0.55 * k;
     scene.fog.near *= 1 - 0.6 * k; scene.fog.far *= 1 - 0.55 * k; scene.fog.color.lerp(_c.setRGB(0.16, 0.24, 0.18).multiplyScalar(0.4 + day * 0.6), 0.45 * k);

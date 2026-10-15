@@ -17,6 +17,7 @@ const K = 4, MAX_CHANGED = 0.02, MAX_MEAN = 4;
 export default {
   name: 'Visual',
   slow: true,
+  order: 1,   // (run early: timings and pictures suffer once the GPU has been busy for minutes)
   viewport: { w: 1280, h: 720 },
   async run(t, { flags }) {
     const update = flags.has('--update'), rows = [];

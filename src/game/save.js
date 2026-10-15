@@ -6,10 +6,14 @@ const KEY = 'argonisos.world.v1';
 export const hasSave = () => { try { return !!localStorage.getItem(KEY); } catch { return false; } };
 export function clearSave() { try { localStorage.removeItem(KEY); } catch { /* private mode */ } }
 
+// The layout of the land (which trees and pickups stand where). Saves remember felled trees and gathered pickups by their
+// place in that layout, so when it changes (2: the woods of Pedias and bare rock on steep ground, Patch 4) an older
+// save keeps everything else but lets the trees and pickups come back.
+const WORLD_LAYOUT = 2;
 export function save(g) {
   const P = g.player, S = g.S;
   const data = {
-    v: 1, at: Date.now(),
+    v: 1, world: WORLD_LAYOUT, at: Date.now(),
     S: { time: S.time, day: S.day, tier: S.tier || 0, bed: S.bed, trial: S.trial, map: S.map, owl: S.owl, guide: S.guide },
     player: { x: P.pos.x, y: P.pos.y, z: P.pos.z, yaw: P.yaw, cam: P.camYaw, stats: P.stats.toJSON() },
     inv: g.inv.toJSON(), build: g.build.toJSON(), harvest: g.harvest.toJSON(), pickups: g.pickups.toJSON(),
@@ -32,10 +36,12 @@ export function load(g) {
   P.stats.food = (st.food || []).map((f) => ({ id: f.id, t: f.t, def: g.ITEMS[f.id].food }));
   P.spawn(d.player.x, d.player.z); P.pos.y = d.player.y; P.yaw = d.player.yaw; P.camYaw = d.player.cam;
   // the world's changes
-  for (const id of d.harvest.removed || []) g.veg.removed.add(id);
-  g.harvest.hp = new Map(d.harvest.hp || []); g.harvest.picked = new Map(d.harvest.picked || []);
-  for (const s of d.harvest.stumps || []) g.harvest.addStump(s.x, s.y, s.z, s.r);
-  g.pickups.load(d.pickups);
+  if ((d.world || 1) === WORLD_LAYOUT) {
+    for (const id of d.harvest.removed || []) g.veg.removed.add(id);
+    g.harvest.hp = new Map(d.harvest.hp || []); g.harvest.picked = new Map(d.harvest.picked || []);
+    for (const s of d.harvest.stumps || []) g.harvest.addStump(s.x, s.y, s.z, s.r);
+    g.pickups.load(d.pickups);
+  } else { g.pickups.load({ taken: [], drops: d.pickups?.drops || [] }); setTimeout(() => g.hud.toast('The land has changed since you were last here: the trees and what lies on the ground have grown back'), 4000); }
   g.build.load(d.build || []);
   for (const u of g.structures.uses) { if (u.kind === 'scrap' && g.trial.st.scraps.includes(u.id)) u.taken = true; if (u.kind === 'carving' && g.trial.st.carvings.includes(u.id)) u.taken = true; if (u.kind === 'offering' && g.trial.st.offered[u.boss]) g.trial.mountHead(u); if (u.kind === 'loot' && g.trial.st.looted.includes(u.id) && u.lid) u.lid.rotation.x = -1.2; }
   g.trial.drawPower();

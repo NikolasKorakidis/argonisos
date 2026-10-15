@@ -20,7 +20,7 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
   const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 });
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, grassU);
-    sh.vertexShader = `uniform float uWind, uTile, uSize; uniform vec2 uCenter, uOrigin; uniform sampler2D uHeight; varying float vGH, vVar, vShade, vGust; varying vec3 vWorld;\n` + sh.vertexShader
+    sh.vertexShader = `uniform float uWind, uTile, uSize; uniform vec2 uCenter, uOrigin; uniform sampler2D uHeight; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.vertexShader
       .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0.0, 1.0, 0.0);')   // soft, uniform lighting like a painted field
       .replace('#include <begin_vertex>', `
         vec3 ip = instanceMatrix[3].xyz;
@@ -31,8 +31,12 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
         // further out fewer blades, each a little wider, so the meadow reads the same with far less to draw (Ghost of
         // Tsushima's trick); a blade seen edge-on is widened so it doesn't thin away to a line
         float keep = mix(1.0, 0.42, smoothstep(10.0, 34.0, length(wp - uCenter))), r2 = fract(rnd * 91.73);
-        float sc = hm.g * fade * (0.55 + rnd * 0.62) * step(r2, keep);
-        vec3 p = position; p.y *= sc; p.x *= step(0.01, sc) / sqrt(keep);
+        // the grass amount, and whether it's a tall patch (there it all stands about 0.7x the hero's height, 1.35 m: the
+        // amount only says whether a blade grows, not how tall, and the blades barely differ)
+        float gg = max(hm.g, 0.0), tl = floor(gg * 0.5) / 7.0, amt = gg - floor(gg * 0.5) * 2.0;
+        float sc = fade * mix(amt * (0.55 + rnd * 0.62), step(0.3, amt) * (0.94 + rnd * 0.12) * 2.35, smoothstep(0.0, 0.15, tl)) * step(r2, keep);
+        sc *= mix(1.0, smoothstep(1.5, 4.0, length(wp - cameraPosition.xz)), smoothstep(0.1, 0.4, tl));   // (tall grass shrinks away round the camera, so you look over it, not into it)
+        vec3 p = position; p.y *= sc; p.x *= step(0.01, sc) / sqrt(keep) * (1.0 + tl * 0.4); vTall = tl;
         float a = rnd * 6.2831; vec2 bn = vec2(sin(a), cos(a)), tv = normalize(cameraPosition.xz - wp + 1e-4);
         p.x *= 1.0 + (1.0 - abs(dot(bn, tv))) * 0.9;
         p.xz = mat2(cos(a), -sin(a), sin(a), cos(a)) * p.xz;
@@ -40,7 +44,7 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
         float gust = sin(uWind * 0.6 + wp.x * 0.05) * 0.5 + 0.5;
         // gusts sweeping across the meadow: bands that bend the grass further and catch the light as they pass
         float wave = smoothstep(0.6, 1.0, sin(dot(wp, vec2(0.045, 0.028)) - uWind * 1.25) * 0.5 + 0.5 + (fract(sin(dot(floor(wp / 11.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.25);
-        float bend = gh * gh * sc * (0.07 + gust * 0.1) * (1.0 + wave * 1.3);
+        float bend = gh * gh * min(sc, 1.6) * (0.07 + gust * 0.1) * (1.0 + wave * 1.3) * (1.0 + tl * 0.8);   // (tall grass sways further, but not wildly)
         p.x += sin(uWind * 1.9 + wp.x * 0.35 + wp.y * 0.22) * bend;
         p.z += cos(uWind * 1.5 + wp.y * 0.3) * bend * 0.7;
         vec2 away = wp - uCenter; float pd = length(away), push = (1.0 - smoothstep(0.25, 1.5, pd)) * gh * sc;   // blades part around your legs
@@ -48,14 +52,14 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
         vec3 transformed = p + vec3(wp.x, hm.r - 0.03, wp.y) - ip;
         vGH = gh; float fk = floor(hm.b * 0.5); vVar = hm.b - fk * 2.0; vShade = fk / 15.0;
         vVar = clamp(vVar + (fract(sin(dot(floor(wp / 2.7), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.3, 0.0, 1.0);   // colour in clumps vGust = wave; vWorld = p + vec3(wp.x, hm.r, wp.y);`);
-    sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; varying float vGH, vVar, vShade, vGust; varying vec3 vWorld;\n` + sh.fragmentShader
+    sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.fragmentShader
       .replace('#include <tonemapping_fragment>', `gl_FragColor.rgb *= 1.0 + vGust * 0.2 * vGH;   // the gust's lighter band
         float shine = pow(max(dot(normalize(vWorld - cameraPosition), uSunDir), 0.0), 4.0) * vGH * vGH;   // sun through the blade tips
-        gl_FragColor.rgb += diffuseColor.rgb * uSunCol * shine * 0.32;
+        gl_FragColor.rgb += diffuseColor.rgb * uSunCol * shine * 0.32 / (1.0 + vTall * 2.0);   // (less glow through tall grass: a lot of blade catches the light)
         #include <tonemapping_fragment>`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         float v = smoothstep(0.35, 0.7, vVar);
-        diffuseColor.rgb = mix(mix(uBaseA, uBaseB, v), mix(uTipA, uTipB, v * 0.8), smoothstep(0.0, 1.0, vGH));
+        diffuseColor.rgb = mix(mix(uBaseA, uBaseB, v), mix(uTipA, uTipB, min(1.0, v * 0.8 + vTall * 0.25)), smoothstep(0.0, 1.0, vGH));   // (tall grass ripens golden at the tips)
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.55, 0.68, 0.6), vShade);   // deep forest and marsh: darker, bluer grass`);
   };
   const grass = new THREE.InstancedMesh(blade, mat, COUNT), gm = new THREE.Matrix4(); GRASS.mesh = grass;
@@ -72,7 +76,7 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
         vec4 hm = texture2D(uHeight, (wp - uOrigin) / uSize);
         float rnd = fract(sin(dot(ip.xz, vec2(39.3, 11.7))) * 43758.5453);
         float fade = 1.0 - smoothstep(0.6, 1.0, length(wp - uCenter) / (uTile * 0.5));
-        float on = step(rnd, hm.a) * step(0.5, hm.g) * fade;
+        float gg = max(hm.g, 0.0), on = step(rnd, hm.a) * step(0.5, gg - floor(gg * 0.5) * 2.0) * step(gg, 1.99) * fade;   // (the amount, unpacked; none in tall grass)
         vec3 p = position * on * ${size.toFixed(2)} * (0.8 + rnd * 0.5);
         float bend = max(position.y, 0.0) * 0.12;
         p.x += sin(uWind * 1.9 + wp.x * 0.35 + wp.y * 0.22) * bend;
@@ -134,7 +138,7 @@ function stamp(c) {
       if (s.r !== undefined) d = Math.hypot(dx, dz) - s.r;
       else { const u = Math.abs(dx * cs - dz * sn) - s.hw, v = Math.abs(dx * sn + dz * cs) - s.hd; d = Math.max(u, v); }
       const f = Math.min(1, Math.max(0, (d - 0.1) / 0.5)), o = (j * N + i) * 4 + 1;   // none at all inside, fading back in just outside the edge
-      data[o] = Math.min(data[o], data[o] * f); data[o + 2] *= f;   // grass and flowers both
+      const tl = Math.max(0, Math.floor(data[o] / 2) * 2); data[o] = data[o] > 0 ? tl + (data[o] - tl) * f : data[o]; data[o + 2] *= f;   // grass and flowers both (keeping the tallness packed in with the grass)
     }
   }
   // under and around floors the blades stand on the pressed-down ground (the same rule as the terrain shader)

@@ -1,7 +1,10 @@
 // Terrain worker: builds terrain patches (positions, normals, colours, uvs) off the main thread so streaming the world
 // never stutters. Also bakes the world height texture used by the water shader.
-import { heightAt, biomeWeights, groundColor, fbm } from './gen.js';
-import { layoutCell, CELL, shadeAround, bakeShade } from './flora.js';
+import { heightAt, biomeWeights, groundColor, fbm, isRock } from './gen.js';
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+import { layoutCell, CELL, shadeAround, bakeShade, solidsAround, SPECIES, STRIDE } from './flora.js';
+// how wide a space to keep round the things that stand about but aren't solid (metres at scale 1)
+const CLEAR_R = { lavender: 0.5, broom: 0.7, myrtle: 0.8, fern: 0.6, redbush: 0.7, colfall: 1.4, colstand: 0.6, herm: 0.4, amphorae: 0.7, wallruin: 1.6 };
 import './sites.js';   // registers the flattened ground under the trial's sites
 
 function patch({ id, x0, z0, size, res }) {
@@ -54,7 +57,7 @@ self.onmessage = (e) => {
   const msg = e.data;
   if (msg.type === 'patch') { const r = patch(msg); self.postMessage({ type: 'patch', ...r }, [r.pos.buffer, r.nor.buffer, r.col.buffer, r.uv.buffer]); }
   else if (msg.type === 'heightTex') { const r = heightTexture(msg); self.postMessage({ type: 'heightTex', ...r }, [r.data.buffer]); }
-  else if (msg.type === 'grassTex') {      // local ground texture for the grass carpet: R height, G grass amount, B tint variation, A flowers
+  else if (msg.type === 'grassTex') {      // local ground texture for the grass carpet: R height, G grass amount (+ 2 × tallness 0-7), B tint variation, A flowers
     const { N, x0, z0, size } = msg, data = new Float32Array(N * N * 4), w = { p: 0, y: 0, v: 0, r: 0 };
     const occ = new Float32Array(N * N), kk = size / N; bakeShade(shadeAround(x0, z0, x0 + size, z0 + size), x0 + kk / 2, z0 + kk / 2, kk, N, N, occ);   // the grass shaded under trees too
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
@@ -67,6 +70,28 @@ self.onmessage = (e) => {
       g *= Math.min(1, Math.max(0, (190 - h) / 40));   // none on the bare rock and snow of the peak
       data[k] = h; data[k + 1] = g; data[k + 2] = Math.min(0.99, Math.max(0, fbm(x * 0.03 + 9, z * 0.03 - 4, 2))) + Math.round(Math.min(1, w.y + w.v * 0.6 + occ[j * N + i] * 1.3) * 15) * 2;   // tint, plus the forest shade packed above it
       data[k + 3] = Math.min(1, Math.max(0, (fbm(x * 0.07, z * 0.07 + 5, 2) - 0.42) * 3)) * (w.p * 1 + w.y * 0.2);
+      // taller grass: patches here and there, 20-40 m across, where it all grows to about 0.7x the hero's height (a crisp
+      // edge, the same height throughout); mostly in the meadows, some in the marsh, fewer in the forest (packed into the
+      // whole part of G)
+      const thr = 0.66 + (1 - Math.min(1, w.p + w.v * 0.8 + w.y * 0.45)) * 0.07, tall = smooth(thr - 0.0015, thr + 0.0015, fbm(x * 0.032 + 50, z * 0.032 - 30, 3));   // (fewer outside the meadows)
+      if (data[k + 1] > 0) data[k + 1] = Math.min(0.999, data[k + 1]) + 2 * Math.round(Math.min(1, tall) * 7);
+      if (isRock(x, z)) { data[k + 1] = -1; data[k + 3] = 0; }   // bare rock: no grass, no flowers (-1, so blades stop halfway to the next texel)
+    }
+    // nothing grows in or over a rock, a boulder, a tree's trunk, a shrub or a ruin: a clear space round each (fading back
+    // in just outside it), for the short grass and the tall alike, as round the things lying on the ground
+    const kk2 = size / N;
+    for (let cz = Math.floor(z0 / CELL) - 1; cz <= Math.floor((z0 + size) / CELL) + 1; cz += 3) for (let cx = Math.floor(x0 / CELL) - 1; cx <= Math.floor((x0 + size) / CELL) + 1; cx += 3) {
+      const so = solidsAround(cx + 1, cz + 1).slice();   // (a 3×3 block of cells)
+      // and round the shrubs, ferns and ruins standing about (not solid, but tall grass mustn't poke up through them)
+      for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) { const it = layoutCell(cx + i, cz + j); for (let o = 0; o < it.length; o += STRIDE) { const r = CLEAR_R[SPECIES[it[o]].name]; if (r && it[o + 6] > 0) so.push(it[o + 2], it[o + 4], r * it[o + 6]); } }
+      for (let s = 0; s < so.length; s += 3) {
+        const sx = so[s], sz = so[s + 1], r = so[s + 2] + 0.15, R = r + 0.5;
+        const i0 = Math.max(0, Math.floor((sx - R - x0) / kk2)), i1 = Math.min(N - 1, Math.ceil((sx + R - x0) / kk2)), j0 = Math.max(0, Math.floor((sz - R - z0) / kk2)), j1 = Math.min(N - 1, Math.ceil((sz + R - z0) / kk2));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+          const d = Math.hypot(x0 + (i + 0.5) * kk2 - sx, z0 + (j + 0.5) * kk2 - sz), f = Math.min(1, Math.max(0, (d - r) / 0.5)), k = (j * N + i) * 4;
+          if (f >= 1 || data[k + 1] <= 0) continue; const tl = Math.floor(data[k + 1] / 2) * 2; data[k + 1] = tl + (data[k + 1] - tl) * f; data[k + 3] *= f;
+        }
+      }
     }
     self.postMessage({ type: 'grassTex', id: msg.id, data, N, x0, z0, size }, [data.buffer]);
   }

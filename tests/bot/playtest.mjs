@@ -138,7 +138,9 @@ const ACTIVITIES = {
     await ev(`const i = inv.slots.findIndex((s) => s?.id === 'hammer'); if (i >= 0) g.useSlot(i); return true;`); await wait(300);
     await ev('window.__mon.allowPause = true; return true;');   // (a second Escape, with the menu already shut, pauses: that's the game working)
     await page.mouse.click(640, 360, { button: 'right' }); await wait(700); await page.keyboard.press('Escape'); await wait(400); await page.keyboard.press('Escape'); await wait(300);
-    await ev(`const i = inv.slots.findIndex((s) => s?.id === 'crudeSpear'); if (i >= 0) g.equip(i); B.sel = null; if (B.ghost) AG.scene.remove(B.ghost); B.ghost = null; return true;`); await ev('window.__mon.allowPause = false; return true;'); await check('the hammer menu');
+    await ev(`const i = inv.slots.findIndex((s) => s?.id === 'crudeSpear'); if (i >= 0) g.equip(i); B.sel = null; if (B.ghost) AG.scene.remove(B.ghost); B.ghost = null; return true;`);
+    if (await ev('return !!g.paused;')) { await page.keyboard.press('KeyP'); await wait(400); }   // (and unpause, as a player would)
+    await ev('window.__mon.allowPause = false; return true;'); await check('the hammer menu');
   },
   async timewarp() {
     const w = pick(['clear', 'cloudy', 'lightRain', 'heavyRain', 'thunder', 'fog', null]);
