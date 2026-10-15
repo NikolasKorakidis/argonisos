@@ -9,6 +9,7 @@ export const PATCHES = [
     sections: [
       { t: 'The world', icon: 'temple', items: [
         '<b>The woods of Pedias</b>: trees now grow together in woods of every size, from small islands to great forest belts along the hills, with wide open meadow between. No tree stands alone or in a pair out in the open.',
+        '<b>Tall grass</b>: here and there the grass grows waist high, and in the thick of a patch taller than you, ripening golden at the tips. Most of it is in the meadows, some in the marsh and the forest. Around the camera it bends away, so you always see over it.',
         '<b>Tall trees</b>: every tree has a clear trunk, its crown starting well above your head, so in a wood you can see between the trunks.',
         'Small orchards of olive, pomegranate and fig trees dot the meadows, so tribute fruit is still near at hand.',
         '<b>Bare rock</b>: wherever the ground is steeper than about 25°, it is bare rock. No grass, flowers, bushes or trees grow there, and only loose stones lie about, in little heaps.',

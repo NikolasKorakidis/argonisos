@@ -150,7 +150,8 @@ function loop() {
   // high up the air clears: from the hills, and from the top of Olympos, you see out across the island
   const up = Math.min(1.6, Math.max(0, (camera.position.y - 60) / 160)), clear = Math.min(1, Math.max(0, (camera.position.y - 90) / 140));
   scene.fog.near = (scene.fog.near + (300 - scene.fog.near) * clear) * (1 + up); scene.fog.far = (scene.fog.far + (2400 - scene.fog.far) * clear) * (1 + up * 1.4);   // (above the forest's own haze)
-  updateGiantwood(dt, focus, camera, lightDir, LIGHT.day);
+  const fx = S.still ? 0 : dt;   // (screenshot tests: dust, pollen and the like hold still too)
+  updateGiantwood(dt, focus, camera, lightDir, LIGHT.day, S.still);
   fogSky(Math.min(1, Math.max(0, 1 - scene.fog.far / 1400, atmo.overcast)));
   updateWater(t, camera.position, LIGHT, skyDome, sunDir, moonDir);
   updateStormWall(t, LIGHT);
@@ -165,7 +166,7 @@ function loop() {
   const bw = biomeWeights(focus.x, focus.z);
   // pollen in the sunny meadows, fireflies at dusk and by night, leaves in the woods, snow blowing on the summit
   const wet = 1 - Math.min(1, WEATHER.k.rain * 1.5), snowK = PEAK.on ? Math.min(1, Math.max(0, (camera.position.y - 215) / 50)) : 0;
-  updateAmbient(dt, camera.position, { pollen: LIGHT.day * bw.p * wet * (1 - atmo.overcast * 0.7), firefly: (LIGHT.dusk * 0.6 + LIGHT.night) * (bw.p + bw.y * 0.7) * wet,
+  updateAmbient(fx, camera.position, { pollen: LIGHT.day * bw.p * wet * (1 - atmo.overcast * 0.7), firefly: (LIGHT.dusk * 0.6 + LIGHT.night) * (bw.p + bw.y * 0.7) * wet,
     leaf: (0.35 + LIGHT.day * 0.65) * Math.min(1, bw.y * 1.2 + GIANTWOOD.k), snow: snowK }, t);
   // the player's mist: its ceiling a little over the tallest thing standing near you (trees, giants, buildings), eased so
   // it doesn't jump, and never lower than a few metres over the ground you stand on
