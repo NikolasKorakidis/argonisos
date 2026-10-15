@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { heightAt, biomeWeights, hash2, fbm, isRock } from './gen.js';
 import { clearGrass } from './grass.js';
 import { siteClear } from './sites.js';
-import { solidsAround, insideSolid } from './flora.js';
+import { solidsAround, insideSolid, pediasWood } from './flora.js';
 import { cutLimit, onCutsChanged } from './groundcut.js';
 
 const CELL = 64, RANGE = 110, REGROW_DAYS = 3;
@@ -37,7 +37,7 @@ export const KINDS = {
 };
 // How many of each kind per cell, by biome (Pedias, Yleos)
 function counts(w, x, z) {
-  const tree = fbm(x * 0.0075 + 21, z * 0.0075 - 4, 3);
+  const tree = pediasWood(x, z).wood;   // (fallen branches lie mostly under the woods)
   return {
     stone: 3.5 * w.p + 4 * w.y, branch: (1.6 + tree * 4) * w.p + 6 * w.y,   // starter materials: easy to come by
     lightstone: 0.15 * w.p + 1.2 * w.y,

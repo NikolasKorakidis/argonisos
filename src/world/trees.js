@@ -156,12 +156,13 @@ function growTree(P, o) {
 }
 const TREE_BUILDERS = {
   oak(v) {
-    // three personalities: a broad old spreader, a tall upright one, and a wind-bent twisted one
+    // three personalities: a broad old spreader, a tall upright one, and a wind-bent twisted one; all with a clear trunk
+    // well above head height (you see between the trunks in a wood)
     const P = [], leaf = [0x4f7f2e, 0x5d8a34, 0x46752b][v % 3];
     const T = [
-      { trunkH: rr(2.6, 3.1), trunkR: rr(0.6, 0.72), gnarl: 0.22, rise: 0.02, lean: 0.05, spread: (d) => (d === 2 ? 1.1 : 0.7), kids: (d) => (d === 2 ? 4 : 2), lenF: 0.8, clusterR: 1.6 },
-      { trunkH: rr(4, 4.8), trunkR: rr(0.45, 0.55), gnarl: 0.12, rise: 0.3, lean: 0.02, spread: (d) => (d === 2 ? 0.6 : 0.55), kids: (d) => (d === 2 ? 3 : 2), lenF: 0.62, clusterR: 1.35 },
-      { trunkH: rr(3, 3.6), trunkR: rr(0.5, 0.6), gnarl: 0.38, rise: 0.06, lean: 0.35, spread: (d) => (d === 2 ? 0.95 : 0.7), kids: (d) => (d === 2 ? 3 : 2), lenF: 0.75, clusterR: 1.45 },
+      { trunkH: rr(4.8, 5.3), trunkR: rr(0.6, 0.72), gnarl: 0.22, rise: 0.08, lean: 0.05, spread: (d) => (d === 2 ? 0.85 : 0.6), kids: (d) => (d === 2 ? 4 : 2), lenF: 0.8, clusterR: 1.6 },
+      { trunkH: rr(5.2, 6), trunkR: rr(0.45, 0.55), gnarl: 0.12, rise: 0.3, lean: 0.02, spread: (d) => (d === 2 ? 0.6 : 0.55), kids: (d) => (d === 2 ? 3 : 2), lenF: 0.62, clusterR: 1.35 },
+      { trunkH: rr(5, 5.5), trunkR: rr(0.5, 0.6), gnarl: 0.38, rise: 0.1, lean: 0.3, spread: (d) => (d === 2 ? 0.8 : 0.6), kids: (d) => (d === 2 ? 3 : 2), lenF: 0.75, clusterR: 1.45 },
     ][v % 3];
     growTree(P, { bark: 0x6b4a30, leaf, trunkSteps: 4, depth: 2, taper: 0.6, roots: 5, knot: 1.15, rF: 0.62, midKids: true, flat: 0.75, cards: 12, card0: 1.25, card1: 1.85, ...T });
     return P;
@@ -241,8 +242,8 @@ const TREE_BUILDERS = {
   holm(v) {
     // Holm / kermes oak (Quercus ilex): evergreen, dense, almost black-green rounded crowns on a short dark trunk.
     const P = [], leaf = [0x3f5a2e, 0x46623a, 0x3a5430][v % 3];
-    growTree(P, { bark: 0x4a3e32, leaf, trunkH: rr(2.4, 3.2), trunkR: rr(0.42, 0.52), trunkSteps: 3, depth: 2, taper: 0.6, gnarl: 0.2, rise: 0.08, lean: 0.08, roots: 5,
-      kids: (d) => (d === 2 ? 4 : 3), spread: (d) => (d === 2 ? 0.8 : 0.65), lenF: 0.65, rF: 0.6, clusterR: 1.45, flat: 0.85, cards: 13, card0: 1.0, card1: 1.5, core: 0.72 });
+    growTree(P, { bark: 0x4a3e32, leaf, trunkH: rr(4, 4.6), trunkR: rr(0.42, 0.52), trunkSteps: 3, depth: 2, taper: 0.6, gnarl: 0.2, rise: 0.12, lean: 0.08, roots: 5,
+      kids: (d) => (d === 2 ? 4 : 3), spread: (d) => (d === 2 ? 0.65 : 0.55), lenF: 0.65, rF: 0.6, clusterR: 1.45, flat: 0.85, cards: 13, card0: 1.0, card1: 1.5, core: 0.72 });
     return P;
   },
   carob(v) {
@@ -268,19 +269,20 @@ const TREE_BUILDERS = {
   },
   fig(v) {
     // Fig (Ficus carica): smooth grey limbs branching low from the ground, sparse crown of very large leaves.
-    const P = [], leaf = [0x7aa848, 0x82b04c, 0x709e42][v % 3];
+    // (one smooth trunk to above head height, then the limbs: you walk under a fig's crown, not into it)
+    const P = [[limb(0.3, 0.22, 3.2, 0, -0.2, 0, rr(-0.04, 0.04), rr(-0.04, 0.04), 7), 0x9a958a]], leaf = [0x7aa848, 0x82b04c, 0x709e42][v % 3];
     for (let s2 = 0; s2 < 3; s2++) {
       const a = s2 * 2.1 + v * 0.7;
       growTree(P, { bark: 0x9a958a, leaf, trunkH: rr(1.4, 2), trunkR: 0.2, trunkSteps: 3, depth: 2, taper: 0.6, gnarl: 0.25, rise: 0.05, roots: 0,
-        dir: new THREE.Vector3(Math.cos(a) * 0.8, 1, Math.sin(a) * 0.8), start: new THREE.Vector3(0, -0.2, 0),
+        dir: new THREE.Vector3(Math.cos(a) * 0.55, 1, Math.sin(a) * 0.55), start: new THREE.Vector3(0, 2.9, 0),
         kids: (d) => 2, spread: (d) => 0.8, lenF: 0.65, rF: 0.6, clusterR: 1.05, flat: 0.7, cards: 7, card0: 1.6, card1: 2.4, core: 0.45 });
     }
     return P;
   },
   cypress(v) {
-    const P = [[limb(0.3, 0.14, 6.5, 0, -0.2, 0, rr(-0.04, 0.04), rr(-0.04, 0.04), 6), 0x5e3f28]], c = new THREE.Vector3(0, 4.5, 0), col = [0x345c2c, 0x3d6630, 0x2e5528][v % 3];
-    const H = [7.5, 9, 6.5][v % 3], tw = rr(-0.6, 0.6);
-    for (let i = 0; i < 11; i++) { const y = 1.4 + i * (H - 1.4) / 11, w = Math.sin(Math.PI * Math.pow((i + 0.5) / 11, 0.8)) * 1.05 + 0.2, a = i * tw;
+    const P = [[limb(0.3, 0.14, 8.5, 0, -0.2, 0, rr(-0.04, 0.04), rr(-0.04, 0.04), 6), 0x5e3f28]], c = new THREE.Vector3(0, 6, 0), col = [0x345c2c, 0x3d6630, 0x2e5528][v % 3];
+    const H = [9.5, 11, 8.5][v % 3], tw = rr(-0.6, 0.6), base = 4.4;   // (the foliage starts above head height on a clear trunk)
+    for (let i = 0; i < 11; i++) { const y = base + i * (H - base) / 11, w = Math.sin(Math.PI * Math.pow((i + 0.5) / 11, 0.8)) * 1.05 + 0.2, a = i * tw;
       P.push([blob(w * 0.8, Math.cos(a) * 0.15, y, Math.sin(a) * 0.15, c, 3, 0), new THREE.Color(col).multiplyScalar(PROP_LO ? 1 : 0.7).getHex()]);
       leafCards(new THREE.Vector3(Math.cos(a) * 0.15, y, Math.sin(a) * 0.15), w, 0.55, 7, col, 0.7, 1.1, c.clone().setY(y)); }
     return P;
@@ -289,8 +291,8 @@ const TREE_BUILDERS = {
     // Olive: a short, twisted, often split trunk, wide low limbs, many silvery-green clusters of small leaves
     const P = [], leaf = [0x95a67a, 0x879b6c, 0xa2b086][v % 3];
     for (let s2 = 0; s2 < (v % 2 ? 2 : 1); s2++) {                                                      // some olives split into two trunks
-      const sub = [], cs = CARD_PARTS.length; growTree(sub, { bark: 0x6e6252, leaf, trunkH: rr(1.6, 2.2), trunkR: rr(0.34, 0.44) * (v % 2 ? 0.8 : 1), trunkSteps: 4, depth: 3, taper: 0.6, gnarl: 0.42, rise: 0.02, roots: 4, knot: 1.25,
-        kids: (d) => (d === 3 ? (v % 2 ? 2 : 3) : 2), spread: (d) => (d === 3 ? 1.0 : d === 2 ? 0.75 : 0.55), lenF: 0.78, rF: 0.62,
+      const sub = [], cs = CARD_PARTS.length; growTree(sub, { bark: 0x6e6252, leaf, trunkH: rr(3.5, 3.9), trunkR: rr(0.34, 0.44) * (v % 2 ? 0.8 : 1), trunkSteps: 4, depth: 3, taper: 0.6, gnarl: 0.42, rise: 0.02, roots: 4, knot: 1.25,
+        kids: (d) => (d === 3 ? (v % 2 ? 2 : 3) : 2), spread: (d) => (d === 3 ? 0.8 : d === 2 ? 0.65 : 0.5), lenF: 0.78, rF: 0.62,
         clusterR: 1.15, flat: 0.6, cards: 14, card0: 0.85, card1: 1.3, core: 0.42 });
       const off = v % 2 ? (s2 ? 0.35 : -0.35) : 0, tl = v % 2 ? (s2 ? 0.25 : -0.25) : 0;
       for (const [g] of sub) { g.rotateZ(tl); g.translate(off, 0, 0); }

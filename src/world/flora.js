@@ -16,7 +16,7 @@ export const SPECIES = [
   { name: 'pomegranate', s: [0.9, 1.15], res: 'tree', col: 0.25 },
   { name: 'fig', s: [0.95, 1.2], res: 'tree', col: 0.3 },
   { name: 'plane', s: [1.0, 1.25], res: 'tree', col: 0.8 },
-  { name: 'qtree', s: [0.9, 1.35], res: 'tree', col: 0.45 },
+  { name: 'qtree', s: [0.95, 1.35], res: 'tree', col: 0.45 },
   { name: 'qpine', s: [0.9, 1.4], res: 'tree', col: 0.4 },
   { name: 'fir', s: [0.9, 1.35], res: 'tree', col: 0.4 },
   { name: 'holm', s: [0.95, 1.3], res: 'tree', col: 0.5 },
@@ -42,8 +42,8 @@ export const SPECIES = [
 ];
 export const SP = Object.fromEntries(SPECIES.map((s, i) => [s.name, i]));
 const MIX = {
-  grove: [['olive', 40], ['oak', 18], ['cypress', 14], ['pomegranate', 12], ['fig', 10], ['plane', 6]],
-  meadow: [['oak', 35], ['olive', 30], ['cypress', 25], ['qtree', 10]],
+  grove: [['olive', 42], ['pomegranate', 30], ['fig', 12], ['cypress', 9], ['oak', 7]],                       // orchard islands
+  wood: [['oak', 32], ['plane', 14], ['cypress', 18], ['olive', 14], ['qtree', 12], ['holm', 10]],             // the woods of the meadows
   forest: [['qpine', 26], ['fir', 22], ['holm', 16], ['qtree', 22], ['qdead', 6], ['oak', 8]],
   swamp: [['dead', 45], ['qdead', 30], ['cypress', 25]],
 };
@@ -56,11 +56,22 @@ export function titanBand(x, z, w = biomeWeights(x, z, _tw)) {
   const edge = smooth(0.1, 0.32, w.y) * smooth(0.86, 0.62, w.y) * (1 - w.v);
   return edge * smooth(0.44, 0.58, fbm(x * 0.0016 + 77, z * 0.0016 - 31, 3));
 }
+// The woods of Pedias (tester feedback, 15 Oct): trees grow in woods, never scattered over the meadows. Woods of every
+// size with ragged edges (noise whose coordinates are warped by other noise), from big masses 150-300 m across down to
+// small islands 25-55 m across (those are orchards: olive, pomegranate, fig), more of them along the hillsides so they
+// make belts; wide open meadow between. Returns { wood: 0..1 (how deep in a wood), orchard: whether a small island }.
+const _pw = { wood: 0, orchard: false };
+export function pediasWood(x, z, out = _pw) {
+  const wx = x + (fbm(x * 0.004 + 11, z * 0.004 - 7, 2) - 0.5) * 160, wz = z + (fbm(x * 0.004 - 23, z * 0.004 + 5, 2) - 0.5) * 160;
+  const g = slopeGrade(x, z), hill = smooth(0.1, 0.3, g) * smooth(ROCK_GRADE, ROCK_GRADE - 0.1, g);
+  const big = smooth(0.6, 0.67, fbm(wx * 0.0042 + 3, wz * 0.0042 - 9, 3) + hill * 0.08), small = smooth(0.7, 0.75, fbm(wx * 0.019 - 41, wz * 0.019 + 13, 2)) * 0.9;
+  out.wood = Math.max(big, small); out.orchard = small > big; return out;
+}
 export function treeDensity(x, z, h, w) {
   if (h < 1.6 && w.v < 0.5) return 0;
   if (h > 150) return smooth(205, 150, h) * treeDensity(x, z, 140, w);   // the treeline on Olympos
-  const grove = smooth(0.52, 0.68, fbm(x * 0.0075 + 21, z * 0.0075 - 4, 3));
-  const pedias = (1 / 900) + grove * (1 / 70);
+  // in a wood the crowns stand close enough to read as one mass from afar, a little thinner and more varied at the edges
+  const pw = w.p > 0.05 ? pediasWood(x, z).wood : 0, pedias = pw * (1 / 34) * (0.75 + 0.5 * fbm(x * 0.05 + 7, z * 0.05 - 2, 2));
   const clearing = smooth(0.38, 0.28, fbm(x * 0.01 - 3, z * 0.01 + 6, 3));      // forest glades
   const yleos = (1 / 38) * (1 - clearing * 0.9);
   const valtos = 1 / 160;
@@ -69,8 +80,26 @@ export function treeDensity(x, z, h, w) {
 // Lay out one cell: returns a flat Float32Array of [species, variant, x, y, z, rotY, scale] per item. Trees are kept out of
 // rocks and boulders (their own cell's and the neighbours'): one standing in a rock is moved just clear of it, staying in
 // its cell and keeping its place in the list (felled trees are remembered by index); if it can't, it isn't drawn.
+// In the meadows no tree stands alone, nor in a pair: first a tree with fewer than four others within 11 m goes, then
+// (counting only the trees that are left) one with fewer than two. Trees that go keep their place in the list, so felled
+// trees stay remembered by index.
+const isMeadowTree = (it, o, w) => SPECIES[it[o]].res === 'tree' && biomeWeights(it[o + 2], it[o + 4], w).p >= 0.5;
+const reach2 = (it, o) => (it[o] === SP.titan ? 484 : 121);   // (the giants stand ~13 m apart: their neighbours within 22 m)
+const KEPT = new Map(), _lw = { p: 0, y: 0, v: 0, r: 0 };
+function count(list, x, z, upTo, r2 = 121) { let n = 0; for (let k = 0; k < list.length && n < upTo; k += 2) { const dx = list[k] - x, dz = list[k + 1] - z; if (dx * dx + dz * dz < r2) n++; } return n; }
+function treesOf(cx, cz, pass) {   // [x, z, ...] of the trees around a cell: as first laid out (pass 0), or those the first pass keeps (pass 1)
+  const out = []; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const it = pass ? kept1(cx + i, cz + j) : rawCell(cx + i, cz + j); for (let o = 0; o < it.length; o += STRIDE) if (SPECIES[it[o]].res === 'tree' && it[o + 6] > 0 && (pass || !isRock(it[o + 2], it[o + 4]))) out.push(it[o + 2], it[o + 4]); }   // (a tree on bare rock won't stand: it doesn't count)
+  return out;
+}
+function kept1(cx, cz) {
+  const k = cx + ',' + cz; let r = KEPT.get(k); if (r) return r;
+  r = rawCell(cx, cz).slice(); const near = treesOf(cx, cz, 0);
+  for (let o = 0; o < r.length; o += STRIDE) if (isMeadowTree(r, o, _lw) && (isRock(r[o + 2], r[o + 4]) || count(near, r[o + 2], r[o + 4], 5, reach2(r, o)) < 5)) r[o + 6] = 0;   // (itself and four)
+  KEPT.set(k, r); if (KEPT.size > 160) KEPT.delete(KEPT.keys().next().value); return r;
+}
 export function layoutCell(cx, cz) {
-  const it = rawCell(cx, cz).slice(), rocks = rocksAround(cx, cz), x0 = cx * CELL, z0 = cz * CELL;
+  const it = kept1(cx, cz).slice(), rocks = rocksAround(cx, cz), x0 = cx * CELL, z0 = cz * CELL, near = treesOf(cx, cz, 1);
+  for (let o = 0; o < it.length; o += STRIDE) if (it[o + 6] > 0 && isMeadowTree(it, o, _lw) && count(near, it[o + 2], it[o + 4], 3, reach2(it, o)) < 3) it[o + 6] = 0;   // (itself and two)
   for (let i = 0; i < it.length; i += STRIDE) {
     const sp = SPECIES[it[i]]; if (sp.res !== 'tree' || it[i] === SP.titan) continue;
     if (titanBand(it[i + 2], it[i + 4]) > 0.35 && hash2(cx * 131 + i, cz * 977 - i) < 0.75) { it[i + 6] = 0; continue; }   // the giants' shade: the understory thins out
@@ -155,8 +184,7 @@ function layoutRaw(cx, cz) {
     }
     if (slope > ROCK_GRADE) continue;   // bare rock: nothing grows (the shared slope rule, see gen.js)
     const d = treeDensity(x, z, h, w); if (r2 >= d * STEP * STEP) continue;
-    const grove = smooth(0.52, 0.68, fbm(x * 0.0075 + 21, z * 0.0075 - 4, 3));
-    const mix = w.v > 0.5 ? MIX.swamp : w.y > w.p ? MIX.forest : grove > 0.3 ? MIX.grove : MIX.meadow;
+    const mix = w.v > 0.5 ? MIX.swamp : w.y > w.p ? MIX.forest : pediasWood(x, z).orchard ? MIX.grove : MIX.wood;
     const sp = pick(mix, r3), S = SPECIES[sp].s;
     out.push(sp, Math.floor(r4 * 3), x, h - 0.05, z, rnd() * 6.283, S[0] + (S[1] - S[0]) * rnd());
   }

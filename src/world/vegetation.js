@@ -14,7 +14,7 @@ const NEAR_KEEP = NEAR_R + CELL * 1.5, FAR = 256, FAR_R = 1000;
 // ---- extra species the new world needs
 TREE_BUILDERS.pomegranate = (v) => {            // a small, bushy tree with glossy leaves and red fruit
   const P = TREE_BUILDERS.fig(v + 1).map(([g, c]) => [g, c === 0x9a958a ? 0x7a5e48 : new THREE.Color(c).lerp(new THREE.Color(0x3f6a2c), 0.55).getHex()]);
-  for (let i = 0; i < 18; i++) P.push([new THREE.IcosahedronGeometry(rr(0.1, 0.14), 0).translate(rr(-1.6, 1.6), rr(1.6, 3), rr(-1.6, 1.6)), i % 3 ? 0xb3261e : 0xd4462a]);
+  for (let i = 0; i < 18; i++) P.push([new THREE.IcosahedronGeometry(rr(0.1, 0.14), 0).translate(rr(-1.6, 1.6), rr(3.6, 5), rr(-1.6, 1.6)), i % 3 ? 0xb3261e : 0xd4462a]);
   return P;
 };
 TREE_BUILDERS.boulder = (v) => TREE_BUILDERS.rock(v + 3);
