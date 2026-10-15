@@ -31,7 +31,7 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
         // further out fewer blades, each a little wider, so the meadow reads the same with far less to draw (Ghost of
         // Tsushima's trick); a blade seen edge-on is widened so it doesn't thin away to a line
         float keep = mix(1.0, 0.42, smoothstep(10.0, 34.0, length(wp - uCenter))), r2 = fract(rnd * 91.73);
-        float sc = hm.g * fade * (0.55 + rnd * 0.62) * step(r2, keep);
+        float sc = max(hm.g, 0.0) * fade * (0.55 + rnd * 0.62) * step(r2, keep);
         vec3 p = position; p.y *= sc; p.x *= step(0.01, sc) / sqrt(keep);
         float a = rnd * 6.2831; vec2 bn = vec2(sin(a), cos(a)), tv = normalize(cameraPosition.xz - wp + 1e-4);
         p.x *= 1.0 + (1.0 - abs(dot(bn, tv))) * 0.9;

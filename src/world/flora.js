@@ -4,7 +4,7 @@
 // Pedias: open meadows with groves (olive, oak, cypress, pomegranate, fig, the odd great plane tree) and lone trees.
 // Yleos:  dense dark forest (pines, firs, holm oaks, broadleaves, dead snags) with clearings.
 // Valtos: dead and drowned trees, cypresses, sparse.
-import { heightAt, biomeWeights, fbm, hash2, smooth } from './gen.js';
+import { heightAt, biomeWeights, fbm, hash2, smooth, slopeGrade, isRock, ROCK_GRADE } from './gen.js';
 import { siteClear } from './sites.js';
 
 export const CELL = 64;
@@ -86,7 +86,7 @@ export function layoutCell(cx, cz) {
       }
       if (!moved) break;
     }
-    if (obstructed(rocks, it[i + 2], it[i + 4], tr)) it[i + 6] = 0;   // nowhere to go in its cell
+    if (obstructed(rocks, it[i + 2], it[i + 4], tr) || isRock(it[i + 2], it[i + 4])) it[i + 6] = 0;   // nowhere to go in its cell (or pushed onto bare rock)
     else it[i + 3] = heightAt(it[i + 2], it[i + 4]) - 0.05;
   }
   return it;
@@ -147,13 +147,13 @@ function layoutRaw(cx, cz) {
     // reeds fringe the marsh pools and the low shores
     if (h > -0.5 && h < 1.4 && r1 < w.v * 0.09 * STEP * STEP / 4) { out.push(SP.reeds, Math.floor(r4 * 3), x, h, z, r3 * 6.283, 0.8 + r2 * 0.5); continue; }
     if (h < (w.v > 0.5 ? -0.25 : 0.6)) continue;
-    const slope = Math.hypot(heightAt(x + 1.5, z) - h, heightAt(x, z + 1.5) - h) / 1.5;
+    const slope = slopeGrade(x, z);
     // boulders and rocks: more on slopes and in the hills
     if (r1 < (1 / 1100 + slope * 0.006 + w.y * 0.0012) * STEP * STEP) {
       const big = r2 < 0.12 + w.y * 0.1, sp = big ? SP.boulder : SP.rock, S = SPECIES[sp].s;
       out.push(sp, Math.floor(r3 * 3), x, h, z, r4 * 6.283, S[0] + (S[1] - S[0]) * rnd()); continue;
     }
-    if (slope > 0.75) continue;
+    if (slope > ROCK_GRADE) continue;   // bare rock: nothing grows (the shared slope rule, see gen.js)
     const d = treeDensity(x, z, h, w); if (r2 >= d * STEP * STEP) continue;
     const grove = smooth(0.52, 0.68, fbm(x * 0.0075 + 21, z * 0.0075 - 4, 3));
     const mix = w.v > 0.5 ? MIX.swamp : w.y > w.p ? MIX.forest : grove > 0.3 ? MIX.grove : MIX.meadow;
@@ -163,7 +163,7 @@ function layoutRaw(cx, cz) {
   // the old world between the trees: Mediterranean shrubs, and here and there a ruin (a fallen column, a herm by the way,
   // a stub of wall, a cache of jars). Laid out last, with dice of their own, so nothing laid out before them moves.
   { const cw = biomeWeights(x0 + 32, z0 + 32, { p: 0, y: 0, v: 0, r: 0 }), h2 = (k) => hash2(cx * 7907 + Math.round(k * 1000), cz * 104723 + Math.round(k * 7919) + 3);   // (the hash takes whole numbers)
-    const place = (k) => { const x = x0 + h2(k) * CELL, z = z0 + h2(k + 0.5) * CELL, h = heightAt(x, z); if (h < 1.6 || siteClear(x, z)) return null; return Math.hypot(heightAt(x + 1.5, z) - h, heightAt(x, z + 1.5) - h) / 1.5 > 0.5 ? null : { x, z, h }; };
+    const place = (k) => { const x = x0 + h2(k) * CELL, z = z0 + h2(k + 0.5) * CELL, h = heightAt(x, z); if (h < 1.6 || siteClear(x, z)) return null; return isRock(x, z) ? null : { x, z, h }; };   // (nothing on bare rock)
     if (cw.v < 0.4) {
       const n = Math.round(cw.p * 16 + cw.y * 5);
       for (let k = 0; k < n; k++) { const q = place(k * 2 + 1); if (!q) continue; const r = h2(k * 2 + 1.3), sp = cw.p > cw.y ? (r < 0.42 ? SP.lavender : r < 0.58 ? SP.broom : SP.myrtle) : SP.myrtle, S = SPECIES[sp].s;
@@ -174,7 +174,7 @@ function layoutRaw(cx, cz) {
     // the giant forest: one great tree in every 13 m square where the band is strong, ferns underneath
     for (let j = 0; j < 5; j++) for (let i = 0; i < 5; i++) {
       const k = 200 + j * 5 + i, x = x0 + (i + 0.2 + h2(k) * 0.6) * 12.8, z = z0 + (j + 0.2 + h2(k + 0.5) * 0.6) * 12.8, b = titanBand(x, z);
-      if (b < 0.15 || h2(k + 0.25) > b * 1.1) continue; const h = heightAt(x, z); if (h < 2 || h > 140 || siteClear(x, z)) continue;
+      if (b < 0.15 || h2(k + 0.25) > b * 1.1) continue; const h = heightAt(x, z); if (h < 2 || h > 140 || siteClear(x, z) || isRock(x, z)) continue;
       const S = SPECIES[SP.titan].s; out.push(SP.titan, Math.floor(h2(k + 0.75) * 3), x, h - 0.3, z, h2(k + 0.6) * 6.283, S[0] + (S[1] - S[0]) * h2(k + 0.7));
     }
     const bc = titanBand(x0 + 32, z0 + 32), nf = Math.round(bc * 26 + cw.y * (1 - bc) * 6);

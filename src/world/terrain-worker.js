@@ -1,6 +1,6 @@
 // Terrain worker: builds terrain patches (positions, normals, colours, uvs) off the main thread so streaming the world
 // never stutters. Also bakes the world height texture used by the water shader.
-import { heightAt, biomeWeights, groundColor, fbm } from './gen.js';
+import { heightAt, biomeWeights, groundColor, fbm, isRock } from './gen.js';
 import { layoutCell, CELL, shadeAround, bakeShade } from './flora.js';
 import './sites.js';   // registers the flattened ground under the trial's sites
 
@@ -67,6 +67,7 @@ self.onmessage = (e) => {
       g *= Math.min(1, Math.max(0, (190 - h) / 40));   // none on the bare rock and snow of the peak
       data[k] = h; data[k + 1] = g; data[k + 2] = Math.min(0.99, Math.max(0, fbm(x * 0.03 + 9, z * 0.03 - 4, 2))) + Math.round(Math.min(1, w.y + w.v * 0.6 + occ[j * N + i] * 1.3) * 15) * 2;   // tint, plus the forest shade packed above it
       data[k + 3] = Math.min(1, Math.max(0, (fbm(x * 0.07, z * 0.07 + 5, 2) - 0.42) * 3)) * (w.p * 1 + w.y * 0.2);
+      if (isRock(x, z)) { data[k + 1] = -1; data[k + 3] = 0; }   // bare rock: no grass, no flowers (-1, so blades stop halfway to the next texel)
     }
     self.postMessage({ type: 'grassTex', id: msg.id, data, N, x0, z0, size }, [data.buffer]);
   }

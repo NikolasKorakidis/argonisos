@@ -2,7 +2,7 @@
 // anything the player drops. Natural ones are laid out per 64 m cell from the seed (stable ids "cx,cz,i") and grow back
 // a few days after they are taken. Each kind is one instanced mesh holding every visible copy near the player.
 import * as THREE from 'three';
-import { heightAt, biomeWeights, hash2, fbm } from './gen.js';
+import { heightAt, biomeWeights, hash2, fbm, isRock } from './gen.js';
 import { clearGrass } from './grass.js';
 import { siteClear } from './sites.js';
 import { solidsAround, insideSolid } from './flora.js';
@@ -39,7 +39,8 @@ export const KINDS = {
 function counts(w, x, z) {
   const tree = fbm(x * 0.0075 + 21, z * 0.0075 - 4, 3);
   return {
-    stone: 3.5 * w.p + 4 * w.y, branch: (1.6 + tree * 4) * w.p + 6 * w.y,   // starter materials: easy to come by lightstone: 0.15 * w.p + 1.2 * w.y,
+    stone: 3.5 * w.p + 4 * w.y, branch: (1.6 + tree * 4) * w.p + 6 * w.y,   // starter materials: easy to come by
+    lightstone: 0.15 * w.p + 1.2 * w.y,
     dandelion: 3 * w.p, moonflower: 0.6 * w.y, feather: 0.4 * w.p + 0.3 * w.y, bones: 0.25 * w.y,
     bush: 2.2 * w.p + 1.6 * w.y,                // fiber for early rope; last, so the ids of the kinds above don't shift
   };
@@ -53,8 +54,19 @@ export function layoutPickups(cx, cz) {
     for (let i = 0; i < whole; i++, k++) {
       const x = x0 + rnd(cx + k * 3.1, cz - k) * CELL, z = z0 + rnd(cx - k * 1.7, cz + k * 2.3) * CELL, h = heightAt(x, z);
       if (h < 0.8 || siteClear(x, z) || insideSolid(solid, x, z, 0.35)) continue;   // never inside a rock or a trunk
-      const s = Math.hypot(heightAt(x + 1, z) - h, heightAt(x, z + 1) - h); if (s > 0.8) continue;
+      if (isRock(x, z) && kind !== 'stone' && kind !== 'lightstone') continue;   // on bare rock only stones (the shared slope rule)
       out.push({ id: `${cx},${cz},${k}`, kind, x, z, y: h, rot: rnd(k, cx + cz) * 6.28 });
+    }
+  }
+  // loose stones on bare rock: a few small heaps here and there, never an even scatter
+  for (let q = 0; q < 8; q++) {
+    const x = x0 + rnd(cx * 101 + q * 17, cz * 37 + 911) * CELL, z = z0 + rnd(cz * 89 - q * 23, cx * 41 + 577) * CELL;
+    if (!isRock(x, z) || rnd(cx * 7 + q * 131, cz * 13 + 3) > 0.5) continue;
+    const n = 1 + Math.floor(rnd(q * 53 + cx, cz * 29 + 71) * 3);
+    for (let m = 0; m < n; m++) {
+      const sx = x + (rnd(m * 61 + q * 7 + cx, cz + 401) - 0.5) * 3.5, sz = z + (rnd(cz * 3 + m * 47, q * 11 + cx + 233) - 0.5) * 3.5;
+      if (!isRock(sx, sz) || siteClear(sx, sz) || insideSolid(solid, sx, sz, 0.35)) continue;
+      out.push({ id: `${cx},${cz},r${q}.${m}`, kind: 'stone', x: sx, z: sz, y: heightAt(sx, sz), rot: rnd(m * 19, q * 7 + cz) * 6.28 });
     }
   }
   return out;
