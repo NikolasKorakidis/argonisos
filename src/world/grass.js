@@ -31,9 +31,10 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
         // further out fewer blades, each a little wider, so the meadow reads the same with far less to draw (Ghost of
         // Tsushima's trick); a blade seen edge-on is widened so it doesn't thin away to a line
         float keep = mix(1.0, 0.42, smoothstep(10.0, 34.0, length(wp - uCenter))), r2 = fract(rnd * 91.73);
-        // the grass amount, and how tall it grows here (0-1: up to 0.7x the hero's height, 1.35 m, in a patch)
+        // the grass amount, and whether it's a tall patch (there it all stands about 0.7x the hero's height, 1.35 m: the
+        // amount only says whether a blade grows, not how tall, and the blades barely differ)
         float gg = max(hm.g, 0.0), tl = floor(gg * 0.5) / 7.0, amt = gg - floor(gg * 0.5) * 2.0;
-        float sc = amt * fade * mix(0.55 + rnd * 0.62, (0.85 + rnd * 0.3) * (1.0 + tl * 1.35), smoothstep(0.0, 0.15, tl)) * step(r2, keep);
+        float sc = fade * mix(amt * (0.55 + rnd * 0.62), step(0.3, amt) * (0.94 + rnd * 0.12) * 2.35, smoothstep(0.0, 0.15, tl)) * step(r2, keep);
         sc *= mix(1.0, smoothstep(1.5, 4.0, length(wp - cameraPosition.xz)), smoothstep(0.1, 0.4, tl));   // (tall grass shrinks away round the camera, so you look over it, not into it)
         vec3 p = position; p.y *= sc; p.x *= step(0.01, sc) / sqrt(keep) * (1.0 + tl * 0.4); vTall = tl;
         float a = rnd * 6.2831; vec2 bn = vec2(sin(a), cos(a)), tv = normalize(cameraPosition.xz - wp + 1e-4);
