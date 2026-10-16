@@ -39,14 +39,17 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
 - **Heights change once the sites are placed.** The Olympos peak and the small-scale ground detail (`PEAK.on`,
   `DETAIL.on` in `gen.js`) switch on at the end of `sites.js`, so they can't move sites. Anything that picks places by
   height must run before that, or accept the final heights. Ground detail finer than ~6 m won't match the 2 m terrain mesh.
-- **One slope rule** (`slopeGrade`, `ROCK_GRADE` 47% / ~25°, `isRock` in `gen.js`) decides bare rock in the ground colour,
-  where nothing grows (grass texture, flora layout) and that only stones lie on rock (pickups). Use it; don't measure
-  slope another way for any of these.
-- **The meadows' trees grow only in woods** (`pediasWood` in `flora.js`); no tree may stand alone or in a pair there.
+- **One slope rule** (`slopeGrade`, `rockLimit`, `isRock` in `gen.js`: `ROCK_GRADE` 47% / ~25°, lowered by noise in places
+  for a ragged edge, never raised) decides bare rock in the ground colour and the terrain's rock surface (`groundColor`'s
+  `out[3]` → the `rock` attribute → `rockGround` in `terrain.js`), where nothing grows (grass texture, flora layout) and
+  that only stones lie on rock (pickups). Use it; don't measure slope another way for any of these.
+- **The meadows' trees grow only in woods** (`pediasWood` in `flora.js`, about 70% of Pedias, glades round the trial's
+  places); no tree may stand alone or in a pair there.
   Tree crowns start above 2.9 m (1.5× the hero) at their smallest size (`tests/suites/woods.mjs` checks it).
-- **The player's mist** (`atmosphere.js`: clear to `MIST_R0` 100 m, 70% by `MIST_R1` 170 m, ceiling from `tallestNear`)
-  hides how much less is drawn behind it (`farKeep`/`keepTo` in `vegetation.js`, `FAR_R` 600, minor sites' `VIEW_R`).
-  Change them together. The focus blur is the `focus` uniform.
+- **The player's mist** (`atmosphere.js`: clear to `MIST_R0` 60 m, 68% by `MIST_R1` 100 m, ceiling from `tallestNear`)
+  lies over the grass's edge (`GRASS_R` 80 m, gone by `GRASS_END` 95 m in `grass.js`: a dense near carpet hands over to a
+  sparse far one at ~30 m) and hides how much less is drawn behind it (`farKeep`/`keepTo` in `vegetation.js`, `FAR_R`
+  600, minor sites' `VIEW_R`). Change them together. The focus blur is the `focus` uniform.
 - Saves remember felled trees and pickups by their place in the layout: bump `WORLD_LAYOUT` in `save.js` whenever flora
   or pickup layout changes.
 - **The ground isn't just `heightAt`.** Floors press the terrain down (`groundcut.js`): use `groundAt(x, z)` for where

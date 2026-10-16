@@ -1,7 +1,7 @@
 // Argonisos: the trial of Zeus. Entry point: builds the world and the player, runs the frame loop.
 import * as THREE from 'three';
 import { renderer, scene, camera, render, followShadow, groundDetail, sun, GPU, ADAPT, adaptResolution } from './render/core.js';
-import { Terrain } from './world/terrain.js';
+import { Terrain, rockGround } from './world/terrain.js';
 import { WorkerPool } from './world/pool.js';
 import { Vegetation } from './world/vegetation.js';
 import { windUniform } from './world/trees.js';
@@ -33,6 +33,7 @@ const $ = (id) => document.getElementById(id);
 // ---- World
 const terrainMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, map: groundDetail, envMapIntensity: 0.4 });
 const pool = new WorkerPool(Math.max(2, Math.min(4, (navigator.hardwareConcurrency || 4) - 1)));
+rockGround(terrainMat);           // the rock surface on steep ground
 cutTerrain(terrainMat);           // floors press the ground down under them
 const terrain = new Terrain(scene, terrainMat, pool);
 terrain.requestHeightTexture(1024, WORLD.SIZE).then(setHeightTexture);

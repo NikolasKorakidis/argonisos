@@ -85,10 +85,11 @@ export default {
   name: 'Structures',
   slow: true,
   async run(t) {
-    // a building site; its level is set the way the game lays the first floor tile: on the highest of its corners
-    // (tile = the first tile's middle in house space), or for a fence, on the ground where it stands
+    // a building site, cleared of trees and rocks; its level is set the way the game lays the first floor tile: on the
+    // highest of its corners (tile = the first tile's middle in house space), or for a fence, on the ground where it stands
     const site = (dx, dz, R, tile, fence) => t.eval(`const x = P.pos.x + ${dx}, z = P.pos.z + ${dz}, R = ${R}, c = Math.cos(R), s = Math.sin(R), at = (u, v) => AG.heightAt(x + u * c + v * s, z - u * s + v * c);
       const [tx, tz] = ${JSON.stringify(tile)}; const y = ${fence ? 'at(tx, tz)' : 'Math.max(...[[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5], [0, 0]].map(([u, v]) => at(tx + u, tz + v))) + 0.03'};
+      for (const q of [...g.colliders.near(x, z, 18)]) if (q.ref) { g.veg.remove(q.ref.cx, q.ref.cz, q.ref.i); g.colliders.removeOne(q); }   // (fell the trees and break the rocks on the site first, as a player would)
       window._H = { x, z, y, R }; return true;`);
     await site(30, 0, 0.35, [-1.5, -1.5]);
     await t.step('a two-storey house with a terrace, outside stairs, doors on both floors, a roof and gables', `${LIB} ${BUILDER} ${HOUSE} return verdict();`);

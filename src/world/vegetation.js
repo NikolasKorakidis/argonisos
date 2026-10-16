@@ -10,11 +10,11 @@ import { renderer, sun, hemi } from '../render/core.js';
 export const NEAR_R = 75;                     // full-detail radius
 export const MID_R = 260;                     // light meshes out to here, impostors beyond
 const NEAR_KEEP = NEAR_R + CELL * 1.5, FAR = 256, FAR_R = 600;
-// Behind the player's mist (tester feedback, 15 Oct; see atmosphere.js) the distant land is drawn with much less: from
-// MIST_R0 out to MIST_R1 things drop away one by one (each at its own distance, so there's no ring where they vanish),
-// until only a share of each kind is left: half the trees and ruins, a tenth of the big rocks, none of the small stuff.
+// Behind the player's mist (tester feedback, 15 and 16 Oct; see atmosphere.js) the distant land is drawn with much less:
+// from MIST_R0 out to MIST_R1 things drop away one by one (each at its own distance, so there's no ring where they
+// vanish), until only a share of each kind is left: half the trees and ruins, a tenth of the big rocks, none of the small stuff.
 // Coming closer, they come back the same way.
-export const MIST_R0 = 100, MIST_R1 = 170;
+export const MIST_R0 = 60, MIST_R1 = 100;   // (the mist is half grown at GRASS_R, 80 m, where the grass ends: grass.js)
 const SMALL = new Set(['lavender', 'broom', 'myrtle', 'fern', 'redbush', 'amphorae', 'herm', 'reeds']);
 const farKeep = (sp) => { const n = SPECIES[sp].name; return SMALL.has(n) ? 0 : n === 'rock' || n === 'boulder' ? 0.1 : 0.5; };
 const dice = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };

@@ -41,7 +41,7 @@ export class Terrain {
     const nd = this.nodes.get(m.id); if (!nd) return;
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(m.pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(m.nor, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(m.col, 3)); g.setAttribute('uv', new THREE.BufferAttribute(m.uv, 2)); g.setIndex(INDEX);
+    g.setAttribute('color', new THREE.BufferAttribute(m.col, 3)); g.setAttribute('uv', new THREE.BufferAttribute(m.uv, 2)); g.setAttribute('rock', new THREE.BufferAttribute(m.rock, 1)); g.setIndex(INDEX);
     g.boundingBox = new THREE.Box3(new THREE.Vector3(nd.x0, m.minH - 4, nd.z0), new THREE.Vector3(nd.x0 + nd.size, m.maxH, nd.z0 + nd.size));
     g.boundingSphere = g.boundingBox.getBoundingSphere(new THREE.Sphere());
     const mesh = new THREE.Mesh(g, this.material); mesh.receiveShadow = true; mesh.matrixAutoUpdate = false; mesh.visible = false;
@@ -90,4 +90,71 @@ export class Terrain {
   }
   get pending() { return this.inflight + this.queue.length; }
   get drawn() { let n = 0; for (const nd of this.visible) if (nd.mesh && nd.mesh.visible) n++; return n; }
+}
+
+// ---- Bare rock (tester feedback, 15 and 16 Oct): where the slope rule makes the ground rock (the 'rock' attribute the
+// worker fills from groundColor), the terrain shader lays a rock surface over the colour: slabs split by dark cracks,
+// each slab its own grey, fine grain, a few lichen specks, and layers that follow the contours (bands of equal height,
+// like bedded stone). It is projected from three sides, so steep faces don't smear, and its relief catches the light.
+// One tileable texture made here at start-up: R tone, G relief, B lichen, A broad variation.
+const ROCK_TEX = (() => {
+  const N = 256, C = 4, d = new Uint8Array(N * N * 4);
+  let s = 91; const r = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+  const pts = Array.from({ length: C * C }, () => [r(), r(), r()]);   // a point in each cell of a C×C grid (and the slab's tone)
+  const h21 = (x, z) => { const v = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return v - Math.floor(v); };
+  const noise = (period, oct, seed) => { const f = new Float32Array(N * N);   // tileable value noise
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { let a = 0.5, fr = 1, v = 0;
+      for (let o = 0; o < oct; o++) { const P = period * fr, px = x / N * P, pz = y / N * P, xi = Math.floor(px), zi = Math.floor(pz), xf = px - xi, zf = pz - zi, u = xf * xf * (3 - 2 * xf), w = zf * zf * (3 - 2 * zf);
+        const hh = (i, j) => h21(((i % P) + P) % P + o * 17 + seed, ((j % P) + P) % P + o * 31 - seed);
+        v += a * ((hh(xi, zi) * (1 - u) + hh(xi + 1, zi) * u) * (1 - w) + (hh(xi, zi + 1) * (1 - u) + hh(xi + 1, zi + 1) * u) * w); a *= 0.5; fr *= 2; }
+      f[y * N + x] = v; }
+    return f; };
+  const grain = noise(32, 3, 0), broad = noise(4, 3, 7), lichen = noise(12, 3, 3), wa = noise(6, 3, 11), wb = noise(6, 3, 19);
+  // the cracks: the edges of a Voronoi pattern whose coordinates are warped by noise, so they wander and kink like real
+  // fractures rather than run straight; big slabs (C across the tile) split again by finer cracks (3C)
+  const cells = (u, v, C, P) => { const ci = Math.floor(u), cj = Math.floor(v); let f1 = 9, f2 = 9, id = 0;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const i = ci + di, j = cj + dj, p = P[((j % C) + C) % C * C + ((i % C) + C) % C], dd = Math.hypot(i + p[0] - u, j + p[1] - v);
+      if (dd < f1) { f2 = f1; f1 = dd; id = p[2]; } else if (dd < f2) f2 = dd;
+    }
+    return [f2 - f1, id]; };
+  const fine = Array.from({ length: 9 * C * C }, () => [r(), r(), r()]);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const k = y * N + x, g = grain[k], ox = (wa[k] - 0.5) * 0.9, oz = (wb[k] - 0.5) * 0.9;
+    const [e1, id] = cells(x / N * C + ox, y / N * C + oz, C, pts), [e2, id2] = cells(x / N * 3 * C + ox * 2, y / N * 3 * C + oz * 2, 3 * C, fine);
+    const w1 = 0.05 + wa[k] * 0.06, c1 = Math.min(1, e1 / w1), c2 = 1 - (1 - Math.min(1, e2 / 0.09)) * 0.55;   // (crack widths vary along their length)
+    const relief = Math.min(1, e1 / 0.5) * 0.55 + Math.min(1, e2 / 0.3) * 0.15 + g * 0.3;   // slabs rounded off toward their cracks
+    const tone = (0.48 + id * 0.42 + (id2 - 0.5) * 0.12 + (g - 0.5) * 0.4) * (0.25 + 0.75 * c1 * c1) * c2;
+    d.set([Math.min(255, tone * 200), relief * 255, lichen[k] * 255, broad[k] * 255], k * 4);
+  }
+  const t = new THREE.DataTexture(d, N, N); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true; t.anisotropy = 8; t.needsUpdate = true; return t;
+})();
+export function rockGround(mat) {
+  const base = mat.onBeforeCompile;
+  mat.onBeforeCompile = (sh, r) => {
+    base?.call(mat, sh, r);
+    sh.uniforms.uRockTex = { value: ROCK_TEX };
+    sh.vertexShader = 'attribute float rock; varying float vRock; varying vec3 vRockP, vRockN;\n' + sh.vertexShader.replace('#include <project_vertex>', `
+      vRock = rock; vRockP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRockN = normalize(mat3(modelMatrix) * objectNormal);
+      #include <project_vertex>`);
+    sh.fragmentShader = 'uniform sampler2D uRockTex; varying float vRock; varying vec3 vRockP, vRockN;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      // (sampled everywhere, not only on rock: the relief's screen derivatives need every pixel of the quad)
+      vec3 rbw = pow(abs(vRockN), vec3(4.0)); rbw /= rbw.x + rbw.y + rbw.z;
+      vec3 rp = vRockP / 7.0;   // (a tile 7 m across: slabs of about 1.7 m)
+      vec4 rk = texture2D(uRockTex, rp.zy) * rbw.x + texture2D(uRockTex, rp.xz) * rbw.y + texture2D(uRockTex, rp.xy + 0.37) * rbw.z;
+      float rbroad = texture2D(uRockTex, vRockP.xz / 41.0 + 0.5).a;
+      float rlayer = vRockP.y / 1.7 + (rbroad - 0.5) * 2.5, rbed = abs(fract(rlayer) - 0.5) * 2.0;   // bedding: thin dark seams along the contours
+      float rtone = (0.4 + rk.r * 0.85) * mix(0.82, 1.1, step(0.5, fract(rlayer * 0.5))) * mix(0.62, 1.0, smoothstep(0.0, 0.12, rbed)) * (0.85 + rbroad * 0.3);
+      vec3 rcol = diffuseColor.rgb * rtone;
+      rcol = mix(rcol, rcol * vec3(0.85, 1.0, 0.62), smoothstep(0.72, 0.85, rk.b) * 0.6);   // lichen
+      diffuseColor.rgb = mix(diffuseColor.rgb, rcol, vRock);
+      float rockRelief = (rk.g + smoothstep(0.0, 0.12, rbed) * 0.35) * vRock * (1.0 - smoothstep(25.0, 70.0, length(vViewPosition)));`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      {   // the relief tilts the normal (bump mapping from screen-space derivatives)
+        vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition), r1 = cross(sy, normal), r2 = cross(normal, sx);
+        float det = dot(sx, r1) * faceDirection, hx = dFdx(rockRelief) * 0.25, hy = dFdy(rockRelief) * 0.25;
+        normal = normalize(abs(det) * normal - sign(det) * (hx * r1 + hy * r2));
+      }`);
+  };
 }

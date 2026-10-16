@@ -1,5 +1,5 @@
-// Terrain worker: builds terrain patches (positions, normals, colours, uvs) off the main thread so streaming the world
-// never stutters. Also bakes the world height texture used by the water shader.
+// Terrain worker: builds terrain patches (positions, normals, colours, uvs, bare rock) off the main thread so streaming
+// the world never stutters. Also bakes the world height texture used by the water shader.
 import { heightAt, biomeWeights, groundColor, fbm, isRock } from './gen.js';
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 import { layoutCell, CELL, shadeAround, bakeShade, solidsAround, SPECIES, STRIDE } from './flora.js';
@@ -9,11 +9,11 @@ import './sites.js';   // registers the flattened ground under the trial's sites
 
 function patch({ id, x0, z0, size, res }) {
   const n = res + 1, step = size / res, NV = n * n + 4 * res;
-  const pos = new Float32Array(NV * 3), nor = new Float32Array(NV * 3), col = new Float32Array(NV * 3), uv = new Float32Array(NV * 2);
+  const pos = new Float32Array(NV * 3), nor = new Float32Array(NV * 3), col = new Float32Array(NV * 3), uv = new Float32Array(NV * 2), rock = new Float32Array(NV);
   // heights with a one-sample border so normals match across patch edges
   const m = n + 2, H = new Float32Array(m * m);
   for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) H[j * m + i] = heightAt(x0 + (i - 1) * step, z0 + (j - 1) * step);
-  let minH = 1e9, maxH = -1e9; const c = [0, 0, 0], w = { p: 0, y: 0, v: 0, r: 0 };
+  let minH = 1e9, maxH = -1e9; const c = [0, 0, 0, 0], w = { p: 0, y: 0, v: 0, r: 0 };
   // baked shade (near patches): pools of shade under the trees and at the foot of rocks, computed once here
   const occ = new Float32Array(n * n); if (size <= 128) bakeShade(shadeAround(x0, z0, x0 + size, z0 + size), x0, z0, step, n, n, occ);
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
@@ -26,7 +26,7 @@ function patch({ id, x0, z0, size, res }) {
     const cav = Math.max(-0.05, Math.min(0.1, ((hl + hr + hd + hu) / 4 - h) * 0.25 / Math.max(step, 1)));   // hollows a touch darker, ridges a touch lighter
     const ao = (1 - Math.min(0.45, occ[k])) * (1 - cav);
     col[k * 3] = c[0] * ao; col[k * 3 + 1] = c[1] * ao; col[k * 3 + 2] = c[2] * ao;
-    uv[k * 2] = x / 3; uv[k * 2 + 1] = z / 3;
+    uv[k * 2] = x / 3; uv[k * 2 + 1] = z / 3; rock[k] = c[3];
     if (h < minH) minH = h; if (h > maxH) maxH = h;
   }
   // skirt: copy of the outer ring, pushed down (deeper for coarse patches whose neighbours may differ more)
@@ -38,9 +38,9 @@ function patch({ id, x0, z0, size, res }) {
   for (let j = res; j > 0; j--) ring.push(j * n);                      // left edge
   for (const k of ring) {
     pos[s * 3] = pos[k * 3]; pos[s * 3 + 1] = pos[k * 3 + 1] - drop; pos[s * 3 + 2] = pos[k * 3 + 2];
-    nor.set(nor.subarray(k * 3, k * 3 + 3), s * 3); col.set(col.subarray(k * 3, k * 3 + 3), s * 3); uv.set(uv.subarray(k * 2, k * 2 + 2), s * 2); s++;
+    nor.set(nor.subarray(k * 3, k * 3 + 3), s * 3); col.set(col.subarray(k * 3, k * 3 + 3), s * 3); uv.set(uv.subarray(k * 2, k * 2 + 2), s * 2); rock[s] = rock[k]; s++;
   }
-  return { id, pos, nor, col, uv, minH, maxH };
+  return { id, pos, nor, col, uv, rock, minH, maxH };
 }
 
 // World height texture for the water: depth below the surface everywhere (shoreline foam, colour by depth)
@@ -55,7 +55,7 @@ function heightTexture({ id, N, extent }) {
 
 self.onmessage = (e) => {
   const msg = e.data;
-  if (msg.type === 'patch') { const r = patch(msg); self.postMessage({ type: 'patch', ...r }, [r.pos.buffer, r.nor.buffer, r.col.buffer, r.uv.buffer]); }
+  if (msg.type === 'patch') { const r = patch(msg); self.postMessage({ type: 'patch', ...r }, [r.pos.buffer, r.nor.buffer, r.col.buffer, r.uv.buffer, r.rock.buffer]); }
   else if (msg.type === 'heightTex') { const r = heightTexture(msg); self.postMessage({ type: 'heightTex', ...r }, [r.data.buffer]); }
   else if (msg.type === 'grassTex') {      // local ground texture for the grass carpet: R height, G grass amount (+ 2 × tallness 0-7), B tint variation, A flowers
     const { N, x0, z0, size } = msg, data = new Float32Array(N * N * 4), w = { p: 0, y: 0, v: 0, r: 0 };

@@ -18,10 +18,11 @@ export const ATMO = {
   // the focus (tester feedback, 15 Oct): sharp round the crosshair, softening toward the edges of the screen, so the
   // cheaper detail at the edges of your view isn't noticed (focus: the blur radius in pixels at the screen's edge)
   focus: { value: 3 }, aspect: { value: 16 / 9 },
-  // the player's mist (tester feedback, 15 Oct): clear for MIST_R0 round the hero, thickening to mzAmt by MIST_R1 and
-  // staying there, up to a ceiling (mzTop) a little over the tallest thing standing near; above it the sky stays clear.
-  // It hides how much less is drawn out there (see vegetation.js).
-  mzC: { value: new THREE.Vector2() }, mzR0: { value: MIST_R0 }, mzR1: { value: MIST_R1 }, mzAmt: { value: 0.7 }, mzTop: { value: 30 }, mzSoft: { value: 10 }, mzCol: { value: new THREE.Color(0.7, 0.75, 0.8) },
+  // the player's mist (tester feedback, 15 and 16 Oct): clear for MIST_R0 round the hero, thickening to mzAmt by MIST_R1
+  // (hiding about two thirds of what lies behind) and staying there, half grown where the grass ends (GRASS_R); up to a
+  // ceiling (mzTop) a little over the tallest thing standing near, above which the sky stays clear. It hides how much
+  // less is drawn out there (see vegetation.js).
+  mzC: { value: new THREE.Vector2() }, mzR0: { value: MIST_R0 }, mzR1: { value: MIST_R1 }, mzAmt: { value: 0.68 }, mzTop: { value: 30 }, mzSoft: { value: 10 }, mzCol: { value: new THREE.Color(0.7, 0.75, 0.8) },
   // the grade (white balance, saturation, a tint in the shadows) and the cloud shadows drifting over the land
   gTint: { value: new THREE.Color(1, 1, 1) }, gSat: { value: 1 }, gShadow: { value: new THREE.Color(0, 0, 0) },
   cloudOff: { value: new THREE.Vector2() }, cloudCover: { value: 0.4 }, cloudK: { value: 0 },
@@ -64,11 +65,11 @@ export class AtmospherePass extends Pass {
             // haze glowing towards the sun, deeper with distance
             col.rgb += hazeCol * pow(toSun, 5.0) * (1.0 - exp(-dist / 900.0)) * hazeAmt;
           }
-          // the player's mist: how far out from the hero (across the ground) and how high; for the sky, where the line of
-          // sight is when it reaches the far edge of the mist, so only the band low over the horizon is covered
-          float mh = mzR1, mp;
-          if (d < 0.99999) { mh = length(P.xz - mzC); mp = P.y; }
-          else { vec3 rd = normalize(P - camPos); mp = camPos.y + rd.y * (mzR1 / max(length(rd.xz), 1e-3)); mh = mzR1; }
+          // the player's mist: how far out from the hero (across the ground) and how high; for the sky, and for anything past
+          // the mist's far edge, where the line of sight is when it reaches that edge, so only the band low over the horizon
+          // is covered and nothing far off (a giant tree on a ridge) stands out of the mist above its ceiling
+          vec3 rd = normalize(P - camPos); float mpEdge = camPos.y + rd.y * (mzR1 / max(length(rd.xz), 1e-3)), mh = mzR1, mp = mpEdge;
+          if (d < 0.99999) { mh = length(P.xz - mzC); mp = mix(P.y, mpEdge, smoothstep(mzR1 * 0.9, mzR1 * 1.1, mh)); }
           col.rgb = mix(col.rgb, mzCol, mzAmt * smoothstep(mzR0, mzR1, mh) * (1.0 - smoothstep(mzTop - mzSoft, mzTop + mzSoft, mp)));
           // shafts of sun: march towards the sun on the screen, gathering light wherever the sky shows through
           if (sunVis > 0.001 && rays > 0.5) {
