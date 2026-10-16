@@ -5,7 +5,7 @@ const sunYaw = `(() => { const s = AG.sun.position.clone().sub(AG.sun.target.pos
 const later = (ms, code) => `await new Promise((r) => setTimeout(r, ${ms})); ${code}`;
 
 export const PLACES = {
-  meadow: { time: 0.25, go: `AG.teleport(60, -60, 2.2, -0.12); P.camDist = 9;` },
+  meadow: { time: 0.25, go: `AG.teleport(-220, 360, 2.2, -0.12); P.camDist = 9;` },   // (a wide clearing among the woods of Pedias)
   grove: { time: 0.3, go: `AG.teleport(-120, 140, 0.4, -0.35); P.camDist = 10;` },
   forest: { time: 0.3, go: `for (let r = 150; r < 1200; r += 10) { const x = r * 0.7, z = r * 0.7; if (AG.biomeWeights(x, z).y > 0.9) { AG.teleport(x, z, 0.9, 0.05); break; } }` },
   giantwood: { time: 0.28, settle: 8000, go: `const F = await import('/src/world/flora.js'); let done = false; for (let r = 300; r < 1100 && !done; r += 8) for (let a = 0; a < 6.28; a += 0.05) { const x = r * Math.cos(a), z = r * Math.sin(a); if (F.titanBand(x, z) > 0.75 && AG.heightAt(x, z) > 3) { AG.teleport(x, z, 0, 0.25); done = true; break; } } ${later(800, `P.camYaw = ${sunYaw} + 0.5; P.camPitch = 0.4; P.camDist = 5;`)}` },

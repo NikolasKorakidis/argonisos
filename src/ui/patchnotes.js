@@ -4,6 +4,26 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-5', name: 'Patch 5', title: 'Into the Woods', date: '16 October 2026',
+    intro: 'Pedias is now mostly forest, the grass reaches far out around you, and steep ground looks like real rock.',
+    sections: [
+      { t: 'The world', icon: 'temple', items: [
+        '<b>Deeper woods</b>: woods now cover most of Pedias, about seven tenths of it, with open clearings of every size between them, from small glades to wide meadows.',
+        'The temple, the farmhouse, the Labyrinth and the sacred olives each stand in a clearing of their own, so you can see them from the edge of the wood.',
+        '<b>Rock that looks like rock</b>: steep ground now shows cracked slabs of stone in different greys, with layers running along the hillside, a little lichen, and a surface that catches the light.',
+        'The edge between grass and rock is now ragged, with tongues of rock reaching a little way down the slope, instead of a clean line. Everything steeper than about 25° is still bare rock.',
+      ] },
+      { t: 'Graphics and performance', icon: 'blessing', items: [
+        '<b>Grass all around you</b>: the grass now reaches about 80 metres out (it used to stop at about 40), with fewer, broader blades further away so it costs little to draw.',
+        '<b>The mist now lies on the edge of the grass</b>: clear for about 60 metres, it thickens to hide about two thirds of what lies beyond 100 metres. Behind it the game draws even less than before.',
+        'Fixed: the crowns of distant giant trees showed as black shapes over the mist. They are now hidden in it like everything else far away.',
+      ] },
+      { t: 'Saves', icon: 'goal', items: [
+        'The woods have changed, so a world saved before this patch keeps your pack, buildings and progress, but its felled trees and gathered items grow back.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-4', name: 'Patch 4', title: 'Woods and Stone', date: '15 October 2026',
     intro: 'A new look for the land: real woods and open meadows, bare rock where the ground is steep, and a mist that lets the game draw far less in the distance.',
     sections: [

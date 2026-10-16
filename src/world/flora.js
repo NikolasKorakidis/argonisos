@@ -4,8 +4,8 @@
 // Pedias: open meadows with groves (olive, oak, cypress, pomegranate, fig, the odd great plane tree) and lone trees.
 // Yleos:  dense dark forest (pines, firs, holm oaks, broadleaves, dead snags) with clearings.
 // Valtos: dead and drowned trees, cypresses, sparse.
-import { heightAt, biomeWeights, fbm, hash2, smooth, slopeGrade, isRock, ROCK_GRADE } from './gen.js';
-import { siteClear } from './sites.js';
+import { heightAt, biomeWeights, fbm, hash2, smooth, slopeGrade, isRock, rockLimit, ROCK_GRADE } from './gen.js';
+import { siteClear, ALL_SITES } from './sites.js';
 
 export const CELL = 64;
 // species: name for the builder, scale range, collision radius (and height) per unit of scale; 'res' marks things you can harvest (trees give logs, rocks stone)
@@ -56,16 +56,24 @@ export function titanBand(x, z, w = biomeWeights(x, z, _tw)) {
   const edge = smooth(0.1, 0.32, w.y) * smooth(0.86, 0.62, w.y) * (1 - w.v);
   return edge * smooth(0.44, 0.58, fbm(x * 0.0016 + 77, z * 0.0016 - 31, 3));
 }
-// The woods of Pedias (tester feedback, 15 Oct): trees grow in woods, never scattered over the meadows. Woods of every
-// size with ragged edges (noise whose coordinates are warped by other noise), from big masses 150-300 m across down to
-// small islands 25-55 m across (those are orchards: olive, pomegranate, fig), more of them along the hillsides so they
-// make belts; wide open meadow between. Returns { wood: 0..1 (how deep in a wood), orchard: whether a small island }.
-const _pw = { wood: 0, orchard: false };
+// The woods of Pedias (tester feedback, 15 and 16 Oct): trees grow in woods, never scattered over the meadows, and the
+// woods cover about 70% of the plain, so there is more wood than clearing. Ragged edges everywhere (noise whose
+// coordinates are warped by other noise): wide woods thicker along the hillsides, open clearings of every size between
+// them, and in the clearings small islands 25-55 m across (orchards: olive, pomegranate, fig).
+// The trial's places stand in glades of their own (a ragged ring GLADE m past their pad), so they can be seen from the
+// edge of the wood. Returns { wood: 0..1 (how deep in a wood), orchard: whether a small island }.
+const _pw = { wood: 0, orchard: false }, GLADE = { temple: 45, house: 30, labyrinth: 50, chimera: 40, olive: 14 };
+let glades = null;
+function glade(x, z) {
+  glades ||= ALL_SITES().filter((s) => GLADE[s.kind]).map((s) => [s.x, s.z, s.r + GLADE[s.kind]]);
+  let k = 1; for (const [gx, gz, r] of glades) { const d = Math.hypot(x - gx, z - gz) - r; if (d < 30) k = Math.min(k, smooth(-10, 25, d + (fbm(x * 0.03 + 5, z * 0.03, 2) - 0.5) * 24)); }
+  return k;
+}
 export function pediasWood(x, z, out = _pw) {
   const wx = x + (fbm(x * 0.004 + 11, z * 0.004 - 7, 2) - 0.5) * 160, wz = z + (fbm(x * 0.004 - 23, z * 0.004 + 5, 2) - 0.5) * 160;
   const g = slopeGrade(x, z), hill = smooth(0.1, 0.3, g) * smooth(ROCK_GRADE, ROCK_GRADE - 0.1, g);
-  const big = smooth(0.6, 0.67, fbm(wx * 0.0042 + 3, wz * 0.0042 - 9, 3) + hill * 0.08), small = smooth(0.7, 0.75, fbm(wx * 0.019 - 41, wz * 0.019 + 13, 2)) * 0.9;
-  out.wood = Math.max(big, small); out.orchard = small > big; return out;
+  const big = smooth(0.43, 0.5, fbm(wx * 0.0042 + 3, wz * 0.0042 - 9, 3) + hill * 0.08), small = smooth(0.7, 0.75, fbm(wx * 0.019 - 41, wz * 0.019 + 13, 2)) * 0.9;
+  const gl = glade(x, z); out.wood = Math.max(big, small) * gl; out.orchard = small > big; return out;
 }
 export function treeDensity(x, z, h, w) {
   if (h < 1.6 && w.v < 0.5) return 0;
@@ -182,7 +190,7 @@ function layoutRaw(cx, cz) {
       const big = r2 < 0.12 + w.y * 0.1, sp = big ? SP.boulder : SP.rock, S = SPECIES[sp].s;
       out.push(sp, Math.floor(r3 * 3), x, h, z, r4 * 6.283, S[0] + (S[1] - S[0]) * rnd()); continue;
     }
-    if (slope > ROCK_GRADE) continue;   // bare rock: nothing grows (the shared slope rule, see gen.js)
+    if (slope > rockLimit(x, z)) continue;   // bare rock: nothing grows (the shared slope rule, see gen.js)
     const d = treeDensity(x, z, h, w); if (r2 >= d * STEP * STEP) continue;
     const mix = w.v > 0.5 ? MIX.swamp : w.y > w.p ? MIX.forest : pediasWood(x, z).orchard ? MIX.grove : MIX.wood;
     const sp = pick(mix, r3), S = SPECIES[sp].s;

@@ -120,10 +120,13 @@ export function heightAt(x, z) {
 // ---- Steepness: one measure for everything that depends on it (bare rock on steep ground, where plants may grow, what
 // lies about), so they can never disagree. Grade is rise over run, measured across 8 m (4 m either side), so a hillside
 // counts and a hummock doesn't. Above ROCK_GRADE (47%, about 25°) the ground is bare rock: no grass, flowers, bushes or
-// trees grow there, and only stones lie on it.
+// trees grow there, and only stones lie on it. So that the rock's edge isn't a clean line along the slope, noise lowers
+// the limit here and there (rockLimit, never above ROCK_GRADE): ragged tongues of rock reach a little way down onto
+// gentler ground, while everything steeper than ROCK_GRADE is rock without exception (tester feedback, 15 and 16 Oct).
 export const ROCK_GRADE = 0.47;
 export function slopeGrade(x, z) { return Math.hypot(heightAt(x + 4, z) - heightAt(x - 4, z), heightAt(x, z + 4) - heightAt(x, z - 4)) / 8; }
-export const isRock = (x, z) => heightAt(x, z) > 0.3 && slopeGrade(x, z) > ROCK_GRADE;
+export const rockLimit = (x, z) => ROCK_GRADE - 0.06 * smooth(0.42, 0.72, fbm(x * 0.07 + 13, z * 0.07 - 29, 2));
+export const isRock = (x, z) => heightAt(x, z) > 0.3 && slopeGrade(x, z) > rockLimit(x, z);
 
 // ---- Ground colour (linear-ish RGB 0..1), from biome weights, height, slope and a few noise layers
 const C = (hex) => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
@@ -151,17 +154,19 @@ export function groundColor(x, z, h, slope, w = biomeWeights(x, z), out = [0, 0,
   // bare rock on steep ground (the slope rule above): broken up by noise into patches of exposed rock of different
   // greys, with stony soil showing here and there, never one flat colour; just below the limit a fringe of bare earth,
   // patchy too, so the edge is ragged rather than a line
-  const gr = h > 0.3 ? slopeGrade(x, z) : 0;
-  if (gr > ROCK_GRADE - 0.12) {
+  // out[3] says how much of the rock surface the terrain shader lays over the colour (cracks, layers, relief)
+  const gr = h > 0.3 ? slopeGrade(x, z) : 0, lim = rockLimit(x, z); out[3] = 0;
+  if (gr > lim - 0.12) {
     const n = fbm(x * 0.09 + 17, z * 0.09 - 3, 3);
-    if (gr > ROCK_GRADE) { const rk = PAL.rock2.slice(); mix3(rk, PAL.rock, smooth(0.35, 0.65, n)); mix3(rk, PAL.scree, smooth(0.55, 0.8, fbm(x * 0.21 + 3, z * 0.21, 2)) * 0.6); mix3(rk, PAL.soil, smooth(0.42, 0.25, n) * 0.45); mix3(out, rk, 0.82 + 0.18 * smooth(ROCK_GRADE, ROCK_GRADE + 0.2, gr)); }
-    else mix3(out, PAL.soil, smooth(ROCK_GRADE - 0.12, ROCK_GRADE, gr) * smooth(0.38, 0.62, n) * 0.7);
+    if (gr > lim) { const rk = PAL.rock2.slice(); mix3(rk, PAL.rock, smooth(0.35, 0.65, n)); mix3(rk, PAL.scree, smooth(0.55, 0.8, fbm(x * 0.21 + 3, z * 0.21, 2)) * 0.6); mix3(rk, PAL.soil, smooth(0.42, 0.25, n) * 0.45); mix3(out, rk, 0.82 + 0.18 * smooth(lim, lim + 0.2, gr)); out[3] = 1; }
+    else mix3(out, PAL.soil, smooth(lim - 0.12, lim, gr) * smooth(0.38, 0.62, n) * 0.7);
   }
   // on the peak: pale scree above the trees, then snow lying wherever the rock is not too steep to hold it
   if (PEAK.on && h > 150) {
     const n = fbm(x * 0.015 + 4, z * 0.015, 3);
     mix3(out, PAL.scree, smooth(170, 220, h + n * 30) * (1 - smooth(0.7, 1, slope)) * 0.6);
-    mix3(out, PAL.snow, smooth(PEAK.snow - 25, PEAK.snow + 15, h + (n - 0.5) * 50) * (1 - smooth(0.85, 1.25, slope)));
+    const snow = smooth(PEAK.snow - 25, PEAK.snow + 15, h + (n - 0.5) * 50) * (1 - smooth(0.85, 1.25, slope));
+    mix3(out, PAL.snow, snow); out[3] *= 1 - snow;
   }
   const j = 0.94 + hash2(Math.floor(x * 2), Math.floor(z * 2)) * 0.08;   // tiny per-vertex jitter breaks banding
   out[0] *= j; out[1] *= j; out[2] *= j;
