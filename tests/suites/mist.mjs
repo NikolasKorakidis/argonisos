@@ -17,7 +17,7 @@ export default {
   name: 'Mist',
   viewport: { w: 1280, h: 720 },
   async run(t) {
-    await t.step('clear for 60 m round the hero, thickening to 68% by 100 m, half grown where the grass ends', `const { ATMO } = await import('/src/render/atmosphere.js'), { GRASS_R } = await import('/src/world/grass.js'); return (ATMO.mzR0.value === 60 && ATMO.mzR1.value === 100 && ATMO.mzAmt.value === 0.68 && GRASS_R === 80 && Math.abs((ATMO.mzR0.value + ATMO.mzR1.value) / 2 - GRASS_R) < 1) || JSON.stringify([ATMO.mzR0.value, ATMO.mzR1.value, ATMO.mzAmt.value]);`);
+    await t.step('clear for 60 m round the hero, thickening to 68% by 100 m, half grown where the grass ends', `const { ATMO } = await import('/src/render/atmosphere.js'), { GRASS_R } = await import('/src/world/reach.js'); return (ATMO.mzR0.value === 60 && ATMO.mzR1.value === 100 && ATMO.mzAmt.value === 0.68 && GRASS_R === 80 && Math.abs((ATMO.mzR0.value + ATMO.mzR1.value) / 2 - GRASS_R) < 1) || JSON.stringify([ATMO.mzR0.value, ATMO.mzR1.value, ATMO.mzAmt.value]);`);
     await visit(t, 'meadow');
     const meadow = await t.eval(`const { ATMO } = await import('/src/render/atmosphere.js'); const g0 = AG.heightAt(P.pos.x, P.pos.z); return { top: ATMO.mzTop.value - g0, tallest: AG.veg.tallestNear(P.pos, 110) - g0 };`);
     await visit(t, 'giantwood');

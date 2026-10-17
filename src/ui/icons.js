@@ -1,6 +1,6 @@
-// The black-figure icon set (../../icons.js) plus the things the open world adds: new materials, food, tools, weapons,
+// The black-figure icon set (icon-set.js) plus the things the open world adds: new materials, food, tools, weapons,
 // armour and the condition badges.
-import { ICONS, K, R, C, G, O, L, icon, iconImg } from '../../icons.js';
+import { ICONS, K, R, C, G, O, L, icon, iconImg } from './icon-set.js';
 
 const inc = (d, w = 1.6) => `<path d="${d}" fill="none" stroke="${C}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
 const fill = (d, c = K) => `<path d="${d}" fill="${c}"/>`;

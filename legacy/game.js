@@ -1,18 +1,18 @@
 // Argonisos — Island Prologue (three.js playtest prototype)
 // Single-module game: world gen, characters, survival, combat, crafting, quests, sailing ending.
 import * as THREE from 'three';
-import { FBXLoader } from './jsm/loaders/FBXLoader.js';
-import { Sky } from './jsm/objects/Sky.js';
-import { EffectComposer } from './jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from './jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from './jsm/postprocessing/UnrealBloomPass.js';
-import { ShaderPass } from './jsm/postprocessing/ShaderPass.js';
-import { OutputPass } from './jsm/postprocessing/OutputPass.js';
-import { VignetteShader } from './jsm/shaders/VignetteShader.js';
-import { GLTFLoader } from './jsm/loaders/GLTFLoader.js';
-import { icon, iconImg } from './icons.js';
-import { clone as cloneSkinned } from './jsm/utils/SkeletonUtils.js';
-import QTREES from './models/qtrees.js';
+import { FBXLoader } from '../vendor/three/jsm/loaders/FBXLoader.js';
+import { Sky } from '../vendor/three/jsm/objects/Sky.js';
+import { EffectComposer } from '../vendor/three/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from '../vendor/three/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from '../vendor/three/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from '../vendor/three/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from '../vendor/three/jsm/postprocessing/OutputPass.js';
+import { VignetteShader } from '../vendor/three/jsm/shaders/VignetteShader.js';
+import { GLTFLoader } from '../vendor/three/jsm/loaders/GLTFLoader.js';
+import { icon, iconImg } from '../src/ui/icon-set.js';
+import { clone as cloneSkinned } from '../vendor/three/jsm/utils/SkeletonUtils.js';
+import QTREES from '../assets/models/qtrees.js';
 import { initAudio, snd, updateAmbience, setVolume, VOL } from './audio.js';
 
 // ============================================================
@@ -884,7 +884,7 @@ function qGeo(g, tint) {
   return geo;
 }
 function qLeafMat(file, tint) {
-  const t = new THREE.TextureLoader().load(`models/${file}`); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  const t = new THREE.TextureLoader().load(`../assets/models/${file}`); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   const m = new THREE.MeshStandardMaterial({ map: t, color: tint, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85 });   // tinted down to the island palette
   m.onBeforeCompile = leafMat.onBeforeCompile; return m;
 }
@@ -1154,7 +1154,7 @@ const BUSH_GEOS = [0, 1, 2].map(() => cardBushGeo(13, 0.95, 1.4));
 let BUSH_MAT = null;
 // Berry bush: a dark, glossy bush heavy with bright red berry clusters. Clearly different from the plain green shrubs.
 function bush() {
-  BUSH_MAT ||= new THREE.MeshStandardMaterial({ map: new THREE.TextureLoader().load('models/q_tree_leaves.png', (t) => { t.colorSpace = THREE.SRGBColorSpace; }), color: 0x5f8a48, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.7 });
+  BUSH_MAT ||= new THREE.MeshStandardMaterial({ map: new THREE.TextureLoader().load('../assets/models/q_tree_leaves.png', (t) => { t.colorSpace = THREE.SRGBColorSpace; }), color: 0x5f8a48, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.7 });
   const g = new THREE.Group(); const berries = new THREE.Group();
   const leaves = new THREE.Mesh(BUSH_GEOS[Math.floor(rand() * 3)], BUSH_MAT); leaves.userData.keep = true; leaves.rotation.y = rr(0, 6.28); leaves.scale.setScalar(rr(0.85, 1.1)); g.add(leaves);
   const core = mesh(new THREE.IcosahedronGeometry(0.62, 1), flat(0x2f5222), 0, 0.6, 0, g); core.scale.set(1.25, 0.9, 1.25);   // fills the gaps between cards
@@ -2679,7 +2679,7 @@ loadModelBuffer('axe').then((buf) => new FBXLoader().parse(buf, '')).then((obj) 
 // Load a textured FBX (geometry from the FBX, colour from a compact JPG), normalised to a given height
 var texLoader;   // hoisted: created on first use (props load from anywhere in world setup)
 function loadTexturedFBX(name, height, cb) {
-  const tex = (texLoader ||= new THREE.TextureLoader()).load(`models/${name}.jpg`); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const tex = (texLoader ||= new THREE.TextureLoader()).load(`../assets/models/${name}.jpg`); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
   const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 });
   loadModelBuffer(name).then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
     obj.traverse((m) => { if (m.isMesh) { m.material = mat; m.castShadow = true; m.receiveShadow = true; } });
@@ -2701,8 +2701,8 @@ function poseIdleRig(rig, t, look = 0) {
 
 // Try the raw .fbx first (local server); fall back to the base64 module (artifact hosting can't serve .fbx).
 async function loadModelBuffer(name) {
-  try { const r = await fetch(`models/${name}.fbx`); if (r.ok) return await r.arrayBuffer(); } catch { /* fall through */ }
-  const b64 = (await import(`./models/${name}.fbx.js`)).default;
+  try { const r = await fetch(`../assets/models/${name}.fbx`); if (r.ok) return await r.arrayBuffer(); } catch { /* fall through */ }
+  const b64 = (await import(`../assets/models/${name}.fbx.js`)).default;
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).buffer;
 }
 const loadStaticHero = () => loadModelBuffer('hero').then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
@@ -2766,7 +2766,7 @@ function heroOverlay(C, t, w, upper, hipsY) {
 loadModelBuffer('hero_rig').then((buf) => new FBXLoader().parse(buf, '')).then((obj) => {
   const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
   HA.s = 1.95 / size.y; obj.scale.setScalar(HA.s);
-  const tl = new THREE.TextureLoader(), map = tl.load('models/hero_diffuse.jpg'), nrm = tl.load('models/hero_normal.jpg');
+  const tl = new THREE.TextureLoader(), map = tl.load('../assets/models/hero_diffuse.jpg'), nrm = tl.load('../assets/models/hero_normal.jpg');
   map.colorSpace = THREE.SRGBColorSpace; map.anisotropy = 4;
   obj.traverse((m) => {
     if (m.isBone) HA.bones[m.name] = m;
@@ -3023,8 +3023,8 @@ const ANIMALS = { wolf: { file: 'wolf', len: 1.45 }, deer: { file: 'deer', len: 
   alpaca: { file: 'alpaca', len: 1.5 }, shibainu: { file: 'shibainu', len: 0.85 }, horse_white: { file: 'horse_white', len: 2.3 }, bull: { file: 'bull', len: 2.4 }, husky: { file: 'husky', len: 1.15 } };
 const ANIM_TPL = {};
 async function loadGlb(name) {
-  try { const r = await fetch(`models/${name}.glb`); if (r.ok) return await r.arrayBuffer(); } catch { /* fall through */ }
-  const b64 = (await import(`./models/${name}.glb.js`)).default;
+  try { const r = await fetch(`../assets/models/${name}.glb`); if (r.ok) return await r.arrayBuffer(); } catch { /* fall through */ }
+  const b64 = (await import(`../assets/models/${name}.glb.js`)).default;
   return Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0)).buffer;
 }
 function animalTemplate(type) {
@@ -3099,12 +3099,12 @@ const HUSKY = (() => { for (let k = 0; k < 400; k++) { const p = landSpot(4, 30,
   const g = new THREE.Group(); g.position.copy(p); g.rotation.y = Math.PI / 2 + 0.4; scene.add(g);   // looks down the ravine at whoever comes
   const plinth = new THREE.Mesh(new THREE.DodecahedronGeometry(1.25, 1), rockMat); plinth.scale.set(1.5, 0.75, 1.9); plinth.position.y = 0.35; plinth.castShadow = plinth.receiveShadow = true; g.add(plinth);
   colliders.push({ x: p.x, z: p.z, r: 2.1, h: 2.2 });
-  import('./models/wolfstatue.js').then(({ default: W }) => {
+  import('../assets/models/wolfstatue.js').then(({ default: W }) => {
     const geo = new THREE.BufferGeometry(), P = b64arr(W.p, Int16Array), N = b64arr(W.nr, Int8Array), U = b64arr(W.uv, Uint16Array);
     geo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(P, (v) => v / 10000), 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(Float32Array.from(N, (v) => v / 127), 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(Float32Array.from(U, (v) => v / 65535), 2));
-    const map = new THREE.TextureLoader().load('models/wolfstatue.jpg'); map.colorSpace = THREE.SRGBColorSpace;
+    const map = new THREE.TextureLoader().load('../assets/models/wolfstatue.jpg'); map.colorSpace = THREE.SRGBColorSpace;
     const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map, color: 0xb59a74, metalness: 0.55, roughness: 0.45 }));   // weathered bronze over the fur sculpt
     m.scale.setScalar(1.6); m.position.y = 0.95; m.castShadow = m.receiveShadow = true; g.add(m);
   }).catch((e) => console.warn('wolf statue failed', e));
@@ -3498,10 +3498,10 @@ function talkNestor() {
 // Story & tutorial cards: full-screen panels that pause the game
 // ============================================================
 const STORY = [
-  { kicker: 'Argonisos', title: 'Hercules Is Dead', body: 'After centuries of hatred, Hera has finally slain Hercules. His strength, the greatest ever given to a mortal, has no heir.', img: 'concept/world-characters.webp' },
-  { kicker: 'The grief of Zeus', title: 'A World Made for a Trial', body: 'Mourning his son, Zeus shapes a demi-plane between the earth and the sky: <b>Argonisos</b>. Here mortals must prove themselves worthy to inherit the power of Hercules.', img: 'concept/nature.webp' },
-  { kicker: 'The path', title: 'Nine Lands, Nine Guardians', body: 'Argonisos holds nine biomes, each ruled by a Guardian Boss. Conquer all nine and you ascend to <b>Olympos</b> to claim the power of a demigod.', img: 'concept/buildings.webp' },
-  { kicker: 'You', title: 'One of the Chosen', body: 'You did not wash up here by accident. Zeus chose you. Your trial begins on <b>Nisos</b>, a small island at the edge of Argonisos. Pass it, and the fertile fields of Pedias open to you.<br><br>Zeus left a guide on Nisos: <b>Nestor</b>. Find him.', img: 'concept/animals.webp', btn: 'Begin the trial' },
+  { kicker: 'Argonisos', title: 'Hercules Is Dead', body: 'After centuries of hatred, Hera has finally slain Hercules. His strength, the greatest ever given to a mortal, has no heir.', img: 'art/world-characters.webp' },
+  { kicker: 'The grief of Zeus', title: 'A World Made for a Trial', body: 'Mourning his son, Zeus shapes a demi-plane between the earth and the sky: <b>Argonisos</b>. Here mortals must prove themselves worthy to inherit the power of Hercules.', img: 'art/nature.webp' },
+  { kicker: 'The path', title: 'Nine Lands, Nine Guardians', body: 'Argonisos holds nine biomes, each ruled by a Guardian Boss. Conquer all nine and you ascend to <b>Olympos</b> to claim the power of a demigod.', img: 'art/buildings.webp' },
+  { kicker: 'You', title: 'One of the Chosen', body: 'You did not wash up here by accident. Zeus chose you. Your trial begins on <b>Nisos</b>, a small island at the edge of Argonisos. Pass it, and the fertile fields of Pedias open to you.<br><br>Zeus left a guide on Nisos: <b>Nestor</b>. Find him.', img: 'art/animals.webp', btn: 'Begin the trial' },
 ];
 const TUTORIAL = [
   { kicker: 'Nestor teaches · 1/5', title: 'Gather', body: 'Walk up to branches, pebbles, bushes and reeds and press <b>E</b> to pick them up. Bushes give berries and grow back.', keys: [['E', 'Interact / pick up'], ['WASD', 'Move'], ['Shift', 'Sprint'], ['Space', 'Jump']] },

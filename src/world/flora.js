@@ -4,7 +4,8 @@
 // Pedias: open meadows with groves (olive, oak, cypress, pomegranate, fig, the odd great plane tree) and lone trees.
 // Yleos:  dense dark forest (pines, firs, holm oaks, broadleaves, dead snags) with clearings.
 // Valtos: dead and drowned trees, cypresses, sparse.
-import { heightAt, biomeWeights, fbm, hash2, smooth, slopeGrade, isRock, rockLimit, ROCK_GRADE } from './gen.js';
+import { heightAt, biomeWeights, fbm, hash2, slopeGrade, isRock, rockLimit, ROCK_GRADE } from './gen.js';
+import { smooth } from '../util/math.js';
 import { siteClear, ALL_SITES } from './sites.js';
 
 export const CELL = 64;

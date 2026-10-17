@@ -2,10 +2,10 @@
 // of textured cards, root flares) or loaded from the imported tree pack, in a full-detail and a far version. Placement
 // and streaming live in vegetation.js; this module only makes the geometry and the wind-swayed materials.
 import * as THREE from 'three';
-import QTREES from '../../models/qtrees.js';
-import QBUSH from '../../models/qbushes.js';
+import QTREES from '../../assets/models/qtrees.js';
+import QBUSH from '../../assets/models/qbushes.js';
+import { clamp, lerp } from '../util/math.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
 let seed = 1337;
 const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
 const rr = (a, b) => a + rand() * (b - a);
@@ -24,7 +24,7 @@ const windUniformEarly = { value: 0 };
 export const LIGHT_U = { uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(0, 0, 0) } };
 // --- Props: every tree/rock species is one merged geometry, drawn with InstancedMesh per 100 m chunk
 // (frustum culling per chunk keeps thousands of trees cheap). Trees sway in the wind in the vertex shader.
-const trunkMat = flat(0x7a4f2c), birchMat = flat(0xe9e2d2), rockMat = flat(0x8e887e);
+const trunkMat = flat(0x7a4f2c), rockMat = flat(0x8e887e);
 // Leaf-cluster texture (drawn once): ~30 pointed leaves with midribs on transparent background, near-neutral so species tint it
 const leafTex = (() => {
   const N = 256, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d');
@@ -258,7 +258,7 @@ const TREE_BUILDERS = {
     // Strawberry tree (Arbutus): several smooth stems with red-orange peeling bark, glossy dark leaves and red berries.
     const P = [], leaf = [0x47703a, 0x4f7a40, 0x426a36][v % 3];
     for (let s2 = 0; s2 < 2 + (v % 2); s2++) {
-      const sub = [], cs = CARD_PARTS.length, a = s2 * 2.4 + v;
+      const sub = [], a = s2 * 2.4 + v;
       const tips = growTree(sub, { bark: 0x8e5038, leaf, trunkH: rr(2.2, 3), trunkR: 0.17, trunkSteps: 3, depth: 2, taper: 0.6, gnarl: 0.22, rise: 0.15, roots: 0,
         dir: new THREE.Vector3(Math.cos(a) * 0.35, 1, Math.sin(a) * 0.35), start: new THREE.Vector3(Math.cos(a) * 0.15, -0.2, Math.sin(a) * 0.15),
         kids: (d) => 2, spread: (d) => 0.7, lenF: 0.6, rF: 0.6, clusterR: 0.95, flat: 0.8, cards: 9, card0: 0.8, card1: 1.2, core: 0.6 });
@@ -326,7 +326,7 @@ const TREE_BUILDERS = {
   },
 };
 // ---- Imported stylised trees (the uploaded pack): broadleaf 'qtree', 'qpine', and leafless 'qdead' (tree trunks, weathered).
-// Packed as quantised binary (models/qtrees.js). Trunks get vertex colours sampled from the bark texture, so they share
+// Packed as quantised binary (assets/models/qtrees.js). Trunks get vertex colours sampled from the bark texture, so they share
 // propMat with every other tree; leaf clusters keep their own alpha-cut textures.
 const b64arr = (str, T) => { const u = Uint8Array.from(atob(str), (ch) => ch.charCodeAt(0)); return new T(u.buffer); };
 function qGeo(g, tint) {
@@ -338,17 +338,17 @@ function qGeo(g, tint) {
   return geo;
 }
 function qLeafMat(file, tint) {
-  const t = new THREE.TextureLoader().load(`models/${file}`); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  const t = new THREE.TextureLoader().load(new URL(`../../assets/models/${file}`, import.meta.url).href); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   const m = new THREE.MeshStandardMaterial({ map: t, color: tint, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85, alphaToCoverage: true });   // tinted down to the island palette
   m.onBeforeCompile = leafMat.onBeforeCompile; return m;
 }
-// CC0 bushes and ferns (Quaternius, "Stylized Nature", via poly.pizza), packed into models/qbushes.js: leaf geometry
+// CC0 bushes and ferns (Quaternius, "Stylized Nature", via poly.pizza), packed into assets/models/qbushes.js: leaf geometry
 // on a leaf texture each (glTF UVs, so the textures aren't flipped), on a short dark stem
 const QB_SRC = { myrtle: ['leafy', 0xa6b48c], broom: ['flowering', 0xd2d8b8], fern: ['fern', 0x9eb48e], redbush: ['redbush', 0xb89878] };   // (the red of the leaves muted to rust)
 const QB_MATS = {};
 function qbBuild(species) {
   const [k, tint] = QB_SRC[species], src = QBUSH[k];
-  if (!QB_MATS[k]) { const t = new THREE.TextureLoader().load(`models/${src.tex}`); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.flipY = false;
+  if (!QB_MATS[k]) { const t = new THREE.TextureLoader().load(new URL(`../../assets/models/${src.tex}`, import.meta.url).href); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; t.flipY = false;
     const m = QB_MATS[k] = new THREE.MeshStandardMaterial({ map: t, color: tint, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85, alphaToCoverage: true }); m.onBeforeCompile = leafMat.onBeforeCompile; }
   const stem = mergeParts([[new THREE.ConeGeometry(0.06, 0.35, 4).translate(0, 0.17, 0), 0x3e3224]]);
   return { geo: stem, lo: stem, cards: qGeo(src), cardMat: QB_MATS[k], leafFar: false };   // (close by only: past the near band a bush is a speck in the grass)
@@ -364,7 +364,6 @@ function qBuild(species, v) {
   return { geo, lo: geo, cards, cardMat: cards && Q_LEAF_MATS[species], leafFar: true };
 }
 const PROPS = {};  // key -> { geo, variants:[geo], chunks: Map }
-const CHUNK = 100;
 function propGeo(species, v) {
   const k = species + v;
   if (!PROPS[k] && QB_SRC[species]) PROPS[k] = { species, v, ...qbBuild(species), items: [] };

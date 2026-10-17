@@ -4,6 +4,21 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-6', name: 'Patch 6', title: 'Smooth Going', date: '17 October 2026',
+    intro: 'Nothing new to find, but the island runs more smoothly as you travel.',
+    sections: [
+      { t: 'Graphics and performance', icon: 'blessing', items: [
+        'Running into new ground no longer makes the game stutter now and then: what lies about in each new stretch of land is worked out in the background.',
+        'The first click or key press no longer freezes the game for a moment: the sound starts up while the island loads.',
+        'After you come back from a fall, the grass round you appears sooner.',
+        'The first time you see something, it no longer hitches: everything is prepared while the island loads.',
+      ] },
+      { t: 'Other', icon: 'goal', items: [
+        'The title screen now shows which build you are playing, next to the patch.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-5', name: 'Patch 5', title: 'Into the Woods', date: '16 October 2026',
     intro: 'Pedias is now mostly forest, the grass reaches far out around you, and steep ground looks like real rock.',
     sections: [
@@ -191,7 +206,7 @@ export function patchText(p) {
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); return true; } catch { /* not allowed here: fall back to a selected text box */ }
   const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select();
-  let ok = false; try { ok = document.execCommand('copy'); } catch { ok = false; } ta.remove(); return ok;
+  let ok; try { ok = document.execCommand('copy'); } catch { ok = false; } ta.remove(); return ok;
 }
 const SEEN = 'argonisos.notesSeen';
 export const notesUnread = () => { try { return localStorage.getItem(SEEN) !== PATCHES[0].id; } catch { return false; } };

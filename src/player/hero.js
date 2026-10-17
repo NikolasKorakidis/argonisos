@@ -4,8 +4,8 @@
 import * as THREE from 'three';
 import { FootIK } from './footik.js';
 import { loadFBX, loadTex } from '../assets.js';
+import { clamp, lerp } from '../util/math.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
 const ss = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 const UPPER = /Spine|Neck|Head|Shoulder|Arm|Hand/, UPV = new THREE.Vector3(0, 1, 0), HEIGHT = 1.95;
 

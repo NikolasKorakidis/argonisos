@@ -3,7 +3,7 @@
 // and you hold Esc for two seconds to leave fullscreen. Where it doesn't (Safari, Firefox), Esc leaves fullscreen and
 // the game puts it back on your next click.
 import * as THREE from 'three';
-import { renderer, composer, bloom, sun, camera, GFX, setScale } from '../render/core.js';
+import { renderer, bloom, sun, camera, GFX, setScale } from '../render/core.js';
 import { ATMO } from '../render/atmosphere.js';
 import { GRASS } from '../world/grass.js';
 import { setVolume, setMusicVolume } from '../audio/sound.js';

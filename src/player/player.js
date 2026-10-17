@@ -2,15 +2,14 @@
 // trees, rocks and buildings, the storm wall's push-back, and the orbit camera.
 import * as THREE from 'three';
 import { camera } from '../render/core.js';
-import { heightAt } from '../world/gen.js';
 import { groundAt } from '../world/groundcut.js';
 import { colliders } from '../world/colliders.js';
 import { stormWallDepth, stormWallOut } from '../world/stormwall.js';
 import { input, down, hit } from '../input.js';
 import { Hero } from './hero.js';
 import { Stats } from './stats.js';
+import { clamp, lerp } from '../util/math.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 // Data-table speeds (ft → m): sprint 25 ft/s, swim 8 ft/s, jump 6 ft up
 const RUN = 4.6, SPRINT = 7.6, SWIM = 2.4, SNEAK = 2.0, GRAV = 20, JUMP_V = Math.sqrt(2 * GRAV * 1.83);

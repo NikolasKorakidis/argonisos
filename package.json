@@ -3,13 +3,23 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node dev-server.mjs",
+    "dev": "node tools/dev-server.mjs",
     "test": "node tests/run.mjs",
     "test:quick": "node tests/run.mjs --quick",
     "test:update": "node tests/run.mjs visual --update",
+    "test:world": "node tests/run.mjs world",
+    "lint": "eslint .",
+    "cycles": "madge --circular --extensions js src/main.js src/world/terrain-worker.js",
+    "deadcode": "knip --include files,dependencies,unlisted,unresolved",
+    "check": "npm run lint && npm run cycles && npm run deadcode && npm run test:world",
     "playtest": "node tests/bot/playtest.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "knip": "^6.41.0",
+    "madge": "^8.0.0",
     "playwright": "^1.64.0",
     "pngjs": "^7.0.0"
   }

@@ -1,7 +1,7 @@
 // Survival stats, the Valheim way: no hunger. Health and stamina have small base pools that food raises for a while.
 // Conditions (wet, cold, rested, near fire, under roof...) change regeneration and speed. Skills level up by doing.
+import { clamp } from '../util/math.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export const BASE = { health: 25, healthRegen: 0.5, stamina: 50, staminaRegen: 5, staminaDelay: 1.0 };
 

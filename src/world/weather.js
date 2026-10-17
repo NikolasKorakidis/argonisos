@@ -6,8 +6,8 @@
 import * as THREE from 'three';
 import { scene, camera } from '../render/core.js';
 import { biomeWeights, BIOME } from './gen.js';
+import { clamp, lerp } from '../util/math.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
 const TYPES = {
   clear: { overcast: 0, rain: 0, fog: 0 },
   cloudy: { overcast: 0.55, rain: 0, fog: 0.1 },

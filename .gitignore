@@ -1,10 +1,5 @@
-# Design documents are private: they stay on this machine and never go to GitHub.
-# (Anything new dropped into concept/ is ignored; only the old reference images were ever committed.)
-concept/*
-!concept/animals.webp
-!concept/buildings.webp
-!concept/nature.webp
-!concept/world-characters.webp
+# Design documents are private: they stay on this machine and never go to GitHub (the whole folder).
+concept/
 .DS_Store
 # Test tooling: installed packages and the reports, screenshots and diffs each run writes
 node_modules/

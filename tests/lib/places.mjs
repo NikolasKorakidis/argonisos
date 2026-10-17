@@ -25,6 +25,9 @@ export async function visit(t, name) {
     const R = await import('/src/render/core.js'); R.ADAPT.on = false; if (R.ADAPT.k !== 1) { R.ADAPT.k = 1; R.setScale(); }
     ${p.go} return true;`);
   await t.page.waitForFunction(() => AG.terrain.pending === 0, null, { timeout: 90000 });
+  // and the grass's ground texture re-centred on the hero (its bake takes a second or more after a long jump, longer on
+  // a busy machine; a shot taken before it shows the grass of the place before, stretched)
+  await t.eval(`const Gm = await import('/src/world/grass.js'); for (let i = 0; i < 300; i++) { const o = Gm.grassU.uOrigin.value, h = Gm.TEX_SIZE / 2; if (Math.hypot(o.x + h - P.pos.x, o.y + h - P.pos.z) < 30) return true; await new Promise((r) => setTimeout(r, 100)); } return 'grass never re-centred';`);
   await t.wait(p.settle || 6000);
   // (the cloud shadows drift with the frames that passed: put them back where they start)
   await t.eval(`g.occlusion.clearAll(); (await import('/src/render/atmosphere.js')).ATMO.cloudOff.value.set(0, 0); return true;`);

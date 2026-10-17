@@ -4,6 +4,8 @@
 // built the parent stays on screen, so the ground never has holes. Skirts hide the seams between detail levels.
 import * as THREE from 'three';
 import { WORLD } from './gen.js';
+import { seeded, hash21, tileNoise } from '../util/math.js';
+import { PRIORITY } from './pool.js';
 
 const RES = 32, MIN_SIZE = 64, ROOT = WORLD.SIZE, SPLIT = 1.35, MAX_INFLIGHT = 6, CACHE = 700;
 
@@ -79,7 +81,7 @@ export class Terrain {
         const nd = this.queue.shift(); if (nd.state !== 'queued') continue;
         if (this.frame - nd.lastUsed > 3) { nd.state = 'none'; continue; }   // no longer wanted (the camera moved on)
         nd.state = 'pending'; this.inflight++;
-        this.pool.post({ type: 'patch', id: nd.key, x0: nd.x0, z0: nd.z0, size: nd.size, res: RES }).then((m) => this.receive(m));
+        this.pool.post({ type: 'patch', id: nd.key, x0: nd.x0, z0: nd.z0, size: nd.size, res: RES }, PRIORITY.near).then((m) => this.receive(m));
       }
     }
     // forget patches nobody has looked at for a while
@@ -99,16 +101,8 @@ export class Terrain {
 // One tileable texture made here at start-up: R tone, G relief, B lichen, A broad variation.
 const ROCK_TEX = (() => {
   const N = 256, C = 4, d = new Uint8Array(N * N * 4);
-  let s = 91; const r = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
-  const pts = Array.from({ length: C * C }, () => [r(), r(), r()]);   // a point in each cell of a C×C grid (and the slab's tone)
-  const h21 = (x, z) => { const v = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return v - Math.floor(v); };
-  const noise = (period, oct, seed) => { const f = new Float32Array(N * N);   // tileable value noise
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { let a = 0.5, fr = 1, v = 0;
-      for (let o = 0; o < oct; o++) { const P = period * fr, px = x / N * P, pz = y / N * P, xi = Math.floor(px), zi = Math.floor(pz), xf = px - xi, zf = pz - zi, u = xf * xf * (3 - 2 * xf), w = zf * zf * (3 - 2 * zf);
-        const hh = (i, j) => h21(((i % P) + P) % P + o * 17 + seed, ((j % P) + P) % P + o * 31 - seed);
-        v += a * ((hh(xi, zi) * (1 - u) + hh(xi + 1, zi) * u) * (1 - w) + (hh(xi, zi + 1) * (1 - u) + hh(xi + 1, zi + 1) * u) * w); a *= 0.5; fr *= 2; }
-      f[y * N + x] = v; }
-    return f; };
+  const r = seeded(91), pts = Array.from({ length: C * C }, () => [r(), r(), r()]);   // a point in each cell of a C×C grid (and the slab's tone)
+  const noise = (period, oct, seed) => tileNoise(N, period, oct, (x, z) => hash21(x + seed, z - seed));
   const grain = noise(32, 3, 0), broad = noise(4, 3, 7), lichen = noise(12, 3, 3), wa = noise(6, 3, 11), wb = noise(6, 3, 19);
   // the cracks: the edges of a Voronoi pattern whose coordinates are warped by noise, so they wander and kink like real
   // fractures rather than run straight; big slabs (C across the tile) split again by finer cracks (3C)

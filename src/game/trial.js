@@ -13,9 +13,9 @@ import { icon } from '../ui/icons.js';
 import { dust, burst, addShake } from '../render/fx.js';
 import { setWeather } from '../world/weather.js';
 import { hit } from '../input.js';
+import { clamp, rr } from '../util/math.js';
 
-const rr = (a, b) => a + Math.random() * (b - a), FT = 0.3048;
-const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b)), clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const FT = 0.3048, angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 TYPES.minotaur = { name: 'The Minotaur', boss: true, hp: [500, 500], block: 24, speed: [6 * FT, 9], sight: 70, dmg: [18, 22, 'slash'], reach: 2.8, r: 1.0, h: 3.4, mob: [1, 1], heavy: true,
   weak: ['pierce'], resist: ['slash', 'blunt'], drops: [['sharpBone', 20, 30, 1], ['minotaurHide', 12, 12, 1], ['minotaurHead', 1, 1, 1]], thunder: 'big', helpers: 'skeleton' };
 TYPES.chimera = { name: 'The Chimera', boss: true, hp: [2500, 2500], block: 34, speed: [8 * FT, 9.5], sight: 80, dmg: [35, 45, 'pierce'], reach: 3.4, r: 1.8, h: 3.2, mob: [1, 1], heavy: true,

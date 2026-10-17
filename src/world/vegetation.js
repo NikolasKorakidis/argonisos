@@ -5,16 +5,17 @@
 import * as THREE from 'three';
 import { propGeo, propMat, leafMat, TREE_BUILDERS, mergeParts, rr, isLow as PROP_LOW, A2C_FRAG } from './trees.js';
 import { SPECIES, STRIDE, CELL } from './flora.js';
+import { MIST_R0, MIST_R1 } from './reach.js';
 import { renderer, sun, hemi } from '../render/core.js';
+import { PRIORITY } from './pool.js';
 
 export const NEAR_R = 75;                     // full-detail radius
 export const MID_R = 260;                     // light meshes out to here, impostors beyond
 const NEAR_KEEP = NEAR_R + CELL * 1.5, FAR = 256, FAR_R = 600;
-// Behind the player's mist (tester feedback, 15 and 16 Oct; see atmosphere.js) the distant land is drawn with much less:
-// from MIST_R0 out to MIST_R1 things drop away one by one (each at its own distance, so there's no ring where they
-// vanish), until only a share of each kind is left: half the trees and ruins, a tenth of the big rocks, none of the small stuff.
-// Coming closer, they come back the same way.
-export const MIST_R0 = 60, MIST_R1 = 100;   // (the mist is half grown at GRASS_R, 80 m, where the grass ends: grass.js)
+// Behind the player's mist (tester feedback, 15 and 16 Oct; see atmosphere.js and reach.js) the distant land is drawn
+// with much less: from MIST_R0 out to MIST_R1 things drop away one by one (each at its own distance, so there's no ring
+// where they vanish), until only a share of each kind is left: half the trees and ruins, a tenth of the big rocks, none
+// of the small stuff. Coming closer, they come back the same way.
 const SMALL = new Set(['lavender', 'broom', 'myrtle', 'fern', 'redbush', 'amphorae', 'herm', 'reeds']);
 const farKeep = (sp) => { const n = SPECIES[sp].name; return SMALL.has(n) ? 0 : n === 'rock' || n === 'boulder' ? 0.1 : 0.5; };
 const dice = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
@@ -198,7 +199,7 @@ export class Vegetation {
       const cx = pcx + i, cz = pcz + j, key = cx + ',' + cz, dx = Math.max(0, Math.abs((cx + 0.5) * CELL - pos.x) - CELL / 2), dz = Math.max(0, Math.abs((cz + 0.5) * CELL - pos.z) - CELL / 2);
       if (Math.hypot(dx, dz) > NEAR_R + 8 || this.near.has(key)) continue;
       const cell = { meshes: null }; this.near.set(key, cell);
-      this.pool.post({ type: 'flora', cx, cz, n: 1 }).then((m) => {
+      this.pool.post({ type: 'flora', cx, cz, n: 1 }, PRIORITY.near).then((m) => {   // (the trees round you before the far blocks)
         if (this.near.get(key) !== cell) return;
         cell.items = m.items; cell.cx = cx; cell.cz = cz; this.nearDirty = true; this.onCell?.(key, m.items, cx, cz);
       });
@@ -211,7 +212,7 @@ export class Vegetation {
       const bx = fcx + i, bz = fcz + j, key = bx + ',' + bz;
       if (this.far.has(key) || Math.hypot((bx + 0.5) * FAR - pos.x, (bz + 0.5) * FAR - pos.z) > farR + FAR * 0.7) continue;
       const blk = { meshes: null }; this.far.set(key, blk);
-      this.pool.post({ type: 'flora', cx: bx * per, cz: bz * per, n: per }).then((m) => {
+      this.pool.post({ type: 'flora', cx: bx * per, cz: bz * per, n: per }, PRIORITY.background).then((m) => {
         if (this.far.get(key) !== blk) return;
         // items come cell by cell, in order: recover each one's "cx,cz,i" id
         const ids = new Map(), cnt = new Map();
@@ -276,8 +277,13 @@ export class Vegetation {
     const groups = new Map();
     for (const blk of this.far.values()) {
       if (!blk.mid || !blk.items) continue; const it = blk.items;
-      for (let i = 0; i < it.length / STRIDE; i++) { const o = i * STRIDE; if (it[o + 6] <= 0 || this.removed.has(blk.idOf[i])) continue;
-        const sp = it[o], v = it[o + 1], P = this.geoFor(sp, v), key = P.leafFar ? sp + ':' + v : 'sp' + sp; (groups.get(key) || groups.set(key, []).get(key)).push(blk, i); }
+      // (what never changes is worked out once per block: each tree's matrix, how far it stays drawn and its batch; a
+      // rebuild, which comes with every block that streams in, then only copies them)
+      if (!blk.mats) { const n = it.length / STRIDE; blk.mats = new Float32Array(n * 16); blk.keep = new Float32Array(n); blk.gkey = [];
+        for (let i = 0; i < n; i++) { const o = i * STRIDE, sp = it[o], v = it[o + 1]; matrixOf(it, i, false); blk.mats.set(_m.elements, i * 16);
+          const kt = keepTo(sp, it[o + 2], it[o + 4]); blk.keep[i] = kt * kt; blk.gkey[i] = this.geoFor(sp, v).leafFar ? sp + ':' + v : 'sp' + sp; } }
+      for (let i = 0; i < it.length / STRIDE; i++) { if (it[i * STRIDE + 6] <= 0 || this.removed.has(blk.idOf[i])) continue;
+        const key = blk.gkey[i]; (groups.get(key) || groups.set(key, []).get(key)).push(blk, i); }
     }
     for (const [key, b] of this.mids) if (!groups.has(key)) b.n = 0;
     for (const [key, refs] of groups) {
@@ -293,10 +299,10 @@ export class Vegetation {
         this.mids.set(key, b);
       }
       b.n = n; b.refs = refs;
-      for (let k = 0; k < n; k++) { const it = refs[k * 2].items, i = refs[k * 2 + 1], o = i * STRIDE, sc = it[o + 6];
-        matrixOf(it, i, false); b.mats.set(_m.elements, k * 16);
+      for (let k = 0; k < n; k++) { const blk = refs[k * 2], it = blk.items, i = refs[k * 2 + 1], o = i * STRIDE, sc = it[o + 6];
+        b.mats.set(blk.mats.subarray(i * 16, i * 16 + 16), k * 16);
         b.cen[k * 4] = it[o + 2] + b.sphere.center.x * sc; b.cen[k * 4 + 1] = it[o + 3] + b.sphere.center.y * sc; b.cen[k * 4 + 2] = it[o + 4] + b.sphere.center.z * sc; b.cen[k * 4 + 3] = b.sphere.radius * sc;
-        const kt = keepTo(it[o], it[o + 2], it[o + 4]); b.keep[k] = kt * kt; }
+        b.keep[k] = blk.keep[i]; }
     }
   }
   // per frame, after the camera has moved: pack the trees worth drawing to the front of each batch

@@ -10,9 +10,9 @@ export default {
   name: 'Grass',
   viewport: { w: 1280, h: 720 },
   async run(t) {
-    await t.step('the grass reaches 80 m round the player and thins away by 95 m, inside the mist', `const Gm = await import('/src/world/grass.js'), VG = await import('/src/world/vegetation.js');
+    await t.step('the grass reaches 80 m round the player and thins away by 95 m, inside the mist', `const Gm = await import('/src/world/grass.js'), VG = await import('/src/world/reach.js');
       const tile = Gm.GRASS.far?.material && Gm.GRASS.far.count, reach = Gm.TEX_SIZE / 2 - 25;   // (the ground texture is re-centred every 25 m)
-      return (Gm.GRASS_R >= 80 && Gm.GRASS_END > Gm.GRASS_R && reach >= Gm.GRASS_END && tile > 50000 && VG.MIST_R0 < Gm.GRASS_R && VG.MIST_R1 > Gm.GRASS_END) || JSON.stringify({ R: Gm.GRASS_R, end: Gm.GRASS_END, reach, tile, mist: [VG.MIST_R0, VG.MIST_R1] });`);
+      return (VG.GRASS_R >= 80 && VG.GRASS_END > VG.GRASS_R && reach >= VG.GRASS_END && tile > 50000 && VG.MIST_R0 < VG.GRASS_R && VG.MIST_R1 > VG.GRASS_END) || JSON.stringify({ R: VG.GRASS_R, end: VG.GRASS_END, reach, tile, mist: [VG.MIST_R0, VG.MIST_R1] });`);
     await visit(t, 'meadow');
     const shot = async () => shrink(read(await t.page.screenshot()), 4);
     await t.eval(`for (const e of document.querySelectorAll('body > *')) if (e.tagName !== 'CANVAS') e.style.visibility = 'hidden'; return true;`);

@@ -4,10 +4,10 @@
 // own ground, and a planted foot tilts to the slope. The clip's own stride and lift stay on top, so a swinging foot still
 // swings; it just swings over the ground that is really there.
 import * as THREE from 'three';
+import { clamp, lerp } from '../util/math.js';
 
 const _h = new THREE.Vector3(), _k = new THREE.Vector3(), _a = new THREE.Vector3(), _t = new THREE.Vector3(), _u = new THREE.Vector3(), _v = new THREE.Vector3(), _n = new THREE.Vector3();
 const _q = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _bq = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
 const MAX_DROP = 0.5, MAX_LIFT = 0.55, MAX_TILT = 0.45;
 
 // turn a bone by a world-space rotation q, keeping its parent where it is
