@@ -3,6 +3,7 @@
 // jars, bronze tripods, palmette acroteria and antefixes, a herm, a cart wheel, stacked firewood. Every helper pushes
 // [geometry, material] onto a site's part list, in site-local coordinates, like the rest of the kit.
 import * as THREE from 'three';
+import { wettable } from './wetness.js';
 
 const dice = (seed) => { let s = seed; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; };
 function tex(draw, w = 512, h = w, seed = 1) {
@@ -94,6 +95,9 @@ export const GMAT = {
   darkFlags: new THREE.MeshStandardMaterial({ map: darkFlagTex, roughness: 0.95 }),
   caveRock: new THREE.MeshStandardMaterial({ color: 0x4a433b, roughness: 0.95, flatShading: true, envMapIntensity: 0.3 }),
 };
+// outdoor materials take the rain (wetness.js); the inside ones (paint, coffer, floor), the metals' sheen, glowing and
+// water materials are left alone
+for (const [k, o] of Object.entries({ ashlar: [0.68, 0.3], whitewash: [0.75, 0.35], tymp: [0.72, 0.35], pot: [0.7, 0.3], clay: [0.66, 0.3], wood: [0.62, 0.32], oldWood: [0.62, 0.32], wool: [0.7, 0.6], linen: [0.72, 0.6], ash: [0.7, 0.5], leaf: [0.8, 0.45], ivy: [0.8, 0.45], basalt: [0.75, 0.2], darkFlags: [0.66, 0.26] })) wettable(GMAT[k], { dark: o[0], gloss: o[1] });
 
 // ---- shapes
 const lathe = (pts, seg = 16) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg);

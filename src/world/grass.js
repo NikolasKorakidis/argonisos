@@ -10,6 +10,7 @@ import { windUniform, LIGHT_U } from './trees.js';
 import { GRASS_R, GRASS_END } from './reach.js';
 import { cutList, onCutsChanged, CUT_EDGE, CUT_SLOPE } from './groundcut.js';
 import { PRIORITY } from './pool.js';
+import { wettable } from './wetness.js';
 
 let s0 = 4242; const rand = () => ((s0 = (s0 * 16807) % 2147483647) - 1) / 2147483646, rr = (a, b) => a + rand() * (b - a);
 export const GRASS = { mesh: null, far: null, flowers: [] };
@@ -75,6 +76,7 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.55, 0.68, 0.6), vShade);   // deep forest and marsh: darker, bluer grass`);
     };
     mat.customProgramCacheKey = () => 'grass' + far;
+    wettable(mat, { dark: 0.82, gloss: 0.7, shine: 0 });   // (blades face up in the shader: any more gloss mirrors the sky white)   // (wetness.js)
     const grass = new THREE.InstancedMesh(bladeGeo(far ? 1 : 2), mat, COUNT), gm = new THREE.Matrix4();
     for (let i = 0; i < COUNT; i++) grass.setMatrixAt(i, gm.makeTranslation(rr(0, T), 0, rr(0, T)));
     grass.frustumCulled = false; grass.receiveShadow = true; scene.add(grass); return grass;

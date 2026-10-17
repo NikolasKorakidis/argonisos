@@ -5,6 +5,7 @@
 // Local frame: walls run along x, y up, thickness along z. Floors: top at y = 0. Roofs: the eave runs along x at y = 0,
 // z = 0 and the slope climbs towards -z up to the ridge.
 import * as THREE from 'three';
+import { wettable } from '../world/wetness.js';
 
 // ---- materials: painted planks, rough beams, golden thatch
 function canvasTex(w, h, draw, repeat = [1, 1]) {
@@ -45,6 +46,8 @@ export const MAT = {
   iron: new THREE.MeshStandardMaterial({ color: 0x4a4440, roughness: 0.6, metalness: 0.4 }),
   ember: new THREE.MeshStandardMaterial({ color: 0x3a1a0a, emissive: 0xff5a10, emissiveIntensity: 1.6, roughness: 1 }),
 };
+// how each material takes the rain: how much darker, how glossy when soaked (wetness.js)
+for (const [k, o] of Object.entries({ plank: [0.62, 0.32], beam: [0.62, 0.32], thatch: [0.72, 0.55], dark: [0.66, 0.32], stone: [0.66, 0.26], fur: [0.75, 0.6], cloth: [0.72, 0.6], iron: [0.85, 0.25] })) if (MAT[k]) wettable(MAT[k], { dark: o[0], gloss: o[1] });
 
 // ---- geometry helpers. A box with UVs in metres (so textures tile at a constant size)
 function box(w, h, d, x = 0, y = 0, z = 0, uvScale = 1 / 3) {

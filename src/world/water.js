@@ -3,8 +3,9 @@
 // Where the swamp mask is set the water turns murky green-brown and grows rafts of duckweed.
 import * as THREE from 'three';
 import { scene, waterNormals } from '../render/core.js';
+import { WET_U, RIPPLES } from './wetness.js';
 
-export const WATER_U = { uTime: { value: 0 }, uH: { value: null }, uHExt: { value: 4096 }, uNorm: { value: waterNormals }, uSky: { value: new THREE.Color(0x3a78c8) },
+export const WATER_U = { uRainK: WET_U.uRainK, uRainT: WET_U.uRainT, uTime: { value: 0 }, uH: { value: null }, uHExt: { value: 4096 }, uNorm: { value: waterNormals }, uSky: { value: new THREE.Color(0x3a78c8) },
   uHor: { value: new THREE.Color(0xb8dcf0) }, uDay: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(0xfff1d6) } };
 export function makeWaterMat({ level, shallow, deep, foam = 1, depthScale = 6, clarity = 1, weed = 0, ripple = 1 }) {
   const u = Object.assign(THREE.UniformsUtils.clone(THREE.UniformsLib.fog), WATER_U,
@@ -14,7 +15,7 @@ export function makeWaterMat({ level, shallow, deep, foam = 1, depthScale = 6, c
     uniforms: u, transparent: true, fog: true, depthWrite: false,
     vertexShader: `varying vec3 vW; #include <fog_pars_vertex>
       void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition; #include <fog_vertex> }`.replace(/#include <(\w+)>/g, '\n#include <$1>\n'),
-    fragmentShader: `uniform float uTime, uLevel, uFoam, uDS, uClar, uWeed, uRip, uDay, uHExt; uniform sampler2D uH, uNorm; uniform vec3 uShallow, uDeep, uSky, uHor, uSunDir, uSunCol; varying vec3 vW;
+    fragmentShader: `${RIPPLES}uniform float uRainK, uRainT; uniform float uTime, uLevel, uFoam, uDS, uClar, uWeed, uRip, uDay, uHExt; uniform sampler2D uH, uNorm; uniform vec3 uShallow, uDeep, uSky, uHor, uSunDir, uSunCol; varying vec3 vW;
       #include <fog_pars_fragment>
       vec3 nrm(vec2 uv){ vec3 t = texture2D(uNorm, uv).rgb * 2.0 - 1.0; return vec3(t.r, t.b, t.g); }
       float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -30,6 +31,8 @@ export function makeWaterMat({ level, shallow, deep, foam = 1, depthScale = 6, c
         float nk = mix(1.0, 0.3, smoothstep(40.0, 280.0, dist));
         vec3 n1 = nrm(vW.xz * 0.035 * uRip + vec2(t * 0.02, t * 0.013)), n2 = nrm(vW.xz * 0.11 * uRip - vec2(t * 0.03, -t * 0.021)), n3 = nrm(vW.xz * 0.008 + vec2(-t * 0.004, t * 0.006));
         vec3 n = normalize(vec3((n1.x + n2.x * 0.7 * nk + n3.x * 1.3) * nk, 3.2, (n1.z + n2.z * 0.7 * nk + n3.z * 1.3) * nk));
+        // raindrops ringing the surface near you while it rains (wetness.js)
+        if (uRainK > 0.01) { vec2 rs = wetRipples(vW.xz, uRainT) * uRainK * (1.0 - smoothstep(20.0, 45.0, dist)); n = normalize(n + vec3(-rs.x, 0.0, -rs.y) * 1.6); }
         float F = 0.02 + 0.98 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
         // body colour: light absorbed with depth (Beer-Lambert)
         float ab = 1.0 - exp(-depth / uDS * 2.4);

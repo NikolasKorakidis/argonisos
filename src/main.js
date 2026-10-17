@@ -27,6 +27,7 @@ import { HUD } from './ui/hud.js';
 import { installGame } from './game/game.js';
 import { titleScreen, pauseMenu } from './ui/title.js';
 import { devMenu } from './ui/dev.js';
+import { wettable, updateShelter, WET } from './world/wetness.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -35,6 +36,7 @@ const terrainMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughnes
 const pool = new WorkerPool(Math.max(2, Math.min(4, (navigator.hardwareConcurrency || 4) - 1)));
 rockGround(terrainMat);           // the rock surface on steep ground
 cutTerrain(terrainMat);           // floors press the ground down under them
+wettable(terrainMat, { dark: 0.54, gloss: 0.4, puddles: true, shine: 0.3 });   // wet in the rain, puddles on flat open ground
 const terrain = new Terrain(scene, terrainMat, pool);
 terrain.requestHeightTexture(1024, WORLD.SIZE).then(setHeightTexture);
 const veg = new Vegetation(scene, pool);
@@ -171,6 +173,9 @@ function loop() {
   hud.update(dt, clockText(), S.time >= DAY_FRACTION);
   veg.cull(camera, focus);   // the near trees worth drawing this frame
   game.structures?.cull(camera.position, dt);
+  // what stands over the ground round you (roofs, the sites, tree crowns): below it stays dry and no rain falls; only
+  // re-drawn while the world is wet or it rains
+  if (WET.value > 0.001 || WEATHER.k.rain > 0.02) updateShelter(renderer, scene, focus, () => ({ solid: [...(game.build?.placed || []).map((p) => p.obj), ...(game.structures?.groups || [])], canopy: [...veg.batches.values()].flatMap((b) => b.meshes) }), dt);
   const bw = biomeWeights(focus.x, focus.z);
   // pollen in the sunny meadows, fireflies at dusk and by night, leaves in the woods, snow blowing on the summit
   const wet = 1 - Math.min(1, WEATHER.k.rain * 1.5), snowK = PEAK.on ? Math.min(1, Math.max(0, (camera.position.y - 215) / 50)) : 0;

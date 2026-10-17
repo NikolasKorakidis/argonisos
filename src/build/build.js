@@ -16,6 +16,7 @@ import { ITEMS } from '../game/items.js';
 import { icon } from '../ui/icons.js';
 import { Inventory } from '../game/inventory.js';
 import { askLight } from '../render/lights.js';
+import { wetLike } from '../world/wetness.js';
 
 const V_LOSS = 0.125, H_LOSS = 0.2, MIN_SUPPORT = 0.1, REACH = 12, G = 8;
 const _v = new THREE.Vector3(), _ray = new THREE.Raycaster();
@@ -318,7 +319,7 @@ export class Build {
     const inner = new THREE.Group(); obj.add(inner);
     const p = { uid: opts.uid ?? 'pc' + this.seq++, id, def, obj, inner, pos: pos.clone(), rot, hp: opts.hp ?? def.hp, state: opts.state || {}, support: 1, grounded: false, mats: [] };
     const depth = this.depthRank(def, rot);
-    for (const { geo, mat } of def.build()) { const m2 = mat.clone(); Object.assign(m2, depth); p.mats.push(m2); const m = new THREE.Mesh(geo, m2); m.castShadow = m.receiveShadow = true; m.userData.piece = p; inner.add(m); this.meshes.push(m); }
+    for (const { geo, mat } of def.build()) { const m2 = wetLike(mat.clone(), mat); Object.assign(m2, depth); p.mats.push(m2); const m = new THREE.Mesh(geo, m2); m.castShadow = m.receiveShadow = true; m.userData.piece = p; inner.add(m); this.meshes.push(m); }
     this.g.scene.add(obj);
     p.snaps = this.snapsOf(def, pos, rot); p.boxes = this.boxes(def, pos, rot);
     this.index(p, true); this.placed.push(p);
