@@ -1,10 +1,10 @@
-// Model loading shared by the hero, tools and creatures. Raw .fbx/.glb from models/ when served locally, with the base64
+// Model loading shared by the hero, tools and creatures. Raw .fbx/.glb from assets/models/ when served locally, with the base64
 // module copies as a fallback (static hosting that refuses those types).
 import * as THREE from 'three';
-import { FBXLoader } from '../jsm/loaders/FBXLoader.js';
-import { GLTFLoader } from '../jsm/loaders/GLTFLoader.js';
+import { FBXLoader } from '../vendor/three/jsm/loaders/FBXLoader.js';
+import { GLTFLoader } from '../vendor/three/jsm/loaders/GLTFLoader.js';
 
-const ROOT = new URL('../models/', import.meta.url);
+const ROOT = new URL('../assets/models/', import.meta.url);
 export async function loadModelBuffer(file) {
   try { const r = await fetch(new URL(file, ROOT)); if (r.ok) return await r.arrayBuffer(); } catch { /* fall through */ }
   const b64 = (await import(new URL(file + '.js', ROOT).href)).default;

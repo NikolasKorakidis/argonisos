@@ -13,8 +13,9 @@ import { burst, dust, addShake } from '../render/fx.js';
 import { camera } from '../render/core.js';
 import { stormWallDepth } from '../world/stormwall.js';
 import { icon } from '../ui/icons.js';
+import { rr } from '../util/math.js';
 
-const FT = 0.3048, clamp = (v, a, b) => Math.max(a, Math.min(b, v)), rr = (a, b) => a + Math.random() * (b - a), ri = (a, b) => Math.floor(rr(a, b + 1));
+const FT = 0.3048, ri = (a, b) => Math.floor(rr(a, b + 1));
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 // drops: [item, min, max, chance]
 export const TYPES = {

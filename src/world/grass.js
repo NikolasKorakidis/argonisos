@@ -3,15 +3,16 @@
 // flower density come from a small ground texture around the player, re-baked by a worker as you travel.
 // The grass reaches GRASS_R round the player (tester feedback, 16 Oct: 80 m or more, with the mist lying on its edge):
 // past 30 m a second, much wider carpet of fewer, broader blades takes over from the dense one, blade by blade, and
-// thins away between GRASS_R and GRASS_END, inside the mist (see MIST_R0 and MIST_R1 in vegetation.js).
+// thins away between GRASS_R and GRASS_END, inside the mist (all in reach.js).
 import * as THREE from 'three';
 import { scene } from '../render/core.js';
 import { windUniform, LIGHT_U } from './trees.js';
+import { GRASS_R, GRASS_END } from './reach.js';
 import { cutList, onCutsChanged, CUT_EDGE, CUT_SLOPE } from './groundcut.js';
+import { PRIORITY } from './pool.js';
 
 let s0 = 4242; const rand = () => ((s0 = (s0 * 16807) % 2147483647) - 1) / 2147483646, rr = (a, b) => a + rand() * (b - a);
 export const GRASS = { mesh: null, far: null, flowers: [] };
-export const GRASS_R = 80, GRASS_END = 95;
 export const TEX_N = 400, TEX_SIZE = 248;      // 0.62 m per texel over 248 m, re-centred when you move 25 m (the far carpet, 95 m out, never runs off it)
 const NEAR_TILE = 76, FAR_TILE = 2 * GRASS_END, FAR_COUNT = 100000;
 const FAR_KEEP = (FAR_COUNT / FAR_TILE ** 2) / (160000 / NEAR_TILE ** 2);   // how sparse the far carpet is next to the near one
@@ -172,7 +173,7 @@ export function updateGrass(pool, pos) {
   if (restamp && cur) { restamp = false; stamp(cur); cur.tex.needsUpdate = true; }
   if (pending || Math.hypot(pos.x - lastX, pos.z - lastZ) < 25) return;
   pending = true; const x0 = Math.round(pos.x) - TEX_SIZE / 2, z0 = Math.round(pos.z) - TEX_SIZE / 2;
-  pool.post({ type: 'grassTex', N: TEX_N, x0, z0, size: TEX_SIZE }).then((m) => {
+  pool.post({ type: 'grassTex', N: TEX_N, x0, z0, size: TEX_SIZE }, PRIORITY.urgent).then((m) => {   // (ahead of everything queued: it's under your feet)
     const t = new THREE.DataTexture(m.data, m.N, m.N, THREE.RGBAFormat, THREE.FloatType); t.magFilter = t.minFilter = THREE.LinearFilter;
     cur = { data: m.data, base: m.data.slice(), N: m.N, x0: m.x0, z0: m.z0, tex: t }; stamp(cur); t.needsUpdate = true;
     grassU.uHeight.value?.dispose(); grassU.uHeight.value = t; grassU.uOrigin.value.set(m.x0, m.z0);

@@ -11,8 +11,8 @@ import { input } from '../input.js';
 import { burst, dust, addShake } from '../render/fx.js';
 import { BOW_DUR, CLIPS } from '../player/hero.js';
 import { loadFBX, loadTex } from '../assets.js';
+import { clamp, rr } from '../util/math.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), rr = (a, b) => a + Math.random() * (b - a);
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const REACH = { dagger: 1.8, spear: 2.8, axe: 2.3, mace: 2.3 };
 const ARROW_V = [24, 70], ARROW_FLAT = [0.05, 0.6];

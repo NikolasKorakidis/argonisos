@@ -2,11 +2,11 @@
 // The dome shader paints the day gradient and sun, and at night a starfield with the Milky Way, a cratered moon
 // and, on some nights, aurora curtains. A physical-sky copy lights reflections; clouds drift with the wind.
 import * as THREE from 'three';
-import { Sky } from '../../jsm/objects/Sky.js';
+import { Sky } from '../../vendor/three/jsm/objects/Sky.js';
 import { scene, camera, renderer, sun, hemi } from '../render/core.js';
+import { clamp, lerp } from '../util/math.js';
 
 export const DAY_SECONDS = 32 * 60, DAY_FRACTION = 24 / 32;
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
 
 export const skyDome = new THREE.Mesh(new THREE.SphereGeometry(5000, 48, 24), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,

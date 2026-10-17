@@ -1,11 +1,11 @@
 // Dev server: serves the game and reloads open pages whenever a file in the project changes.
-// No dependencies. Run with `npm run dev` (or `node dev-server.mjs`), then open http://localhost:8000
+// No dependencies. Run with `npm run dev` (or `node tools/dev-server.mjs`), then open http://localhost:8000
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');   // (the project, one up from tools/)
 const PORT = Number(process.env.PORT) || 8000;
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
@@ -29,7 +29,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   let file = path.join(ROOT, decodeURIComponent(url.pathname));
-  if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
+  if (!file.startsWith(ROOT) || file.startsWith(path.join(ROOT, 'concept'))) { res.writeHead(403).end(); return; }   // (the design docs are private)
   if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found'); return; }

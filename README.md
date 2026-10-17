@@ -17,9 +17,12 @@ npm install && npx playwright install chromium   # once
 npm test              # every suite: the whole trial end to end, building, features, movement, bosses, performance, looks
 npm run test:quick    # the fast ones only
 npm run playtest -- --minutes 20   # a bot plays on its own and writes a report of what went wrong
+npm run check         # no browser needed: lint, import cycles, unused files, and the world's fingerprint
 ```
 The tests play the real game in headless Chrome on the GPU. Reports, screenshots and diffs land in `tests/reports/`.
 After a change meant to alter the look, check `tests/reports/visual.html`, then `npm run test:update`.
+Every pull request runs `npm run check` on GitHub Actions (its runners have no GPU, so the game suites run locally), and
+must target `main`. The title screen shows which build GitHub Pages is serving.
 
 ## The trial
 - **Explore.** A 2.9 km island: the meadows of **Pedias** in the middle, the dark forest hills of **Yleos** around them,
@@ -43,6 +46,9 @@ F power · R turn a piece · MMB / X take a piece down · Esc pause.
 Debug: F3 info line · F9 free camera · T (with F3 on) time ×60.
 
 ## Code
+- `src/`: the game. `assets/models/`: models and textures. `vendor/three/`: three.js r160 and its add-ons (untouched).
+  `legacy/`: the old prototype. `tests/`: the suites and the playtest bot. `tools/`: the dev server and a lint hook for
+  Claude Code. `docs/`: reviews and audits.
 - `src/world`: generation (`gen.js`), sites, streamed terrain (`terrain.js` + `terrain-worker.js` in a worker pool),
   vegetation in three bands (full trees, light far meshes, impostor cards), grass, sky, water, weather, storm wall,
   pickups, structures.
@@ -54,5 +60,6 @@ Debug: F3 info line · F9 free camera · T (with F3 on) time ×60.
 - The world saves to browser storage every minute and when the page closes.
 
 ## The classic prologue
-The earlier quest-driven prototype (Nestor, the Windbinder, the Drowned Ship) is still playable at `classic.html`
-(`game.js`, `play.html`).
+The earlier quest-driven prototype (Nestor, the Windbinder, the Drowned Ship) is still playable at
+`legacy/classic.html` (`legacy/game.js`, `legacy/play.html`); the old `classic.html` and `play.html` addresses on the
+live site redirect there.

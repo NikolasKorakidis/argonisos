@@ -3,8 +3,8 @@
 // shafts of sun breaking past trees, trunks and ridges (rays marched towards the sun on the screen, lit wherever the
 // sky shows through). All in linear light, before bloom and tone mapping.
 import * as THREE from 'three';
-import { Pass, FullScreenQuad } from '../../jsm/postprocessing/Pass.js';
-import { MIST_R0, MIST_R1 } from '../world/vegetation.js';
+import { Pass, FullScreenQuad } from '../../vendor/three/jsm/postprocessing/Pass.js';
+import { MIST_R0, MIST_R1 } from '../world/reach.js';
 
 export const ATMO = {
   tDiffuse: { value: null }, tDepth: { value: null },

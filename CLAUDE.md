@@ -1,21 +1,31 @@
 # Argonisos: notes for working on the code
 
-A Valheim-style open-world survival game in three.js r160 (vendored as `three.module.js`, add-ons in `jsm/`), plain ES
-modules, no build step. `index.html` loads `src/main.js`. `classic.html` / `play.html` / `game.js` are the old prologue
-prototype: leave them alone unless asked.
+A Valheim-style open-world survival game in three.js r160, plain ES modules, no build step. `index.html` loads
+`src/main.js`; an import map points `three` at `vendor/three/three.module.js` (add-ons in `vendor/three/jsm/`).
+Layout: `src/` the game · `assets/models/` models, textures and packed plant geometry · `vendor/` third-party code (never
+edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `game.js`: leave it alone unless asked) ·
+`tests/` · `tools/` the dev server and the Claude Code lint hook · `docs/` reviews and audits · `concept/` private.
 
 ## Rules
-- **`concept/` is private.** The design docs there are git-ignored and must never be committed, pushed, quoted in
-  commits, PRs or patch notes, or served (the test server refuses `/concept`). Only the four old `.webp` images are tracked.
-- Branch before committing; PRs go to `main`. Push with `git -c credential.helper= -c credential.helper='!gh auth git-credential' push`.
+- **`concept/` is private.** The whole folder is git-ignored; its design docs must never be committed, pushed, quoted
+  in commits, PRs or patch notes, or served (the dev and test servers refuse `/concept`, the deploy leaves it out).
+- Branch before committing; PRs go to `main` (CI refuses any other base: a stacked PR never reaches the live site). Push with `git -c credential.helper= -c credential.helper='!gh auth git-credential' push`.
 - Player-facing changes go in the patch notes (`src/ui/patchnotes.js`, the `PATCHES` list) in plain player language.
 
 ## Run and test
-- `npm run dev`: dev server on :8000 with live reload. `index.html?play` skips the title screen.
+- `npm run dev`: dev server on :8000 with live reload (`tools/dev-server.mjs`). `index.html?play` skips the title screen.
+- `npm run check`: lint (ESLint, mistakes only, no style rules), import cycles (Madge), unused files and dependencies
+  (Knip) and the world fingerprint, all without a browser. GitHub Actions runs it on every PR (`.github/workflows/ci.yml`);
+  its runners have no GPU, so the game suites below run here, not there. `/check` (a project skill) runs both.
+- `npm run test:world`: the world's fingerprint (`tests/suites/world.mjs`): heights, biomes, slope rule, ground colours,
+  sites, trees and pickups hashed in Node. Any refactor must leave it unchanged; when the world is *meant* to change,
+  `node tests/run.mjs world --update`, paste the new fingerprint, and bump `WORLD_LAYOUT`.
+- Claude Code lints every JS file it edits (`.claude/settings.json` → `tools/lint-hook.mjs`) and gets the errors back.
 - `npm test`: every suite in `tests/suites` (about 6 min). `npm run test:quick` skips the slow ones (perf, visual,
   creatures). `node tests/run.mjs loop build` runs suites by file-name prefix; `--headed` to watch.
 - `npm run test:update`: accept new screenshot baselines after an intended look change (check
-  `tests/reports/visual.html` first).
+  `tests/reports/visual.html` first). Never to make a refactor pass: a changed picture means the game changed.
+- Timings depend on the machine: check `uptime` first; with another heavy app running, perf numbers mean nothing.
 - `npm run playtest -- --minutes 20 --seed 7`: the bot plays unattended; report in `tests/reports/playtest/<time>/report.md`.
 - Tests drive the real game in headless Chrome **on the GPU** (`--use-angle=metal`); without those flags it falls back to
   software rendering at under 1 fps and every timing check is meaningless. They serve the project on their own port
@@ -47,8 +57,8 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   places); no tree may stand alone or in a pair there.
   Tree crowns start above 2.9 m (1.5× the hero) at their smallest size (`tests/suites/woods.mjs` checks it).
 - **The player's mist** (`atmosphere.js`: clear to `MIST_R0` 60 m, 68% by `MIST_R1` 100 m, ceiling from `tallestNear`)
-  lies over the grass's edge (`GRASS_R` 80 m, gone by `GRASS_END` 95 m in `grass.js`: a dense near carpet hands over to a
-  sparse far one at ~30 m) and hides how much less is drawn behind it (`farKeep`/`keepTo` in `vegetation.js`, `FAR_R`
+  lies over the grass's edge (`GRASS_R` 80 m, gone by `GRASS_END` 95 m: a dense near carpet hands over to a sparse far
+  one at ~30 m in `grass.js`); all four live in `world/reach.js`. It hides how much less is drawn behind it (`farKeep`/`keepTo` in `vegetation.js`, `FAR_R`
   600, minor sites' `VIEW_R`). Change them together. The focus blur is the `focus` uniform.
 - Saves remember felled trees and pickups by their place in the layout: bump `WORLD_LAYOUT` in `save.js` whenever flora
   or pickup layout changes.
@@ -68,13 +78,20 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   palettes dark (see `MARBLE` in `vegetation.js`).
 - The GPU timer is unreliable on ANGLE/Metal; resolution scaling decides on frame time only.
 - `pickups.visible` is rebuilt on the next frame after a pickup is taken; checks right after `interact()` must wait.
+- **Heavy, pure work goes to the worker pool** (`world/pool.js`): terrain patches, flora cells and blocks, the grass
+  texture, the map, and each cell's pickups (`pickup-layout.js`, laid out off the main thread: a cell's pickups appear a
+  moment after you reach it). Jobs wait in one queue and run most urgent first (`PRIORITY`: the grass under your feet,
+  then near terrain, trees and pickups, then distant blocks); a worker runs one job at a time and its reply is that job's.
+  Anything a worker imports must stay free of three.js and the DOM.
+- Shared helpers (`clamp`, `lerp`, `smooth`, `seeded`, `hash21`, `tileNoise`) are in `src/util/math.js`; don't define
+  them again. The world's own noise (`noise`, `fbm`, `hash2`) belongs to `gen.js`.
 
 ## Code map
 - `src/world`: `gen.js` heights, biomes, the Olympos peak · `sites.js` site placement and pads · `flora.js` species and
-  layout · `vegetation.js` near/mid/impostor bands · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
+  layout · `reach.js` how far the mist and grass reach · `vegetation.js` near/mid/impostor bands · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
   `terrain.js` + `terrain-worker.js` (worker pool, `pool.js`) · `structures.js` + `greek.js` the sites' buildings and
   props · `sky.js`, `weather.js`, `water.js`, `giantwood.js`, `ambient.js`, `stormwall.js` · `groundcut.js` · `pickups.js`
-  · `colliders.js`.
+  (+ `pickup-layout.js`) · `colliders.js`. `src/util/math.js` shared helpers. `src/assets.js` model and texture loading.
 - `src/render`: `core.js` renderer, composer, shadows, adaptive resolution · `atmosphere.js` mist, haze, sun shafts, cloud
   shadows, grade · `occlusion.js` fades what blocks the camera · `fx.js`, `lights.js`.
 - `src/player`: `player.js` controller and camera · `hero.js` rig and clips · `footik.js` foot placement · `stats.js` ·
@@ -82,7 +99,8 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
 - `src/game`: `game.js` wires the systems onto `game` · `items.js` items and recipes · `inventory.js` · `crafting.js` ·
   `harvest.js` · `combat.js` · `trial.js` bosses, clues, offerings · `guide.js` the guided steps · `owl.js` · `save.js`.
 - `src/build`: `pieces.js` piece definitions · `build.js` placement, snapping, support. `src/creatures`: `creatures.js`
-  AI and spawning · `models.js` bodies. `src/ui`: HUD, map, title, menus, patch notes. `src/audio/sound.js`: synthesised.
+  AI and spawning · `models.js` bodies. `src/ui`: HUD, map, title, menus, patch notes, `icons.js` (+ the black-figure
+  `icon-set.js`, shared with the prototype). `src/audio/sound.js`: synthesised (its context opens while the world loads).
 
 ## Style
 Comments are full sentences that say why, in plain British English, often on the line they explain; dense one-line

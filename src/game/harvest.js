@@ -7,8 +7,8 @@ import { heightAt, biomeWeights, hash2 } from '../world/gen.js';
 import { burst, dust, addShake } from '../render/fx.js';
 import { trunkMat } from '../world/trees.js';
 import { clearGrass } from '../world/grass.js';
+import { clamp } from '../util/math.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 // Tree toughness and what it gives, by species
 const BIG = new Set(['oak', 'plane', 'holm']), SMALL = new Set(['pomegranate', 'fig', 'cypress']);
 const TREE_DROPS = {

@@ -4,11 +4,11 @@
 // their own models arrive. Every body exposes the same small interface: obj, animate(state, speed, dt), flash(k), dispose().
 import * as THREE from 'three';
 import { FootIK } from '../player/footik.js';
-import { clone as cloneSkinned } from '../../jsm/utils/SkeletonUtils.js';
+import { clone as cloneSkinned } from '../../vendor/three/jsm/utils/SkeletonUtils.js';
 import { loadGLB, loadFBX } from '../assets.js';
 import { CLIPS } from '../player/hero.js';
+import { clamp } from '../util/math.js';
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const flat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, flatShading: true, ...o });
 // When a creature goes, free what its body put on the GPU: the geometry built for it, its own materials and its
 // skeleton's bone texture. The loaded models' geometry and materials are shared by every body made from them (marked

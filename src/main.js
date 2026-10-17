@@ -121,7 +121,13 @@ game.setFly = (on) => {
   else { player.spawn(camera.position.x, camera.position.z); player.camYaw = fly.yaw; player.yaw = fly.yaw + Math.PI; snapWeather(); }
 };
 // the title screen until the land around you and the hero are in (?play skips it, for tests)
-const readiness = () => Math.min(1, (terrain.drawn > 40 && terrain.pending === 0 ? 0.6 : terrain.drawn / 70) + (player.hero.model ? 0.25 : 0) + (veg.near.size > 6 ? 0.15 : 0));
+// Once the land round you is in, every shader the scene needs is compiled before the loading bar fills, so nothing
+// stalls the first time it comes into view. (renderer.compile, not compileAsync: in three r160 the async one throws if a
+// material is disposed while it waits, and this game disposes faded copies and felled logs as it goes.)
+let warmed = 0;   // 0: not yet, 2: done
+const warmUp = () => { if (warmed) return; warmed = 2; try { renderer.compile(scene, camera); } catch { /* a warm-up only */ } };
+const loaded = () => Math.min(1, (terrain.drawn > 40 && terrain.pending === 0 ? 0.6 : terrain.drawn / 70) + (player.hero.model ? 0.25 : 0) + (veg.near.size > 6 ? 0.15 : 0));
+const readiness = () => { const k = loaded(); if (k >= 1) warmUp(); return warmed === 2 ? 1 : Math.min(k, 0.97); };
 pauseMenu(game); devMenu(game);
 if (new URLSearchParams(location.search).has('play')) game.started = true; else titleScreen(game, readiness);
 const clockText = () => { const t = S.time, h = t < DAY_FRACTION ? 6 + (t / DAY_FRACTION) * 15 : (21 + ((t - DAY_FRACTION) / (1 - DAY_FRACTION)) * 9) % 24; return `Day ${S.day} · ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 6) * 10).padStart(2, '0')}`; };
@@ -130,6 +136,7 @@ const clockText = () => { const t = S.time, h = t < DAY_FRACTION ? 6 + (t / DAY_
 const clock = new THREE.Clock(); let fpsT = 0, frames = 0, fps = 60, atmo = { overcast: 0, dark: 0 }, mistT = 0, mistAim = 30, mistTop = 30;
 function loop() {
   requestAnimationFrame(loop);
+  if (!warmed && loaded() >= 1) warmUp();   // (also when the title screen is skipped)
   const dt = Math.min(clock.getDelta(), 0.05), t = S.still ? 100 : clock.elapsedTime;
   if (!game.paused) S.time += dt * S.timeScale / DAY_SECONDS; if (S.time >= 1) { S.time -= 1; S.day++; hud.toast(`<b>Day ${S.day}</b> dawns`); }
   // keys

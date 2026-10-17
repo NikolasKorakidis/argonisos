@@ -8,6 +8,7 @@
 //   Olympos — one great peak rising out of the far hills, rock above the trees and snow on its head (see PEAK).
 //   The sea all around, with beaches and bays.
 // Biome borders are domain-warped so they wander like real ones; heights blend across them so there are no seams.
+import { lerp, smooth } from '../util/math.js';
 
 export const WORLD = { R: 1450, SIZE: 4096, SEA: 0 };
 export const BIOME = { PEDIAS: 0, YLEOS: 1, VALTOS: 2 };
@@ -17,10 +18,6 @@ const VALTOS_ANG = 2.35;                 // direction of the swamp sector (south
 let SEED = 1337;
 export function setSeed(s) { SEED = s | 0; }
 
-const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
-const lerp = (a, b, t) => a + (b - a) * t;
-const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
-export { clamp, lerp, smooth };
 
 // ---- Noise: gradient (Perlin) noise from an integer hash, quintic fade; fBm and ridged variants. Gradient noise has no
 // grid-aligned blockiness, so ridges and borders wander naturally. Output is 0..1.

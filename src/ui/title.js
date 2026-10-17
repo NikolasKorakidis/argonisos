@@ -3,6 +3,8 @@ import { hasSave, clearSave } from '../game/save.js';
 import { input, lock, unlock } from '../input.js';
 import { PATCHES, notesPanel, notesUnread } from './patchnotes.js';
 import { SETTINGS, PRESETS, RES, applyGraphics, setGraphics, setRes, setVol, setMusic, setSens, toggleFullscreen, isFullscreen, onFullscreenChange } from './settings.js';
+// which build this is (the commit and date the deploy stamps into index.html), so we can tell what GitHub Pages is serving
+const BUILD = document.querySelector('meta[name=build]')?.content || '';
 
 // The title screen is a main menu over the living world: the camera drifts slowly round the hero while the island
 // streams in, the HUD stays hidden, and the menu sits on the left (Continue, New Game, Patch Notes, Fullscreen).
@@ -21,7 +23,7 @@ export function titleScreen(g, ready) {
         ${item('tFs', 'Fullscreen', 'Recommended')}
       </nav>
     </div>
-    <div class="tfoot"><span>${PATCHES[0].name} · ${PATCHES[0].date}</span><span>Esc pauses · the world saves itself every minute</span></div>`;
+    <div class="tfoot"><span>${PATCHES[0].name} · ${PATCHES[0].date}${BUILD ? ` · build ${BUILD}` : ''}</span><span>Esc pauses · the world saves itself every minute</span></div>`;
   document.body.appendChild(el); input.uiOpen = true;
   const notes = notesPanel();
   const bar = el.querySelector('.load i');

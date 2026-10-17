@@ -1,11 +1,12 @@
 // Terrain worker: builds terrain patches (positions, normals, colours, uvs, bare rock) off the main thread so streaming
 // the world never stutters. Also bakes the world height texture used by the water shader.
 import { heightAt, biomeWeights, groundColor, fbm, isRock } from './gen.js';
-const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 import { layoutCell, CELL, shadeAround, bakeShade, solidsAround, SPECIES, STRIDE } from './flora.js';
 // how wide a space to keep round the things that stand about but aren't solid (metres at scale 1)
 const CLEAR_R = { lavender: 0.5, broom: 0.7, myrtle: 0.8, fern: 0.6, redbush: 0.7, colfall: 1.4, colstand: 0.6, herm: 0.4, amphorae: 0.7, wallruin: 1.6 };
 import './sites.js';   // registers the flattened ground under the trial's sites
+import { smooth } from '../util/math.js';
+import { layoutPickups } from './pickup-layout.js';
 
 function patch({ id, x0, z0, size, res }) {
   const n = res + 1, step = size / res, NV = n * n + 4 * res;
@@ -113,6 +114,7 @@ self.onmessage = (e) => {
     }
     self.postMessage({ type: 'mapImage', id: msg.id, data, N, extent }, [data.buffer]);
   }
+  else if (msg.type === 'pickups') self.postMessage({ type: 'pickups', id: msg.id, items: layoutPickups(msg.cx, msg.cz) });   // what lies about in a cell
   else if (msg.type === 'flora') {         // lay out an n×n block of flora cells
     const parts = []; let len = 0;
     for (let j = 0; j < msg.n; j++) for (let i = 0; i < msg.n; i++) { const a = layoutCell(msg.cx + i, msg.cz + j); parts.push(a); len += a.length; }

@@ -2,14 +2,14 @@
 // anything the player drops. Natural ones are laid out per 64 m cell from the seed (stable ids "cx,cz,i") and grow back
 // a few days after they are taken. Each kind is one instanced mesh holding every visible copy near the player.
 import * as THREE from 'three';
-import { heightAt, biomeWeights, hash2, fbm, isRock } from './gen.js';
+import { heightAt } from './gen.js';
 import { clearGrass } from './grass.js';
-import { siteClear } from './sites.js';
-import { solidsAround, insideSolid, pediasWood } from './flora.js';
 import { cutLimit, onCutsChanged } from './groundcut.js';
+import { CELL, layoutPickups, rnd } from './pickup-layout.js';
+import { PRIORITY } from './pool.js';
+export { layoutPickups };
 
-const CELL = 64, RANGE = 110, REGROW_DAYS = 3;
-const rnd = (a, b) => hash2(a * 13.37 + b * 0.71, b * 7.13 - a * 1.9);
+const RANGE = 110, REGROW_DAYS = 3;
 
 // ---- models (small, merged, origin on the ground)
 const merge = (list) => {     // [[geo, colorHex]] → one geometry with vertex colours
@@ -35,46 +35,9 @@ export const KINDS = {
     return { geo: merge(P), mat: vc() }; } },
   drop: { item: null, model: () => ({ geo: merge([[new THREE.BoxGeometry(0.34, 0.24, 0.3).translate(0, 0.12, 0), 0xa9824e], [new THREE.BoxGeometry(0.36, 0.04, 0.32).translate(0, 0.25, 0), 0x6e5238]]), mat: vc() }) },   // a little bundle for dropped items
 };
-// How many of each kind per cell, by biome (Pedias, Yleos)
-function counts(w, x, z) {
-  const tree = pediasWood(x, z).wood;   // (fallen branches lie mostly under the woods)
-  return {
-    stone: 3.5 * w.p + 4 * w.y, branch: (1.6 + tree * 4) * w.p + 6 * w.y,   // starter materials: easy to come by
-    lightstone: 0.15 * w.p + 1.2 * w.y,
-    dandelion: 3 * w.p, moonflower: 0.6 * w.y, feather: 0.4 * w.p + 0.3 * w.y, bones: 0.25 * w.y,
-    bush: 2.2 * w.p + 1.6 * w.y,                // fiber for early rope; last, so the ids of the kinds above don't shift
-  };
-}
-export function layoutPickups(cx, cz) {
-  const out = [], x0 = cx * CELL, z0 = cz * CELL, w = biomeWeights(x0 + 32, z0 + 32, { p: 0, y: 0, v: 0, r: 0 });
-  if (w.v > 0.4) return out;
-  const C = counts(w, x0 + 32, z0 + 32), solid = solidsAround(cx, cz); let k = 0;
-  for (const [kind, n] of Object.entries(C)) {
-    const whole = Math.floor(n) + (rnd(cx * 31 + k, cz * 17 - k) < n % 1 ? 1 : 0);
-    for (let i = 0; i < whole; i++, k++) {
-      const x = x0 + rnd(cx + k * 3.1, cz - k) * CELL, z = z0 + rnd(cx - k * 1.7, cz + k * 2.3) * CELL, h = heightAt(x, z);
-      if (h < 0.8 || siteClear(x, z) || insideSolid(solid, x, z, 0.35)) continue;   // never inside a rock or a trunk
-      if (isRock(x, z) && kind !== 'stone' && kind !== 'lightstone') continue;   // on bare rock only stones (the shared slope rule)
-      out.push({ id: `${cx},${cz},${k}`, kind, x, z, y: h, rot: rnd(k, cx + cz) * 6.28 });
-    }
-  }
-  // loose stones on bare rock: a few small heaps here and there, never an even scatter
-  for (let q = 0; q < 8; q++) {
-    const x = x0 + rnd(cx * 101 + q * 17, cz * 37 + 911) * CELL, z = z0 + rnd(cz * 89 - q * 23, cx * 41 + 577) * CELL;
-    if (!isRock(x, z) || rnd(cx * 7 + q * 131, cz * 13 + 3) > 0.5) continue;
-    const n = 1 + Math.floor(rnd(q * 53 + cx, cz * 29 + 71) * 3);
-    for (let m = 0; m < n; m++) {
-      const sx = x + (rnd(m * 61 + q * 7 + cx, cz + 401) - 0.5) * 3.5, sz = z + (rnd(cz * 3 + m * 47, q * 11 + cx + 233) - 0.5) * 3.5;
-      if (!isRock(sx, sz) || siteClear(sx, sz) || insideSolid(solid, sx, sz, 0.35)) continue;
-      out.push({ id: `${cx},${cz},r${q}.${m}`, kind: 'stone', x: sx, z: sz, y: heightAt(sx, sz), rot: rnd(m * 19, q * 7 + cz) * 6.28 });
-    }
-  }
-  return out;
-}
-
 export class Pickups {
-  constructor(scene) {
-    this.scene = scene; this.cells = new Map(); this.taken = new Map();   // id → day taken
+  constructor(scene, pool) {
+    this.scene = scene; this.pool = pool; this.cells = new Map(); this.taken = new Map();   // id → day taken
     this.drops = [];                                                     // { id, item, n, x, y, z, extra }
     this.meshes = {}; this.dirty = true; this.day = 1; this.seq = 0;
     for (const [k, K] of Object.entries(KINDS)) { const { geo, mat } = K.model(); const m = new THREE.InstancedMesh(geo, mat, 1024); m.count = 0; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; scene.add(m); this.meshes[k] = m; }
@@ -94,11 +57,15 @@ export class Pickups {
     const r = Math.ceil(RANGE / CELL), pcx = Math.floor(pos.x / CELL), pcz = Math.floor(pos.z / CELL), want = new Set();
     for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
       const cx = pcx + i, cz = pcz + j, key = cx + ',' + cz; want.add(key);
-      if (!this.cells.has(key)) { this.cells.set(key, layoutPickups(cx, cz)); this.dirty = true; }
+      if (this.cells.has(key)) continue;
+      // laid out by a worker (it needs the cell's trees, too slow for a frame), shown once it arrives
+      if (!this.pool) { this.cells.set(key, layoutPickups(cx, cz)); this.dirty = true; continue; }
+      const cell = []; this.cells.set(key, cell);
+      this.pool.post({ type: 'pickups', cx, cz }, PRIORITY.near).then((m) => { if (this.cells.get(key) === cell) { this.cells.set(key, m.items); this.dirty = true; } });
     }
     for (const key of this.cells.keys()) if (!want.has(key)) { this.cells.delete(key); this.dirty = true; }
     if (!this.dirty) return; this.dirty = false;
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), s = new THREE.Vector3(1, 1, 1), n = {};
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), n = {};
     for (const k in this.meshes) n[k] = 0;
     this.visible = [];
     let np = 0; const up = new THREE.Vector3(0, 1, 0), nrm = new THREE.Vector3(), qq = new THREE.Quaternion(), ss = new THREE.Vector3();

@@ -50,6 +50,9 @@ function init() {
 }
 addEventListener('pointerdown', () => { init(); ctx?.resume?.(); });
 addEventListener('keydown', () => { init(); ctx?.resume?.(); });
+// Opening the audio device takes the browser over a tenth of a second: do it while the world loads, so the first click
+// or key only resumes it. (A context made before any click starts suspended and stays silent until then.)
+(globalThis.requestIdleCallback || setTimeout)(() => init());
 const now = () => ctx.currentTime;
 // One shot of filtered noise. wet: how much goes to the reverb; pan: -1 left … 1 right
 function noise(dur, { type = 'bandpass', freq = 1000, q = 1, vol = 0.3, attack = 0.005, slide = 0, delay = 0, wet = 0.1, pan = 0, bus, brown } = {}) {

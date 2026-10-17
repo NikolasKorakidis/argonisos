@@ -1,11 +1,12 @@
 // Renderer, scene, camera, lights and post-processing. A light base grade (saturation, warm push, teal shadows) lives
 // inside tone mapping (AgX), so every material runs it for free; the grade for each place and hour is in the atmosphere pass.
 import * as THREE from 'three';
-import { EffectComposer } from '../../jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from '../../jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from '../../jsm/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from '../../jsm/postprocessing/OutputPass.js';
+import { EffectComposer } from '../../vendor/three/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from '../../vendor/three/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from '../../vendor/three/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from '../../vendor/three/jsm/postprocessing/OutputPass.js';
 import { AtmospherePass } from './atmosphere.js';
+import { tileNoise, hash21 } from '../util/math.js';
 
 THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace('vec3 CustomToneMapping( vec3 color ) { return color; }',
   `vec3 CustomToneMapping( vec3 color ) {
@@ -90,24 +91,8 @@ export function followShadow(target, dir) {
 }
 
 // ---- Procedural textures
-export function tileNoise(size, period, octaves, hash) {
-  const f = new Float32Array(size * size);
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    let a = 0.5, fr = 1, v = 0;
-    for (let o = 0; o < octaves; o++) {
-      const px = (x / size) * period * fr, pz = (y / size) * period * fr, P = period * fr;
-      const xi = Math.floor(px), zi = Math.floor(pz), xf = px - xi, zf = pz - zi, u = xf * xf * (3 - 2 * xf), w = zf * zf * (3 - 2 * zf);
-      const hh = (i, j) => hash(((i % P) + P) % P + o * 17, ((j % P) + P) % P + o * 31);
-      v += a * ((hh(xi, zi) * (1 - u) + hh(xi + 1, zi) * u) * (1 - w) + (hh(xi, zi + 1) * (1 - u) + hh(xi + 1, zi + 1) * u) * w);
-      a *= 0.5; fr *= 2;
-    }
-    f[y * size + x] = v;
-  }
-  return f;
-}
-const h21 = (x, z) => { const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453; return s - Math.floor(s); };
 export const waterNormals = (() => {
-  const N = 256, hf = tileNoise(N, 8, 4, h21), d = new Uint8Array(N * N * 4);
+  const N = 256, hf = tileNoise(N, 8, 4, hash21), d = new Uint8Array(N * N * 4);
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
     const i = y * N + x, hx = hf[y * N + ((x + 1) % N)] - hf[y * N + ((x - 1 + N) % N)], hz = hf[((y + 1) % N) * N + x] - hf[((y - 1 + N) % N) * N + x];
     const nx = -hx * 6, nz = -hz * 6, l = Math.hypot(nx, nz, 1);

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/main.js",
+    "src/world/terrain-worker.js",
+    "tests/suites/*.mjs",
+    "tests/bot/*.{js,mjs}",
+    "tools/*.mjs",
+    "legacy/game.js"
+  ],
+  "project": [
+    "src/**/*.js",
+    "tests/**/*.{js,mjs}",
+    "tools/**/*.mjs",
+    "legacy/*.js"
+  ],
+  "ignoreDependencies": [
+    "three"
+  ]
+}

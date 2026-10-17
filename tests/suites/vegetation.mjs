@@ -6,8 +6,9 @@ export default {
   async run(t) {
     await t.page.waitForFunction(() => AG.veg.near.size > 4, null, { timeout: 60000 });
     // (a cypress: its trunk grows straight up, so the line of sight can be laid through it exactly; the other trees' crowns
-    // start above head height and their trunks lean)
-    await t.step('a tree between the camera and the hero fades', `const F = await import('/src/world/flora.js'); let tr = null; for (const b of AG.veg.batches.values()) { if (!b.meshes[1] || !b.n) continue; for (let k = 0; k < b.n; k++) { const c = b.refs[k * 2], i = b.refs[k * 2 + 1], o = i * 7; if (c.items[o] === F.SP.cypress && c.items[o + 6] > 0.8 && Math.hypot(c.items[o + 2] - P.pos.x, c.items[o + 4] - P.pos.z) < 60) { tr = { c, i, x: c.items[o + 2], z: c.items[o + 4] }; break; } } if (tr) break; }
+    // start above head height and their trunks lean. One with clear ground where the hero will stand, or a rock there
+    // would push him out of line.)
+    await t.step('a tree between the camera and the hero fades', `const F = await import('/src/world/flora.js'); let tr = null; for (const b of AG.veg.batches.values()) { if (!b.meshes[1] || !b.n) continue; for (let k = 0; k < b.n; k++) { const c = b.refs[k * 2], i = b.refs[k * 2 + 1], o = i * 7; if (c.items[o] === F.SP.cypress && c.items[o + 6] > 0.8 && Math.hypot(c.items[o + 2] - P.pos.x, c.items[o + 4] - P.pos.z) < 60 && ![...g.colliders.near(c.items[o + 2], c.items[o + 4] - 3.2, 4)].some((q) => Math.hypot(q.x - c.items[o + 2], q.z - c.items[o + 4] + 3.2) < q.r + 0.8)) { tr = { c, i, x: c.items[o + 2], z: c.items[o + 4] }; break; } } if (tr) break; }
       if (!tr) return 'no tree'; window._t = tr; P.camBlock = () => null; P.spawn(tr.x, tr.z - 3.2); P.camYaw = 0; P.camPitch = -0.05; P.camDist = 7; return true;`);
     await t.wait(600);
     // the camera sits off the hero's shoulder: shift the hero so the line from the camera passes through the trunk

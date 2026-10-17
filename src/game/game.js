@@ -29,7 +29,7 @@ import { input, hit } from '../input.js';
 
 export function installGame(g) {
   const { player, inv, hud } = g;
-  g.pickups = new Pickups(g.scene);
+  g.pickups = new Pickups(g.scene, g.pool);
   g.harvest = new Harvest(g);
   g.build = new Build(g);
   g.crafting = new Crafting(g);
