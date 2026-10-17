@@ -10,6 +10,7 @@ import { askLight } from '../render/lights.js';
 import { heightAt } from './gen.js';
 import { propGeo, propMat, leafMat } from './trees.js';
 import { GMAT, amphora, pithos, bowl, jug, tripod, acroterion, antefixes, cartWheel, firewood, leaves, mist, dice } from './greek.js';
+import { wettable } from './wetness.js';
 
 const rnd = (() => { let s = 77; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; })(), rr = (a, b) => a + rnd() * (b - a);
 function canvasTex(draw, n = 512, rep = 1) { const c = document.createElement('canvas'); c.width = c.height = n; draw(c.getContext('2d'), n); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; }
@@ -58,6 +59,7 @@ export const SMAT = {
   flags: new THREE.MeshStandardMaterial({ map: flagTex, roughness: 0.95, color: 0xb9ab96 }),
   bone: new THREE.MeshStandardMaterial({ color: 0xd9cfb4, roughness: 0.75 }),
 };
+for (const [k, o] of Object.entries({ marble: [0.72, 0.28], stone: [0.66, 0.28], moss: [0.7, 0.45], tile: [0.68, 0.3], frieze: [0.72, 0.3], dark: [0.68, 0.3], rock: [0.66, 0.26], wood: [0.62, 0.32], plaster: [0.72, 0.35], flags: [0.66, 0.26], bone: [0.75, 0.35] })) wettable(SMAT[k], { dark: o[0], gloss: o[1] });   // (wetness.js)
 const _nav = new THREE.Vector3();
 // how far off each kind of site is drawn: the landmarks you find your way by far out under the mist, the minor sites
 // (the farmhouse, the olive markers, the caves) only a little way beyond it

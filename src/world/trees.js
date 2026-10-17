@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import QTREES from '../../assets/models/qtrees.js';
 import QBUSH from '../../assets/models/qbushes.js';
 import { clamp, lerp } from '../util/math.js';
+import { patchWet } from './wetness.js';
 
 let seed = 1337;
 const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -378,6 +379,7 @@ function propGeo(species, v) {
 }
 const propMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
 propMat.onBeforeCompile = (sh) => {
+  patchWet(sh, { dark: 0.66, gloss: 0.75, shine: 0.1 });   // bark and stone darken in the rain (only a little gloss: the far trees' crowns share this material)
   sh.uniforms.uWind = windUniformEarly;
   sh.vertexShader = 'uniform float uWind;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
     vec4 ipp = instanceMatrix[3];
@@ -393,6 +395,7 @@ export const A2C_FRAG = `#ifdef USE_ALPHATEST
 #endif`;
 const leafMat = new THREE.MeshStandardMaterial({ map: leafTex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85, alphaToCoverage: true });
 leafMat.onBeforeCompile = (sh) => {
+  patchWet(sh, { dark: 0.86, gloss: 1, shine: 0 });   // wet leaves only a little darker (any gloss turns a crown milky in the sun)
   sh.uniforms.uWind = windUniformEarly; Object.assign(sh.uniforms, LIGHT_U);
   // leaves glow where the sun shines through them (looking towards the sun)
   sh.fragmentShader = 'uniform vec3 uSunDir, uSunCol; varying vec3 vLeafW;\n' + sh.fragmentShader.replace('#include <alphatest_fragment>', A2C_FRAG)

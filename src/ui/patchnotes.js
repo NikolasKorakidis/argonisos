@@ -4,6 +4,18 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-7', name: 'Patch 7', title: 'After the Rain', date: '17 October 2026',
+    intro: 'The rain now soaks the island, and it no longer falls inside your house.',
+    sections: [
+      { t: 'Weather', icon: 'wet', items: [
+        'Fixed: rain fell inside houses you had built, even under a roof. A roof now keeps the rain out, and the ground under it stays dry.',
+        '<b>New rain</b>: thousands of drops slanting with the wind, harder in a storm. Only a little gets through the leaves under a tree.',
+        '<b>The world gets wet</b>: in the rain the ground, stone, wood, thatch and leaves turn darker and glisten, and slowly dry again afterwards, faster in the sun.',
+        '<b>Puddles</b> gather on flat open ground as the rain goes on, and the drops ring the puddles, the sea and the marsh with ripples.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-6', name: 'Patch 6', title: 'Smooth Going', date: '17 October 2026',
     intro: 'Nothing new to find, but the island runs more smoothly as you travel.',
     sections: [
