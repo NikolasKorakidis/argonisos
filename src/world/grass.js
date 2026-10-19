@@ -6,7 +6,7 @@
 // thins away between GRASS_R and GRASS_END, inside the mist (all in reach.js).
 import * as THREE from 'three';
 import { scene } from '../render/core.js';
-import { windUniform, LIGHT_U } from './trees.js';
+import { windUniform, LIGHT_U, WIND_U } from './trees.js';
 import { GRASS_R, GRASS_END } from './reach.js';
 import { cutList, onCutsChanged, shapeGround } from './groundcut.js';
 import { PRIORITY } from './pool.js';
@@ -17,7 +17,7 @@ export const GRASS = { mesh: null, far: null, flowers: [] };
 export const TEX_N = 400, TEX_SIZE = 248;      // 0.62 m per texel over 248 m, re-centred when you move 25 m (the far carpet, 95 m out, never runs off it)
 const NEAR_TILE = 76, FAR_TILE = 2 * GRASS_END, FAR_COUNT = 100000;
 const FAR_KEEP = (FAR_COUNT / FAR_TILE ** 2) / (160000 / NEAR_TILE ** 2);   // how sparse the far carpet is next to the near one
-export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new THREE.Vector2() }, uTile: { value: NEAR_TILE }, uHeight: { value: null },
+export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { value: new THREE.Vector2() }, uTile: { value: NEAR_TILE }, uHeight: { value: null },
   uOrigin: { value: new THREE.Vector2(-1e6, -1e6) }, uSize: { value: TEX_SIZE },
   uBaseA: { value: new THREE.Color(0x1d3a24) }, uBaseB: { value: new THREE.Color(0x3a4a1e) },
   uTipA: { value: new THREE.Color(0x7fae45) }, uTipB: { value: new THREE.Color(0xc9c35a) } };
@@ -30,7 +30,7 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
     const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 });
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, U);
-      sh.vertexShader = `uniform float uWind, uTile, uSize; uniform vec2 uCenter, uOrigin; uniform sampler2D uHeight; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.vertexShader
+      sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.vertexShader
         .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0.0, 1.0, 0.0);')   // soft, uniform lighting like a painted field
         .replace('#include <begin_vertex>', `
           vec3 ip = instanceMatrix[3].xyz;
@@ -56,10 +56,12 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
           float gh = position.y / ${H.toFixed(2)};
           float gust = sin(uWind * 0.6 + wp.x * 0.05) * 0.5 + 0.5;
           // gusts sweeping across the meadow: bands that bend the grass further and catch the light as they pass
-          float wave = smoothstep(0.6, 1.0, sin(dot(wp, vec2(0.045, 0.028)) - uWind * 1.25) * 0.5 + 0.5 + (fract(sin(dot(floor(wp / 11.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.25);
+          float wave = smoothstep(0.6, 1.0, sin(dot(wp, uWindDir) * 0.055 - uWind * (1.0 + uWindStr * 1.2)) * 0.5 + 0.5 + (fract(sin(dot(floor(wp / 11.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.25);   // (rolling downwind)
           float bend = gh * gh * min(sc, 1.6) * (0.07 + gust * 0.1) * (1.0 + wave * 1.3) * (1.0 + tl * 0.8);   // (tall grass sways further, but not wildly)
           p.x += sin(uWind * 1.9 + wp.x * 0.35 + wp.y * 0.22) * bend;
           p.z += cos(uWind * 1.5 + wp.y * 0.3) * bend * 0.7;
+        // and every blade leans downwind, further in the gusts and the rolling waves (a gentle lean in a breeze, flattened in a storm)
+        float lean = gh * gh * min(sc, 1.6) * uWindStr * (0.3 + gust * 0.25 + wave * 0.45) * 0.42; p.xz += uWindDir * lean; p.y -= lean * 0.35;
           vec2 away = wp - uCenter; float pd = length(away), push = (1.0 - smoothstep(0.25, 1.5, pd)) * gh * sc;   // blades part around your legs
           p.xz += away / max(pd, 0.001) * push * 0.55; p.y *= 1.0 - push * 0.35;
           vec3 transformed = p + vec3(wp.x, hm.r - 0.03, wp.y) - ip;
@@ -88,7 +90,7 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
     const fm = new THREE.MeshStandardMaterial({ roughness: 0.7 });
     fm.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, grassU);
-      sh.vertexShader = `uniform float uWind, uTile, uSize; uniform vec2 uCenter, uOrigin; uniform sampler2D uHeight;\n` + sh.vertexShader.replace('#include <begin_vertex>', `
+      sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight;\n` + sh.vertexShader.replace('#include <begin_vertex>', `
         vec3 ip = instanceMatrix[3].xyz;
         vec2 wp = ip.xz + uTile * floor((uCenter - ip.xz) / uTile + 0.5);
         vec4 hm = texture2D(uHeight, (wp - uOrigin) / uSize);
@@ -98,6 +100,7 @@ export const grassU = { ...LIGHT_U, uWind: windUniform, uCenter: { value: new TH
         vec3 p = position * on * ${size.toFixed(2)} * (0.8 + rnd * 0.5);
         float bend = max(position.y, 0.0) * 0.12;
         p.x += sin(uWind * 1.9 + wp.x * 0.35 + wp.y * 0.22) * bend;
+        p.xz += uWindDir * max(position.y, 0.0) * uWindStr * 0.18;   // (nodding downwind)
         vec3 transformed = p + vec3(wp.x, hm.r - 0.03, wp.y) - ip;`);
     };
     const im = new THREE.InstancedMesh(geo, fm, count), mm = new THREE.Matrix4(), cc = new THREE.Color();

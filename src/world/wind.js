@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { scene, camera } from '../render/core.js';
 import { WET_U, SHELTER } from './wetness.js';
 import { grassU } from './grass.js';
+import { WIND_U } from './trees.js';
 
 export const WIND = { dir: new THREE.Vector2(1, 0.35).normalize(), speed: 3, gust: 0, angle: 0.34 };
 let target = 3, drift = 0, gustT = 0, gustTo = 0;
@@ -27,7 +28,7 @@ export function updateWind(dt, { rain = 0, storm = 0, overcast = 0 } = {}) {
 // own clock (where it starts, how it waves, whether it loops, all from hashes of the square and the cycle). An instance
 // draws whichever square lies at its place in a GRID×GRID patch round the camera, so walking only changes which squares
 // are drawn, never where a line is; at the patch's edge they fade.
-const GRID = 12, CELL = 4, SEG = 96, N = GRID * GRID;
+const GRID = 14, CELL = 8, SEG = 96, N = GRID * GRID;   // (out to ~55 m, where the mist begins: spread wide, never crowding round you)
 export const WINDLINE_U = { uCam: { value: new THREE.Vector3() }, uTime: { value: 0 }, uDir: { value: new THREE.Vector2(1, 0) }, uSpeed: { value: 3 },
   uAmount: { value: 0 }, uLight: { value: 1 } };
 const geo = new THREE.InstancedBufferGeometry(), pos = [], idx = [];
@@ -60,7 +61,7 @@ const mat = new THREE.ShaderMaterial({
       if (h1(k * 3.3) > uAmount) return;                                    // (a calm square this time round)
       vec2 at = (cell + vec2(h1(k * 1.3), h1(k * 2.7))) * ${CELL.toFixed(1)};
       vec2 huv = (at - uOrigin) / uSize; if (huv.x <= 0.0 || huv.y <= 0.0 || huv.x >= 1.0 || huv.y >= 1.0) return;
-      float ground = texture2D(uHeight, huv).r, lift = 1.0 + h1(k * 4.1) * h1(k * 5.3) * 3.5;   // (over the tall grass)
+      float ground = texture2D(uHeight, huv).r, lift = 1.2 + h1(k * 4.1) * h1(k * 5.3) * 5.0;   // (over the tall grass)
       if (ground + lift < max(coverTop(uShelter, at), coverTop(uCanopy, at)) + 0.2 || ground < -0.5) return;   // (in the open: not under a roof or a crown, not over the sea)
       // each strand a little off the wind's line, so they flow together without being ruled straight
       float tw = (h1(k * 11.7) - 0.5) * 0.35; vec2 dir2 = vec2(uDir.x * cos(tw) - uDir.y * sin(tw), uDir.x * sin(tw) + uDir.y * cos(tw));
@@ -75,9 +76,9 @@ const mat = new THREE.ShaderMaterial({
       // the drawn part slides along the strand over its life, long and tapering at both ends
       float head = ph * 1.5 + 0.1, tail = head - 0.8, along = clamp((u - tail) / (head - tail), 0.0, 1.0);
       float vis = step(tail, u) * step(u, head) * pow(sin(along * 3.1416), 0.8);
-      float bright = 0.5 + pow(h1(k * 12.3), 3.0) * 0.45;                 // (most soft, a few bright)
-      float dist = distance(p, cameraPosition), width = dist * 0.0024 * (0.7 + bright * 0.6) * (0.3 + 0.7 * vis);   // (a hairline: the same pixels wide near or far)
-      vA = vis * bright * smoothstep(0.0, 0.15, ph) * (1.0 - smoothstep(0.8, 1.0, ph)) * (1.0 - smoothstep(16.0, 24.0, length(p.xz - uCam.xz))) * smoothstep(1.5, 3.5, dist);
+      float bright = 0.28 + pow(h1(k * 12.3), 3.0) * 0.32;                // (most faint, a few a little brighter)
+      float dist = distance(p, cameraPosition), width = dist * 0.0019 * (0.8 + bright * 0.5) * (0.3 + 0.7 * vis);   // (a hairline: the same pixels wide near or far)
+      vA = vis * bright * smoothstep(0.0, 0.15, ph) * (1.0 - smoothstep(0.8, 1.0, ph)) * (1.0 - smoothstep(40.0, 55.0, length(p.xz - uCam.xz))) * smoothstep(5.0, 11.0, dist);   // (none in your face, the far ones into the mist)
       gl_Position = projectionMatrix * viewMatrix * vec4(p + w * position.y * width, 1.0);
     }`,
   fragmentShader: `uniform float uAmount, uLight; varying float vA, vS;
@@ -87,7 +88,10 @@ const lines = new THREE.Mesh(geo, mat); lines.frustumCulled = false; lines.rende
 
 // light: how bright the air is (dim at night); still: hold them in place (screenshot tests)
 export function updateWindLines(dt, { light = 1, rain = 0, still = false } = {}) {
-  const amount = still ? 0.4 : Math.min(0.9, 0.35 + Math.max(0, WIND.speed - 2.5) * 0.1) * (1 - rain * 0.4);
+  // what everything bends with (grass, flowers, trees, clouds): the direction, and a strength from a breeze to a storm
+  if (still) { WIND_U.uWindDir.value.set(0.94, 0.34); WIND_U.uWindStr.value = 0.1; }
+  else { WIND_U.uWindDir.value.copy(WIND.dir); WIND_U.uWindStr.value = Math.min(1.3, Math.max(0, (WIND.speed - 2.3) / 8) + WIND.gust * 0.25); }   // (fair weather ~0.1, rain ~0.6, a storm over 1)
+  const amount = still ? 0.3 : Math.min(0.75, 0.22 + Math.max(0, WIND.speed - 2.5) * 0.08);
   lines.visible = amount > 0.02 && light > 0.05; if (!lines.visible) return;
   WINDLINE_U.uTime.value = still ? 7.3 : WINDLINE_U.uTime.value + dt;   // (screenshot tests: held at one moment)
   WINDLINE_U.uCam.value.copy(camera.position); if (still) { WINDLINE_U.uDir.value.set(0.94, 0.34); WINDLINE_U.uSpeed.value = 3; }   // (screenshot tests: one fixed wind)

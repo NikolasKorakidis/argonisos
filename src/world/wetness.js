@@ -25,7 +25,7 @@ export function updateWetness(dt, rain, sun) {
 }
 
 // ---- Shelter
-const SIZE = 64, RES = 256, LIFT = 120, LAYER = 3;   // (layers 3 and 4: what the two shelter maps draw)
+const SIZE = 112, RES = 512, LIFT = 120, LAYER = 3;   // (layers 3 and 4: what the two shelter maps draw)
 const depthTarget = () => { const t = new THREE.WebGLRenderTarget(RES, RES, { depthBuffer: true, depthTexture: new THREE.DepthTexture(RES, RES) }); t.texture.generateMipmaps = false; return t; };
 const solid = depthTarget(), canopy = depthTarget(), CANOPY = LAYER + 1;
 const cam = new THREE.OrthographicCamera(-SIZE / 2, SIZE / 2, SIZE / 2, -SIZE / 2, 1, 400); cam.up.set(0, 0, -1);
