@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { PIECES, PIECE } from './pieces.js';
 import { heightAt } from '../world/gen.js';
 import { clearGrass } from '../world/grass.js';
-import { setCut } from '../world/groundcut.js';
+import { setCut, SHAPE } from '../world/groundcut.js';
 import { camera } from '../render/core.js';
 import { input, hit } from '../input.js';
 import { burst, dust, addShake } from '../render/fx.js';
@@ -74,6 +74,7 @@ function centreOf(def) {
   for (const b of def.solids || []) pts.push([b[0], b[1], b[2]]);
   const src = pts.length ? pts : def.snaps; return [0, 1, 2].map((k) => src.reduce((a, p) => a + p[k], 0) / src.length);
 }
+const FILL_MAX = 2.5, FILL_TOUCH = 1.2, WALL_W = 3;   // (the most ground a piece fills under itself; how near the ground it must come somewhere; a wall's width)
 const toWorld = (pos, rot, l, out = new THREE.Vector3()) => { const c = Math.cos(rot), s = Math.sin(rot); return out.set(pos.x + l[0] * c + l[2] * s, pos.y + l[1], pos.z - l[0] * s + l[2] * c); };
 
 export class Build {
@@ -245,6 +246,11 @@ export class Build {
     for (const p of this.near(pos.x, pos.z, 3)) { if (p.id !== 'doorframe') continue; for (const [side, turn] of [[-0.7, 0], [0.7, Math.PI]]) { const w = toWorld(p.pos, p.rot, [side, 0, 0]), dr = Math.atan2(Math.sin(rot - p.rot - turn), Math.cos(rot - p.rot - turn)); if (w.distanceTo(pos) < 0.05 && Math.abs(dr) < 0.05) return p; } }
     return null;
   }
+  // whether the ground under a rectangle at level y should be filled up to it: the piece nearly touches the ground
+  // somewhere (a hillside floor or wall) and nowhere stands more than FILL_MAX over it (not a balcony, not on stilts)
+  fills(c, hw, hd, rot, y) { const cs = Math.cos(rot), sn = Math.sin(rot); let lo = Infinity, hi = -Infinity;
+    for (const [u, v] of [[0, 0], [-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd]]) { const g = y - heightAt(c.x + u * cs + v * sn, c.z - u * sn + v * cs); lo = Math.min(lo, g); hi = Math.max(hi, g); }
+    return lo <= FILL_TOUCH && hi <= FILL_MAX; }
   grounded(def, pos, rot) { for (const s of def.snaps) { const w = toWorld(pos, rot, s, _v); if (w.y - heightAt(w.x, w.z) < 0.35) return true; } return false; }
   // neighbours: pieces sharing a snap point, or touching
   neighbours(def, pos, rot, self) {
@@ -324,9 +330,14 @@ export class Build {
     p.snaps = this.snapsOf(def, pos, rot); p.boxes = this.boxes(def, pos, rot);
     this.index(p, true); this.placed.push(p);
     this.addColliders(p);
-    // a floor near the ground presses it down under its boards (flat floors only: stairs keep the slope)
+    // the ground meets what's built on it (groundcut.js): under a floor it's pressed down below the boards and, near the
+    // ground, filled up to its beams; under a wall standing on the ground it's levelled to the wall's foot. Flat floors
+    // only (stairs keep the slope); see fills() for what counts as near the ground
     const ft = def.cat === 'Floors' && def.tops?.length === 1 && def.tops[0].y !== undefined ? def.tops[0] : null;
-    if (ft) { const c = toWorld(pos, rot, [(ft.x0 + ft.x1) / 2, 0, (ft.z0 + ft.z1) / 2]); setCut(p.uid, { x: c.x, z: c.z, hw: Math.abs(ft.x1 - ft.x0) / 2, hd: Math.abs(ft.z1 - ft.z0) / 2, rot, y: pos.y + ft.y - 0.3 }); }
+    if (ft) { const c = toWorld(pos, rot, [(ft.x0 + ft.x1) / 2, 0, (ft.z0 + ft.z1) / 2]), hw = Math.abs(ft.x1 - ft.x0) / 2, hd = Math.abs(ft.z1 - ft.z0) / 2, y = pos.y + ft.y - 0.3;
+      setCut(p.uid, { x: c.x, z: c.z, hw, hd, rot, y, fill: this.fills(c, hw, hd, rot, y), shape: SHAPE.floor }); }
+    else if (def.cat === 'Walls' && !def.door && this.fills(pos, WALL_W / 2, 0.18, rot, pos.y - 0.04)) {
+      const y = pos.y - 0.04; setCut(p.uid, { x: pos.x, z: pos.z, hw: WALL_W / 2, hd: 0.18, rot, y, fill: this.fills(pos, WALL_W / 2, 0.18, rot, y), shape: SHAPE.wall }); }
     // grass doesn't grow through floors and furniture
     const bb = p.boxes.reduce((a, b) => a.union(b), new THREE.Box3()); if (bb.min.y < heightAt(pos.x, pos.z) + 1.2) clearGrass(p.uid, { x: pos.x, z: pos.z, hw: (def.tops?.[0] ? Math.abs(def.tops[0].x1 - def.tops[0].x0) / 2 : (def.solids?.[0]?.[3] ?? 1) / 2) + 0.35, hd: (def.tops?.[0] ? Math.abs(def.tops[0].z1 - def.tops[0].z0) / 2 : (def.solids?.[0]?.[5] ?? 1) / 2) + 0.35, rot });
     if (def.fire || def.torch) { p.state.fuel ??= def.fire ? 3 : 4; p.state.lit ??= true; this.addFlame(p); }

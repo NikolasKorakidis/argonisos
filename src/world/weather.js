@@ -9,6 +9,7 @@ import { biomeWeights, BIOME } from './gen.js';
 import { clamp, lerp } from '../util/math.js';
 import { updateWetness } from './wetness.js';
 import { updateRain } from './rain.js';
+import { WIND, updateWind } from './wind.js';
 
 const TYPES = {
   clear: { overcast: 0, rain: 0, fog: 0 },
@@ -72,8 +73,9 @@ export function updateWeather(dt, pos, light, onThunder) {
   scene.fog.color.lerp(_tint.setRGB(0.15, 0.175, 0.2).multiplyScalar(0.3 + light.day * 0.7), WEATHER.k.overcast * 0.85);
   // the world gets wet in the rain and dries in the sun
   updateWetness(dt, WEATHER.k.rain, light.day * (1 - WEATHER.k.overcast * 0.6));
-  // rain, slanting more in a storm, as bright as the air
-  _wind.set(2.2 + WEATHER.storm * 6, 0.8 + WEATHER.storm * 2);
+  // the wind, by the weather; the rain slants with it, as bright as the air
+  updateWind(dt, { rain: WEATHER.k.rain, storm: WEATHER.storm, overcast: WEATHER.k.overcast });
+  _wind.copy(WIND.dir).multiplyScalar(WIND.speed * (0.7 + WIND.gust * 0.3));
   updateRain(dt, WEATHER.k.rain, _wind, 0.22 + light.day * 0.78);
   // lightning in storms
   WEATHER.boltT -= dt;

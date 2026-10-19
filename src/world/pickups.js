@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { heightAt } from './gen.js';
 import { clearGrass } from './grass.js';
-import { cutLimit, onCutsChanged } from './groundcut.js';
+import { shapeGround, onCutsChanged } from './groundcut.js';
 import { CELL, layoutPickups, rnd } from './pickup-layout.js';
 import { PRIORITY } from './pool.js';
 export { layoutPickups };
@@ -75,8 +75,8 @@ export class Pickups {
       if (np < 2048) { nrm.set(heightAt(p.x - 0.5, p.z) - heightAt(p.x + 0.5, p.z), 1, heightAt(p.x, p.z - 0.5) - heightAt(p.x, p.z + 0.5)).normalize(); qq.setFromUnitVectors(up, nrm).multiply(q);
         v.set(p.x, p.y + 0.03, p.z); this.patch.setMatrixAt(np++, m4.compose(v, qq, ss.setScalar(rad))); }
     };
-    // (natural ones under a floor you've built stay hidden: the ground there is pressed down below the boards)
-    for (const list of this.cells.values()) for (const p of list) if (!this.isTaken(p.id) && cutLimit(p.x, p.z) > p.y - 0.05) put(p.kind, p);
+    // (natural ones where a building has reshaped the ground stay hidden: pressed down under the boards, or buried)
+    for (const list of this.cells.values()) for (const p of list) if (!this.isTaken(p.id) && Math.abs(shapeGround(p.y, p.x, p.z) - p.y) < 0.05) put(p.kind, p);
     for (const d of this.drops) put('drop', d);
     // keep the grass short round everything lying about, so it can be found
     const keep = new Set(this.visible.map((p) => 'pk' + p.id));
