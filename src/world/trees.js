@@ -22,6 +22,9 @@ function mesh(geo, mat, x = 0, y = 0, z = 0, parent) { const m = new THREE.Mesh(
 
 const windUniformEarly = { value: 0 };
 // the sun (or moon) for light shining through leaves and grass blades: direction towards it, and its colour × strength
+// The wind everything bends with (set by wind.js each frame): its direction across the ground and its strength (0 calm,
+// about 0.25 in a breeze, 1 and more in a storm)
+export const WIND_U = { uWindDir: { value: new THREE.Vector2(0.94, 0.34) }, uWindStr: { value: 0.25 } };
 export const LIGHT_U = { uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(0, 0, 0) } };
 // --- Props: every tree/rock species is one merged geometry, drawn with InstancedMesh per 100 m chunk
 // (frustum culling per chunk keeps thousands of trees cheap). Trees sway in the wind in the vertex shader.
@@ -380,12 +383,15 @@ function propGeo(species, v) {
 const propMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
 propMat.onBeforeCompile = (sh) => {
   patchWet(sh, { dark: 0.66, gloss: 0.75, shine: 0.1 });   // bark and stone darken in the rain (only a little gloss: the far trees' crowns share this material)
-  sh.uniforms.uWind = windUniformEarly;
-  sh.vertexShader = 'uniform float uWind;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+  sh.uniforms.uWind = windUniformEarly; Object.assign(sh.uniforms, WIND_U);
+  sh.vertexShader = 'uniform float uWind, uWindStr; uniform vec2 uWindDir;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
     vec4 ipp = instanceMatrix[3];
-    float sway = max(position.y - 2.0, 0.0) * 0.018;
+    float sway = max(position.y - 2.0, 0.0) * 0.018 * (1.0 + uWindStr);
     transformed.x += sin(uWind * 1.1 + ipp.x * 0.13 + ipp.z * 0.07) * sway;
-    transformed.z += cos(uWind * 0.9 + ipp.z * 0.11) * sway * 0.7;`);
+    transformed.z += cos(uWind * 0.9 + ipp.z * 0.11) * sway * 0.7;
+    // and the whole tree leans downwind, swaying as the gusts come and go (the wind turned into the tree's own frame)
+    vec3 wl = normalize(transpose(mat3(instanceMatrix)) * vec3(uWindDir.x, 0.0, uWindDir.y));
+    transformed.xz += wl.xz * pow(max(position.y - 1.5, 0.0), 1.3) * uWindStr * (0.022 + 0.014 * sin(uWind * 0.9 + ipp.x * 0.07 + ipp.z * 0.05));`);
 };
 // Leaf and impostor cut-outs: instead of a hard alpha test (which shimmers as you move), the edge is sharpened to about one
 // pixel and handed to the MSAA samples as coverage (alpha to coverage), so leaves get smooth, stable edges
@@ -396,7 +402,7 @@ export const A2C_FRAG = `#ifdef USE_ALPHATEST
 const leafMat = new THREE.MeshStandardMaterial({ map: leafTex, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85, alphaToCoverage: true });
 leafMat.onBeforeCompile = (sh) => {
   patchWet(sh, { dark: 0.86, gloss: 1, shine: 0 });   // wet leaves only a little darker (any gloss turns a crown milky in the sun)
-  sh.uniforms.uWind = windUniformEarly; Object.assign(sh.uniforms, LIGHT_U);
+  sh.uniforms.uWind = windUniformEarly; Object.assign(sh.uniforms, LIGHT_U, WIND_U);
   // leaves glow where the sun shines through them (looking towards the sun)
   sh.fragmentShader = 'uniform vec3 uSunDir, uSunCol; varying vec3 vLeafW;\n' + sh.fragmentShader.replace('#include <alphatest_fragment>', A2C_FRAG)
     .replace('#include <tonemapping_fragment>', `float shine = pow(max(dot(normalize(vLeafW - cameraPosition), uSunDir), 0.0), 3.0);
@@ -408,11 +414,13 @@ leafMat.onBeforeCompile = (sh) => {
     #else
       vLeafW = (modelMatrix * vec4(transformed, 1.0)).xyz;
     #endif`);
-  sh.vertexShader = 'uniform float uWind;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+  sh.vertexShader = 'uniform float uWind, uWindStr; uniform vec2 uWindDir;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
     vec4 ipp = instanceMatrix[3];
-    float sway = max(position.y - 2.0, 0.0) * 0.02;
-    transformed.x += sin(uWind * 1.1 + ipp.x * 0.13 + ipp.z * 0.07) * sway + sin(uWind * 4.0 + position.x * 3.0 + position.y) * 0.035;
-    transformed.z += cos(uWind * 0.9 + ipp.z * 0.11) * sway * 0.7 + cos(uWind * 3.6 + position.z * 3.0) * 0.03;`);
+    float sway = max(position.y - 2.0, 0.0) * 0.02 * (1.0 + uWindStr), flut = 1.0 + uWindStr * 1.6;   // (leaves flutter harder in a strong wind)
+    transformed.x += sin(uWind * 1.1 + ipp.x * 0.13 + ipp.z * 0.07) * sway + sin(uWind * 4.0 * (1.0 + uWindStr * 0.5) + position.x * 3.0 + position.y) * 0.035 * flut;
+    transformed.z += cos(uWind * 0.9 + ipp.z * 0.11) * sway * 0.7 + cos(uWind * 3.6 * (1.0 + uWindStr * 0.5) + position.z * 3.0) * 0.03 * flut;
+    vec3 wl = normalize(transpose(mat3(instanceMatrix)) * vec3(uWindDir.x, 0.0, uWindDir.y));   // (leaning downwind with the trunk)
+    transformed.xz += wl.xz * pow(max(position.y - 1.5, 0.0), 1.3) * uWindStr * (0.022 + 0.014 * sin(uWind * 0.9 + ipp.x * 0.07 + ipp.z * 0.05));`);
 };
 
 const isLow = () => PROP_LO;

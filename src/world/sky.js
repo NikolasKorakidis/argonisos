@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Sky } from '../../vendor/three/jsm/objects/Sky.js';
 import { scene, camera, renderer, sun, hemi } from '../render/core.js';
 import { clamp, lerp } from '../util/math.js';
+import { WIND_U } from './trees.js';
 
 export const DAY_SECONDS = 32 * 60, DAY_FRACTION = 24 / 32;
 
@@ -141,7 +142,8 @@ export function updateSky(t, dt, time, overcast = 0, dark = 0) {
   // clouds drift with the wind, warm at dusk, dark at night
   const cc = _c1.setRGB(1.3, 1.3, 1.34).lerp(_c2.setRGB(1.6, 0.95, 0.75), dusk * 0.6).lerp(_c2.setRGB(0.1, 0.12, 0.2), night);
   const wind = 2 + overcast * 20;
-  for (const c of clouds) { c.position.x += dt * wind; if (c.position.x > 3000) c.position.x = -3000; c.material.color.copy(cc).lerp(_c2.setRGB(0.55, 0.58, 0.64).multiplyScalar(0.4 + day * 0.6), overcast * 0.85); }
+  const wd = WIND_U.uWindDir.value;
+  for (const c of clouds) { c.position.x += dt * wind * wd.x; c.position.z += dt * wind * wd.y; for (const k of ['x', 'z']) { if (c.position[k] > 3000) c.position[k] -= 6000; else if (c.position[k] < -3000) c.position[k] += 6000; } c.material.color.copy(cc).lerp(_c2.setRGB(0.55, 0.58, 0.64).multiplyScalar(0.4 + day * 0.6), overcast * 0.85); }
   for (const c of stormClouds) {
     c.visible = overcast > 0.02; if (!c.visible) continue;
     c.userData.a += dt * wind * 0.00006;

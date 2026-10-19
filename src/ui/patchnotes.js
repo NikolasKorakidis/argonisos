@@ -12,8 +12,9 @@ export const PATCHES = [
         'A floor high up (an upper storey, a balcony, anything on posts) leaves the ground alone, and taking a piece down puts the ground back as it was.',
       ] },
       { t: 'Weather', icon: 'wet', items: [
-        '<b>Wind you can see</b>: soft white streaks drift through the air with the wind, now and then curling into a loop; a few in a breeze, many in a gale. They blow in the open, not under roofs or trees.',
+        '<b>Wind you can see</b>: faint, thin white strands flow through the air with the wind, spread out across the land into the distance, waving gently and now and then curling into a small hook; a few in a breeze, more in a gale. They belong to the place they blow through (they don\'t follow you), and only in the open, not under roofs or trees.',
         'The wind now has a direction that slowly changes, and it grows stronger as the weather turns. The rain slants with it.',
+        '<b>Everything blows with the wind</b>: the grass and flowers lean downwind with waves of gusts rolling across the meadows, the trees sway and lean that way with their leaves fluttering, and the clouds drift along it. Gentle on a fair day, wild in a storm.',
       ] },
     ],
   },

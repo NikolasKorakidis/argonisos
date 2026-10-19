@@ -91,7 +91,7 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   them again. The world's own noise (`noise`, `fbm`, `hash2`) belongs to `gen.js`.
 - **Weather look** (graphics plan in `docs/plans/graphics-plan.md`): one wetness (`wetness.js`: `wettable()` patches a
   material, each kind with its own program key; clones lose patches, so placed pieces use `wetLike`), one wind
-  (`wind.js`: direction, speed, gusts; the rain and the wind lines follow it), and the shelter maps (`wetness.js`, two
+  (`wind.js`: direction, speed, gusts → `WIND_U` in `trees.js`: grass, flowers, trees, clouds, rain and wind lines all follow it), and the shelter maps (`wetness.js`, two
   top-down depth maps of roofs/buildings and tree crowns round the player, kept up to date): under cover no rain falls,
   nothing gets wet and no wind lines blow. Rain and wind lines are GPU-only (`rain.js`, `wind.js`).
 
