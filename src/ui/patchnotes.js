@@ -4,6 +4,20 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-8', name: 'Patch 8', title: 'Wind and Earth', date: '19 October 2026',
+    intro: 'You can see the wind now, and what you build sits on the ground instead of hanging over it.',
+    sections: [
+      { t: 'Building', icon: 'hammerBuild', items: [
+        '<b>The ground meets your building</b>: on a slope, the earth now rises to meet a floor or a wall built on it, with a gentle grassy bank round the edge, so nothing is left hanging in the air. Where the ground is higher it is still pressed down under the boards.',
+        'A floor high up (an upper storey, a balcony, anything on posts) leaves the ground alone, and taking a piece down puts the ground back as it was.',
+      ] },
+      { t: 'Weather', icon: 'wet', items: [
+        '<b>Wind you can see</b>: soft white streaks drift through the air with the wind, now and then curling into a loop; a few in a breeze, many in a gale. They blow in the open, not under roofs or trees.',
+        'The wind now has a direction that slowly changes, and it grows stronger as the weather turns. The rain slants with it.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-7', name: 'Patch 7', title: 'After the Rain', date: '17 October 2026',
     intro: 'The rain now soaks the island, and it no longer falls inside your house.',
     sections: [

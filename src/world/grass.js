@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { scene } from '../render/core.js';
 import { windUniform, LIGHT_U } from './trees.js';
 import { GRASS_R, GRASS_END } from './reach.js';
-import { cutList, onCutsChanged, CUT_EDGE, CUT_SLOPE } from './groundcut.js';
+import { cutList, onCutsChanged, shapeGround } from './groundcut.js';
 import { PRIORITY } from './pool.js';
 import { wettable } from './wetness.js';
 
@@ -159,15 +159,11 @@ function stamp(c) {
       const tl = Math.max(0, Math.floor(data[o] / 2) * 2); data[o] = data[o] > 0 ? tl + (data[o] - tl) * f : data[o]; data[o + 2] *= f;   // grass and flowers both (keeping the tallness packed in with the grass)
     }
   }
-  // under and around floors the blades stand on the pressed-down ground (the same rule as the terrain shader)
+  // under and around buildings the blades stand on the reshaped ground (the same rule as the terrain shader)
   for (const c of cutList()) {
-    const r = Math.hypot(c.hw, c.hd) + CUT_EDGE + 3, i0 = Math.max(0, Math.floor((c.x - r - x0) / k)), i1 = Math.min(N - 1, Math.ceil((c.x + r - x0) / k));
+    const r = Math.hypot(c.hw, c.hd) + c.edge + 4, i0 = Math.max(0, Math.floor((c.x - r - x0) / k)), i1 = Math.min(N - 1, Math.ceil((c.x + r - x0) / k));
     const j0 = Math.max(0, Math.floor((c.z - r - z0) / k)), j1 = Math.min(N - 1, Math.ceil((c.z + r - z0) / k));
-    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-      const dx = x0 + (i + 0.5) * k - c.x, dz = z0 + (j + 0.5) * k - c.z, u = Math.abs(dx * c.cs - dz * c.sn) - c.hw, v = Math.abs(dx * c.sn + dz * c.cs) - c.hd;
-      const out = Math.max(u, v) > 0 ? Math.hypot(Math.max(u, 0), Math.max(v, 0)) : Math.max(u, v), o = (j * N + i) * 4;
-      data[o] = Math.min(data[o], c.y + CUT_SLOPE * Math.max(0, out - CUT_EDGE));
-    }
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const o = (j * N + i) * 4; data[o] = shapeGround(base[o], x0 + (i + 0.5) * k, z0 + (j + 0.5) * k); }
   }
 }
 export function updateGrass(pool, pos) {

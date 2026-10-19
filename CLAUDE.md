@@ -33,7 +33,8 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
 - A test step is a page snippet returning `true` or a reason string. In snippets `g` is `AG.game`, `P` the player, `B` the
   build system, `C` crafting, `inv` the pack, `V` `THREE.Vector3`: don't redeclare those names.
 - Test setup: saving off, `S.peaceful`, clear weather, `g.weatherRain = () => 0` (random rain puts fires out), the owl's
-  talks marked heard (her dialogue pauses the world). Screenshot tests also set `S.still` (holds wind, water and clouds).
+  talks marked heard (her dialogue pauses the world). Screenshot tests also set `S.still` (holds wind, water, clouds and
+  the wind lines, which then use one fixed wind).
 
 ## How a frame runs (`src/main.js` `loop`)
 input → `game.update` (creatures, trial, build, combat…) → `player.update` → sky, weather, fog → giant forest, water,
@@ -62,8 +63,11 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   600, minor sites' `VIEW_R`). Change them together. The focus blur is the `focus` uniform.
 - Saves remember felled trees and pickups by their place in the layout: bump `WORLD_LAYOUT` in `save.js` whenever flora
   or pickup layout changes.
-- **The ground isn't just `heightAt`.** Floors press the terrain down (`groundcut.js`): use `groundAt(x, z)` for where
-  things stand, `player.groundHere(x, z, y)` to include floors and stairs, and `pickups.landAt` for dropped items.
+- **The ground isn't just `heightAt`.** Buildings reshape the terrain (`groundcut.js`): under a floor, and a wall on the
+  ground, it's cut down to the piece's level and, if the piece is near the ground (`build.fills`), filled up to it with a
+  bank; cuts always win. One rule (`shapeGround`) for the terrain shader, the grass map, pickups and walking: use
+  `groundAt(x, z)` for where things stand, `player.groundHere(x, z, y)` to include floors and stairs, and
+  `pickups.landAt` for dropped items. `heightAt` stays the raw land (support and snapping use it).
 - **Vegetation is batched.** Near trees are one `InstancedMesh` per species and variant across all cells, re-packed every
   frame in `veg.cull`. Hide or find a tree through `veg.hideTree(cell, i, on)` / `veg.treeAt(mesh, instanceId)` and remove
   it with `veg.remove(cx, cz, i)`; never edit instance matrices directly.
@@ -85,12 +89,17 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   Anything a worker imports must stay free of three.js and the DOM.
 - Shared helpers (`clamp`, `lerp`, `smooth`, `seeded`, `hash21`, `tileNoise`) are in `src/util/math.js`; don't define
   them again. The world's own noise (`noise`, `fbm`, `hash2`) belongs to `gen.js`.
+- **Weather look** (graphics plan in `docs/plans/graphics-plan.md`): one wetness (`wetness.js`: `wettable()` patches a
+  material, each kind with its own program key; clones lose patches, so placed pieces use `wetLike`), one wind
+  (`wind.js`: direction, speed, gusts; the rain and the wind lines follow it), and the shelter maps (`wetness.js`, two
+  top-down depth maps of roofs/buildings and tree crowns round the player, kept up to date): under cover no rain falls,
+  nothing gets wet and no wind lines blow. Rain and wind lines are GPU-only (`rain.js`, `wind.js`).
 
 ## Code map
 - `src/world`: `gen.js` heights, biomes, the Olympos peak · `sites.js` site placement and pads · `flora.js` species and
   layout · `reach.js` how far the mist and grass reach · `vegetation.js` near/mid/impostor bands · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
   `terrain.js` + `terrain-worker.js` (worker pool, `pool.js`) · `structures.js` + `greek.js` the sites' buildings and
-  props · `sky.js`, `weather.js`, `water.js`, `giantwood.js`, `ambient.js`, `stormwall.js` · `groundcut.js` · `pickups.js`
+  props · `sky.js`, `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`), `water.js`, `giantwood.js`, `ambient.js`, `stormwall.js` · `groundcut.js` · `pickups.js`
   (+ `pickup-layout.js`) · `colliders.js`. `src/util/math.js` shared helpers. `src/assets.js` model and texture loading.
 - `src/render`: `core.js` renderer, composer, shadows, adaptive resolution · `atmosphere.js` mist, haze, sun shafts, cloud
   shadows, grade · `occlusion.js` fades what blocks the camera · `fx.js`, `lights.js`.

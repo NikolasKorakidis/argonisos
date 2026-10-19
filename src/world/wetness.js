@@ -34,10 +34,10 @@ WET_U.uShelter.value = solid.depthTexture; WET_U.uCanopy.value = canopy.depthTex
 let lastX = 1e9, lastZ = 1e9, timer = 0;
 // roots(): { solid: placed buildings and site groups, canopy: the near trees }; drawn depth only, no shadows. Re-drawn
 // every half second (so a roof you've just built shelters at once) or when you've moved a few metres.
-export function updateShelter(renderer, scene, pos, roots, dt, force = false) {
+export function updateShelter(renderer, scene, pos, roots, dt, raining = true, force = false) {
   timer -= dt;
   if (!force && timer > 0 && Math.hypot(pos.x - lastX, pos.z - lastZ) < 3) return;
-  timer = 0.5; lastX = pos.x; lastZ = pos.z;
+  timer = raining ? 0.5 : 2; lastX = pos.x; lastZ = pos.z;
   const r = roots();
   for (const o of r.solid) o?.traverse((m) => { if (m.isMesh) m.layers.enable(LAYER); });
   for (const o of r.canopy) o?.traverse((m) => { if (m.isMesh) m.layers.enable(CANOPY); });

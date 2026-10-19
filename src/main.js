@@ -28,6 +28,7 @@ import { installGame } from './game/game.js';
 import { titleScreen, pauseMenu } from './ui/title.js';
 import { devMenu } from './ui/dev.js';
 import { wettable, updateShelter, WET } from './world/wetness.js';
+import { updateWindLines } from './world/wind.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -157,6 +158,7 @@ function loop() {
   const focus = S.fly ? camera.position : player.pos;
   updateSky(S.time, dt, t, atmo.overcast, atmo.dark);
   atmo = updateWeather(dt, focus, LIGHT, (k) => setTimeout(() => game.sound?.('thunder', Math.min(1.5, k * 0.6)), 300 + k * 900));
+  updateWindLines(dt, { light: Math.max(0.12, LIGHT.day), rain: WEATHER.k.rain, still: S.still });   // the wind drawn in the air (wind.js)
   // high up the air clears: from the hills, and from the top of Olympos, you see out across the island
   const up = Math.min(1.6, Math.max(0, (camera.position.y - 60) / 160)), clear = Math.min(1, Math.max(0, (camera.position.y - 90) / 140));
   scene.fog.near = (scene.fog.near + (300 - scene.fog.near) * clear) * (1 + up); scene.fog.far = (scene.fog.far + (2400 - scene.fog.far) * clear) * (1 + up * 1.4);   // (above the forest's own haze)
@@ -173,9 +175,9 @@ function loop() {
   hud.update(dt, clockText(), S.time >= DAY_FRACTION);
   veg.cull(camera, focus);   // the near trees worth drawing this frame
   game.structures?.cull(camera.position, dt);
-  // what stands over the ground round you (roofs, the sites, tree crowns): below it stays dry and no rain falls; only
-  // re-drawn while the world is wet or it rains
-  if (WET.value > 0.001 || WEATHER.k.rain > 0.02) updateShelter(renderer, scene, focus, () => ({ solid: [...(game.build?.placed || []).map((p) => p.obj), ...(game.structures?.groups || [])], canopy: [...veg.batches.values()].flatMap((b) => b.meshes) }), dt);
+  // what stands over the ground round you (roofs, the sites, tree crowns): below it stays dry, no rain falls and no wind
+  // lines blow; re-drawn every half second while it rains (a roof you've just built shelters at once), else every two
+  updateShelter(renderer, scene, focus, () => ({ solid: [...(game.build?.placed || []).map((p) => p.obj), ...(game.structures?.groups || [])], canopy: [...veg.batches.values()].flatMap((b) => b.meshes) }), dt, WET.value > 0.001 || WEATHER.k.rain > 0.02);
   const bw = biomeWeights(focus.x, focus.z);
   // pollen in the sunny meadows, fireflies at dusk and by night, leaves in the woods, snow blowing on the summit
   const wet = 1 - Math.min(1, WEATHER.k.rain * 1.5), snowK = PEAK.on ? Math.min(1, Math.max(0, (camera.position.y - 215) / 50)) : 0;
