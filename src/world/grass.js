@@ -164,9 +164,9 @@ function stamp(c) {
   }
   // under and around buildings the blades stand on the reshaped ground (the same rule as the terrain shader)
   for (const c of cutList()) {
-    const r = Math.hypot(c.hw, c.hd) + c.edge + 4, i0 = Math.max(0, Math.floor((c.x - r - x0) / k)), i1 = Math.min(N - 1, Math.ceil((c.x + r - x0) / k));
+    const r = Math.hypot(c.hw, c.hd) + c.shoulder + 3.5, i0 = Math.max(0, Math.floor((c.x - r - x0) / k)), i1 = Math.min(N - 1, Math.ceil((c.x + r - x0) / k));
     const j0 = Math.max(0, Math.floor((c.z - r - z0) / k)), j1 = Math.min(N - 1, Math.ceil((c.z + r - z0) / k));
-    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const o = (j * N + i) * 4; data[o] = shapeGround(base[o], x0 + (i + 0.5) * k, z0 + (j + 0.5) * k); }
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const o = (j * N + i) * 4; data[o] = shapeGround(base[o], x0 + (i + 0.5) * k, z0 + (j + 0.5) * k, true); }
   }
 }
 export function updateGrass(pool, pos) {

@@ -4,6 +4,20 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-9', name: 'Patch 9', title: 'Firm Ground', date: '20 October 2026',
+    intro: 'Building on hills: walls and floors now stand on the ground, however long the row.',
+    sections: [
+      { t: 'Building', icon: 'hammerBuild', items: [
+        'Fixed: a row of walls built down a slope left gaps underneath, and after a few walls it said "Nothing holds it up". Now every wall or floor built at ground level stands on the ground: the earth rises to meet it along its whole length, and it is held up fully, however long the row.',
+        'Keep a row level over ground that falls away and it carries on while the earth can be raised to it (up to about two and a half metres). Past that the game tells you to build a wall under it first; once there is one, the row carries on along its top.',
+        'Aiming at the ground ahead of a row on a slope now places the next wall on the ground there, instead of half buried a whole storey down in the hill.',
+        '<b>See where a floor goes</b>: while you aim a floor, the ground under the green tile is already flattened to it and the grass round it parts, so the tile is never hidden in the grass. Stop aiming and it all comes back.',
+        'Fixed: grass and flowers grew up through floors built on a slope. The ground under a floor is now flattened to it, raised where it was low, and bare.',
+        'Upper storeys, a wall standing on a wall, and floors laid on walls are unchanged: they rest on what you have built and leave the ground alone.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-8', name: 'Patch 8', title: 'Wind and Earth', date: '19 October 2026',
     intro: 'You can see the wind now, and what you build sits on the ground instead of hanging over it.',
     sections: [
