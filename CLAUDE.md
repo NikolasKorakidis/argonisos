@@ -63,9 +63,11 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   600, minor sites' `VIEW_R`). Change them together. The focus blur is the `focus` uniform.
 - Saves remember felled trees and pickups by their place in the layout: bump `WORLD_LAYOUT` in `save.js` whenever flora
   or pickup layout changes.
-- **The ground isn't just `heightAt`.** Buildings reshape the terrain (`groundcut.js`): under a floor, and a wall on the
-  ground, it's cut down to the piece's level and, if the piece is near the ground (`build.fills`), filled up to it with a
-  bank; cuts always win. One rule (`shapeGround`) for the terrain shader, the grass map, pickups and walking: use
+- **The ground isn't just `heightAt`.** Buildings reshape the terrain (`groundcut.js`): under a floor it's always cut down
+  below the boards; a wall or flat floor *on the ground* (`build.onGround`: not resting on another piece, `restsOn`, and
+  the land nowhere more than `FILL_MAX` 2.5 m below its foot) gets the earth raised to it (a flat shoulder wide enough for
+  the 2 m terrain mesh, then a bank) and counts as grounded (full support, however long a row). A wall over a bigger drop
+  is refused ("build a wall under it first"); cuts always win. `tests/suites/hillside.mjs` builds rows down real slopes. One rule (`shapeGround`) for the terrain shader, the grass map, pickups and walking: use
   `groundAt(x, z)` for where things stand, `player.groundHere(x, z, y)` to include floors and stairs, and
   `pickups.landAt` for dropped items. `heightAt` stays the raw land (support and snapping use it).
 - **Vegetation is batched.** Near trees are one `InstancedMesh` per species and variant across all cells, re-packed every

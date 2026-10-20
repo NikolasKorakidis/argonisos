@@ -74,7 +74,7 @@ function centreOf(def) {
   for (const b of def.solids || []) pts.push([b[0], b[1], b[2]]);
   const src = pts.length ? pts : def.snaps; return [0, 1, 2].map((k) => src.reduce((a, p) => a + p[k], 0) / src.length);
 }
-const FILL_MAX = 2.5, FILL_TOUCH = 1.2, WALL_W = 3;   // (the most ground a piece fills under itself; how near the ground it must come somewhere; a wall's width)
+const FILL_MAX = 2.5, WALL_W = 3;   // (the most ground a piece fills under itself; a wall's width)
 const toWorld = (pos, rot, l, out = new THREE.Vector3()) => { const c = Math.cos(rot), s = Math.sin(rot); return out.set(pos.x + l[0] * c + l[2] * s, pos.y + l[1], pos.z - l[0] * s + l[2] * c); };
 
 export class Build {
@@ -201,6 +201,8 @@ export class Build {
         const L = onLine(cand); let d = onGround ? Math.hypot(cand.x - pos.x, cand.z - pos.z) : Math.min(flatReach(def, cand, r2, flatAim), 2 * L.off + Math.max(0, 3 - (t1 - L.t)));
         // (stairs aimed by their top end come down toward you from there; aimed by their foot, they climb away from you)
         if (def.aimAt) { const mid = toWorld(cand, r2, centre), away = (mid.x - pos.x) * dir.x + (mid.z - pos.z) * dir.z > 0, top = toWorld(cand, r2, def.aimAt[1]).distanceTo(pos) < cand.distanceTo(pos); if (top === away) d += 0.5; if (!top && cand.y - this.g.player.pos.y > 1.5) d += 0.8; }   // (and from below, stairs that bring you up to what you aim at, not ones starting up there)
+        // (a wall sunk deep in the land, as a row going downhill snapped a storey lower, loses to one standing on it)
+        if (def.cat === 'Walls' && !def.door) d += Math.max(0, heightAt(cand.x, cand.z) - cand.y - 0.6) * 1.5;
         if (!gap && d > 1.7) continue;
         cands.push({ pos: cand, rot: r2, score: (gap ? -100 + x : d) - 0.3 * (match - 1) + pen });
       }
@@ -232,6 +234,7 @@ export class Build {
     // building pieces stand on the ground or snap onto what's built (sharing a point with it): never just leaning on the
     // side of something in mid-air
     if (!def.equip && !def.door && !this.grounded(def, pos, rot) && !this.snapsOf(def, pos, rot).some((m) => [...this.near(pos.x, pos.z, 8)].some((p) => p.snaps.some((q) => q.distanceTo(m) < 0.05)))) return 'Attach it to your building';
+    const f = this.foot(def, pos, rot); if (f?.wall && this.gapUnder(f, rot).hi > FILL_MAX && !this.restsOn(def, pos, rot)) return 'Too high above the ground: build a wall under it first';
     const sup = this.supportFor(def, pos, rot); if (sup.s < MIN_SUPPORT) return 'Nothing holds it up';
     if (this.overlaps(def, pos, rot)) return 'Something is in the way';
     if (this.duplicate(def, pos, rot)) return 'Already built here';
@@ -246,12 +249,32 @@ export class Build {
     for (const p of this.near(pos.x, pos.z, 3)) { if (p.id !== 'doorframe') continue; for (const [side, turn] of [[-0.7, 0], [0.7, Math.PI]]) { const w = toWorld(p.pos, p.rot, [side, 0, 0]), dr = Math.atan2(Math.sin(rot - p.rot - turn), Math.cos(rot - p.rot - turn)); if (w.distanceTo(pos) < 0.05 && Math.abs(dr) < 0.05) return p; } }
     return null;
   }
-  // whether the ground under a rectangle at level y should be filled up to it: the piece nearly touches the ground
-  // somewhere (a hillside floor or wall) and nowhere stands more than FILL_MAX over it (not a balcony, not on stilts)
-  fills(c, hw, hd, rot, y) { const cs = Math.cos(rot), sn = Math.sin(rot); let lo = Infinity, hi = -Infinity;
-    for (const [u, v] of [[0, 0], [-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd]]) { const g = y - heightAt(c.x + u * cs + v * sn, c.z - u * sn + v * cs); lo = Math.min(lo, g); hi = Math.max(hi, g); }
-    return lo <= FILL_TOUCH && hi <= FILL_MAX; }
-  grounded(def, pos, rot) { for (const s of def.snaps) { const w = toWorld(pos, rot, s, _v); if (w.y - heightAt(w.x, w.z) < 0.35) return true; } return false; }
+  // ---- Pieces on the ground (tester feedback, 19-20 Oct). A wall or flat floor that doesn't rest on another piece stands
+  // on the ground: the earth is raised under it (and cut where it's higher: groundcut.js), so on a slope nothing hangs
+  // in the air and it counts as grounded, however far along a row it is. Where the land falls more than FILL_MAX below
+  // it, a wall can't go: build a wall under it first (a floor can still reach out, held up by what it's built onto).
+  // footprint: the rectangle a piece stands on (centre, half sizes, level), for walls and flat floors only
+  foot(def, pos, rot) {
+    if (def.cat === 'Walls' && !def.door) return { c: pos, hw: WALL_W / 2, hd: 0.18, y: pos.y - 0.04, wall: true };
+    const ft = def.cat === 'Floors' && def.tops?.length === 1 && def.tops[0].y !== undefined ? def.tops[0] : null;
+    if (!ft) return null;
+    return { c: toWorld(pos, rot, [(ft.x0 + ft.x1) / 2, 0, (ft.z0 + ft.z1) / 2]), hw: Math.abs(ft.x1 - ft.x0) / 2, hd: Math.abs(ft.z1 - ft.z0) / 2, y: pos.y + ft.y - 0.3, wall: false };
+  }
+  // the most and least the land lies below a footprint's level (sampled every ~0.75 m over it)
+  gapUnder(f, rot) { const cs = Math.cos(rot), sn = Math.sin(rot), nu = Math.max(1, Math.ceil(f.hw / 0.75)), nv = Math.max(1, Math.ceil(f.hd / 0.75)); let hi = -Infinity, lo = Infinity;
+    for (let i = -nu; i <= nu; i++) for (let j = -nv; j <= nv; j++) { const u = (i / nu) * f.hw, v = (j / nv) * f.hd, g = f.y - heightAt(f.c.x + u * cs + v * sn, f.c.z - u * sn + v * cs); hi = Math.max(hi, g); lo = Math.min(lo, g); }
+    return { hi, lo }; }
+  // whether a piece's footprint rests on another piece (a wall on a floor or on a wall below, a floor on walls)
+  restsOn(def, pos, rot, self) {
+    const f = this.foot(def, pos, rot); if (!f) return false;
+    for (const p of this.near(pos.x, pos.z, 6)) { if (p === self) continue;
+      for (const b of p.boxes) if (Math.abs(b.max.y - (f.y + 0.04)) < 0.35 || (!f.wall && Math.abs(b.max.y - (f.y + 0.3)) < 0.35)) {
+        const cs = Math.cos(rot), sn = Math.sin(rot); for (let u = -f.hw + 0.15; u <= f.hw - 0.14; u += 0.3) for (const v of [-f.hd * 0.5, 0, f.hd * 0.5]) { const x = f.c.x + u * cs + v * sn, z = f.c.z - u * sn + v * cs; if (x > b.min.x && x < b.max.x && z > b.min.z && z < b.max.z) return true; } } }
+    return false;
+  }
+  // a piece standing on the ground (the earth is shaped to it): not resting on another piece, never too high over the land
+  onGround(def, pos, rot, self) { const f = this.foot(def, pos, rot); if (!f) return false; const g = this.gapUnder(f, rot); return g.hi <= FILL_MAX && !this.restsOn(def, pos, rot, self); }
+  grounded(def, pos, rot, self) { for (const s of def.snaps) { const w = toWorld(pos, rot, s, _v); if (w.y - heightAt(w.x, w.z) < 0.35) return true; } return this.onGround(def, pos, rot, self); }
   // neighbours: pieces sharing a snap point, or touching
   neighbours(def, pos, rot, self) {
     const mine = this.snapsOf(def, pos, rot), out = [];
@@ -330,14 +353,11 @@ export class Build {
     p.snaps = this.snapsOf(def, pos, rot); p.boxes = this.boxes(def, pos, rot);
     this.index(p, true); this.placed.push(p);
     this.addColliders(p);
-    // the ground meets what's built on it (groundcut.js): under a floor it's pressed down below the boards and, near the
-    // ground, filled up to its beams; under a wall standing on the ground it's levelled to the wall's foot. Flat floors
-    // only (stairs keep the slope); see fills() for what counts as near the ground
-    const ft = def.cat === 'Floors' && def.tops?.length === 1 && def.tops[0].y !== undefined ? def.tops[0] : null;
-    if (ft) { const c = toWorld(pos, rot, [(ft.x0 + ft.x1) / 2, 0, (ft.z0 + ft.z1) / 2]), hw = Math.abs(ft.x1 - ft.x0) / 2, hd = Math.abs(ft.z1 - ft.z0) / 2, y = pos.y + ft.y - 0.3;
-      setCut(p.uid, { x: c.x, z: c.z, hw, hd, rot, y, fill: this.fills(c, hw, hd, rot, y), shape: SHAPE.floor }); }
-    else if (def.cat === 'Walls' && !def.door && this.fills(pos, WALL_W / 2, 0.18, rot, pos.y - 0.04)) {
-      const y = pos.y - 0.04; setCut(p.uid, { x: pos.x, z: pos.z, hw: WALL_W / 2, hd: 0.18, rot, y, fill: this.fills(pos, WALL_W / 2, 0.18, rot, y), shape: SHAPE.wall }); }
+    // the ground meets what's built on it (groundcut.js): under a floor it's always pressed down below the boards, and
+    // under a floor or wall standing on the ground (onGround) it's also raised up to it. Flat floors only: stairs keep
+    // the slope
+    const f = this.foot(def, pos, rot), on = f && this.onGround(def, pos, rot, p);
+    if (f && (on || !f.wall)) setCut(p.uid, { x: f.c.x, z: f.c.z, hw: f.hw, hd: f.hd, rot, y: f.y, fill: on, shape: f.wall ? SHAPE.wall : SHAPE.floor });
     // grass doesn't grow through floors and furniture
     const bb = p.boxes.reduce((a, b) => a.union(b), new THREE.Box3()); if (bb.min.y < heightAt(pos.x, pos.z) + 1.2) clearGrass(p.uid, { x: pos.x, z: pos.z, hw: (def.tops?.[0] ? Math.abs(def.tops[0].x1 - def.tops[0].x0) / 2 : (def.solids?.[0]?.[3] ?? 1) / 2) + 0.35, hd: (def.tops?.[0] ? Math.abs(def.tops[0].z1 - def.tops[0].z0) / 2 : (def.solids?.[0]?.[5] ?? 1) / 2) + 0.35, rot });
     if (def.fire || def.torch) { p.state.fuel ??= def.fire ? 3 : 4; p.state.lit ??= true; this.addFlame(p); }
@@ -365,7 +385,7 @@ export class Build {
   }
   // Recompute support everywhere (pieces form one graph); anything too weak falls
   recompute() {
-    for (const p of this.placed) { const gr = this.grounded(p.def, p.pos, p.rot); p.grounded = gr; p.support = gr ? 1 : 0; p.nb = this.neighbours(p.def, p.pos, p.rot, p); }
+    for (const p of this.placed) { const gr = this.grounded(p.def, p.pos, p.rot, p); p.grounded = gr; p.support = gr ? 1 : 0; p.nb = this.neighbours(p.def, p.pos, p.rot, p); }
     for (let it = 0, changed = true; changed && it < 60; it++) {
       changed = false;
       for (const p of this.placed) { if (p.grounded) continue; let s = 0; for (const q of p.nb) { const up = p.pos.y - q.pos.y > 0.3 ? V_LOSS : H_LOSS; s = Math.max(s, q.support * (1 - up)); } if (Math.abs(s - p.support) > 1e-4) { p.support = s; changed = true; } }
