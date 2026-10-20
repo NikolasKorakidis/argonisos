@@ -25,7 +25,8 @@ export const CUT_U = {
   uCutN: { value: 0 },
 };
 
-// c: { x, z, hw, hd, rot, y, fill, shape: SHAPE.floor | SHAPE.wall }, or null to remove
+// c: { x, z, hw, hd, rot, y, fill, shape: SHAPE.floor | SHAPE.wall, look }, or null to remove (look: only for the eye, as the
+// ghost's preview while you aim a floor: the terrain and grass show it, but nobody walks on it)
 export function setCut(key, c) {
   if (c) { const sh = c.shape || SHAPE.floor; cuts.set(key, { ...c, cs: Math.cos(c.rot || 0), sn: Math.sin(c.rot || 0), edge: sh.edge, cut: sh.cut, shoulder: sh.shoulder, bank: sh.fill, fill: !!c.fill }); }
   else if (!cuts.delete(key)) return;
@@ -34,9 +35,10 @@ export function setCut(key, c) {
 // how far (x, z) lies outside a cut's rectangle (negative inside)
 const outside = (c, x, z) => { const dx = x - c.x, dz = z - c.z, u = Math.abs(dx * c.cs - dz * c.sn) - c.hw, v = Math.abs(dx * c.sn + dz * c.cs) - c.hd; return Math.max(u, v) > 0 ? Math.hypot(Math.max(u, 0), Math.max(v, 0)) : Math.max(u, v); };
 // the ground at (x, z) once the buildings have reshaped it, from its raw height h (the same rule as the terrain shader)
-export function shapeGround(h, x, z) {
+export function shapeGround(h, x, z, look = false) {
   let lo = -Infinity, hi = Infinity;
   for (const c of cuts.values()) {
+    if (c.look && !look) continue;
     if (Math.abs(x - c.x) > c.hw + c.hd + 8 || Math.abs(z - c.z) > c.hw + c.hd + 8) continue;
     const o = outside(c, x, z);
     hi = Math.min(hi, c.y + c.cut * Math.max(0, o - c.edge)); if (c.fill) lo = Math.max(lo, c.y - c.bank * Math.max(0, o - c.shoulder));

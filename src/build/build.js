@@ -89,7 +89,7 @@ export class Build {
   }
   piece(id) { return id === 'repair' ? this.pieces[0] : PIECE[id]; }
   get active() { return !!this.sel && this.g.equippedTool('build'); }
-  select(id) { this.sel = id; if (this.ghost) { this.g.scene.remove(this.ghost); this.ghost = null; } if (id !== 'repair') this.makeGhost(PIECE[id]); this.g.hud.toast(`${this.piece(id).name}: <span class="kbd">LMB</span> place · <span class="kbd">R</span> turn · <span class="kbd">MMB</span> remove · <span class="kbd">RMB</span> menu`); }
+  select(id) { this.sel = id; if (this.ghost) { this.g.scene.remove(this.ghost); this.ghost = null; } this.preview(null); if (id !== 'repair') this.makeGhost(PIECE[id]); this.g.hud.toast(`${this.piece(id).name}: <span class="kbd">LMB</span> place · <span class="kbd">R</span> turn · <span class="kbd">MMB</span> remove · <span class="kbd">RMB</span> menu`); }
   makeGhost(def) {
     const grp = new THREE.Group(); for (const { geo } of def.build()) { const m = new THREE.Mesh(geo, ghostOk); m.renderOrder = 5; grp.add(m); }
     this.ghost = grp; this.ghostDef = def; this.g.scene.add(grp);
@@ -133,7 +133,7 @@ export class Build {
   placeGhost() {
     const def = this.ghostDef; let a = this.aim();
     // aiming at open sky (say, into the gap between two roof panels): structural pieces still snap along the line of aim
-    if (!a) { if (def.equip) { this.ghost.visible = false; return null; } a = { p: _ray.ray.origin.clone().addScaledVector(_ray.ray.direction, 9), d: 9, air: true }; }
+    if (!a) { if (def.equip) { this.ghost.visible = false; this.preview(null); return null; } a = { p: _ray.ray.origin.clone().addScaledVector(_ray.ray.direction, 9), d: 9, air: true }; }
     this.ghost.visible = true;
     let pos = a.p.clone();
     // a cooking stand goes right over a campfire: aim at the fire, or close to it, and it settles over it
@@ -221,6 +221,7 @@ export class Build {
     this.ghost.position.copy(pos); this.ghost.rotation.y = rot;
     const why = this.invalid(def, pos, rot, !!best, a);
     for (const m of this.ghost.children) m.material = why ? ghostBad : ghostOk;
+    this.preview(def, pos, rot);
     return { pos, rot, why, snapped: !!best };
   }
   // Why this placement isn't allowed (null if it is)
@@ -248,6 +249,17 @@ export class Build {
   doorFrameAt(pos, rot) {
     for (const p of this.near(pos.x, pos.z, 3)) { if (p.id !== 'doorframe') continue; for (const [side, turn] of [[-0.7, 0], [0.7, Math.PI]]) { const w = toWorld(p.pos, p.rot, [side, 0, 0]), dr = Math.atan2(Math.sin(rot - p.rot - turn), Math.cos(rot - p.rot - turn)); if (w.distanceTo(pos) < 0.05 && Math.abs(dr) < 0.05) return p; } }
     return null;
+  }
+  // While you aim a floor, the ground under the green tile already looks as it will once it's built (pressed down,
+  // raised where it's low, the grass and flowers cleared), so the tile is never hidden in the grass; only for the eye
+  // (look), so you don't walk on it, and redone only when the ghost moves to another spot. preview(null) puts it back.
+  preview(def, pos, rot) {
+    const f = def && this.ghost?.visible ? this.foot(def, pos, rot) : null, floor = f && !f.wall;
+    const key = floor ? `${pos.x.toFixed(2)},${pos.y.toFixed(2)},${pos.z.toFixed(2)},${rot.toFixed(3)}` : null;
+    if (key === this.previewKey) return; this.previewKey = key;
+    if (!floor) { setCut('ghost', null); clearGrass('ghost', null); return; }
+    setCut('ghost', { x: f.c.x, z: f.c.z, hw: f.hw, hd: f.hd, rot, y: f.y, fill: this.onGround(def, pos, rot), shape: SHAPE.floor, look: true });
+    clearGrass('ghost', { x: f.c.x, z: f.c.z, hw: f.hw + 1.2, hd: f.hd + 1.2, rot });   // (a metre wider than the tile: the tall grass round it would lean over it)
   }
   // ---- Pieces on the ground (tester feedback, 19-20 Oct). A wall or flat floor that doesn't rest on another piece stands
   // on the ground: the earth is raised under it (and cut where it's higher: groundcut.js), so on a slope nothing hangs
@@ -344,6 +356,7 @@ export class Build {
     return { polygonOffset: k > 0, polygonOffsetFactor: -0.12 * k, polygonOffsetUnits: -k };
   }
   place(id, pos, rot, opts = {}) {
+    this.preview(null);
     const def = PIECE[id], obj = new THREE.Group(); obj.position.copy(pos); obj.rotation.y = rot;
     const inner = new THREE.Group(); obj.add(inner);
     const p = { uid: opts.uid ?? 'pc' + this.seq++, id, def, obj, inner, pos: pos.clone(), rot, hp: opts.hp ?? def.hp, state: opts.state || {}, support: 1, grounded: false, mats: [] };
@@ -359,7 +372,8 @@ export class Build {
     const f = this.foot(def, pos, rot), on = f && this.onGround(def, pos, rot, p);
     if (f && (on || !f.wall)) setCut(p.uid, { x: f.c.x, z: f.c.z, hw: f.hw, hd: f.hd, rot, y: f.y, fill: on, shape: f.wall ? SHAPE.wall : SHAPE.floor });
     // grass doesn't grow through floors and furniture
-    const bb = p.boxes.reduce((a, b) => a.union(b), new THREE.Box3()); if (bb.min.y < heightAt(pos.x, pos.z) + 1.2) clearGrass(p.uid, { x: pos.x, z: pos.z, hw: (def.tops?.[0] ? Math.abs(def.tops[0].x1 - def.tops[0].x0) / 2 : (def.solids?.[0]?.[3] ?? 1) / 2) + 0.35, hd: (def.tops?.[0] ? Math.abs(def.tops[0].z1 - def.tops[0].z0) / 2 : (def.solids?.[0]?.[5] ?? 1) / 2) + 0.35, rot });
+    // (always under a floor or wall standing on the ground: the earth raised to it would otherwise grow grass through the boards)
+    const bb = p.boxes.reduce((a, b) => a.union(b), new THREE.Box3()); if (bb.min.y < heightAt(pos.x, pos.z) + 1.2 || on) clearGrass(p.uid, { x: pos.x, z: pos.z, hw: (def.tops?.[0] ? Math.abs(def.tops[0].x1 - def.tops[0].x0) / 2 : (def.solids?.[0]?.[3] ?? 1) / 2) + 0.35, hd: (def.tops?.[0] ? Math.abs(def.tops[0].z1 - def.tops[0].z0) / 2 : (def.solids?.[0]?.[5] ?? 1) / 2) + 0.35, rot });
     if (def.fire || def.torch) { p.state.fuel ??= def.fire ? 3 : 4; p.state.lit ??= true; this.addFlame(p); }
     if (def.chest) { p.inv = new Inventory(); p.inv.slots = new Array(def.chest[0] * def.chest[1]).fill(null); if (opts.state?.slots) p.inv.slots = opts.state.slots; }
     if (def.cook) p.state.cook ??= [];
@@ -482,14 +496,14 @@ export class Build {
   update(dt) {
     const g = this.g, hammer = g.equippedTool('build');
     if (hammer !== this.tint) this.updateTint();
-    if (!hammer && this.ghost) { this.ghost.visible = false; }
+    if (!hammer && this.ghost) { this.ghost.visible = false; this.preview(null); }
     if (hammer && !input.uiOpen && !g.player.dead) {
       if (input.clicks.includes(2)) { g.buildMenu.toggle(true); input.clicks.length = 0; return; }
       if (this.sel) {
         const step = this.aligned ? Math.PI / 2 : Math.PI / 8;   // quarter turns against a structure, finer on open ground
         if (hit('KeyR')) this.rot += step;
         if (input.wheel) { this.rot += input.wheel * step; input.wheel = 0; }
-        if (hit('Escape')) { this.sel = null; if (this.ghost) this.g.scene.remove(this.ghost); this.ghost = null; }
+        if (hit('Escape')) { this.sel = null; if (this.ghost) this.g.scene.remove(this.ghost); this.ghost = null; this.preview(null); }
       }
       const target = this.aim(), tp = target?.piece;
       // remove with MMB / X

@@ -37,6 +37,20 @@ export default {
       const ok = !B.invalid(B.piece('wall'), under, s.rot, true, {}); if (!ok) return 'the wall under it was refused: ' + B.invalid(B.piece('wall'), under, s.rot, true, {});
       B.place('wall', under, s.rot); B.recompute(); const top = B.invalid(B.piece('wall'), at, s.rot, true, {});
       done(); return (placed >= 2 && !top) || JSON.stringify({ placed, top });`);
+    await t.step('aiming a floor clears the grass and shapes the ground under the green tile (for the eye only), and puts it back when you stop', `${ROW}
+      const s = slope(0.1, 0.3); if (!s) return 'no slope found'; clear(s); const GM = await import('/src/world/grass.js'); P.spawn(s.x - 3, s.z - 3);
+      const tgt = new V(s.x, G.heightAt(s.x, s.z), s.z); B.select('floor'); B.rot = 0; AG.camera.position.set(s.x - 4, tgt.y + 3, s.z - 4); AG.camera.lookAt(tgt); AG.camera.updateMatrixWorld(); AG.scene.updateMatrixWorld(true);
+      const r = B.placeGhost(); if (!r) return 'no ghost'; const look = [...GC.cutList()].filter((c) => c.look).length, walk = GC.groundAt(r.pos.x, r.pos.z) - G.heightAt(r.pos.x, r.pos.z);
+      const up = B.update; B.update = () => {}; await new Promise((q) => setTimeout(q, 300)); B.update = up;   // (the build tool isn't in hand: its own update would put the ghost away)
+      const t0 = GM.grassU.uHeight.value, o = GM.grassU.uOrigin.value, N = t0.image.width, k = GM.TEX_SIZE / N, gi = Math.floor((r.pos.x - o.x) / k), gj = Math.floor((r.pos.z - o.y) / k), grass = t0.image.data[(gj * N + gi) * 4 + 1];
+      done(); B.preview(null); const after = [...GC.cutList()].filter((c) => c.look).length;
+      return (look === 1 && Math.abs(walk) < 0.01 && grass <= 0 && after === 0) || JSON.stringify({ look, walk, grass, after });`);
+    await t.step('no grass or flowers grow through a floor built on a slope (the earth raised under it is bare)', `${ROW}
+      const s = slope(0.15, 0.35); if (!s) return 'no slope found'; clear(s); const GM = await import('/src/world/grass.js'); P.spawn(s.x - 4, s.z - 4);
+      const top = Math.max(...[[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]].map(([u, v]) => G.heightAt(s.x + u, s.z + v))) + 0.03, f = B.place('floor', new V(s.x, top, s.z), 0); B.recompute();
+      await new Promise((q) => setTimeout(q, 300)); const t0 = GM.grassU.uHeight.value, o = GM.grassU.uOrigin.value, N = t0.image.width, k = GM.TEX_SIZE / N; let bad = 0;
+      for (let u = -1.4; u <= 1.4; u += 0.35) for (let v = -1.4; v <= 1.4; v += 0.35) { const i = Math.floor((s.x + u - o.x) / k), j = Math.floor((s.z + v - o.y) / k), q = (j * N + i) * 4; if (t0.image.data[q + 1] > 0 || t0.image.data[q + 3] > 0) bad++; }
+      B.remove(f, false); return bad === 0 || bad + ' spots under the floor still grow grass or flowers';`);
     await t.step('a wall on a wall, and a floor on walls, leave the ground alone (they rest on what is built)', `${ROW}
       const s = slope(0.05, 0.4); if (!s) return 'no slope found'; clear(s); const p = first(s), up = B.place('wall', p.pos.clone().add(new V(0, 3, 0)), s.rot); B.recompute();
       const f = B.foot(up.def, up.pos, up.rot), rests = B.restsOn(up.def, up.pos, up.rot, up), onGround = B.onGround(up.def, up.pos, up.rot, up); done();
