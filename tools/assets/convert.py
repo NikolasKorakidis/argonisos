@@ -7,7 +7,8 @@ import bpy, sys, json
 
 job = json.load(open(sys.argv[sys.argv.index('--') + 1]))
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.import_scene.fbx(filepath=job['src'], use_anim=True, ignore_leaf_bones=True, automatic_bone_orientation=False)
+if job['src'].endswith('.glb'): bpy.ops.import_scene.gltf(filepath=job['src'])   # (a plant: the catalogue's export, see below)
+else: bpy.ops.import_scene.fbx(filepath=job['src'], use_anim=True, ignore_leaf_bones=True, automatic_bone_orientation=False)
 for extra in job.get('also') or []: bpy.ops.import_scene.fbx(filepath=extra, use_anim=False)   # (more parts of one piece, e.g. a door wall and its frame)
 
 # keep only the meshes asked for, or drop some (files often hold several variants: two sets of horns), and the armatures
@@ -43,7 +44,7 @@ if img:
     tex = nt.nodes.new('ShaderNodeTexImage'); tex.image = img; tex.interpolation = 'Closest' if job.get('palette') else 'Linear'
     nt.links.new(tex.outputs['Color'], bsdf.inputs['Base Color'])
 for o in bpy.data.objects:
-    if o.type == 'MESH':
+    if o.type == 'MESH' and not job.get('plant'):
         if not o.material_slots: o.data.materials.append(mat)
         for slot in o.material_slots: slot.material = mat
 
@@ -62,12 +63,58 @@ if job.get('bakeColors'):
         o.data.color_attributes.active_color = ca
         o.data.color_attributes.render_color_index = o.data.color_attributes.find('Col')
 
+# A plant (trees, shrubs, flowers, the forest floor) comes from the catalogue's export (everything.py), where each material
+# already has the pack texture Unity gives it ("tex:<key>", in pack/tex/). Each face takes its texture's colours into its
+# corners like the rest, unless it shows a see-through part of the texture (a leaf card, a frond, a reed's tuft painted
+# on a plane): those keep their texture and UVs, on a material named for it that the game draws cut out, with the wind.
+if job.get('plant'):
+    import numpy as np, re, os
+    tint = np.array(job.get('tint', [1, 1, 1]) + [1], np.float32); pix, cards = {}, {}
+    def image(key):
+        if key not in pix:
+            f = os.path.join(job['plant'], key + '.webp'); im = bpy.data.images.load(f) if os.path.exists(f) else None
+            if im: W, H = im.size; px = np.empty(W * H * 4, np.float32); im.pixels.foreach_get(px); pix[key] = px.reshape(H, W, 4)
+            else: pix[key] = None
+        return pix[key]
+    plain = bpy.data.materials.new('plant'); keyOf = {}
+    for m in list(bpy.data.materials):   # (the imported ones out of the way of the cards' names)
+        if m.name.startswith('tex:'): keyOf[m.name] = re.sub(r'\.\d{3}$', '', m.name)[4:]; m.name = 'src:' + m.name
+    for o in [o for o in bpy.data.objects if o.type == 'MESH']:
+        me = o.data; uvl = me.uv_layers.active; n = len(me.loops)
+        keys = [keyOf.get(s.material.name[4:]) if s.material else None for s in o.material_slots]
+        uv = np.zeros(n * 2, np.float32)
+        if uvl: uvl.data.foreach_get('uv', uv)
+        uv = uv.reshape(n, 2); col = np.ones((n, 4), np.float32); slot = []
+        for p in me.polygons:
+            key = keys[p.material_index] if p.material_index < len(keys) else None; px = image(key) if key else None
+            if px is None: slot.append(None); continue
+            H, W = px.shape[:2]; li = list(p.loop_indices); u = uv[li]; c = u.mean(0)
+            pts = np.vstack([u, c, (u + c) / 2]) % 1.0   # (its corners, its middle and halfway between: a card's corners can sit on leaf)
+            a = px[np.minimum((pts[:, 1] * H).astype(int), H - 1), np.minimum((pts[:, 0] * W).astype(int), W - 1), 3]
+            if a.min() < 0.5: slot.append(key); continue
+            q = u % 1.0; col[li] = px[np.minimum((q[:, 1] * H).astype(int), H - 1), np.minimum((q[:, 0] * W).astype(int), W - 1)] * tint; col[li, 3] = 1; slot.append(None)
+        mats = [plain] + sorted({k for k in slot if k})
+        me.materials.clear()
+        for m in mats: me.materials.append(m if m is plain else cards.setdefault(m, bpy.data.materials.new('tex:' + m)))
+        me.polygons.foreach_set('material_index', [0 if k is None else mats.index(k) for k in slot])
+        ca = me.color_attributes.new('Col', 'BYTE_COLOR', 'CORNER'); ca.data.foreach_set('color_srgb', col.ravel())
+        me.color_attributes.active_color = ca; me.color_attributes.render_color_index = me.color_attributes.find('Col')
+    if job.get('height'):   # (brought to a height in metres: a pack's bush can be knee-high where the game wants a shrub)
+        from mathutils import Matrix, Vector
+        bpy.context.view_layer.update(); ms = [o for o in bpy.data.objects if o.type == 'MESH']
+        lo = min((o.matrix_world @ Vector(c)).z for o in ms for c in o.bound_box); hi = max((o.matrix_world @ Vector(c)).z for o in ms for c in o.bound_box)
+        for o in bpy.data.objects:
+            if not o.parent: o.matrix_world = Matrix.Scale(job['height'] / (hi - lo), 4) @ o.matrix_world
+    print('PLANT cards', sorted(cards))
+
 # one mesh for the whole body (the Infinity PBR characters come in a hundred pieces: a draw call each in the game)
 if job.get('join'):
     parts = [o for o in bpy.data.objects if o.type == 'MESH']
     with bpy.context.temp_override(active_object=parts[0], selected_editable_objects=parts, selected_objects=parts): bpy.ops.object.join()
-    parts[0].name = job.get('name', 'Body'); parts[0].data.materials.clear(); parts[0].data.materials.append(mat)
-    for poly in parts[0].data.polygons: poly.material_index = 0
+    parts[0].name = job.get('name', 'Body')
+    if not job.get('plant'):   # (a plant keeps its cards' materials)
+        parts[0].data.materials.clear(); parts[0].data.materials.append(mat)
+        for poly in parts[0].data.polygons: poly.material_index = 0
 
 # animations: renamed, or cut out of one take, and nothing else
 def curves(a):   # (Blender 5 keeps an action's curves in layers and slots; older versions on the action)
@@ -106,5 +153,5 @@ if arm and arm.animation_data: arm.animation_data.action = None
 
 bpy.ops.export_scene.gltf(filepath=job['out'], export_format='GLB', export_animations=True, export_animation_mode='ACTIONS',
     export_force_sampling=True, export_frame_step=job.get('frameStep', 1), export_skins=True, export_morph=False,
-    export_image_format='AUTO', export_vertex_color='ACTIVE' if job.get('bakeColors') else 'MATERIAL', export_cameras=False, export_lights=False, export_yup=True, export_apply=False)
+    export_image_format='AUTO', export_vertex_color='ACTIVE' if job.get('bakeColors') or job.get('plant') else 'MATERIAL', export_cameras=False, export_lights=False, export_yup=True, export_apply=False)
 print('CONVERTED', job['out'], 'clips', [a.name for a in want])

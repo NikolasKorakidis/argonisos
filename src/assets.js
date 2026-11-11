@@ -32,9 +32,9 @@ export function loadTex(file, srgb = true) {
 }
 // One geometry from all of a loaded model's meshes (positions, normals, UVs), in the model's own frame
 // (or, with colours, positions, normals and vertex colours as plain RGB floats)
-export function bake(root, colours = false) {
+export function bake(root, colours = false, only = () => true) {
   root.updateMatrixWorld(true); const geos = [], want = colours ? [['position', 3], ['normal', 3], ['color', 3]] : [['position', 3], ['normal', 3], ['uv', 2]];
-  root.traverse((m) => { if (m.isMesh) { const g = m.geometry.clone().applyMatrix4(m.matrixWorld); geos.push(g.index ? g.toNonIndexed() : g); } });
+  root.traverse((m) => { if (m.isMesh && only(m)) { const g = m.geometry.clone().applyMatrix4(m.matrixWorld); geos.push(g.index ? g.toNonIndexed() : g); } });
   const n = geos.reduce((s, g) => s + g.attributes.position.count, 0), out = new THREE.BufferGeometry();
   for (const [k, size] of want) {
     const a = new Float32Array(n * size); let o = 0;

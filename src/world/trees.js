@@ -384,9 +384,16 @@ function propGeo(species, v) {
   const P = PROPS[k];
   if (!P.packed && FLORA[species]) {
     const box = new THREE.Box3(); for (const g of [P.geo, P.cards]) if (g) { g.computeBoundingBox(); box.union(g.boundingBox); }
-    const g = floraGeo(species, v, box, TREE_TYPES.has(species)); if (g) Object.assign(P, { geo: g, lo: g, cards: null, cardMat: null, leafFar: false, packed: true });
+    const g = floraGeo(species, v, box, TREE_TYPES.has(species)); if (g) Object.assign(P, { geo: g.geo, lo: g.geo, cards: g.cards, cardMat: g.cards && packCardMat(g.map), leafFar: !!g.cards, packed: true });
   }
   return P;
+}
+// the see-through parts of the packs' plants (flora-pack.js): one material per pack texture, cut out like the leaves and
+// darkened a little towards green (the pale leaf textures come out washed in our light)
+const PACK_CARDS = new Map();
+function packCardMat(map) {
+  if (!PACK_CARDS.has(map)) { const m = new THREE.MeshStandardMaterial({ map, color: 0xa3ad92, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85, alphaToCoverage: true }); m.onBeforeCompile = leafMat.onBeforeCompile; PACK_CARDS.set(map, m); }
+  return PACK_CARDS.get(map);
 }
 const propMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
 propMat.onBeforeCompile = (sh) => {

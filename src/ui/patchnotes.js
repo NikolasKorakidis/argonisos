@@ -4,6 +4,26 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-13', name: 'Patch 13', title: 'Each in Its Place', date: '11 November 2026',
+    intro: 'The plants of Nisos now grow where they belong, and look as they should up close.',
+    sections: [
+      { t: 'Fixed', icon: 'goal', items: [
+        'No more <b>strange patches of colour</b> on plants: the coloured squares in the marsh, the red-and-white zigzags on some pines, the grey lumps where bushes should be, and flowers growing out of grey stones are all gone.',
+        'Pines and the forest\'s bushes have proper needles and leaves now, swaying in the wind.',
+        'Flowers, grass and the small things on the ground no longer vanish all at once in a ring around you. Each one sinks gently into the ground at its own distance as you walk away.',
+        'Pebbles and rocks are stone-coloured again, not glaring white in the sun.',
+      ] },
+      { t: 'The Meadows', icon: 'tree', items: [
+        'Each stretch of meadow has its own flowers: <b>fields of poppies</b> in one place, lavender, purple anemones or yellow crown daisies in another, with a few others mixed in.',
+        'Tall grass grows in tussocks, and real shrubs line the edges of the woods. Lavender grows from a mound of grey-green leaves.',
+      ] },
+      { t: 'The Forests and the Marsh', icon: 'wet', items: [
+        'Leafy undergrowth and <b>moss</b> beneath the forest trees. Brown mushrooms at their feet, and red-capped fly agarics in the giant forest.',
+        'Meadow flowers no longer stray into the forest or the marsh. The marsh has water lilies in flower, cattails, sedge and mossy banks.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-12', name: 'Patch 12', title: 'Undergrowth', date: '11 November 2026',
     intro: 'The ground of Nisos has filled in: flowers, bushes and the litter of the woods, everywhere you walk.',
     sections: [

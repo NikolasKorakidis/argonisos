@@ -16,8 +16,12 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
   in a page (`fbx-page.mjs`, `"via": "three"`) for rigs Blender bends out of shape (the Minotaur). `tools/assets/clips.mjs`
   lists a .glb's clips and any root motion left in them. Check every new model in the game (`tools/shots.mjs`).
   How pack models get in: shared atlases are one file each in `pack/tex/` (`loadPack` puts them on materials named
-  `tex:<key>`); trees, rocks and shrubs have the atlas baked into vertex colours (`bakeColors`) and take the carved
-  species' places in `propGeo` (`world/flora-pack.js`, fitted to the carved one's size); site props likewise
+  `tex:<key>`); plants (trees, rocks, shrubs, the ground cover: manifest `"plant": "<catalogue id>"`) are converted from
+  the catalogue's export below, which has the right texture on each part: their colours baked into the vertices, except
+  faces showing a see-through part of a texture (leaf and needle cards), which keep it and are drawn cut out with the
+  wind (`packCardMat` in `trees.js`); `tint` darkens or lightens, `height` resizes. They take the carved species' places
+  in `propGeo` (`world/flora-pack.js`, fitted to the carved one's size; look at a new one in the game's light, which
+  makes vertex colours much brighter than the dev page does); site props likewise
   (`world/site-pack.js`); building pieces get the rustic kit's model fitted into their own box (`build/kit.js`; aiming
   still meets the carved shape, kept invisible); the hero, dryads and giants are pack bodies fitted onto the Mixamo rig
   in three.js (`refit` in `tools/assets/fbx-page.mjs`: the rig's bones keep their rest rotations, so the Mixamo clips play
@@ -84,6 +88,10 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
 - **The meadows' trees grow only in woods** (`pediasWood` in `flora.js`, about 70% of Pedias, glades round the trial's
   places); no tree may stand alone or in a pair there.
   Tree crowns start above 2.9 m (1.5× the hero) at their smallest size (`tests/suites/woods.mjs` checks it).
+- **Small things drop away before the mist** (`keepTo` in `vegetation.js`: the smallest from 35 to 75 m, each at its
+  own distance; shrubs, logs and the like at the mist): both bands sink each one into the ground over its last
+  `SHRINK` metres, measured from the player, so nothing pops. Screenshot tests that aim the camera far from the player
+  see them gone.
 - **The player's mist** (`atmosphere.js`: clear to `MIST_R0` 60 m, 68% by `MIST_R1` 100 m, ceiling from `tallestNear`)
   lies over the grass's edge (`GRASS_R` 80 m, gone by `GRASS_END` 95 m: a dense near carpet hands over to a sparse far
   one at ~30 m in `grass.js`); all four live in `world/reach.js`. It hides how much less is drawn behind it (`farKeep`/`keepTo` in `vegetation.js`, `FAR_R`
@@ -126,8 +134,9 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
 
 ## Code map
 - `src/world`: `gen.js` heights, biomes, the Olympos peak · `sites.js` site placement and pads · `flora.js` species and
-  layout (the ground cover of Patch 12, `groundCover`, comes last in each cell with dice of its own: flowers,
-  bushes, stumps, logs, pebbles, lily pads… whose pack models keep their own size, `natural`) · `reach.js` how far the mist and grass reach · `vegetation.js` near/mid/impostor bands · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
+  layout (the ground cover, `groundCover`, comes last in each cell with dice of its own: flowers, bushes, stumps,
+  logs, moss, pebbles, lilies… whose pack models keep their own size, `natural`; each piece goes by the biome where it
+  stands, and some kinds pick their looks by land: `FLOWER_KINDS` per stretch of meadow, `BUSH`, `MUSHROOM`) · `reach.js` how far the mist and grass reach · `vegetation.js` near/mid/impostor bands · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
   `terrain.js` + `terrain-worker.js` (worker pool, `pool.js`) · `structures.js` + `greek.js` the sites' buildings and
   props · `town.js` the abandoned town and the small scenes about the island (`SITES.town`, `SITES.spots`) · `sky.js`, `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`), `water.js`, `giantwood.js`, `ambient.js`, `stormwall.js` · `groundcut.js` · `pickups.js`
   (+ `pickup-layout.js`) · `colliders.js`. `src/util/math.js` shared helpers. `src/assets.js` model and texture loading.

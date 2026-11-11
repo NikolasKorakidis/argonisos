@@ -378,223 +378,243 @@
     },
     "fl_olive0": {
       "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_01.fbx",
-      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonancientempire/sm-env-tree-01"
     },
     "fl_olive1": {
       "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_03.fbx",
-      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonancientempire/sm-env-tree-03"
     },
     "fl_olive2": {
       "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_04.fbx",
-      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonancientempire/sm-env-tree-04"
     },
     "fl_oak0": {
       "src": "Synty/PolygonNature/Models/SM_Tree_Round_05.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-round-05"
     },
     "fl_oak1": {
       "src": "Synty/PolygonNature/Models/SM_Tree_Round_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-round-01"
     },
     "fl_oak2": {
       "src": "Synty/PolygonNature/Models/SM_Tree_04.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-04"
     },
     "fl_cypress0": {
       "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_Thin_01.fbx",
-      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonancientempire/sm-env-tree-thin-01"
     },
     "fl_cypress1": {
       "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_Thin_02.fbx",
-      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonancientempire/sm-env-tree-thin-02"
     },
     "fl_pomegranate0": {
       "src": "Synty/PolygonNature/Models/SM_Tree_Round_02.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-round-02"
     },
     "fl_fig0": {
       "src": "Synty/PolygonNature/Models/SM_Tree_Round_04.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-round-04"
     },
     "fl_fig1": {
       "src": "Synty/PolygonNature/Models/SM_Tree_04.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-04"
     },
     "fl_plane0": {
       "src": "Synty/PolygonNature/Models/SM_Tree_Round_05.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-round-05"
     },
     "fl_plane1": {
       "src": "Synty/PolygonNature/Models/SM_Tree_Round_02.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-round-02"
     },
     "fl_qtree0": {
       "src": "Synty/PolygonNature/Models/SM_Tree_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-01"
     },
     "fl_qtree1": {
       "src": "Synty/PolygonNature/Models/SM_Tree_02.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-02"
     },
     "fl_qpine0": {
       "src": "Synty/PolygonNature/Models/SM_Tree_TallRound_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-tallround-01"
     },
     "fl_fir0": {
       "src": "Synty/PolygonNature/Models/SM_Tree_PolyPine_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-polypine-01"
     },
     "fl_holm0": {
       "src": "Synty/PolygonNature/Models/SM_Tree_Round_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_04.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-round-01"
     },
     "fl_qdead0": {
       "src": "Synty/PolygonNature/Models/SM_Tree_Pine_Dead_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-tree-pine-dead-01"
     },
     "fl_dead0": {
       "src": "Synty/PolygonNatureBiomes/PNB_Arid_Desert/Models/SM_Env_Tree_Dead_01.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Arid_Desert/Textures/PolygonNatureBiomesS2_AridDesert_Texture_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "pnb-arid-desert/sm-env-tree-dead-01"
     },
     "fl_dead1": {
       "src": "Synty/PolygonNatureBiomes/PNB_Arid_Desert/Models/SM_Env_Tree_Dead_02.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Arid_Desert/Textures/PolygonNatureBiomesS2_AridDesert_Texture_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "pnb-arid-desert/sm-env-tree-dead-02"
     },
     "fl_rock0": {
       "src": "Synty/PolygonNature/Models/SM_Rock_Rounded_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-rock-rounded-01",
+      "tint": [
+        0.8,
+        0.8,
+        0.8
+      ]
     },
     "fl_rock1": {
       "src": "Synty/PolygonNature/Models/SM_Rock_Small_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-rock-small-01",
+      "tint": [
+        0.8,
+        0.8,
+        0.8
+      ]
     },
     "fl_boulder0": {
       "src": "Synty/PolygonNature/Models/SM_Rock_Boulder_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-rock-boulder-01",
+      "tint": [
+        0.8,
+        0.8,
+        0.8
+      ]
     },
     "fl_boulder1": {
       "src": "Synty/PolygonNature/Models/SM_Rock_Rounded_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-rock-rounded-01",
+      "tint": [
+        0.8,
+        0.8,
+        0.8
+      ]
     },
     "fl_reeds0": {
       "src": "Synty/PolygonNature/Models/SM_Plant_Reeds_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-plant-reeds-01"
     },
     "fl_myrtle0": {
       "src": "Synty/PolygonNature/Models/SM_Plant_Hedge_Bush_02.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
       "join": true,
       "tint": [
         1.35,
         1.35,
         1.3
-      ]
+      ],
+      "plant": "polygonnature/sm-plant-hedge-bush-02"
     },
     "fl_broom0": {
       "src": "Synty/PolygonNature/Models/SM_Plant_Bush_03.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
       "join": true,
       "tint": [
         1.15,
         1.1,
         0.6
-      ]
+      ],
+      "plant": "polygonnature/sm-plant-bush-03"
     },
     "fl_redbush0": {
       "src": "Synty/PolygonNature/Models/SM_Plant_Bush_02.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_02.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-plant-bush-02"
     },
     "fl_fern0": {
       "src": "Synty/PolygonNature/Models/SM_Plant_Fern_02.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonnature/sm-plant-fern-02"
     },
     "fl_colfall0": {
       "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Block_04.fbx",
-      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-marble-block-04"
     },
     "fl_colfall1": {
       "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Pile_01.fbx",
-      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-marble-pile-01"
     },
     "fl_colstand0": {
       "src": "Synty/PolygonAncientEmpire/Models/SM_Bld_Pillar_01.fbx",
-      "bakeColors": "Synty/PolygonAncientEmpire/Textures/BuildingAlts/Building_Marble_02.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonancientempire/sm-bld-pillar-01"
     },
     "fl_wallruin0": {
       "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Stack_01.fbx",
-      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-marble-stack-01"
     },
     "fl_amphorae0": {
       "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Vase_Pile_02.fbx",
-      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
       "static": true,
-      "join": true
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-vase-pile-02"
     },
     "sAmphora": {
       "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Vase_05.fbx",
@@ -985,7 +1005,7 @@
         {
           "src": "SM_Bld_Pillar_01",
           "at": [
-            0.0,
+            0,
             0.4,
             0
           ]
@@ -1001,7 +1021,7 @@
         {
           "src": "SM_Bld_Pillar_01",
           "at": [
-            5.0,
+            5,
             0.4,
             0
           ]
@@ -1017,7 +1037,7 @@
         {
           "src": "SM_Bld_Pillar_01",
           "at": [
-            10.0,
+            10,
             0.4,
             0
           ]
@@ -1033,101 +1053,61 @@
         {
           "src": "SM_Bld_Roof_Base_Straight_01",
           "at": [
-            0.0,
-            0.0,
-            3.0
+            0,
+            0,
+            3
           ]
         },
         {
           "src": "SM_Bld_Roof_Base_Straight_01",
           "at": [
             2.5,
-            0.0,
-            3.0
+            0,
+            3
           ]
         },
         {
           "src": "SM_Bld_Roof_Base_Straight_01",
           "at": [
-            5.0,
-            0.0,
-            3.0
+            5,
+            0,
+            3
           ]
         },
         {
           "src": "SM_Bld_Roof_Base_Straight_01",
           "at": [
             7.5,
-            0.0,
-            3.0
+            0,
+            3
           ]
         },
         {
           "src": "SM_Bld_Roof_Base_Straight_01",
           "at": [
-            10.0,
-            0.0,
-            3.0
+            10,
+            0,
+            3
           ]
         },
         {
           "src": "SM_Bld_Roof_Base_Straight_Side_01",
           "at": [
             0,
-            0.0,
-            3.0
+            0,
+            3
           ]
         },
         {
           "src": "SM_Bld_Roof_Base_Straight_Side_01",
           "at": [
             12.5,
-            0.0,
-            3.0
+            0,
+            3
           ]
         },
         {
           "src": "SM_Bld_Roof_Base_Straight_01",
-          "at": [
-            0.0,
-            2.5,
-            3.75
-          ]
-        },
-        {
-          "src": "SM_Bld_Roof_Base_Straight_01",
-          "at": [
-            2.5,
-            2.5,
-            3.75
-          ]
-        },
-        {
-          "src": "SM_Bld_Roof_Base_Straight_01",
-          "at": [
-            5.0,
-            2.5,
-            3.75
-          ]
-        },
-        {
-          "src": "SM_Bld_Roof_Base_Straight_01",
-          "at": [
-            7.5,
-            2.5,
-            3.75
-          ]
-        },
-        {
-          "src": "SM_Bld_Roof_Base_Straight_01",
-          "at": [
-            10.0,
-            2.5,
-            3.75
-          ]
-        },
-        {
-          "src": "SM_Bld_Roof_Base_Straight_Side_01",
           "at": [
             0,
             2.5,
@@ -1135,6 +1115,46 @@
           ]
         },
         {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            2.5,
+            2.5,
+            3.75
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            5,
+            2.5,
+            3.75
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            7.5,
+            2.5,
+            3.75
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            10,
+            2.5,
+            3.75
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_Side_01",
+          "at": [
+            0,
+            2.5,
+            3.75
+          ]
+        },
+        {
           "src": "SM_Bld_Roof_Base_Straight_Side_01",
           "at": [
             12.5,
@@ -1163,7 +1183,7 @@
         {
           "src": "SM_Bld_Wall_01",
           "at": [
-            5.0,
+            5,
             5,
             0
           ],
@@ -1172,7 +1192,7 @@
         {
           "src": "Synty/PolygonAncientEmpire/Models/Base_Building/SM_Bld_Base_Wall_Half_01.fbx",
           "at": [
-            5.0,
+            5,
             5,
             3
           ],
@@ -1199,7 +1219,7 @@
         {
           "src": "SM_Bld_Wall_01",
           "at": [
-            10.0,
+            10,
             5,
             0
           ],
@@ -1208,7 +1228,7 @@
         {
           "src": "Synty/PolygonAncientEmpire/Models/Base_Building/SM_Bld_Base_Wall_Half_01.fbx",
           "at": [
-            10.0,
+            10,
             5,
             3
           ],
@@ -1332,7 +1352,7 @@
         {
           "src": "SM_Prop_Marble_Rubble_01",
           "at": [
-            2.0,
+            2,
             2.6,
             0
           ]
@@ -1366,7 +1386,7 @@
         {
           "src": "SM_Prop_Plinth_02",
           "at": [
-            2.0,
+            2,
             5.6,
             0
           ]
@@ -1374,9 +1394,9 @@
         {
           "src": "SM_Prop_Statue_Broken_04",
           "at": [
-            2.0,
+            2,
             5.6,
-            1.0
+            1
           ]
         }
       ]
@@ -1674,7 +1694,7 @@
           "at": [
             0,
             0,
-            3.0
+            3
           ]
         },
         {
@@ -1711,419 +1731,462 @@
         }
       ]
     },
-    "fl_flowers0": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Flowers_01.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_flowers1": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Flowers_04.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_flowers2": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Flowers_05.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_flowers3": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Flowers_07.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_flowers4": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Flowers_08.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_flowers5": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Wildflowers_01.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Textures/PolygonNatureBiomes_Meadow_Texture_01.png",
-      "static": true,
-      "join": true
-    },
-    "fl_flowers6": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Flowers_01.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Textures/PolygonNatureBiomesS2_Alpine_Texture_01.png",
-      "static": true,
-      "join": true
-    },
-    "fl_tallgrass0": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Grass_Tall_01.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_tallgrass1": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Grass_Tall_02.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_tallgrass2": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Grass_Tall_03.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_bush0": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Bush_01.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_bush1": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Bush_02.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_bush2": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Bush_03.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_bush3": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Bush_04.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_mushrooms0": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Mushroom_01.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_mushrooms1": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Mushroom_02.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
     "fl_pebbles0": {
       "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Rock_Small_Pile_01.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Textures/PolygonNatureBiomes_Meadow_Texture_01.png",
       "static": true,
       "join": true,
       "tint": [
-        1.35,
-        1.35,
-        1.35
-      ]
+        0.85,
+        0.85,
+        0.85
+      ],
+      "plant": "pnb-meadow-forest/sm-env-rock-small-pile-01"
     },
     "fl_pebbles1": {
       "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Rock_Small_Pile_02.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Textures/PolygonNatureBiomes_Meadow_Texture_01.png",
       "static": true,
       "join": true,
       "tint": [
-        1.35,
-        1.35,
-        1.35
-      ]
-    },
-    "fl_pebbles2": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Rock_Pebbles_05.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Textures/PolygonNatureBiomesS2_Alpine_Texture_01.png",
-      "static": true,
-      "join": true,
-      "tint": [
-        4.5,
-        4.5,
-        4.5
-      ]
+        0.85,
+        0.85,
+        0.85
+      ],
+      "plant": "pnb-meadow-forest/sm-env-rock-small-pile-02"
     },
     "fl_stump0": {
       "src": "PolyArt/Animals/PolyArt_Forest_Animals/Forest_objects/FBX/Forest_Stump.fbx",
-      "bakeColors": "PolyArt/Animals/PolyArt_Forest_Animals/Bears/Textures/PolyArt_Forest_color.png",
       "static": true,
       "join": true,
-      "meshes": [
-        "Stump_001"
-      ],
       "tint": [
         2.6,
         2.6,
         2.6
-      ]
+      ],
+      "plant": "polyart-animals/stump-001"
     },
     "fl_stump1": {
       "src": "PolyArt/Animals/PolyArt_Forest_Animals/Forest_objects/FBX/Forest_Stump.fbx",
-      "bakeColors": "PolyArt/Animals/PolyArt_Forest_Animals/Bears/Textures/PolyArt_Forest_color.png",
       "static": true,
       "join": true,
-      "meshes": [
-        "Stump_002"
-      ],
       "tint": [
         1.5,
         1.5,
         1.5
-      ]
+      ],
+      "plant": "polyart-animals/stump-002"
     },
     "fl_stump2": {
       "src": "PolyArt/Animals/PolyArt_Forest_Animals/Forest_objects/FBX/Forest_Stump.fbx",
-      "bakeColors": "PolyArt/Animals/PolyArt_Forest_Animals/Bears/Textures/PolyArt_Forest_color.png",
       "static": true,
       "join": true,
-      "meshes": [
-        "Stump_003"
-      ],
       "tint": [
         1.3,
         1.3,
         1.3
-      ]
+      ],
+      "plant": "polyart-animals/stump-003"
     },
     "fl_stump3": {
       "src": "PolyArt/Animals/PolyArt_Forest_Animals/Forest_objects/FBX/Forest_Stump.fbx",
-      "bakeColors": "PolyArt/Animals/PolyArt_Forest_Animals/Bears/Textures/PolyArt_Forest_color.png",
       "static": true,
       "join": true,
-      "meshes": [
-        "Stump_004"
-      ],
       "tint": [
         1.2,
         1.2,
         1.2
-      ]
+      ],
+      "plant": "polyart-animals/stump-004"
     },
     "fl_stump4": {
       "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Stump_01.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
       "static": true,
       "join": true,
       "tint": [
         1.1,
         1.1,
         1.1
-      ]
+      ],
+      "plant": "polygongeneric/sm-gen-env-stump-01"
     },
     "fl_log0": {
       "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Log_01.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
       "static": true,
       "join": true,
       "tint": [
         1.3,
         1.3,
         1.3
-      ]
+      ],
+      "plant": "polygongeneric/sm-gen-env-log-01"
     },
     "fl_log1": {
       "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Log_02.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
       "static": true,
       "join": true,
       "tint": [
         1.1,
         1.1,
         1.1
-      ]
+      ],
+      "plant": "polygongeneric/sm-gen-env-log-02"
     },
     "fl_log2": {
       "src": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Models/SM_Env_Log_02.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Textures/PolygonNatureBiomesS2_Texture_01.png",
       "static": true,
       "join": true,
       "tint": [
         2.1,
         2.1,
         2.1
-      ]
+      ],
+      "plant": "pnb-enchanted-forest/sm-env-log-02"
     },
     "fl_log3": {
       "src": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Models/SM_Env_Log_03.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Textures/PolygonNatureBiomesS2_Texture_01.png",
       "static": true,
       "join": true,
       "tint": [
         1.7,
         1.7,
         1.7
-      ]
+      ],
+      "plant": "pnb-enchanted-forest/sm-env-log-03"
     },
     "fl_branch0": {
       "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Branch_01.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Textures/PolygonNatureBiomesS2_Alpine_Texture_01.png",
       "static": true,
       "join": true,
       "tint": [
         3.6,
         3.6,
         3.6
-      ]
+      ],
+      "plant": "pnb-alpine-mountain/sm-env-branch-01"
     },
     "fl_branch1": {
       "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Branch_02.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Textures/PolygonNatureBiomesS2_Alpine_Texture_01.png",
       "static": true,
       "join": true,
       "tint": [
         3.6,
         3.6,
         3.6
-      ]
+      ],
+      "plant": "pnb-alpine-mountain/sm-env-branch-02"
     },
     "fl_branch2": {
       "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Branch_03.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Textures/PolygonNatureBiomesS2_Alpine_Texture_01.png",
       "static": true,
       "join": true,
       "tint": [
         3.6,
         3.6,
         3.6
-      ]
+      ],
+      "plant": "pnb-alpine-mountain/sm-env-branch-03"
     },
     "fl_roots0": {
       "src": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Models/SM_Env_Roots_Small_01.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Textures/PolygonNatureBiomesS2_Texture_01.png",
       "static": true,
       "join": true,
       "tint": [
         1.6,
         1.6,
         1.6
-      ]
+      ],
+      "plant": "pnb-enchanted-forest/sm-env-roots-small-01"
     },
     "fl_roots1": {
       "src": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Models/SM_Env_Roots_Small_02.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Textures/PolygonNatureBiomesS2_Texture_01.png",
       "static": true,
       "join": true,
       "tint": [
         1.5,
         1.5,
         1.5
-      ]
+      ],
+      "plant": "pnb-enchanted-forest/sm-env-roots-small-02"
     },
     "fl_roots2": {
       "src": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Models/SM_Env_Roots_Low_01.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Textures/PolygonNatureBiomesS2_Texture_01.png",
       "static": true,
       "join": true,
       "tint": [
         1.6,
         1.6,
         1.6
-      ]
+      ],
+      "plant": "pnb-enchanted-forest/sm-env-roots-low-01"
+    },
+    "fl_swampgrass0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_SwampGrass_Small_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-swamp-marshland/sm-env-swampgrass-small-01"
+    },
+    "fl_swampgrass1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_SwampGrass_Medium_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-swamp-marshland/sm-env-swampgrass-medium-01"
+    },
+    "fl_swampgrass2": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_SwampGrass_Tall_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-swamp-marshland/sm-env-swampgrass-tall-01"
+    },
+    "fl_driftwood0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Tropical_Jungle/Models/SM_Env_DriftWood_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-tropical-jungle/sm-env-driftwood-02"
+    },
+    "fl_driftwood1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Tropical_Jungle/Models/SM_Env_DriftWood_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-tropical-jungle/sm-env-driftwood-03"
+    },
+    "fl_driftwood2": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Tropical_Jungle/Models/SM_Env_DriftWood_04.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-tropical-jungle/sm-env-driftwood-04"
+    },
+    "fl_qpine1": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_Pine_Large_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonnature/sm-tree-pine-large-01"
+    },
+    "fl_qpine2": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_Pine_Large_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonnature/sm-tree-pine-large-02"
+    },
+    "fl_fir1": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_PolyPine_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonnature/sm-tree-polypine-02"
+    },
+    "fl_fir2": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_Pine_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonnature/sm-tree-pine-01"
+    },
+    "fl_holm1": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonnature/sm-tree-03"
+    },
+    "fl_holm2": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonancientempire/sm-env-tree-02"
+    },
+    "fl_qdead1": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_Birch_Dead_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonnature/sm-tree-birch-dead-01"
+    },
+    "fl_qdead2": {
+      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Tree_Dead_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygongeneric/sm-gen-env-tree-dead-01"
+    },
+    "fl_pomegranate1": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonancientempire/sm-env-tree-03"
+    },
+    "fl_flowers0": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_flower_01a.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-flower-01a",
+      "static": true,
+      "join": true
+    },
+    "fl_flowers1": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_flower_01b.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-flower-01b",
+      "static": true,
+      "join": true
+    },
+    "fl_flowers2": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_flower_02a.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-flower-02a",
+      "static": true,
+      "join": true
+    },
+    "fl_flowers3": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_flower_02b.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-flower-02b",
+      "static": true,
+      "join": true
+    },
+    "fl_flowers4": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_flower_03a.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-flower-03a",
+      "static": true,
+      "join": true
+    },
+    "fl_flowers5": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_flower_03b.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-flower-03b",
+      "static": true,
+      "join": true
+    },
+    "fl_flowers6": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_flower_04a.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-flower-04a",
+      "static": true,
+      "join": true
+    },
+    "fl_flowers7": {
+      "src": "Synty/PolygonNature/Models/SM_Plant_Flowers_01.fbx",
+      "plant": "polygonnature/sm-plant-flowers-01",
+      "static": true,
+      "join": true
+    },
+    "fl_tallgrass0": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_grass_tall_01a.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-grass-tall-01a",
+      "static": true,
+      "join": true
+    },
+    "fl_tallgrass1": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_grass_tall_01b.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-grass-tall-01b",
+      "static": true,
+      "join": true
+    },
+    "fl_tallgrass2": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_grass_tall_01c.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-grass-tall-01c",
+      "static": true,
+      "join": true
+    },
+    "fl_mushrooms0": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_mushrooms_01a.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-mushrooms-01a",
+      "static": true,
+      "join": true
+    },
+    "fl_mushrooms1": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_mushrooms_02a.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-mushrooms-02a",
+      "static": true,
+      "join": true
+    },
+    "fl_mushrooms2": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_mushrooms_02b.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-mushrooms-02b",
+      "static": true,
+      "join": true
+    },
+    "fl_mushrooms3": {
+      "src": "Synty/PolygonNature/Models/SM_Plant_Mushrooms_05.fbx",
+      "plant": "polygonnature/sm-plant-mushrooms-05",
+      "static": true,
+      "join": true
+    },
+    "fl_mushrooms4": {
+      "src": "Synty/PolygonNature/Models/SM_Plant_Mushrooms_02.fbx",
+      "plant": "polygonnature/sm-plant-mushrooms-02",
+      "static": true,
+      "join": true
     },
     "fl_lilypads0": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_LillyPads_02.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Textures/PolygonNatureBiomes_Swamp_Texture_01.png",
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Lillies_01.fbx",
+      "plant": "pnb-meadow-forest/sm-env-lillies-01",
       "static": true,
       "join": true
     },
     "fl_lilypads1": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_LillyPads_03.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Textures/PolygonNatureBiomes_Swamp_Texture_01.png",
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Lillies_02.fbx",
+      "plant": "pnb-meadow-forest/sm-env-lillies-02",
       "static": true,
       "join": true
     },
     "fl_lilypads2": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_LillyPads_04.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Textures/PolygonNatureBiomes_Swamp_Texture_01.png",
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Lillies_03.fbx",
+      "plant": "pnb-meadow-forest/sm-env-lillies-03",
       "static": true,
       "join": true
     },
-    "fl_swampgrass0": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_SwampGrass_Small_01.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Textures/PolygonNatureBiomes_Swamp_Texture_01.png",
+    "fl_moss0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_MossMound_01.fbx",
+      "plant": "pnb-swamp-marshland/sm-env-mossmound-01",
       "static": true,
       "join": true
     },
-    "fl_swampgrass1": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_SwampGrass_Medium_01.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Textures/PolygonNatureBiomes_Swamp_Texture_01.png",
+    "fl_moss1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_MossMound_02.fbx",
+      "plant": "pnb-swamp-marshland/sm-env-mossmound-02",
       "static": true,
       "join": true
     },
-    "fl_swampgrass2": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_SwampGrass_Tall_01.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Textures/PolygonNatureBiomes_Swamp_Texture_01.png",
+    "fl_moss2": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_MossMound_03.fbx",
+      "plant": "pnb-swamp-marshland/sm-env-mossmound-03",
       "static": true,
       "join": true
     },
-    "fl_driftwood0": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Tropical_Jungle/Models/SM_Env_DriftWood_02.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Tropical_Jungle/Textures/PolygonNatureBiomes_Tropical_Texture_01.png",
+    "fl_reeds1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_Reeds_01.fbx",
+      "plant": "pnb-swamp-marshland/sm-env-reeds-01",
       "static": true,
       "join": true
     },
-    "fl_driftwood1": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Tropical_Jungle/Models/SM_Env_DriftWood_03.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Tropical_Jungle/Textures/PolygonNatureBiomes_Tropical_Texture_01.png",
+    "fl_reeds2": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_Reeds_02.fbx",
+      "plant": "pnb-swamp-marshland/sm-env-reeds-02",
       "static": true,
       "join": true
     },
-    "fl_driftwood2": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Tropical_Jungle/Models/SM_Env_DriftWood_04.fbx",
-      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Tropical_Jungle/Textures/PolygonNatureBiomes_Tropical_Texture_01.png",
+    "fl_bush0": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_bush_01.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-bush-01",
       "static": true,
-      "join": true
+      "join": true,
+      "tint": [
+        0.62,
+        0.62,
+        0.6
+      ]
     },
-    "fl_qpine1": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Pine_Large_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+    "fl_bush1": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_bush_02.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-bush-02",
       "static": true,
-      "join": true
+      "join": true,
+      "tint": [
+        0.62,
+        0.62,
+        0.6
+      ]
     },
-    "fl_qpine2": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Pine_Large_02.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+    "fl_bush2": {
+      "src": "Synty/PolygonNature/Models/SM_Plant_Bush_Leaves_01.fbx",
+      "plant": "polygonnature/sm-plant-bush-leaves-01",
       "static": true,
-      "join": true
+      "join": true,
+      "height": 2
     },
-    "fl_fir1": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_PolyPine_02.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+    "fl_bush3": {
+      "src": "Synty/PolygonNature/Models/SM_Plant_Bush_Leaves_03.fbx",
+      "plant": "polygonnature/sm-plant-bush-leaves-03",
       "static": true,
-      "join": true
-    },
-    "fl_fir2": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Pine_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
-      "static": true,
-      "join": true
-    },
-    "fl_holm1": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_03.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
-      "static": true,
-      "join": true
-    },
-    "fl_holm2": {
-      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_02.fbx",
-      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_qdead1": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Birch_Dead_01.fbx",
-      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
-      "static": true,
-      "join": true
-    },
-    "fl_qdead2": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Tree_Dead_01.fbx",
-      "bakeColors": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
-      "static": true,
-      "join": true
-    },
-    "fl_pomegranate1": {
-      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_03.fbx",
-      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
-      "static": true,
-      "join": true
+      "join": true,
+      "height": 2.3
     }
   },
   "textures": {

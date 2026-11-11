@@ -70,7 +70,8 @@ for (const [name, e] of Object.entries(manifest.models)) {
   if (want.length && !want.includes(name)) continue;
   if (e.compose || e.house) { compose(name, e, path.join(ROOT, 'assets/models/pack', name + '.glb')); continue; }
   if (e.shared && !manifest.textures?.[e.shared]) throw new Error(`${name}: no texture ${e.shared} in the manifest`);
-  const job = { ...e, name, src: path.join(PACK, e.src), texture: e.texture && path.join(PACK, e.texture), out: path.join(ROOT, 'assets/models/pack', name + '.glb'),
+  // (a plant comes from the catalogue's export of its model, everything.mjs, which has the right texture on each part)
+  const job = { ...e, name, src: e.plant ? path.join(ROOT, 'assets/models/pack/all', e.plant + '.glb') : path.join(PACK, e.src), plant: e.plant && path.join(ROOT, 'assets/models/pack/tex'), texture: e.texture && path.join(PACK, e.texture), out: path.join(ROOT, 'assets/models/pack', name + '.glb'),
     clips: typeof e.clips === 'string' ? manifest.clipSets[e.clips] : e.clips, also: e.also?.map((f) => path.join(PACK, f)), bakeColors: e.bakeColors && path.join(PACK, e.bakeColors) };
   if (e.metaClips) job.splits = metaSplits(job.src, e.metaClips);
   fs.mkdirSync(path.dirname(job.out), { recursive: true });

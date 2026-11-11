@@ -16,12 +16,16 @@ const NEAR_KEEP = NEAR_R + CELL * 1.5, FAR = 256, FAR_R = 600;
 // with much less: from MIST_R0 out to MIST_R1 things drop away one by one (each at its own distance, so there's no ring
 // where they vanish), until only a share of each kind is left: half the trees and ruins, a tenth of the big rocks, none
 // of the small stuff. Coming closer, they come back the same way.
-const SMALL = new Set(['lavender', 'broom', 'myrtle', 'fern', 'redbush', 'amphorae', 'herm', 'reeds', 'bush', 'stump', 'log', 'lilypads', 'swampgrass', 'driftwood']);
+const SMALL = new Set(['lavender', 'broom', 'myrtle', 'fern', 'redbush', 'amphorae', 'herm', 'reeds', 'bush', 'stump', 'log', 'lilypads', 'swampgrass', 'driftwood', 'moss']);
 // the smallest things on the ground (Patch 12) go well inside the mist, from 35 m to 75 m: there are a great many of them
 const TINY = new Set(['flowers', 'tallgrass', 'mushrooms', 'pebbles', 'branch', 'roots']);
 const farKeep = (sp) => { const n = SPECIES[sp].name; return SMALL.has(n) || TINY.has(n) ? 0 : n === 'rock' || n === 'boulder' ? 0.1 : 0.5; };
 const dice = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
-// how far off this one is still drawn (Infinity: always, as one of the share that stays)
+// how far off this one is still drawn (Infinity: always, as one of the share that stays); over its last few metres it
+// sinks into the ground (shrinks about its foot), so nothing pops out of sight as you walk away
+const SHRINK = 6;
+const sinks = (sp) => SMALL.has(SPECIES[sp].name) || TINY.has(SPECIES[sp].name);   // (trees and rocks don't: they drop away behind the mist as before)
+function shrink(m, i, left) { if (left >= SHRINK) return; const f = Math.max(left, 0) / SHRINK; for (const e of [0, 1, 2, 4, 5, 6, 8, 9, 10]) m[i * 16 + e] *= f; }
 const keepTo = (sp, x, z) => { const k = farKeep(sp), h = dice(x, z); if (TINY.has(SPECIES[sp].name)) return 35 + 40 * h; return h < k ? Infinity : MIST_R0 + (MIST_R1 - MIST_R0) * ((h - k) / (1 - k)); };
 
 // ---- extra species the new world needs
@@ -82,7 +86,8 @@ TREE_BUILDERS.wallruin = () => {
   return P;
 };
 TREE_BUILDERS.lavender = () => {
-  const P = [[new THREE.IcosahedronGeometry(0.36, 1).scale(1.3, 0.55, 1.3).translate(0, 0.16, 0), 0x6d7f4a]], n = PROP_LOW() ? 6 : 22;
+  const P = [], n = PROP_LOW() ? 6 : 22;
+  for (let k = 0; k < 3; k++) { const a = k * 2.1 + rr(-0.4, 0.4); P.push([new THREE.IcosahedronGeometry(rr(0.2, 0.27), PROP_LOW() ? 0 : 1).scale(1.2, 0.75, 1.2).translate(Math.cos(a) * 0.18, 0.13, Math.sin(a) * 0.18), k % 2 ? 0x46552f : 0x4f5d36]); }   // (a mound of grey-green leaves, dark: vertex colours come out bright)
   for (let k = 0; k < n; k++) { const a = rr(0, 6.28), d = rr(0, 0.42), h = rr(0.45, 0.75), lean = rr(-0.2, 0.2);
     if (!PROP_LOW()) P.push([new THREE.CylinderGeometry(0.008, 0.01, h, 3).translate(0, h / 2, 0).rotateZ(lean).rotateY(a).translate(Math.cos(a) * d, 0.1, Math.sin(a) * d), 0x6f8a4a]);
     P.push([new THREE.ConeGeometry(0.035, 0.2, 4).rotateX(Math.PI).translate(0, h + 0.02, 0).rotateZ(lean).rotateY(a).translate(Math.cos(a) * d, 0.1, Math.sin(a) * d), k % 3 ? 0x8a6ccf : 0x7457c0]); }
@@ -114,6 +119,7 @@ TREE_BUILDERS.roots = () => { const P = []; for (let k = 0; k < 4; k++) P.push([
 TREE_BUILDERS.lilypads = () => { const P = []; for (let k = 0; k < 6; k++) P.push([new THREE.CircleGeometry(rr(0.14, 0.3), PROP_LOW() ? 6 : 10, 0.3, 5.9).rotateX(-Math.PI / 2).translate(rr(-0.8, 0.8), 0.01, rr(-0.8, 0.8)), k % 3 ? 0x3f6a2a : 0x4c7a30]);
   P.push([new THREE.IcosahedronGeometry(0.06, 0).translate(rr(-0.3, 0.3), 0.04, rr(-0.3, 0.3)), 0xd8d2c8]); return P; };
 TREE_BUILDERS.swampgrass = () => blades([], PROP_LOW() ? 8 : 22, 0.7, 0.8, 1.8, [0x4f6a2e, 0x5b7533, 0x667c38]);
+TREE_BUILDERS.moss = () => { const P = []; for (let k = 0; k < 3; k++) P.push([new THREE.IcosahedronGeometry(rr(0.4, 0.7), PROP_LOW() ? 0 : 1).scale(1, 0.35, 1).translate(rr(-0.5, 0.5), 0.05, rr(-0.5, 0.5)), k % 2 ? 0x3f5a24 : 0x4a6628]); return P; };
 TREE_BUILDERS.driftwood = (v) => [[lying(0.12, 0.07, 2.2 + (v % 3) * 0.6), PALE], [new THREE.CylinderGeometry(0.03, 0.05, 0.7, 5).rotateZ(Math.PI / 2).rotateY(0.6).translate(0.5, 0.12, 0.25), PALE]];
 
 // ---- materials with the near/far cut-off (wind sway stays as in the base material)
@@ -289,14 +295,15 @@ export class Vegetation {
         const trunk = new THREE.InstancedMesh(P.geo, cut(propMat, false), cap), meshes = [trunk];
         if (P.cards) { const lm = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, false), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
         P.geo.computeBoundingSphere(); const bs = P.geo.boundingSphere.clone(); if (P.cards) { P.cards.computeBoundingSphere(); bs.union(P.cards.boundingSphere); }
-        b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), refs: [], slot: new Int32Array(cap), n: 0 };
+        b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), refs: [], slot: new Int32Array(cap), n: 0 };
         for (const m of meshes) { m.castShadow = sh; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; m.userData.batch = b; this.group.add(m); }
         this.batches.set(key, b);
       }
       b.n = n; b.refs = refs;
       for (let k = 0; k < n; k++) { const it = refs[k * 2].items, o = refs[k * 2 + 1] * STRIDE, sc = it[o + 6];
         matrixOf(it, refs[k * 2 + 1], false); b.mats.set(_m.elements, k * 16);
-        b.cen[k * 4] = it[o + 2] + b.sphere.center.x * sc; b.cen[k * 4 + 1] = it[o + 3] + b.sphere.center.y * sc; b.cen[k * 4 + 2] = it[o + 4] + b.sphere.center.z * sc; b.cen[k * 4 + 3] = b.sphere.radius * sc; }
+        b.cen[k * 4] = it[o + 2] + b.sphere.center.x * sc; b.cen[k * 4 + 1] = it[o + 3] + b.sphere.center.y * sc; b.cen[k * 4 + 2] = it[o + 4] + b.sphere.center.z * sc; b.cen[k * 4 + 3] = b.sphere.radius * sc;
+        b.keep[k] = sinks(sp) ? keepTo(sp, it[o + 2], it[o + 4]) : Infinity; }
     }
   }
   // The mid band (light versions, out to MID_R): every block in reach together, one batch per species (the variants share
@@ -310,7 +317,7 @@ export class Vegetation {
       // rebuild, which comes with every block that streams in, then only copies them)
       if (!blk.mats) { const n = it.length / STRIDE; blk.mats = new Float32Array(n * 16); blk.keep = new Float32Array(n); blk.gkey = [];
         for (let i = 0; i < n; i++) { const o = i * STRIDE, sp = it[o], v = it[o + 1]; matrixOf(it, i, false); blk.mats.set(_m.elements, i * 16);
-          const kt = keepTo(sp, it[o + 2], it[o + 4]); blk.keep[i] = kt * kt; blk.gkey[i] = this.geoFor(sp, v).leafFar ? sp + ':' + v : 'sp' + sp; } }
+          blk.keep[i] = keepTo(sp, it[o + 2], it[o + 4]); blk.gkey[i] = this.geoFor(sp, v).leafFar ? sp + ':' + v : 'sp' + sp; } }
       for (let i = 0; i < it.length / STRIDE; i++) { if (it[i * STRIDE + 6] <= 0 || this.removed.has(blk.idOf[i])) continue;
         const key = blk.gkey[i]; (groups.get(key) || groups.set(key, []).get(key)).push(blk, i); }
     }
@@ -323,7 +330,7 @@ export class Vegetation {
         const trunk = new THREE.InstancedMesh(P.lo, cut(propMat, true), cap), meshes = [trunk];
         if (P.cards && P.leafFar) { const lm = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, true), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
         P.lo.computeBoundingSphere(); const bs = P.lo.boundingSphere.clone(); if (meshes[1]) { P.cards.computeBoundingSphere(); bs.union(P.cards.boundingSphere); }
-        b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), refs: [], n: 0 };
+        b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), sinks: sinks(it0[o0]), refs: [], n: 0 };
         for (const m of meshes) { m.castShadow = false; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; this.group.add(m); }
         this.mids.set(key, b);
       }
@@ -346,7 +353,9 @@ export class Vegetation {
         if (d2 > (nr + r) * (nr + r)) continue;                                            // beyond the near band: the mid band draws it
         const cell = b.refs[k * 2]; if (cell.hidden && cell.hidden.has(b.refs[k * 2 + 1])) continue;   // faded out of the way of the camera
         if (d2 > keep2) { _sp.center.set(x, y, z); _sp.radius = r; if (!_fr.intersectsSphere(_sp)) continue; }
+        if (d2 > b.keep[k] * b.keep[k]) continue;                                           // (the small things drop away well before the mist)
         for (let e = 0; e < 16; e++) dst[m * 16 + e] = b.mats[k * 16 + e];
+        if (b.keep[k] < Infinity) shrink(dst, m, b.keep[k] - Math.sqrt(d2));
         b.slot[m++] = k;
       }
       for (const mesh of b.meshes) { mesh.count = m; mesh.boundingSphere = null; }
@@ -358,9 +367,10 @@ export class Vegetation {
       const dst = b.meshes[0].instanceMatrix.array; let m = 0;
       for (let k = 0; k < b.n; k++) {
         const x = b.cen[k * 4], y = b.cen[k * 4 + 1], z = b.cen[k * 4 + 2], r = b.cen[k * 4 + 3], dx = x - pos.x, dz = z - pos.z, d2 = dx * dx + dz * dz;
-        const inner = Math.max(0, lo - r); if (d2 < inner * inner || d2 > (hi + r) * (hi + r) || d2 > b.keep[k]) continue;   // (and dropped away behind the mist)
+        const inner = Math.max(0, lo - r); if (d2 < inner * inner || d2 > (hi + r) * (hi + r) || d2 > b.keep[k] * b.keep[k]) continue;   // (and dropped away behind the mist)
         _sp.center.set(x, y, z); _sp.radius = r; if (!_fr.intersectsSphere(_sp)) continue;
         for (let e = 0; e < 16; e++) dst[m * 16 + e] = b.mats[k * 16 + e];
+        if (b.sinks) shrink(dst, m, b.keep[k] - Math.sqrt(d2));
         m++;
       }
       for (const mesh of b.meshes) mesh.count = m;
