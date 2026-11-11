@@ -3,6 +3,7 @@
   "entry": [
     "src/main.js",
     "src/world/terrain-worker.js",
+    "src/dev/browser.js",
     "tests/suites/*.mjs",
     "tests/bot/*.{js,mjs}",
     "tools/*.mjs",
