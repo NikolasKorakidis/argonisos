@@ -25,7 +25,13 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
   (`wear_<item>`, shown by `hero.wear`); a `proportions` entry lengthens limbs and scales hands as it fits (the pack's
   people are stylised: short legs, long arms, big hands). Held things: `GRIP` in `hero.js` (in the fist, hand-bone space;
   tools come out centred on their handle, `normalizeHandle`), shields strapped on the left forearm (`STRAP`). `tools/assets/lineup.py` lays every converted model out in one Blender file; `library.py` (with
-  `library-index.mjs` for the textures) does the same for every model in the packs, one file per pack. Manifest entries
+  `library-index.mjs` for the textures) does the same for every model in the packs, one file per pack.
+  `node tools/assets/everything.mjs` exports every pack model on its own (`everything.py`) to `pack/all/<pack>/<model>.glb`
+  (textures in `pack/tex/`, so `loadPack('all/…')` takes any of them as it is) and sorts them by kind and group
+  (`kinds.mjs`, first matching rule wins; `--sort` re-sorts only) into `pack/all/catalogue.json`. It feeds the asset
+  browser (`dev/index.html`, `npm run dev` → `/dev/`) and the Blender catalogue (`catalogue.py` →
+  `incoming assets/catalogue/argonisos-by-kind.blend`: a collection per kind and group, every model an asset in the
+  Asset Browser under "Kind/Group"). Manifest entries
   with `compose` or `house` are put together in Blender from Ancient Empire pieces (`compose.py`: each material slot keeps
   its prefab's texture as `tex:<key>`; houses from a recipe on the kit's 2.5 m grid); the game places them with
   `site-pack.js` `piece()`. Sounds: `node tools/assets/sounds.mjs` →
@@ -120,7 +126,8 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
 
 ## Code map
 - `src/world`: `gen.js` heights, biomes, the Olympos peak · `sites.js` site placement and pads · `flora.js` species and
-  layout · `reach.js` how far the mist and grass reach · `vegetation.js` near/mid/impostor bands · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
+  layout (the ground cover of Patch 12, `groundCover`, comes last in each cell with dice of its own: flowers,
+  bushes, stumps, logs, pebbles, lily pads… whose pack models keep their own size, `natural`) · `reach.js` how far the mist and grass reach · `vegetation.js` near/mid/impostor bands · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
   `terrain.js` + `terrain-worker.js` (worker pool, `pool.js`) · `structures.js` + `greek.js` the sites' buildings and
   props · `town.js` the abandoned town and the small scenes about the island (`SITES.town`, `SITES.spots`) · `sky.js`, `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`), `water.js`, `giantwood.js`, `ambient.js`, `stormwall.js` · `groundcut.js` · `pickups.js`
   (+ `pickup-layout.js`) · `colliders.js`. `src/util/math.js` shared helpers. `src/assets.js` model and texture loading.

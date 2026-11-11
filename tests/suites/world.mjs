@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { ROOT } from '../lib/server.mjs';
 
 const FINGERPRINT = {
-  heights: '94683252', biomes: '7cf08545', rock: '9b5e7ccd', colours: 'ee54c788', sites: '9f717d17', flora: 'a70d5a90', pickups: '7ea753b2',
+  heights: '94683252', biomes: '7cf08545', rock: '9b5e7ccd', colours: 'ee54c788', sites: '9f717d17', flora: '6132d413', pickups: '7ea753b2',
 };
 
 // FNV-1a over numbers rounded to a fixed precision (so the hash doesn't depend on the last float bit)

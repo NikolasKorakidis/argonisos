@@ -16,11 +16,13 @@ const NEAR_KEEP = NEAR_R + CELL * 1.5, FAR = 256, FAR_R = 600;
 // with much less: from MIST_R0 out to MIST_R1 things drop away one by one (each at its own distance, so there's no ring
 // where they vanish), until only a share of each kind is left: half the trees and ruins, a tenth of the big rocks, none
 // of the small stuff. Coming closer, they come back the same way.
-const SMALL = new Set(['lavender', 'broom', 'myrtle', 'fern', 'redbush', 'amphorae', 'herm', 'reeds']);
-const farKeep = (sp) => { const n = SPECIES[sp].name; return SMALL.has(n) ? 0 : n === 'rock' || n === 'boulder' ? 0.1 : 0.5; };
+const SMALL = new Set(['lavender', 'broom', 'myrtle', 'fern', 'redbush', 'amphorae', 'herm', 'reeds', 'bush', 'stump', 'log', 'lilypads', 'swampgrass', 'driftwood']);
+// the smallest things on the ground (Patch 12) go well inside the mist, from 35 m to 75 m: there are a great many of them
+const TINY = new Set(['flowers', 'tallgrass', 'mushrooms', 'pebbles', 'branch', 'roots']);
+const farKeep = (sp) => { const n = SPECIES[sp].name; return SMALL.has(n) || TINY.has(n) ? 0 : n === 'rock' || n === 'boulder' ? 0.1 : 0.5; };
 const dice = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
 // how far off this one is still drawn (Infinity: always, as one of the share that stays)
-const keepTo = (sp, x, z) => { const k = farKeep(sp), h = dice(x, z); return h < k ? Infinity : MIST_R0 + (MIST_R1 - MIST_R0) * ((h - k) / (1 - k)); };
+const keepTo = (sp, x, z) => { const k = farKeep(sp), h = dice(x, z); if (TINY.has(SPECIES[sp].name)) return 35 + 40 * h; return h < k ? Infinity : MIST_R0 + (MIST_R1 - MIST_R0) * ((h - k) / (1 - k)); };
 
 // ---- extra species the new world needs
 TREE_BUILDERS.pomegranate = (v) => {            // a small, bushy tree with glossy leaves and red fruit
@@ -86,6 +88,33 @@ TREE_BUILDERS.lavender = () => {
     P.push([new THREE.ConeGeometry(0.035, 0.2, 4).rotateX(Math.PI).translate(0, h + 0.02, 0).rotateZ(lean).rotateY(a).translate(Math.cos(a) * d, 0.1, Math.sin(a) * d), k % 3 ? 0x8a6ccf : 0x7457c0]); }
   return P;
 };
+
+// ---- the ground between (Patch 12): carved stand-ins for the pack's models (flora-pack.js), at about their sizes
+const BARK = 0x5a4130, BARK2 = 0x6b5038, PALE = 0x7d7466, LEAF = 0x46672b, LEAF2 = 0x557a33, GREY = 0x5e5a54;
+const blades = (P, n, R, h0, h1, cols) => { for (let i = 0; i < n; i++) { const a = rr(0, 6.283), d = rr(0, R), h = rr(h0, h1), lean = rr(-0.25, 0.25);
+  P.push([new THREE.ConeGeometry(rr(0.02, 0.04), h, 3, 1).translate(0, h / 2, 0).rotateZ(lean).rotateY(a).translate(Math.cos(a) * d, 0, Math.sin(a) * d), cols[i % cols.length]]); } return P; };
+const lying = (r0, r1, len) => new THREE.CylinderGeometry(r1, r0, len, PROP_LOW() ? 5 : 8).rotateZ(Math.PI / 2).translate(0, r0, 0);
+TREE_BUILDERS.flowers = (v) => {
+  const P = [[new THREE.IcosahedronGeometry(0.22, 0).scale(1.2, 0.5, 1.2).translate(0, 0.08, 0), LEAF]], head = [0xb3291f, 0xd59b1c, 0x7656c0, 0xd8d2c0, 0xc8572a, 0xb53a6a, 0xe0c840][v % 7];
+  for (let k = 0; k < (PROP_LOW() ? 4 : 10); k++) { const a = rr(0, 6.283), d = rr(0, 0.25), h = rr(0.25, 0.5);
+    if (!PROP_LOW()) P.push([new THREE.CylinderGeometry(0.006, 0.008, h, 3).translate(Math.cos(a) * d, h / 2, Math.sin(a) * d), 0x5c7a3a]);
+    P.push([new THREE.IcosahedronGeometry(0.04, 0).scale(1, 0.6, 1).translate(Math.cos(a) * d, h, Math.sin(a) * d), head]); }
+  return P;
+};
+TREE_BUILDERS.tallgrass = () => blades([], PROP_LOW() ? 8 : 26, 0.5, 0.5, 1.1, [0x6f7f3a, 0x7d8a45, 0x5f7333]);
+TREE_BUILDERS.bush = (v) => { const P = []; for (let k = 0; k < 4 + (v % 3); k++) P.push([new THREE.IcosahedronGeometry(rr(0.55, 0.85), PROP_LOW() ? 0 : 1).translate(rr(-0.8, 0.8), rr(0.45, 0.85), rr(-0.7, 0.7)), k % 2 ? LEAF : LEAF2]); return P; };
+TREE_BUILDERS.mushrooms = () => { const P = []; for (let k = 0; k < 4; k++) { const x = rr(-0.2, 0.2), z = rr(-0.2, 0.2), h = rr(0.08, 0.2);
+  P.push([new THREE.CylinderGeometry(0.02, 0.025, h, 5).translate(x, h / 2, z), 0xd8d0b8], [new THREE.SphereGeometry(rr(0.05, 0.09), 7, 4, 0, 6.283, 0, 1.6).translate(x, h, z), k % 2 ? 0x9a2a1c : 0x7a4a2a]); } return P; };
+TREE_BUILDERS.pebbles = () => { const P = []; for (let k = 0; k < 7; k++) P.push([new THREE.IcosahedronGeometry(rr(0.06, 0.16), 0).scale(1, 0.6, 1).translate(rr(-0.4, 0.4), 0.03, rr(-0.35, 0.35)), k % 2 ? GREY : STONE2]); return P; };
+TREE_BUILDERS.stump = (v) => { const h = 0.35 + (v % 3) * 0.15, P = [[new THREE.CylinderGeometry(0.32, 0.42, h, PROP_LOW() ? 6 : 9).translate(0, h / 2, 0), BARK], [new THREE.CylinderGeometry(0.3, 0.3, 0.02, PROP_LOW() ? 6 : 9).translate(0, h, 0), 0x9a7a52]];
+  for (let k = 0; k < 4; k++) P.push([new THREE.ConeGeometry(0.1, 0.6, 4).rotateZ(1.2).rotateY(k * 1.57 + rr(-0.3, 0.3)).translate(Math.cos(k * 1.57) * 0.35, 0.05, -Math.sin(k * 1.57) * 0.35), BARK]); return P; };
+TREE_BUILDERS.log = (v) => { const len = 3.6 + (v % 4) * 0.8, r = 0.32 + (v % 2) * 0.1; return [[lying(r, r * 0.85, len), BARK2], [new THREE.CylinderGeometry(r * 0.95, r * 0.95, 0.03, 8).rotateZ(Math.PI / 2).translate(len / 2, r, 0), 0x9a7a52], [new THREE.ConeGeometry(0.06, 0.8, 4).rotateZ(-0.9).translate(-0.4, r + 0.4, 0.15), BARK2]]; };
+TREE_BUILDERS.branch = () => [[lying(0.04, 0.025, 1.4), BARK], [new THREE.CylinderGeometry(0.015, 0.025, 0.5, 4).rotateZ(Math.PI / 2).rotateY(0.7).translate(0.2, 0.05, 0.18), BARK]];
+TREE_BUILDERS.roots = () => { const P = []; for (let k = 0; k < 4; k++) P.push([lying(0.08, 0.03, rr(0.9, 1.6)).translate(0.6, -0.04, 0).rotateY(rr(0, 6.283)), BARK]); return P; };
+TREE_BUILDERS.lilypads = () => { const P = []; for (let k = 0; k < 6; k++) P.push([new THREE.CircleGeometry(rr(0.14, 0.3), PROP_LOW() ? 6 : 10, 0.3, 5.9).rotateX(-Math.PI / 2).translate(rr(-0.8, 0.8), 0.01, rr(-0.8, 0.8)), k % 3 ? 0x3f6a2a : 0x4c7a30]);
+  P.push([new THREE.IcosahedronGeometry(0.06, 0).translate(rr(-0.3, 0.3), 0.04, rr(-0.3, 0.3)), 0xd8d2c8]); return P; };
+TREE_BUILDERS.swampgrass = () => blades([], PROP_LOW() ? 8 : 22, 0.7, 0.8, 1.8, [0x4f6a2e, 0x5b7533, 0x667c38]);
+TREE_BUILDERS.driftwood = (v) => [[lying(0.12, 0.07, 2.2 + (v % 3) * 0.6), PALE], [new THREE.CylinderGeometry(0.03, 0.05, 0.7, 5).rotateZ(Math.PI / 2).rotateY(0.6).translate(0.5, 0.12, 0.25), PALE]];
 
 // ---- materials with the near/far cut-off (wind sway stays as in the base material)
 const VEG_U = { uVegC: { value: new THREE.Vector2() }, uNearR: { value: NEAR_R }, uMidR: { value: MID_R }, uFarR: { value: FAR_R } };

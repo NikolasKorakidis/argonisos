@@ -4,6 +4,25 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-12', name: 'Patch 12', title: 'Undergrowth', date: '11 November 2026',
+    intro: 'The ground of Nisos has filled in: flowers, bushes and the litter of the woods, everywhere you walk.',
+    sections: [
+      { t: 'The Meadows', icon: 'tree', items: [
+        'Drifts of <b>wildflowers</b> in the open meadows and the clearings: poppies, marigolds, irises, daisies and more, each drift mostly of one kind.',
+        'Tufts of tall grass, and leafy bushes along the edges of the woods.',
+      ] },
+      { t: 'The Forests', icon: 'log', items: [
+        'Stumps, fallen logs, branches and roots on the forest floor, and little clusters of mushrooms at the feet of the trees. The giant forest has the most.',
+        'More kinds of trees: new pines and firs in the hills, rounder holm oaks, bare dead trees, and a second pomegranate.',
+      ] },
+      { t: 'Water and Stone', icon: 'wet', items: [
+        'Lily pads on the marsh pools, sedge along their banks, half-drowned logs. Driftwood washed up on the shore.',
+        'Pebbles everywhere, and scree on the rocky slopes.',
+        'Nothing you had cut or gathered comes back: everything new grows in between.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-11', name: 'Patch 11', title: 'Lost Places', date: '11 November 2026',
     intro: 'People lived on Nisos once. Out in the meadows you can now find what they left behind.',
     sections: [
