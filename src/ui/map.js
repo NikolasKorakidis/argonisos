@@ -29,10 +29,10 @@ export class WorldMap {
     // compass
     const mm = document.createElement('div'); mm.id = 'minimap'; mm.innerHTML = '<canvas width="176" height="176"></canvas><div id="biomeLabel"></div>'; document.getElementById('hud').appendChild(mm); this.mini = mm.querySelector('canvas'); this.biomeEl = mm.querySelector('#biomeLabel');
     const c = document.createElement('div'); c.id = 'compass'; c.innerHTML = '<div id="compassStrip"></div><i></i>'; document.getElementById('hud').appendChild(c); this.strip = c.querySelector('#compassStrip');
-    this.know(SITES.house);   // the temple is found by exploring
+    this.know(SITES.house);   // the temple is found by exploring (the abandoned town is always known: isKnown)
   }
   know(s) { if (s && !this.st.known.includes(s.x.toFixed(0) + ',' + s.z.toFixed(0))) this.st.known.push(s.x.toFixed(0) + ',' + s.z.toFixed(0)); }
-  isKnown(s) { return this.st.known.includes(s.x.toFixed(0) + ',' + s.z.toFixed(0)); }
+  isKnown(s) { return s.kind === 'town' || this.st.known.includes(s.x.toFixed(0) + ',' + s.z.toFixed(0)); }   // (the town is on the map from the start, older saves too)
   reveal(s) { this.know(s); this.uncover(s.x, s.z, 90); }
   uncover(x, z, r) { const k = FOG / EXT, f = this.fctx; f.globalCompositeOperation = 'destination-out'; const g = f.createRadialGradient((x + EXT / 2) * k, (z + EXT / 2) * k, 0, (x + EXT / 2) * k, (z + EXT / 2) * k, r * k); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.7, 'rgba(0,0,0,.9)'); g.addColorStop(1, 'rgba(0,0,0,0)'); f.fillStyle = g; f.beginPath(); f.arc((x + EXT / 2) * k, (z + EXT / 2) * k, r * k, 0, 7); f.fill(); f.globalCompositeOperation = 'source-over'; }
   done(s) { const st = this.g.trial?.st; if (!st) return false; const i = SITES.olives.indexOf(s); if (i >= 0) return st.scraps.includes('olive' + i); const k = SITES.caves.indexOf(s); return k >= 0 && st.carvings.includes('cave' + k); }
