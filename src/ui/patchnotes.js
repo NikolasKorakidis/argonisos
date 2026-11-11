@@ -4,6 +4,21 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-11', name: 'Patch 11', title: 'Lost Places', date: '11 November 2026',
+    intro: 'People lived on Nisos once. Out in the meadows you can now find what they left behind.',
+    sections: [
+      { t: 'The Abandoned Town', icon: 'roof', items: [
+        'Far out in the meadows lies <b>a little town</b>, long empty: two paved streets crossing at a square with a fountain, a well and a statue, market stalls under the vines, a colonnaded stoa and the ruins of a temple.',
+        'A dozen houses face the streets, some still roofed, some fallen in. Walk in through their doorways or the gaps where walls came down; a roof still keeps the rain off.',
+        'Behind the houses: a smithy\'s yard with its forge and kiln, and a walled garden of figs and pomegranates. It goes on your map once you have found it.',
+      ] },
+      { t: 'About the Island', icon: 'temple', items: [
+        'Small places all over Nisos: a roadside shrine, a cart lost on the way to market, a fallen colonnade, a shepherd\'s camp, a farmer\'s hut, an old well under an olive, the last of a lookout, a vineyard\'s rest.',
+        'Trees and pickups near these new places have moved, so any you had cut or gathered there grow back.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-10', name: 'Patch 10', title: 'New Faces', date: '11 November 2026',
     intro: 'Nisos has a new look: a new hero, new creatures and bosses, new trees, new buildings to build, new tools and new sounds.',
     sections: [

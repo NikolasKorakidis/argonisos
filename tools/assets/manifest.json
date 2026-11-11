@@ -762,6 +762,947 @@
       "src": "Synty/PolygonParticleFX/Models/FX_Sphere_Puff_01.fbx",
       "static": true,
       "join": true
+    },
+    "twHouseA": {
+      "house": {
+        "w": 3,
+        "d": 2,
+        "door": 1,
+        "windows": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            1
+          ],
+          [
+            3,
+            0
+          ]
+        ],
+        "roof": "full",
+        "plaster": "white"
+      }
+    },
+    "twHouseB": {
+      "house": {
+        "w": 2,
+        "d": 2,
+        "door": 0,
+        "windows": [
+          [
+            3,
+            0
+          ]
+        ],
+        "fallen": [
+          [
+            1,
+            0
+          ],
+          [
+            2,
+            1
+          ]
+        ],
+        "gone": [
+          [
+            1,
+            1
+          ]
+        ],
+        "roof": "half",
+        "plaster": "orange"
+      }
+    },
+    "twHouseC": {
+      "house": {
+        "w": 2,
+        "d": 1,
+        "door": 0,
+        "windows": [
+          [
+            0,
+            1
+          ],
+          [
+            2,
+            0
+          ]
+        ],
+        "roof": "full",
+        "plaster": "blue"
+      }
+    },
+    "twHouseD": {
+      "house": {
+        "w": 4,
+        "d": 2,
+        "door": 1,
+        "windows": [
+          [
+            0,
+            3
+          ],
+          [
+            2,
+            0
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "gone": [
+          [
+            0,
+            3
+          ]
+        ],
+        "fallen": [
+          [
+            2,
+            1
+          ]
+        ],
+        "roof": "half",
+        "plaster": "white"
+      }
+    },
+    "twHouseE": {
+      "house": {
+        "w": 3,
+        "d": 2,
+        "door": 1,
+        "fallen": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "gone": [
+          [
+            2,
+            1
+          ],
+          [
+            3,
+            1
+          ]
+        ],
+        "roof": "none",
+        "plaster": "red"
+      }
+    },
+    "twHouseF": {
+      "house": {
+        "w": 2,
+        "d": 2,
+        "door": 1,
+        "windows": [
+          [
+            0,
+            0
+          ],
+          [
+            2,
+            0
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "roof": "full",
+        "plaster": "white"
+      }
+    },
+    "twShed": {
+      "house": {
+        "w": 1,
+        "d": 1,
+        "door": 0,
+        "roof": "full",
+        "plaster": "orange"
+      }
+    },
+    "twShell": {
+      "house": {
+        "w": 3,
+        "d": 1,
+        "door": 1,
+        "fallen": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            2
+          ],
+          [
+            1,
+            0
+          ]
+        ],
+        "gone": [
+          [
+            2,
+            1
+          ],
+          [
+            2,
+            2
+          ]
+        ],
+        "roof": "none",
+        "plaster": "white"
+      }
+    },
+    "twStoa": {
+      "compose": [
+        {
+          "src": "SM_Bld_Pillar_01",
+          "at": [
+            0.0,
+            0.4,
+            0
+          ]
+        },
+        {
+          "src": "SM_Bld_Pillar_01",
+          "at": [
+            2.5,
+            0.4,
+            0
+          ]
+        },
+        {
+          "src": "SM_Bld_Pillar_01",
+          "at": [
+            5.0,
+            0.4,
+            0
+          ]
+        },
+        {
+          "src": "SM_Bld_Pillar_01",
+          "at": [
+            7.5,
+            0.4,
+            0
+          ]
+        },
+        {
+          "src": "SM_Bld_Pillar_01",
+          "at": [
+            10.0,
+            0.4,
+            0
+          ]
+        },
+        {
+          "src": "SM_Bld_Pillar_01",
+          "at": [
+            12.5,
+            0.4,
+            0
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            0.0,
+            0.0,
+            3.0
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            2.5,
+            0.0,
+            3.0
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            5.0,
+            0.0,
+            3.0
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            7.5,
+            0.0,
+            3.0
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            10.0,
+            0.0,
+            3.0
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_Side_01",
+          "at": [
+            0,
+            0.0,
+            3.0
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_Side_01",
+          "at": [
+            12.5,
+            0.0,
+            3.0
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            0.0,
+            2.5,
+            3.75
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            2.5,
+            2.5,
+            3.75
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            5.0,
+            2.5,
+            3.75
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            7.5,
+            2.5,
+            3.75
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01",
+          "at": [
+            10.0,
+            2.5,
+            3.75
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_Side_01",
+          "at": [
+            0,
+            2.5,
+            3.75
+          ]
+        },
+        {
+          "src": "SM_Bld_Roof_Base_Straight_Side_01",
+          "at": [
+            12.5,
+            2.5,
+            3.75
+          ]
+        },
+        {
+          "src": "SM_Bld_Wall_01",
+          "at": [
+            2.5,
+            5,
+            0
+          ],
+          "rot": 180
+        },
+        {
+          "src": "Synty/PolygonAncientEmpire/Models/Base_Building/SM_Bld_Base_Wall_Half_01.fbx",
+          "at": [
+            2.5,
+            5,
+            3
+          ],
+          "rot": 180
+        },
+        {
+          "src": "SM_Bld_Wall_01",
+          "at": [
+            5.0,
+            5,
+            0
+          ],
+          "rot": 180
+        },
+        {
+          "src": "Synty/PolygonAncientEmpire/Models/Base_Building/SM_Bld_Base_Wall_Half_01.fbx",
+          "at": [
+            5.0,
+            5,
+            3
+          ],
+          "rot": 180
+        },
+        {
+          "src": "SM_Bld_Wall_01",
+          "at": [
+            7.5,
+            5,
+            0
+          ],
+          "rot": 180
+        },
+        {
+          "src": "Synty/PolygonAncientEmpire/Models/Base_Building/SM_Bld_Base_Wall_Half_01.fbx",
+          "at": [
+            7.5,
+            5,
+            3
+          ],
+          "rot": 180
+        },
+        {
+          "src": "SM_Bld_Wall_01",
+          "at": [
+            10.0,
+            5,
+            0
+          ],
+          "rot": 180
+        },
+        {
+          "src": "Synty/PolygonAncientEmpire/Models/Base_Building/SM_Bld_Base_Wall_Half_01.fbx",
+          "at": [
+            10.0,
+            5,
+            3
+          ],
+          "rot": 180
+        },
+        {
+          "src": "SM_Bld_Wall_01",
+          "at": [
+            12.5,
+            5,
+            0
+          ],
+          "rot": 180
+        },
+        {
+          "src": "Synty/PolygonAncientEmpire/Models/Base_Building/SM_Bld_Base_Wall_Half_01.fbx",
+          "at": [
+            12.5,
+            5,
+            3
+          ],
+          "rot": 180
+        },
+        {
+          "src": "SM_Bld_Wall_01",
+          "at": [
+            0,
+            5,
+            0
+          ],
+          "rot": 270
+        },
+        {
+          "src": "SM_Bld_Wall_01",
+          "at": [
+            12.5,
+            2.5,
+            0
+          ],
+          "rot": 90
+        }
+      ]
+    },
+    "twTempleRuin": {
+      "compose": [
+        {
+          "src": "SM_Bld_Pillar_01",
+          "at": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "src": "SM_Bld_Pillar_01",
+          "at": [
+            2.5,
+            0,
+            0
+          ]
+        },
+        {
+          "src": "SM_Prop_Pillar_Base_01",
+          "at": [
+            5,
+            0,
+            0
+          ]
+        },
+        {
+          "src": "SM_Prop_Pillar_Base_01",
+          "at": [
+            7.5,
+            0,
+            0
+          ]
+        },
+        {
+          "src": "SM_Bld_Pillar_01",
+          "at": [
+            0,
+            5,
+            0
+          ]
+        },
+        {
+          "src": "SM_Prop_Pillar_Base_01",
+          "at": [
+            0,
+            2.5,
+            0
+          ]
+        },
+        {
+          "src": "SM_Prop_Marble_Block_04",
+          "at": [
+            4.5,
+            2.6,
+            0
+          ],
+          "rot": 35
+        },
+        {
+          "src": "SM_Prop_Marble_Block_04",
+          "at": [
+            6.6,
+            4.4,
+            0
+          ],
+          "rot": 80
+        },
+        {
+          "src": "SM_Prop_Marble_Pile_01",
+          "at": [
+            6.5,
+            6.6,
+            0
+          ],
+          "rot": 20
+        },
+        {
+          "src": "SM_Prop_Marble_Rubble_01",
+          "at": [
+            2.0,
+            2.6,
+            0
+          ]
+        },
+        {
+          "src": "SM_Prop_Marble_Rubble_02",
+          "at": [
+            4.2,
+            6.4,
+            0
+          ],
+          "rot": 120
+        },
+        {
+          "src": "SM_Prop_Marble_Stack_01",
+          "at": [
+            0.3,
+            8.2,
+            0
+          ]
+        },
+        {
+          "src": "SM_Prop_Statue_Broken_01",
+          "at": [
+            3.4,
+            1.2,
+            0
+          ],
+          "rot": 200
+        },
+        {
+          "src": "SM_Prop_Plinth_02",
+          "at": [
+            2.0,
+            5.6,
+            0
+          ]
+        },
+        {
+          "src": "SM_Prop_Statue_Broken_04",
+          "at": [
+            2.0,
+            5.6,
+            1.0
+          ]
+        }
+      ]
+    },
+    "twFountain": {
+      "compose": [
+        {
+          "src": "SM_Prop_Fountain_02"
+        }
+      ]
+    },
+    "twWell": {
+      "compose": [
+        {
+          "src": "SM_Prop_Well_01"
+        }
+      ]
+    },
+    "twAwning": {
+      "compose": [
+        {
+          "src": "SM_Prop_Overhang_01"
+        }
+      ]
+    },
+    "twTable": {
+      "compose": [
+        {
+          "src": "SM_Prop_Table_08"
+        }
+      ]
+    },
+    "twBench": {
+      "compose": [
+        {
+          "src": "SM_Prop_Bench_01"
+        }
+      ]
+    },
+    "twCart": {
+      "compose": [
+        {
+          "src": "SM_Prop_Cart_01"
+        }
+      ]
+    },
+    "twCartB": {
+      "compose": [
+        {
+          "src": "SM_Prop_Cart_02"
+        }
+      ]
+    },
+    "twBaskets": {
+      "compose": [
+        {
+          "src": "SM_Prop_Basket_Set_01"
+        },
+        {
+          "src": "SM_Prop_Basket_Set_01_Insert_01"
+        }
+      ]
+    },
+    "twBasket": {
+      "compose": [
+        {
+          "src": "SM_Prop_Basket_04"
+        }
+      ]
+    },
+    "twSack": {
+      "compose": [
+        {
+          "src": "SM_Prop_Sack_03"
+        }
+      ]
+    },
+    "twSacks": {
+      "compose": [
+        {
+          "src": "SM_Prop_Sack_Stack_01"
+        }
+      ]
+    },
+    "twVases": {
+      "compose": [
+        {
+          "src": "SM_Prop_Vase_Pile_02"
+        }
+      ]
+    },
+    "twJars": {
+      "compose": [
+        {
+          "src": "SM_Prop_Jar_Pile_01"
+        }
+      ]
+    },
+    "twVase": {
+      "compose": [
+        {
+          "src": "SM_Prop_Vase_01"
+        }
+      ]
+    },
+    "twJar": {
+      "compose": [
+        {
+          "src": "SM_Prop_Jar_01"
+        }
+      ]
+    },
+    "twStatue": {
+      "compose": [
+        {
+          "src": "SM_Prop_Statue_03"
+        }
+      ]
+    },
+    "twStatueBroken": {
+      "compose": [
+        {
+          "src": "SM_Prop_Statue_Broken_01"
+        }
+      ]
+    },
+    "twMarblePile": {
+      "compose": [
+        {
+          "src": "SM_Prop_Marble_Pile_01"
+        }
+      ]
+    },
+    "twDrum": {
+      "compose": [
+        {
+          "src": "SM_Prop_Marble_Block_04"
+        }
+      ]
+    },
+    "twRubbleA": {
+      "compose": [
+        {
+          "src": "SM_Prop_Marble_Rubble_01"
+        }
+      ]
+    },
+    "twRubbleB": {
+      "compose": [
+        {
+          "src": "SM_Prop_Marble_Rubble_02"
+        }
+      ]
+    },
+    "twRubbleC": {
+      "compose": [
+        {
+          "src": "SM_Prop_Marble_Rubble_04"
+        }
+      ]
+    },
+    "twStack": {
+      "compose": [
+        {
+          "src": "SM_Prop_Marble_Stack_01"
+        }
+      ]
+    },
+    "twColumn": {
+      "compose": [
+        {
+          "src": "SM_Bld_Pillar_01"
+        }
+      ]
+    },
+    "twColumnBase": {
+      "compose": [
+        {
+          "src": "SM_Prop_Pillar_Base_01"
+        }
+      ]
+    },
+    "twBrazier": {
+      "compose": [
+        {
+          "src": "SM_Prop_Brazier_02"
+        },
+        {
+          "src": "SM_Prop_Brazier_02_Insert_01"
+        }
+      ]
+    },
+    "twStraw": {
+      "compose": [
+        {
+          "src": "SM_Prop_Straw_Stack_01"
+        }
+      ]
+    },
+    "twStrawBundle": {
+      "compose": [
+        {
+          "src": "SM_Prop_Straw_Bundle_01"
+        }
+      ]
+    },
+    "twFence": {
+      "compose": [
+        {
+          "src": "SM_Env_Fence_Wood_01"
+        }
+      ]
+    },
+    "twBanner": {
+      "compose": [
+        {
+          "src": "SM_Prop_Banner_02_A"
+        }
+      ]
+    },
+    "twAnvil": {
+      "compose": [
+        {
+          "src": "SM_Prop_Anvil_01"
+        }
+      ]
+    },
+    "twForge": {
+      "compose": [
+        {
+          "src": "SM_Prop_Forge_01"
+        }
+      ]
+    },
+    "twKiln": {
+      "compose": [
+        {
+          "src": "SM_Prop_Kiln_01"
+        }
+      ]
+    },
+    "twPlinth": {
+      "compose": [
+        {
+          "src": "SM_Prop_Plinth_02"
+        }
+      ]
+    },
+    "twRoad": {
+      "compose": [
+        {
+          "src": "SM_Env_Road_Straight_01"
+        }
+      ]
+    },
+    "twGrind": {
+      "compose": [
+        {
+          "src": "SM_Prop_Grinding_Wheel_01"
+        }
+      ]
+    },
+    "twFirepit": {
+      "compose": [
+        {
+          "src": "SM_Prop_Stone_Border_01"
+        }
+      ]
+    },
+    "twCenser": {
+      "compose": [
+        {
+          "src": "SM_Prop_Senser_02"
+        }
+      ]
+    },
+    "twBowl": {
+      "compose": [
+        {
+          "src": "SM_Prop_Bowl_07"
+        }
+      ]
+    },
+    "twLogs": {
+      "compose": [
+        {
+          "src": "SM_Prop_Cart_01_Insert_03"
+        }
+      ]
+    },
+    "twPergola": {
+      "compose": [
+        {
+          "src": "SM_Bld_Trellis_Roof_01",
+          "at": [
+            0,
+            0,
+            3.0
+          ]
+        },
+        {
+          "src": "SM_Bld_Trellis_Pillar_01",
+          "at": [
+            0.16,
+            -0.16,
+            0
+          ]
+        },
+        {
+          "src": "SM_Bld_Trellis_Pillar_01",
+          "at": [
+            0.16,
+            -2.34,
+            0
+          ]
+        },
+        {
+          "src": "SM_Bld_Trellis_Pillar_01",
+          "at": [
+            2.34,
+            -0.16,
+            0
+          ]
+        },
+        {
+          "src": "SM_Bld_Trellis_Pillar_01",
+          "at": [
+            2.34,
+            -2.34,
+            0
+          ]
+        }
+      ]
     }
   },
   "textures": {

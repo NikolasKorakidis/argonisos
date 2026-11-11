@@ -12,6 +12,7 @@ import { propGeo, propMat, leafMat } from './trees.js';
 import { GMAT, amphora, pithos, bowl, jug, tripod, acroterion, antefixes, cartWheel, firewood, leaves, mist, dice } from './greek.js';
 import { wettable } from './wetness.js';
 import { siteProp } from './site-pack.js';
+import { buildTown, buildSpot } from './town.js';
 
 const rnd = (() => { let s = 77; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; })(), rr = (a, b) => a + rnd() * (b - a);
 function canvasTex(draw, n = 512, rep = 1) { const c = document.createElement('canvas'); c.width = c.height = n; draw(c.getContext('2d'), n); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; }
@@ -64,7 +65,7 @@ for (const [k, o] of Object.entries({ marble: [0.72, 0.28], stone: [0.66, 0.28],
 const _nav = new THREE.Vector3();
 // how far off each kind of site is drawn: the landmarks you find your way by far out under the mist, the minor sites
 // (the farmhouse, the olive markers, the caves) only a little way beyond it
-const VIEW_R = { temple: 1700, labyrinth: 1400, chimera: 1200, house: 220, peak: 600, olive: 220, cave: 220 };
+const VIEW_R = { temple: 1700, labyrinth: 1400, chimera: 1200, house: 220, peak: 600, olive: 220, cave: 220, town: 650, spot: 260 };
 
 // ---- kit: every helper pushes [geometry, material] onto a list in site-local coordinates
 const uvBox = (w, h, d, s = 1 / 3) => { const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, nn = g.attributes.normal; for (let i = 0; i < uv.count; i++) { const ax = Math.abs(nn.getX(i)), ay = Math.abs(nn.getY(i)); uv.setXY(i, uv.getX(i) * (ax > 0.5 ? d : w) * s, uv.getY(i) * (ay > 0.5 ? d : h) * s); } return g; };
@@ -160,6 +161,8 @@ export class Structures {
     S.olives.forEach((o, i) => this.olive(o, i));
     S.caves.forEach((c, i) => this.cave(c, i));
     if (S.peak) this.summit(S.peak);
+    if (S.town) buildTown(this, S.town);   // (last: they throw dice of their own, so the places above keep theirs)
+    for (const sp of S.spots) buildSpot(this, sp);
     const col = this.solids.map((c) => ({ ...c, ref: { site: true } })); this.g.colliders.addGroup('sites', col);
   }
   // ---- the Ancient Temple of Zeus: a Doric peripteros on its stepped platform. Outside: painted pediments with the gods

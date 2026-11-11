@@ -6,7 +6,9 @@
 //   labyrinth: the Minotaur's ruined arena, deep in Pedias
 //   caves:    four Giant caves in the Yleos hills, one carving in each (three together → the Chimera's shrine)
 //   chimera:  the Chimera's shrine, deep in the Yleos forest
-//   peak:     Olympos, one great snowy mountain in the far hills, placed last and kept clear of all the others
+//   peak:     Olympos, one great snowy mountain in the far hills, kept clear of all the places above
+//   town:     an abandoned little town on level meadow, its streets, square and houses from the team's packs
+//   spots:    small scenes about the island (a roadside shrine, a lost cart, a shepherd's camp, a well...)
 import { heightAt, biomeWeights, addPad, hash2, WORLD, PEAK, setPeak, landness, setDetail } from './gen.js';
 
 const slopeAt = (x, z) => Math.hypot(heightAt(x + 2, z) - heightAt(x - 2, z), heightAt(x, z + 2) - heightAt(x, z - 2)) / 4;
@@ -23,7 +25,7 @@ function find({ r0, r1, a0 = 0, a1 = Math.PI * 2, n = 260, score, salt = 0 }) {
 }
 const far = (list, x, z, d) => list.every((s) => Math.hypot(s.x - x, s.z - z) > d);
 
-export const SITES = { temple: null, house: null, olives: [], labyrinth: null, caves: [], chimera: null, peak: null };
+export const SITES = { temple: null, house: null, olives: [], labyrinth: null, caves: [], chimera: null, peak: null, town: null, spots: [] };
 const clears = [];   // [x, z, r]: no trees or rocks inside
 function pad(s, r0, r1, kind, y = s.y) { s.y = y; s.r = r1; s.kind = kind; addPad(s.x, s.z, r0, r1, y); clears.push([s.x, s.z, r1 * 0.95]); return s; }
 
@@ -58,6 +60,19 @@ function pad(s, r0, r1, kind, y = s.y) { s.y = y; s.r = r1; s.kind = kind; addPa
     if (biomeWeights(x, z, _w).y < 0.85 || landness(x, z) < 2.2) continue;
     const d = Math.min(...[SITES.temple, SITES.house, SITES.labyrinth, SITES.chimera, ...SITES.olives, ...SITES.caves].filter(Boolean).map((s) => Math.hypot(s.x - x, s.z - z)));
     if (d > PEAK.r + 60 && d > best) { best = d; pk = { x, z }; }
+  }
+  // the abandoned town and the small scenes: placed now, by the land as it is before the mountain rises (and kept off
+  // its slopes), so the places above and Olympos itself stay just where they were
+  const trial = [SITES.temple, SITES.house, SITES.labyrinth, SITES.chimera, ...SITES.olives, ...SITES.caves].filter(Boolean);
+  const clearOf = (x, z, d) => far(trial, x, z, d) && (!pk || Math.hypot(pk.x - x, pk.z - z) > PEAK.r + 80);
+  // (how uneven the ground is round a spot: the most it rises or falls within r)
+  const rough = (x, z, r) => { const h = heightAt(x, z); let m = 0; for (let i = 0; i < 8; i++) m = Math.max(m, Math.abs(heightAt(x + Math.cos(i * 0.785) * r, z + Math.sin(i * 0.785) * r) - h)); return m; };
+  const T = find({ r0: 380, r1: 760, salt: 40, n: 320, score: (x, z, h, w, sl) => (w.p > 0.8 ? 0 : -99) - rough(x, z, 30) * 3 - sl * 20 + (clearOf(x, z, 160) ? 0 : -99) });
+  if (T && T.y > 3) SITES.town = pad(T, 38, 52, 'town');
+  for (let k = 0; k < 12; k++) {
+    const placed = [...trial, SITES.town, ...SITES.spots].filter(Boolean);
+    const o = find({ r0: 120, r1: 1050, a0: k * 0.5236, a1: (k + 1) * 0.5236, salt: 50 + k, n: 90, score: (x, z, h, w, sl) => -rough(x, z, 7) * 4 - sl * 20 + (clearOf(x, z, 70) && far(placed, x, z, 90) ? 0 : -99) });
+    if (o && o.y > 2.5) SITES.spots.push(Object.assign(pad(o, 5, 11, 'spot'), { v: k % 8 }));
   }
   // (a small flat top for the cairn and the altar, a few metres under the point)
   if (pk) { setPeak(pk.x, pk.z); const y = heightAt(pk.x, pk.z) - 5; addPad(pk.x, pk.z, 6, 18, y); SITES.peak = { x: pk.x, z: pk.z, y, kind: 'peak', r: 12 }; clears.push([pk.x, pk.z, 9]); }

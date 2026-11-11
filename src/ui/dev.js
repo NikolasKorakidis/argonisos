@@ -21,7 +21,7 @@ const KITS = {
   food: [['cookedMeat', 20], ['cookedFish', 20], ['olive', 30], ['pomegranate', 30], ['acorn', 30]],
   tribute: [['deerHide', 5], ['olive', 10], ['dryadHeart', 3], ['pomegranate', 10]],
 };
-const PLACES = () => [['Start', { x: 6, z: 4 }], ['Ancient Temple', SITES.temple], ['Abandoned House', SITES.house], ['The Labyrinth', SITES.labyrinth], ["Chimera's Shrine", SITES.chimera],
+const PLACES = () => [['Start', { x: 6, z: 4 }], ['Ancient Temple', SITES.temple], ['Abandoned House', SITES.house], ['Abandoned Town', SITES.town], ['The Labyrinth', SITES.labyrinth], ["Chimera's Shrine", SITES.chimera],
   ...SITES.olives.map((s, i) => [`Olive ${i + 1}`, s]), ...SITES.caves.map((s, i) => [`Cave ${i + 1}`, s]), ['Valtos edge', { x: -330, z: 520 }]];
 const WEATHERS = [['', 'Auto'], ['clear', 'Clear'], ['cloudy', 'Cloudy'], ['lightRain', 'Rain'], ['heavyRain', 'Downpour'], ['thunder', 'Storm'], ['fog', 'Fog']];
 

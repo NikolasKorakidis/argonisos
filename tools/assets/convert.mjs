@@ -44,8 +44,31 @@ for (const [key, t] of Object.entries(manifest.textures || {})) {
   console.log('texture', key.padEnd(10), (fs.statSync(out).size / 1024).toFixed(0).padStart(5), 'KB');
 }
 
+// Models put together from the Ancient Empire pieces (compose.py: "compose" lists the parts, "house" a recipe): each
+// material slot keeps the texture its Unity prefab gives it (incoming assets/catalogue/empire-materials.json), and each
+// texture they use is kept once in pack/tex like the atlases (the tiling ones at 1024²)
+const EMPIRE = path.join(PACK, 'Synty/PolygonAncientEmpire');
+let slots = null;
+const slotsOf = () => (slots ||= Object.fromEntries(Object.entries(JSON.parse(fs.readFileSync(path.join(ROOT, 'incoming assets/catalogue/empire-materials.json'), 'utf8')))
+  .filter(([, v]) => v.textures).map(([k, v]) => [k, v.textures.map((t) => (Array.isArray(t) ? t : path.join(EMPIRE, t)))])));
+const part = (src) => (src.includes('/') ? path.join(PACK, src) : path.join(EMPIRE, 'Models', src + '.fbx'));   // (a bare name is an Ancient Empire model)
+function compose(name, e, out) {
+  const job = { name, out, kit: path.join(EMPIRE, 'Models'), slots: slotsOf(), fallback: path.join(EMPIRE, 'Textures/Alts/PolygonAncientEmpire_01_A.png'), house: e.house,
+    compose: (e.compose || []).map((p) => ({ ...p, src: part(p.src) })) };
+  const jf = path.join(tmp, name + '.json'); fs.writeFileSync(jf, JSON.stringify(job));
+  const log = execFileSync(BLENDER, ['-b', '--factory-startup', '-P', path.join(HERE, 'compose.py'), '--', jf], { encoding: 'utf8', maxBuffer: 64e6 });
+  const done = log.split('\n').find((l) => l.startsWith('COMPOSED'));
+  if (!done) { console.error(log.slice(-3000)); process.exit(1); }
+  for (const [key, src] of Object.entries(JSON.parse(done.split(' ').slice(2).join(' ')))) {
+    const t = path.join(TEX_OUT, key + '.webp'); if (fs.existsSync(t)) continue;
+    execFileSync('cwebp', ['-quiet', '-q', '86', '-resize', '1024', '1024', src, '-o', t]); console.log('texture', key.padEnd(10), (fs.statSync(t).size / 1024).toFixed(0).padStart(5), 'KB');
+  }
+  console.log(name.padEnd(10), (fs.statSync(out).size / 1024).toFixed(0).padStart(6), 'KB ', '(composed)');
+}
+
 for (const [name, e] of Object.entries(manifest.models)) {
   if (want.length && !want.includes(name)) continue;
+  if (e.compose || e.house) { compose(name, e, path.join(ROOT, 'assets/models/pack', name + '.glb')); continue; }
   if (e.shared && !manifest.textures?.[e.shared]) throw new Error(`${name}: no texture ${e.shared} in the manifest`);
   const job = { ...e, name, src: path.join(PACK, e.src), texture: e.texture && path.join(PACK, e.texture), out: path.join(ROOT, 'assets/models/pack', name + '.glb'),
     clips: typeof e.clips === 'string' ? manifest.clipSets[e.clips] : e.clips, also: e.also?.map((f) => path.join(PACK, f)), bakeColors: e.bakeColors && path.join(PACK, e.bakeColors) };

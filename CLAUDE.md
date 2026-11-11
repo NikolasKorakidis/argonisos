@@ -23,7 +23,10 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
   in three.js (`refit` in `tools/assets/fbx-page.mjs`: the rig's bones keep their rest rotations, so the Mixamo clips play
   unchanged; Blender's import turns them), with the armour from the pack's other Greek characters as parts of their own
   (`wear_<item>`, shown by `hero.wear`). `tools/assets/lineup.py` lays every converted model out in one Blender file; `library.py` (with
-  `library-index.mjs` for the textures) does the same for every model in the packs, one file per pack. Sounds: `node tools/assets/sounds.mjs` →
+  `library-index.mjs` for the textures) does the same for every model in the packs, one file per pack. Manifest entries
+  with `compose` or `house` are put together in Blender from Ancient Empire pieces (`compose.py`: each material slot keeps
+  its prefab's texture as `tex:<key>`; houses from a recipe on the kit's 2.5 m grid); the game places them with
+  `site-pack.js` `piece()`. Sounds: `node tools/assets/sounds.mjs` →
   `assets/sounds/pack/` (also git-ignored), played by `sound.js` where it has a recording. Without the pack files the
   world, buildings, tools, hero and sound fall back to the carved look; the animals and the bosses need the pack.
 - Player-facing changes go in the patch notes (`src/ui/patchnotes.js`, the `PATCHES` list) in plain player language.
@@ -117,7 +120,7 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
 - `src/world`: `gen.js` heights, biomes, the Olympos peak · `sites.js` site placement and pads · `flora.js` species and
   layout · `reach.js` how far the mist and grass reach · `vegetation.js` near/mid/impostor bands · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
   `terrain.js` + `terrain-worker.js` (worker pool, `pool.js`) · `structures.js` + `greek.js` the sites' buildings and
-  props · `sky.js`, `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`), `water.js`, `giantwood.js`, `ambient.js`, `stormwall.js` · `groundcut.js` · `pickups.js`
+  props · `town.js` the abandoned town and the small scenes about the island (`SITES.town`, `SITES.spots`) · `sky.js`, `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`), `water.js`, `giantwood.js`, `ambient.js`, `stormwall.js` · `groundcut.js` · `pickups.js`
   (+ `pickup-layout.js`) · `colliders.js`. `src/util/math.js` shared helpers. `src/assets.js` model and texture loading.
 - `src/render`: `core.js` renderer, composer, shadows, adaptive resolution · `atmosphere.js` mist, haze, sun shafts, cloud
   shadows, grade · `occlusion.js` fades what blocks the camera · `fx.js`, `lights.js`.
