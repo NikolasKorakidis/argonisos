@@ -11,3 +11,5 @@ incoming assets/
 assets/models/pack/
 # Sounds converted from the licensed packs: the same
 assets/sounds/pack/
+# The private backup of the above (tools/assets/backup.mjs): its own git history, pushed to the team's private repo
+.assets-git/
