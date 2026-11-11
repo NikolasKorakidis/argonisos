@@ -8,6 +8,12 @@ import { clamp, lerp } from '../util/math.js';
 
 const ss = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 const UPPER = /Spine|Neck|Head|Shoulder|Arm|Hand/, UPV = new THREE.Vector3(0, 1, 0), HEIGHT = 1.95;
+// How the right hand holds a handle, in the hand bone's space (+x thumb side, +y fingers, +z palm; units of the rig, ~0.8 cm):
+// where the handle's grip point sits, how far the handle tips from across the palm, and how far each finger joint curls
+export const GRIP = { at: [0, 10.6, 4.1], tilt: -1.8, curl: 1.0 };
+// A shield is strapped to the left forearm (bone space: +y elbow to wrist, the body's side +z): its middle this far down
+// the forearm, its back this far out from the bone, on the outside of the arm, so the arm never passes through it
+export const STRAP = { along: 15, out: 5 };
 
 // A clip from an animation-only FBX, with its root motion flattened (we move the player ourselves)
 function loadClip(name) {
@@ -38,7 +44,7 @@ export class Hero {
     this.mixer = null; this.model = null; this.bones = {}; this.acts = {}; this.samplers = {}; this.s = 1; this.t = 0;
     this.sprintW = 0; this.upperK = 0; this.strafeA = 0; this.airT = 0; this.landT = 0;
     // attachment points, filled once the rig loads: right hand (tools and weapons), left hand (bow, shield), back
-    this.handR = new THREE.Group(); this.handL = new THREE.Group(); this.back = new THREE.Group(); this.backBow = new THREE.Group();
+    this.handR = new THREE.Group(); this.handL = new THREE.Group(); this.armL = new THREE.Group(); this.back = new THREE.Group(); this.backBow = new THREE.Group();
     this.placeholder = this.makePlaceholder(); this.wrap.add(this.placeholder);
     this.ready = this.load();
   }
@@ -68,7 +74,7 @@ export class Hero {
     this.mixer = new THREE.AnimationMixer(obj);
     // Bones are in centimetres: attachment points sit in bone space, the objects on them undo the model scale
     const B = this.bones;
-    B.mixamorigRightHand.add(this.handR); B.mixamorigLeftHand.add(this.handL);
+    B.mixamorigRightHand.add(this.handR); B.mixamorigLeftHand.add(this.handL); B.mixamorigLeftForeArm.add(this.armL);
     for (const g of [this.back, this.backBow]) B.mixamorigSpine2.add(g);
     this.back.position.set(2, 8, -16); this.backBow.position.set(-2, 2, -17); this.backBow.rotation.set(0, 0, 0.6);
     return this;
@@ -84,10 +90,17 @@ export class Hero {
   }
   // Hold an object in the right hand. A long-handled tool (axe, club, spear...) runs across the palm and is gripped near its
   // end, head up and forward over the thumb (bone +X thumb side, +Y fingers, +Z palm)
-  holdRight(obj) { this.handR.clear(); if (obj) { this.handR.add(obj); obj.scale.setScalar(1 / this.s); obj.position.set(0, 8, 3); obj.rotation.set(0, Math.PI * 1.5, -2.1, 'ZYX'); } this.gripR = !!obj; }
+  holdRight(obj) { this.handR.clear(); if (obj) { this.handR.add(obj); obj.scale.setScalar(1 / this.s); obj.position.fromArray(GRIP.at); obj.rotation.set(0, Math.PI * 1.5, GRIP.tilt, 'ZYX'); } this.gripR = !!obj; }
   // Sling something across the back (scaled out of bone space like the hand items)
   sling(obj, slot = this.back) { slot.clear(); if (obj) { slot.add(obj); obj.scale.setScalar(1 / this.s); } }
-  holdLeft(obj) { this.handL.clear(); if (obj) { this.handL.add(obj); obj.scale.setScalar(1 / this.s); obj.position.set(0, 8, 2.5); obj.rotation.set(0, 0, Math.PI / 2); } }
+  // Hold something in the left hand (the bow), or strap it on the forearm (a shield: userData.strap, its face along -z)
+  holdLeft(obj) {
+    this.handL.clear(); this.armL.clear(); this.gripL = !!obj; if (!obj) return;
+    obj.scale.setScalar(1 / this.s);
+    if (!obj.userData.strap) { this.handL.add(obj); obj.position.fromArray(GRIP.at); obj.rotation.set(0, 0, Math.PI / 2); return; }   // (the bow, by its grip, in the fist)
+    obj.rotation.set(0, 0, Math.PI); const back = new THREE.Box3().setFromObject(obj).max.z;   // (turned upright as the arm hangs; how deep its back is, in bone units)
+    this.armL.add(obj); obj.position.set(0, STRAP.along, -STRAP.out - back);
+  }
   act(key, C, idleAt) {
     if (this.acts[key] || !C.ready || !this.mixer) return this.acts[key];
     const a = this.mixer.clipAction(C.clip.clone());
@@ -151,8 +164,8 @@ export class Hero {
     if (st.bow) this.poseBow(st.bow, st.aimPt, st.sprinting);
     // swimming: lean forward into a crawl-ish stroke on top of the run
     if (st.swimming && B.mixamorigHips) B.mixamorigHips.rotateX(0.9);
-    // a closed fist round a held handle (the clips leave the hand open)
-    if (this.gripR) for (const f of ['Index', 'Middle', 'Ring', 'Pinky']) for (let k = 1; k <= 3; k++) { const b = B['mixamorigRightHand' + f + k]; if (b) b.rotation.x += 1.2; }
+    // a closed fist round a held handle, the bow or the shield's grip (the clips leave the hands open)
+    for (const [side, on] of [['Right', this.gripR], ['Left', this.gripL]]) if (on) for (const f of ['Index', 'Middle', 'Ring', 'Pinky']) for (let k = 1; k <= 3; k++) { const b = B[`mixamorig${side}Hand${f}${k}`]; if (b) b.rotation.x += GRIP.curl; }
     // feet on the real ground: the hips drop for the lower foot, the legs bend, planted feet follow the slope
     if (st.ground) {
       this.ik ||= new FootIK(B, st.ground);

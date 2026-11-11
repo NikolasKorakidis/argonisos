@@ -66,7 +66,11 @@ export function normalizeHandle(model, L) {
   let top = 0, bot = 0; const v = new THREE.Vector3();
   obj.traverse((m) => { if (!m.isMesh) return; const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i += 3) { v.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld); const w = Math.hypot(v.x, v.z); if (v.y > mid) top = Math.max(top, w); else bot = Math.max(bot, w); } });
   if (bot > top) { obj.rotation.x += Math.PI; obj.updateMatrixWorld(true); }
-  const b2 = new THREE.Box3().setFromObject(obj), c = b2.getCenter(new THREE.Vector3());
+  // centred on the handle (its lower third), not the whole box: a head sticking out to one side would put the handle
+  // beside the hand
+  const b2 = new THREE.Box3().setFromObject(obj), low = b2.min.y + (b2.max.y - b2.min.y) * 0.3, hb = new THREE.Box3();
+  obj.traverse((m) => { if (!m.isMesh) return; const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld); if (v.y < low) hb.expandByPoint(v); } });
+  const c = (hb.isEmpty() ? b2 : hb).getCenter(new THREE.Vector3());
   obj.position.x -= c.x; obj.position.z -= c.z; obj.position.y -= b2.min.y;
   return wrap;
 }

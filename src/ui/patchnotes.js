@@ -16,6 +16,11 @@ export const PATCHES = [
         'Small places all over Nisos: a roadside shrine, a cart lost on the way to market, a fallen colonnade, a shepherd\'s camp, a farmer\'s hut, an old well under an olive, the last of a lookout, a vineyard\'s rest.',
         'Trees and pickups near these new places have moved, so any you had cut or gathered there grow back.',
       ] },
+      { t: 'You', icon: 'goal', items: [
+        '<b>Better proportions:</b> longer legs, shorter arms and smaller hands, so you no longer look squat beside the doorways and your armour.',
+        'Axes, hammers, daggers and the rest are gripped in your fist now, not beside it, and your bow hand closes round the bow\'s grip.',
+        'Shields are strapped to your forearm, face out, so your arm no longer pokes through them.',
+      ] },
     ],
   },
   {

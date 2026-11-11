@@ -694,6 +694,13 @@
       "texture": "GreekWarfare/Textures/GreekWarfareTextureRed.png",
       "palette": true,
       "refit": "hero_rig.fbx",
+      "proportions": {
+        "UpLeg": 1.14,
+        "Leg": 1.14,
+        "Arm": 0.94,
+        "ForeArm": 0.94,
+        "Hand": 0.85
+      },
       "drop": [
         "Helmet"
       ],

@@ -113,6 +113,37 @@ function rigid(m) {
   return out;
 }
 
+// Proportions changed (job.proportions: { UpLeg, Leg, Arm, ForeArm: how much longer each limb bone gets, Hand: how much
+// bigger the hand, fingers and all }): an edit in world space for each of the body's bones, parents first. A limb
+// bone is stretched along itself from its joint, a hand scaled about the wrist with its fingers, and every other bone
+// carried along by where its joint went, so a foot keeps its shape below a longer shin.
+const LIMB_END = { UpLeg: 'Leg', Leg: 'Foot', Arm: 'ForeArm', ForeArm: 'Hand' };
+// a bone by its path from the root (the right hand's fingers can share the left's names; each part has its own copies)
+const boneKey = (b) => { let k = ''; for (let p = b; p?.isBone; p = p.parent) k = p.name + '/' + k; return k; };
+function proportions(root, S, prop) {
+  const E = new Map(), whole = new Set(); if (!prop || !Object.keys(prop).length) return null;
+  root.traverse((b) => {
+    if (!b.isBone) return; const key = boneKey(b); if (E.has(key)) return;
+    const pk = b.parent?.isBone ? boneKey(b.parent) : null, pe = pk && E.get(pk); if (pe && whole.has(pk)) { E.set(key, pe); whole.add(key); return; }
+    const J = wpos(b), to = pe ? J.clone().applyMatrix4(pe) : J.clone(), m = new THREE.Matrix4().makeTranslation(to.x - J.x, to.y - J.y, to.z - J.z);
+    const n = mixamoName(b), side = n?.match(/^mixamorig(Left|Right)(\w+)$/), f = side && prop[side[2]];
+    if (f && side[2] === 'Hand') { m.multiply(new THREE.Matrix4().makeTranslation(J.x, J.y, J.z).multiply(new THREE.Matrix4().makeScale(f, f, f)).multiply(new THREE.Matrix4().makeTranslation(-J.x, -J.y, -J.z))); whole.add(key); }
+    else if (f && LIMB_END[side[2]] && S['mixamorig' + side[1] + LIMB_END[side[2]]]) {
+      const d = wpos(S['mixamorig' + side[1] + LIMB_END[side[2]]]).sub(J).normalize(), k = f - 1;   // (I + k·d·dᵀ about the joint)
+      const st = new THREE.Matrix4().set(1 + k * d.x * d.x, k * d.x * d.y, k * d.x * d.z, 0, k * d.y * d.x, 1 + k * d.y * d.y, k * d.y * d.z, 0, k * d.z * d.x, k * d.z * d.y, 1 + k * d.z * d.z, 0, 0, 0, 0, 1);
+      m.multiply(new THREE.Matrix4().makeTranslation(J.x, J.y, J.z).multiply(st).multiply(new THREE.Matrix4().makeTranslation(-J.x, -J.y, -J.z)));
+    }
+    E.set(key, m);
+  });
+  return E;
+}
+// A posed vertex moved by the edits of the bones that hold it (blended by weight, as skinning blends)
+function reshape(E, v, head) {
+  if (!E) return; const M = new THREE.Matrix4().set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+  for (const [b, w] of v.bones) { const e = E.get(boneKey(b || head)) || new THREE.Matrix4(); for (let c = 0; c < 16; c++) M.elements[c] += e.elements[c] * w; }
+  v.pos.applyMatrix4(M); v.nrm.applyMatrix3(new THREE.Matrix3().getNormalMatrix(M)).normalize();
+}
+
 window.refit = async (job) => {
   const loader = new FBXLoader(), load = (f) => loader.loadAsync(url(f));
   const rig = await load(job.mixamoRel), src = await load(job.srcRel); rig.updateMatrixWorld(true); src.updateMatrixWorld(true);
@@ -139,25 +170,26 @@ window.refit = async (job) => {
       b.quaternion.copy(pw.invert().multiply(q).multiply(bw)); b.updateMatrixWorld(true);
     }
   }
-  const verts = parts.map((p) => ({ name: job.wear ? 'base' : p.name, v: posed(p) }));
+  const E = proportions(src, S, job.proportions), head = S.mixamorigHead;
+  const verts = parts.map((p) => ({ name: job.wear ? 'base' : p.name, v: posed(p) })); for (const part of verts) for (const v of part.v) reshape(E, v, head);
   const floor = Math.min(...verts[0].v.map((v) => v.pos.y));
   // sized so its hips stand as high as the rig's, standing where the rig stands
   const hipS = wpos(S.mixamorigHips), hipR = wpos(R.mixamorigHips), k = (hipR.y - rigFloor) / (hipS.y - floor);
   const place = (p) => p.sub(new THREE.Vector3(hipS.x, floor, hipS.z)).multiplyScalar(k).add(new THREE.Vector3(hipR.x, rigFloor, hipR.z));
   for (const part of verts) for (const v of part.v) place(v.pos);
   // pieces modelled in place on the body (hair): on the head
-  for (const f of job.attachRel || []) { const a = await load(f); a.updateMatrixWorld(true); a.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh) { const v = rigid(o); for (const x of v) place(x.pos); verts.push({ name: job.wear ? 'hair' : o.name, v }); } }); }
+  for (const f of job.attachRel || []) { const a = await load(f); a.updateMatrixWorld(true); a.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh) { const v = rigid(o); for (const x of v) { reshape(E, x, head); place(x.pos); } verts.push({ name: job.wear ? 'hair' : o.name, v }); } }); }
   // clothes and armour from the pack's other characters (on this very skeleton): each posed as the body is, cut to the
   // part of the body it covers, and named wear_<item> for the game to show when that item is worn
   const files = {}, pose = new Map(parts[0].skeleton.bones.map((b) => [b.name, b]));
   for (const [item, w] of Object.entries(job.wear || {})) {
     const o = files[w.src] ||= await load(w.srcRel); o.updateMatrixWorld(true);
     let m = null; o.traverse((x) => { if (x.isSkinnedMesh && x.name === w.mesh) m = x; }); if (!m) throw new Error(`no ${w.mesh} in ${w.src}`);
-    const v = posed(m, pose); for (const x of v) place(x.pos); verts.push({ name: 'wear_' + item, v, region: w.region });
+    const v = posed(m, pose); for (const x of v) { reshape(E, x, head); place(x.pos); } verts.push({ name: 'wear_' + item, v, region: w.region });
   }
   if (job.wear) { const base = verts.shift(); for (const r of ['head', 'body', 'legs']) verts.unshift({ name: 'base_' + r, v: base.v, region: r }); }
   // the rig's bones moved onto the body's joints (parents first: each keeps its rest rotation; unmatched ones ride along)
-  const joints = Object.fromEntries(Object.entries(S).map(([n, b]) => [n, place(wpos(b))]));
+  const joints = Object.fromEntries(Object.entries(S).map(([n, b]) => [n, place(E?.has(boneKey(b)) ? wpos(b).applyMatrix4(E.get(boneKey(b))) : wpos(b))]));
   rig.traverse((o) => { if (o.isBone && joints[o.name]) { o.parent.updateMatrixWorld(true); o.position.copy(o.parent.worldToLocal(joints[o.name].clone())); o.updateMatrixWorld(true); } });
   // one skinned mesh per part, on the rig's skeleton
   for (const m of rigMeshes) m.removeFromParent();

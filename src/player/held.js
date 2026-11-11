@@ -53,10 +53,16 @@ const bowModel = () => (bowP ||= loadFBX('bow').then((o) => { const tex = loadTe
   const b2 = new THREE.Box3().setFromObject(o), c = b2.getCenter(new THREE.Vector3()); o.position.set(-c.x, -c.y, -c.z); return grp(o); }));
 // A model from the pack, sized and turned by fit(model) the first time; null if it can't be had (the carved one stands in)
 const prop = (name, fit) => (props[name] ||= loadPack(name).then((gl) => { gl.scene.traverse((m) => { if (m.isMesh) m.castShadow = true; }); return fit(gl.scene); }).catch(() => null));
-const outward = (o) => { o.rotation.y = Math.PI; return grp(o); };
+const outward = (o) => { o.rotation.y = Math.PI; const g = grp(o); g.userData.strap = true; return g; };   // (and strapped on the forearm: hero.holdLeft)
+// A bow put with its grip (the middle of the riser, where the most of its middle slice lies: not the string) at the origin
+const byGrip = (o) => {
+  const g = grp(o), xs = [], zs = [], v = new THREE.Vector3(); g.updateMatrixWorld(true);
+  o.traverse((m) => { if (!m.isMesh) return; const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld); if (Math.abs(v.y) < 0.05) { xs.push(v.x); zs.push(v.z); } } });
+  const mid = (a) => a.sort((p, q) => p - q)[a.length >> 1] ?? 0; o.position.x -= mid(xs); o.position.z -= mid(zs); return g;
+};
 const centred = (o, size, axis = 'y') => { const b = new THREE.Box3().setFromObject(o); o.scale.multiplyScalar(size / b.getSize(new THREE.Vector3())[axis]); const b2 = new THREE.Box3().setFromObject(o); o.position.sub(b2.getCenter(new THREE.Vector3())); return grp(o); };
 const PACKED = {
-  cretanBow: () => prop('cretanBow', (o) => centred(o, 1.25)),   // (its limbs bow out along +x, its tips and string side to -x: as held, towards the archer)
+  cretanBow: () => prop('cretanBow', (o) => byGrip(centred(o, 1.25))),   // (its limbs bow out along +x, its tips and string side to -x: as held, towards the archer)
   // shields: painted face out (the model's +z is the palm's side as held)
   shieldCretan: () => prop('shieldCretan', (o) => outward(centred(o, 0.7))),
   shieldHoplon: () => prop('shieldHoplon', (o) => outward(centred(o, 0.9))),
@@ -75,7 +81,7 @@ export async function heldModel(id) {
   const k = LOOK[id]; if (!k) return null;
   if (PACKED[k]) { const m = await PACKED[k](); if (m) { const c = m.clone(); c.userData.light = c.getObjectByName('torchLight'); return c; } }   // (a clone loses the light's handle)
   if (k === 'axe' || k === 'axeLight') { const m = (await axeModel()).clone(); if (k === 'axeLight') m.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(0xf4efe0); } }); return m; }
-  if (k === 'bow' || k === 'cretanBow') { const b = (await bowModel()).clone(); b.rotation.y = Math.PI; const w = new THREE.Group(); w.add(b); return w; }   // turned so the string faces the archer and the limbs curve away
+  if (k === 'bow' || k === 'cretanBow') { const b = (await bowModel()).clone(); b.rotation.y = Math.PI; return byGrip(b); }   // turned so the string faces the archer and the limbs curve away
   if (k === 'daggerLight') return CARVED.dagger(light);
   if (k === 'towerShield' || k === 'shieldHoplon') return CARVED.shield(true); if (k === 'shieldCretan') return CARVED.shield();
   if (k === 'spearDoru') return CARVED.spear(light);
