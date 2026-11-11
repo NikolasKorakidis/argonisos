@@ -4,6 +4,8 @@ import { renderer, scene, camera, render, followShadow, groundDetail, sun, GPU, 
 import { Terrain, rockGround } from './world/terrain.js';
 import { WorkerPool } from './world/pool.js';
 import { Vegetation } from './world/vegetation.js';
+import { loadFlora } from './world/flora-pack.js';
+import { loadSiteProps } from './world/site-pack.js';
 import { windUniform } from './world/trees.js';
 import { updateGrass } from './world/grass.js';
 import { heightAt, biomeWeights, BIOME_NAMES, biomeAt, WORLD } from './world/gen.js';
@@ -40,6 +42,7 @@ cutTerrain(terrainMat);           // floors press the ground down under them
 wettable(terrainMat, { dark: 0.54, gloss: 0.4, puddles: true, shine: 0.3 });   // wet in the rain, puddles on flat open ground
 const terrain = new Terrain(scene, terrainMat, pool);
 terrain.requestHeightTexture(1024, WORLD.SIZE).then(setHeightTexture);
+await Promise.all([loadFlora(), loadSiteProps()]);   // (the packs' trees, rocks and site props take the carved ones' places: in before the world is built)
 const veg = new Vegetation(scene, pool);
 veg.prebuild();
 buildStormWall(scene);

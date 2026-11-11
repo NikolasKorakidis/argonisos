@@ -1,0 +1,973 @@
+{
+  "clipSets": {
+    "polyart": {
+      "Idle": "Idle_1",
+      "Walk": "Walk_F_IP",
+      "Gallop": "Run_F_IP",
+      "Attack": "Attack_F",
+      "Death": "Death_L",
+      "Eating": "Eat",
+      "Idle_HitReact1": "Hit_F"
+    }
+  },
+  "models": {
+    "stag": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/FBX/Stag/LowPoly_Deer_stag_IP.fbx",
+      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/Textures/PolyArt_Forest_color.png",
+      "palette": true,
+      "clips": "polyart"
+    },
+    "doe": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/FBX/Doe/LowPoly_Deer_Doe_IP.fbx",
+      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/Textures/PolyArt_Forest_color.png",
+      "palette": true,
+      "clips": "polyart"
+    },
+    "fox": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Foxes/FBX/Adult/Fox_IP.fbx",
+      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/Textures/PolyArt_Forest_color.png",
+      "palette": true,
+      "clips": "polyart"
+    },
+    "hare": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Hares/FBX/Adult/LowPoly_Hare_IP.fbx",
+      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/Textures/PolyArt_Forest_color.png",
+      "palette": true,
+      "clips": "polyart"
+    },
+    "boar": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Boars/FBX/Adult/LowPoly_Boar_IP.fbx",
+      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/Textures/PolyArt_Forest_color.png",
+      "palette": true,
+      "clips": "polyart"
+    },
+    "minotaur": {
+      "src": "Magic Pig Games (Infinity PBR)/Characters/Minotaur/Models/Minotaur_LP.fbx",
+      "texture": "Magic Pig Games (Infinity PBR)/Characters/Minotaur/Textures & Materials/Armor 3.png",
+      "palette": true,
+      "drop": [
+        "Normal_Horns"
+      ],
+      "metaClips": {
+        "Idle": "Idle",
+        "Taunt": "Taunt",
+        "GotHit": "GotHit",
+        "Death": "Death",
+        "Walk": "Walk",
+        "Attack1": "Attack1",
+        "Attack2": "Attack2",
+        "Attack3": "Attack3",
+        "RamStart": "RamStart",
+        "RamRun": "RamRun",
+        "RamWall": "RamWall"
+      },
+      "inPlace": {
+        "bone": "Hips",
+        "axes": [
+          0,
+          1,
+          2
+        ],
+        "clips": [
+          "Walk",
+          "RamRun",
+          "RamStart",
+          "Attack3"
+        ]
+      },
+      "via": "three"
+    },
+    "skeleton": {
+      "src": "Magic Pig Games (Infinity PBR)/Characters/Skeleton Warrior/Models/SkeletonWarriorLP.fbx",
+      "texture": "Magic Pig Games (Infinity PBR)/Characters/Skeleton Warrior/Textures & Materials/Skeleton1.png",
+      "join": true,
+      "metaClips": {
+        "Idle": "Idle",
+        "Taunt": "Taunt",
+        "GotHit": "Got Hit",
+        "Walk": "Walk",
+        "Death": "Death",
+        "Attack1": "Attack 1",
+        "Attack2": "Attack 2",
+        "Attack3": "Attack 3"
+      }
+    },
+    "cretanBow": {
+      "src": "GreekWarfare/Meshes/Bow_CretanArcher_Rigged.fbx",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureRed.png",
+      "palette": true,
+      "static": true,
+      "join": true
+    },
+    "arrow": {
+      "src": "GreekWarfare/Meshes/Arrow_CretanArcher.fbx",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureRed.png",
+      "palette": true,
+      "static": true,
+      "join": true
+    },
+    "shieldCretan": {
+      "src": "GreekWarfare/Meshes/Shield_Small_CretanArcher.fbx",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureRed.png",
+      "palette": true,
+      "static": true,
+      "join": true
+    },
+    "shieldHoplon": {
+      "src": "GreekWarfare/Meshes/Shield_Hoplon_Athens.fbx",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureRed.png",
+      "palette": true,
+      "static": true,
+      "join": true
+    },
+    "doru": {
+      "src": "GreekWarfare/Meshes/Spear_Doru A.fbx",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureRed.png",
+      "palette": true,
+      "static": true,
+      "join": true
+    },
+    "owl": {
+      "src": "Low Poly Bird Barn Owl/Character/Low Poly Barn Owl.fbx",
+      "texture": "Low Poly Bird Barn Owl/Character/Materials/BarnOwl_Tex.png",
+      "palette": true,
+      "join": true,
+      "metaClips": {
+        "Flap": "Flight_straight",
+        "Glide": "Glide_straight",
+        "Hover": "Hover_flight",
+        "Perch": "Idle_1"
+      }
+    },
+    "axeCrude": {
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_axe_02.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "axeGood": {
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_axe_01.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "knifeCrude": {
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_knife_02.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "knifeGood": {
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_knife_01.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "mallet": {
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_hammer_wood_01.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "spade": {
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_shovel_01.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "torch": {
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_torch_01.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "club": {
+      "src": "Synty/PolygonVikings/Models/SM_Wep_Club_01.fbx",
+      "shared": "vikings",
+      "static": true,
+      "join": true
+    },
+    "pickaxe": {
+      "src": "Synty/PolygonVikings/Models/SM_Wep_Pickaxe_01.fbx",
+      "shared": "vikings",
+      "static": true,
+      "join": true
+    },
+    "stake": {
+      "src": "Synty/PolygonVikings/Models/SM_Prop_Wood_Sharp_02.fbx",
+      "shared": "vikings",
+      "static": true,
+      "join": true
+    },
+    "kWall": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_wall_01_3x3_a.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kWallLow": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_wall_01_3x1_a.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kDoorWall": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_wall_01_3x3_door_a.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true,
+      "also": [
+        "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_door_frame_01.fbx"
+      ]
+    },
+    "kDoor": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_door_04a.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kBeam": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_support_beam_int_01a_3m.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kFloor": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_floor_02a_3x3.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kRoof63": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_02a_6x3x3_half.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kRoof65": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_02a_6x5x3_half.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kRoof94": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_02a_9x4x3_half.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kEnd63": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_end_01_6x3_wall_a.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kEnd65": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_end_01_6x5_wall_a.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kEnd94": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_end_01_9x4_wall_a.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kStairs": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_stairs_interior_02a_3m.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kFence": {
+      "src": "RPGPP_AG/Models/Structures/Exterior/rpgpp_ag_fence_01a_2m.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kStockade": {
+      "src": "RPGPP_AG/Models/Structures/Fortifications/rpgpp_ag_stockade_01d_4x4.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kAwning": {
+      "src": "RPGPP_AG/Models/Structures/Exterior/rpgpp_ag_awning_01a.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kGateL": {
+      "src": "RPGPP_AG/Models/Structures/Fortifications/rpgpp_ag_door_gate_small_01_left.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kGateR": {
+      "src": "RPGPP_AG/Models/Structures/Fortifications/rpgpp_ag_door_gate_small_01_right.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kWorkbench": {
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_carpenter_workbench_01.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kCampfire": {
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_camp_fire_01.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kCookStand": {
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_hanger_wood_02a.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kBed": {
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_bed_02b.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kTorchStand": {
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_torch_standing_01.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kChest": {
+      "src": "Synty/PolygonVikings/Models/SM_Prop_Chest_01.fbx",
+      "shared": "vikings",
+      "static": true,
+      "join": true
+    },
+    "pStone": {
+      "src": "Synty/PolygonNature/Models/SM_Rock_01.fbx",
+      "shared": "nature",
+      "static": true,
+      "join": true
+    },
+    "pBranch": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_Branch_01.fbx",
+      "shared": "nature",
+      "static": true,
+      "join": true
+    },
+    "pBush": {
+      "src": "Synty/PolygonNature/Models/SM_Plant_Bush_01.fbx",
+      "shared": "nature",
+      "static": true,
+      "join": true
+    },
+    "pBones": {
+      "src": "Synty/PolygonFantasyRivals/Models/SM_Prop_Bones_01.fbx",
+      "shared": "rivals",
+      "static": true,
+      "join": true
+    },
+    "pSack": {
+      "src": "Synty/PolygonGeneric/Models/SM_Gen_Prop_Sack_01.fbx",
+      "shared": "generic",
+      "static": true,
+      "join": true
+    },
+    "fl_olive0": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_01.fbx",
+      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
+      "static": true,
+      "join": true
+    },
+    "fl_olive1": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_03.fbx",
+      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
+      "static": true,
+      "join": true
+    },
+    "fl_olive2": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_04.fbx",
+      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
+      "static": true,
+      "join": true
+    },
+    "fl_oak0": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_Round_05.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_oak1": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_Round_01.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_oak2": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_04.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_cypress0": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_Thin_01.fbx",
+      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
+      "static": true,
+      "join": true
+    },
+    "fl_cypress1": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_Thin_02.fbx",
+      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
+      "static": true,
+      "join": true
+    },
+    "fl_pomegranate0": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_Round_02.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_fig0": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_Round_04.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_fig1": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_04.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_plane0": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_Round_05.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_plane1": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_Round_02.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_qtree0": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_01.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_qtree1": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_02.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_qpine0": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_TallRound_01.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_fir0": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_PolyPine_01.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_holm0": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_Round_01.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_04.png",
+      "static": true,
+      "join": true
+    },
+    "fl_qdead0": {
+      "src": "Synty/PolygonNature/Models/SM_Tree_Pine_Dead_01.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_dead0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Arid_Desert/Models/SM_Env_Tree_Dead_01.fbx",
+      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Arid_Desert/Textures/PolygonNatureBiomesS2_AridDesert_Texture_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_dead1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Arid_Desert/Models/SM_Env_Tree_Dead_02.fbx",
+      "bakeColors": "Synty/PolygonNatureBiomes/PNB_Arid_Desert/Textures/PolygonNatureBiomesS2_AridDesert_Texture_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_rock0": {
+      "src": "Synty/PolygonNature/Models/SM_Rock_Rounded_01.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_rock1": {
+      "src": "Synty/PolygonNature/Models/SM_Rock_Small_01.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_boulder0": {
+      "src": "Synty/PolygonNature/Models/SM_Rock_Boulder_01.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_boulder1": {
+      "src": "Synty/PolygonNature/Models/SM_Rock_Rounded_01.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_reeds0": {
+      "src": "Synty/PolygonNature/Models/SM_Plant_Reeds_01.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_myrtle0": {
+      "src": "Synty/PolygonNature/Models/SM_Plant_Hedge_Bush_02.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true,
+      "tint": [
+        1.35,
+        1.35,
+        1.3
+      ]
+    },
+    "fl_broom0": {
+      "src": "Synty/PolygonNature/Models/SM_Plant_Bush_03.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true,
+      "tint": [
+        1.15,
+        1.1,
+        0.6
+      ]
+    },
+    "fl_redbush0": {
+      "src": "Synty/PolygonNature/Models/SM_Plant_Bush_02.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_02.png",
+      "static": true,
+      "join": true
+    },
+    "fl_fern0": {
+      "src": "Synty/PolygonNature/Models/SM_Plant_Fern_02.fbx",
+      "bakeColors": "Synty/PolygonNature/Textures/PolygonNature_01.png",
+      "static": true,
+      "join": true
+    },
+    "fl_colfall0": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Block_04.fbx",
+      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
+      "static": true,
+      "join": true
+    },
+    "fl_colfall1": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Pile_01.fbx",
+      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
+      "static": true,
+      "join": true
+    },
+    "fl_colstand0": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Bld_Pillar_01.fbx",
+      "bakeColors": "Synty/PolygonAncientEmpire/Textures/BuildingAlts/Building_Marble_02.png",
+      "static": true,
+      "join": true
+    },
+    "fl_wallruin0": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Stack_01.fbx",
+      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
+      "static": true,
+      "join": true
+    },
+    "fl_amphorae0": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Vase_Pile_02.fbx",
+      "bakeColors": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
+      "static": true,
+      "join": true
+    },
+    "sAmphora": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Vase_05.fbx",
+      "shared": "empire",
+      "static": true,
+      "join": true
+    },
+    "sPithos": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Jar_01.fbx",
+      "shared": "empire",
+      "static": true,
+      "join": true
+    },
+    "sBowl": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Bowl_01.fbx",
+      "shared": "empire",
+      "static": true,
+      "join": true
+    },
+    "sJug": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Jug_01.fbx",
+      "shared": "empire",
+      "static": true,
+      "join": true
+    },
+    "sTripod": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Brazier_03.fbx",
+      "shared": "empire",
+      "static": true,
+      "join": true
+    },
+    "sFirewood": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Cart_01_Insert_03.fbx",
+      "shared": "empire",
+      "static": true,
+      "join": true
+    },
+    "sColumn": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Bld_Pillar_01.fbx",
+      "shared": "marble",
+      "static": true,
+      "join": true
+    },
+    "sStatueA": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_03.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sStatueB": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_05.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sStatueC": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_06.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "dryadling": {
+      "src": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 1/Models/MonsterCreature1_LP.fbx",
+      "texture": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 1/Textures & Mateirals/MonsterCreature1_2.png",
+      "palette": true,
+      "via": "three",
+      "metaClips": {
+        "Idle": "Idle",
+        "Walk": "Walk",
+        "Hop": "Hop",
+        "Attack1": "Attack 1",
+        "Attack2": "Attack 2",
+        "GotHit": "Got Hit",
+        "Taunt": "Taunt",
+        "Death": "Death"
+      }
+    },
+    "chimera": {
+      "src": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 2/Model/MonsterCreature2_LP.fbx",
+      "texture": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 2/Textures & Materials/Brown.png",
+      "palette": true,
+      "via": "three",
+      "clipFiles": {
+        "Idle": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 2/Model/MonsterCreature2@Idle.fbx",
+        "Walk": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 2/Model/MonsterCreature2@Walk.fbx",
+        "Attack1": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 2/Model/MonsterCreature2@Attack1.fbx",
+        "Attack2": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 2/Model/MonsterCreature2@Attack2.fbx",
+        "Roar": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 2/Model/MonsterCreature2@Roar.fbx",
+        "Block": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 2/Model/MonsterCreature2@Block.fbx",
+        "GotHit": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 2/Model/MonsterCreature2@GotHit.fbx",
+        "Death": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 2/Model/MonsterCreature2@Death.fbx",
+        "EatStart": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 2/Model/MonsterCreature2@Eat_start.fbx"
+      }
+    },
+    "hero": {
+      "src": "GreekWarfare/Meshes/Character_CretanArcher.fbx",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureRed.png",
+      "palette": true,
+      "refit": "hero_rig.fbx",
+      "drop": [
+        "Helmet"
+      ],
+      "attach": [
+        "GreekWarfare/Meshes/Hair_Greek A.fbx"
+      ],
+      "wear": {
+        "throwerHelmet": {
+          "src": "GreekWarfare/Meshes/Character_JavelinThrower.fbx",
+          "mesh": "Helmet_JavelinThrower"
+        },
+        "throwerArmor": {
+          "src": "GreekWarfare/Meshes/Character_ThebanHoplite.fbx",
+          "mesh": "Character_ThebanHoplite",
+          "region": "body"
+        },
+        "throwerLegs": {
+          "src": "GreekWarfare/Meshes/Character_ThebanHoplite.fbx",
+          "mesh": "Character_ThebanHoplite",
+          "region": "legs"
+        },
+        "cretanHelmet": {
+          "src": "GreekWarfare/Meshes/Character_CretanArcher.fbx",
+          "mesh": "Helmet_Cretan"
+        },
+        "cretanArmor": {
+          "src": "GreekWarfare/Meshes/Character_AthenianHoplite.fbx",
+          "mesh": "Character_AthenianHoplite",
+          "region": "body"
+        },
+        "cretanLegs": {
+          "src": "GreekWarfare/Meshes/Character_AthenianHoplite.fbx",
+          "mesh": "Character_AthenianHoplite",
+          "region": "legs"
+        }
+      }
+    },
+    "dryad": {
+      "src": "Synty/PolygonFantasyRivals/Models/Characters.fbx",
+      "meshes": [
+        "Character_ForestGuardian_01"
+      ],
+      "texture": "Synty/PolygonFantasyRivals/Textures/FantasyRivals_01_A.png",
+      "refit": "hero_rig.fbx"
+    },
+    "giant": {
+      "src": "Synty/PolygonFantasyRivals/Models/Characters_BR.fbx",
+      "meshes": [
+        "Character_Troll_01"
+      ],
+      "texture": "Synty/PolygonFantasyRivals/Textures/FantasyRivals_01_D.png",
+      "refit": "hero_rig.fbx"
+    },
+    "trollClub": {
+      "src": "Synty/PolygonFantasyRivals/Models/SM_Wep_Troll_01.fbx",
+      "shared": "rivals",
+      "static": true,
+      "join": true
+    },
+    "fxShard": {
+      "src": "Synty/PolygonParticleFX/Models/FX_Shard_Rock_01.fbx",
+      "static": true,
+      "join": true
+    },
+    "fxPuff": {
+      "src": "Synty/PolygonParticleFX/Models/FX_Sphere_Puff_01.fbx",
+      "static": true,
+      "join": true
+    }
+  },
+  "textures": {
+    "rpgpp": {
+      "src": "RPGPP_AG/Textures/rpgpp_ag_tex_a.png"
+    },
+    "vikings": {
+      "src": "Synty/PolygonVikings/Textures/PolygonVikings_01.png"
+    },
+    "generic": {
+      "src": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png"
+    },
+    "nature": {
+      "src": "Synty/PolygonNature/Textures/PolygonNature_01.png"
+    },
+    "rivals": {
+      "src": "Synty/PolygonFantasyRivals/Textures/FantasyRivals_01_A.png",
+      "size": 1024
+    },
+    "empire": {
+      "src": "Synty/PolygonAncientEmpire/Textures/Alts/PolygonAncientEmpire_01_A.png",
+      "size": 2048
+    },
+    "marble": {
+      "src": "Synty/PolygonAncientEmpire/Textures/BuildingAlts/Building_Marble_02.png",
+      "size": 1024
+    },
+    "statue": {
+      "src": "Synty/PolygonAncientEmpire/Textures/Misc/Statue_01.png",
+      "size": 1024
+    },
+    "rivalsStone": {
+      "src": "Synty/PolygonFantasyRivals/Textures/FantasyRivals_01_D.png",
+      "size": 1024
+    }
+  },
+  "flora": {
+    "olive": [
+      "fl_olive0",
+      "fl_olive1",
+      "fl_olive2"
+    ],
+    "oak": [
+      "fl_oak0",
+      "fl_oak1",
+      "fl_oak2"
+    ],
+    "cypress": [
+      "fl_cypress0",
+      "fl_cypress1"
+    ],
+    "pomegranate": [
+      "fl_pomegranate0"
+    ],
+    "fig": [
+      "fl_fig0",
+      "fl_fig1"
+    ],
+    "plane": [
+      "fl_plane0",
+      "fl_plane1"
+    ],
+    "qtree": [
+      "fl_qtree0",
+      "fl_qtree1"
+    ],
+    "qpine": [
+      "fl_qpine0"
+    ],
+    "fir": [
+      "fl_fir0"
+    ],
+    "holm": [
+      "fl_holm0"
+    ],
+    "qdead": [
+      "fl_qdead0"
+    ],
+    "dead": [
+      "fl_dead0",
+      "fl_dead1"
+    ],
+    "rock": [
+      "fl_rock0",
+      "fl_rock1"
+    ],
+    "boulder": [
+      "fl_boulder0",
+      "fl_boulder1"
+    ],
+    "reeds": [
+      "fl_reeds0"
+    ],
+    "myrtle": [
+      "fl_myrtle0"
+    ],
+    "broom": [
+      "fl_broom0"
+    ],
+    "redbush": [
+      "fl_redbush0"
+    ],
+    "fern": [
+      "fl_fern0"
+    ],
+    "colfall": [
+      "fl_colfall0",
+      "fl_colfall1"
+    ],
+    "colstand": [
+      "fl_colstand0"
+    ],
+    "wallruin": [
+      "fl_wallruin0"
+    ],
+    "amphorae": [
+      "fl_amphorae0"
+    ]
+  },
+  "sounds": {
+    "stepGrass": [
+      "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Walk/Footsteps_Walk_Grass_Mono_01.wav",
+      "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Walk/Footsteps_Walk_Grass_Mono_02.wav",
+      "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Walk/Footsteps_Walk_Grass_Mono_03.wav",
+      "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Walk/Footsteps_Walk_Grass_Mono_04.wav"
+    ],
+    "stepDirt": [
+      "Footsteps - Essentials/Footsteps_DirtyGround/Footsteps_DirtyGround_Walk/Footsteps_DirtyGround_Walk_01.wav",
+      "Footsteps - Essentials/Footsteps_DirtyGround/Footsteps_DirtyGround_Walk/Footsteps_DirtyGround_Walk_02.wav",
+      "Footsteps - Essentials/Footsteps_DirtyGround/Footsteps_DirtyGround_Walk/Footsteps_DirtyGround_Walk_03.wav",
+      "Footsteps - Essentials/Footsteps_DirtyGround/Footsteps_DirtyGround_Walk/Footsteps_DirtyGround_Walk_04.wav"
+    ],
+    "stepRock": [
+      "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Walk/Footsteps_Rock_Walk_01.wav",
+      "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Walk/Footsteps_Rock_Walk_02.wav",
+      "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Walk/Footsteps_Rock_Walk_03.wav",
+      "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Walk/Footsteps_Rock_Walk_04.wav"
+    ],
+    "stepWood": [
+      "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Walk/Footsteps_Wood_Walk_01.wav",
+      "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Walk/Footsteps_Wood_Walk_02.wav",
+      "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Walk/Footsteps_Wood_Walk_03.wav"
+    ],
+    "stepWater": [
+      "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_01.wav",
+      "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_02.wav",
+      "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_03.wav"
+    ],
+    "stepLeaves": [
+      "Footsteps - Essentials/Footsteps_Leaves/Footsteps_Leaves_Walk/Footsteps_Leaves_Walk_01.wav",
+      "Footsteps - Essentials/Footsteps_Leaves/Footsteps_Leaves_Walk/Footsteps_Leaves_Walk_02.wav",
+      "Footsteps - Essentials/Footsteps_Leaves/Footsteps_Leaves_Walk/Footsteps_Leaves_Walk_03.wav"
+    ],
+    "stepSand": [
+      "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_01.wav",
+      "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_02.wav",
+      "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_03.wav"
+    ],
+    "landGrass": [
+      "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Jump/Footsteps_Grass_Jump_Land_01.wav"
+    ],
+    "landRock": [
+      "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Jump/Footsteps_Rock_Jump_Land_01.wav"
+    ],
+    "landWood": [
+      "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Jump/Footsteps_Wood_Jump_Land_01.wav"
+    ],
+    "landWater": [
+      "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Jump/Footsteps_Water_Jump_Big_01.wav"
+    ],
+    "door": [
+      "96 General Library (Free Sample)/Samples/DOORWood_InsJ_Door_Wooden_Closing_03-01.wav"
+    ],
+    "creak": [
+      "96 General Library (Free Sample)/Samples/WOODFric_InsJ_Creaking_Wood-Floor_Short_01-01.wav"
+    ],
+    "stoneHit": [
+      "96 General Library (Free Sample)/Samples/CERMImpt_InsJ_Bricks_Impact_Single_01-02.wav"
+    ],
+    "whoosh": [
+      "96 General Library (Free Sample)/Samples/WHSH_InsJ_Whooshing_Bamboo_01-01.wav"
+    ],
+    "growl": [
+      "96 General Library (Free Sample)/Samples/CREAMnstr_InsJ_Monster_Growling_Male_09-01.wav"
+    ],
+    "fireBurst": [
+      "96 General Library (Free Sample)/Samples/AEROMisc_InsJ_Hot-Air-Balloon_Fire_01-01.wav"
+    ],
+    "thunder": [
+      "96 General Library (Free Sample)/Samples/THUN_InsJ_Thunder_Close_Rain_01.wav"
+    ],
+    "foliage": [
+      "Nature Sounds Pack/Foliage/Foliage01.wav",
+      "Nature Sounds Pack/Foliage/Foliage02.wav"
+    ],
+    "loopBirds": [
+      "96 General Library (Free Sample)/Samples/AMBBird_InsJ_Ambience_Birds_Dawn-Chorus_01-01_LOOP.wav"
+    ],
+    "loopCrickets": [
+      "96 General Library (Free Sample)/Samples/ANMLInsc_InsJ_Ambience_Cricket-Insect_06-01_LOOP.wav"
+    ],
+    "loopRain": [
+      "96 General Library (Free Sample)/Samples/RAIN_InsJ_Ambience_Rain_Light_01_LOOP.wav"
+    ],
+    "loopStorm": [
+      "Nature Sounds Pack/Ambient/AmbientNatureStormRainThunder02.wav"
+    ]
+  }
+}

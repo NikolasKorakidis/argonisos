@@ -4,3 +4,10 @@ concept/
 # Test tooling: installed packages and the reports, screenshots and diffs each run writes
 node_modules/
 tests/reports/
+
+# Raw asset drops from the team (gigabytes of Unity packs): converted assets go into assets/, the raw files never into git
+incoming assets/
+# Models converted from the licensed packs: kept out of git until the repo is private (their licences forbid publishing them)
+assets/models/pack/
+# Sounds converted from the licensed packs: the same
+assets/sounds/pack/

@@ -7,6 +7,7 @@ import { clearGrass } from './grass.js';
 import { shapeGround, onCutsChanged } from './groundcut.js';
 import { CELL, layoutPickups, rnd } from './pickup-layout.js';
 import { PRIORITY } from './pool.js';
+import { loadPack, bake } from '../assets.js';
 export { layoutPickups };
 
 const RANGE = 110, REGROW_DAYS = 3;
@@ -35,12 +36,25 @@ export const KINDS = {
     return { geo: merge(P), mat: vc() }; } },
   drop: { item: null, model: () => ({ geo: merge([[new THREE.BoxGeometry(0.34, 0.24, 0.3).translate(0, 0.12, 0), 0xa9824e], [new THREE.BoxGeometry(0.36, 0.04, 0.32).translate(0, 0.25, 0), 0x6e5238]]), mat: vc() }) },   // a little bundle for dropped items
 };
+// Models from the team's packs (tools/assets) for the kinds that have one: [model, size across in metres]. Each takes
+// its kind's place in the instanced mesh once loaded; the carved ones above stand in until then (and for lightstone,
+// the flowers and feathers, which no pack has).
+const PACKED = { stone: ['pStone', 0.42], branch: ['pBranch', 1.4], bush: ['pBush', 0.85], bones: ['pBones', 0.7], drop: ['pSack', 0.42] };
+function dressPacked(meshes) {
+  for (const [k, [file, across]] of Object.entries(PACKED)) loadPack(file).then((gl) => {
+    let map = null; gl.scene.traverse((m) => { if (m.isMesh && !map) map = m.material.map; });
+    const geo = bake(gl.scene); geo.computeBoundingBox(); let b = geo.boundingBox; const s = across / Math.max(b.max.x - b.min.x, b.max.z - b.min.z); geo.scale(s, s, s);
+    geo.computeBoundingBox(); b = geo.boundingBox; geo.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
+    const m = meshes[k]; m.geometry.dispose(); m.geometry = geo; m.material = new THREE.MeshStandardMaterial({ map, color: 0xb0b0b0, roughness: 0.9 });
+  }).catch(() => {});
+}
 export class Pickups {
   constructor(scene, pool) {
     this.scene = scene; this.pool = pool; this.cells = new Map(); this.taken = new Map();   // id → day taken
     this.drops = [];                                                     // { id, item, n, x, y, z, extra }
     this.meshes = {}; this.dirty = true; this.day = 1; this.seq = 0;
     for (const [k, K] of Object.entries(KINDS)) { const { geo, mat } = K.model(); const m = new THREE.InstancedMesh(geo, mat, 1024); m.count = 0; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; scene.add(m); this.meshes[k] = m; }
+    dressPacked(this.meshes);
     this.visible = []; onCutsChanged.add(() => { this.dirty = true; });
     // a patch of bare earth and pebbles under each one, tilted to the slope
     const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');

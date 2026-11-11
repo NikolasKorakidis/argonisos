@@ -10,7 +10,7 @@ import { camera, scene } from '../render/core.js';
 import { input } from '../input.js';
 import { burst, dust, addShake } from '../render/fx.js';
 import { BOW_DUR, CLIPS } from '../player/hero.js';
-import { loadFBX, loadTex } from '../assets.js';
+import { loadFBX, loadGLB, loadTex } from '../assets.js';
 import { clamp, rr } from '../util/math.js';
 
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
@@ -19,11 +19,12 @@ const ARROW_V = [24, 70], ARROW_FLAT = [0.05, 0.6];
 export const armorReduce = (dmg, armor) => (armor <= 0 ? dmg : armor < dmg / 2 ? dmg - armor : (dmg * dmg) / (armor * 4));
 
 let arrowProto = null;
-loadFBX('arrow').then((o) => {
-  const mat = new THREE.MeshStandardMaterial({ map: loadTex('arrow.jpg'), roughness: 0.8 }); o.traverse((m) => { if (m.isMesh) { m.material = mat; m.castShadow = true; } });
+// the Cretan arrow from the team's pack (tools/assets; head up its +y like the old one), or the old model when the pack isn't there
+loadGLB('pack/arrow').then((gl) => { const w = new THREE.Group(); w.add(gl.scene); return w; }).catch(() => loadFBX('arrow').then((o) => { const mat = new THREE.MeshStandardMaterial({ map: loadTex('arrow.jpg'), roughness: 0.8 }); o.traverse((m) => { if (m.isMesh) m.material = mat; }); return o; })).then((o) => {
+  o.traverse((m) => { if (m.isMesh) m.castShadow = true; });
   const box = new THREE.Box3().setFromObject(o), s = 0.9 / box.getSize(new THREE.Vector3()).y; o.scale.multiplyScalar(s);
   const b2 = new THREE.Box3().setFromObject(o); o.position.y -= (b2.min.y + b2.max.y) / 2;
-  const g = new THREE.Group(); g.add(o); g.rotation.x = Math.PI / 2; const w = new THREE.Group(); w.add(g); arrowProto = w;   // w points along +z
+  const g = new THREE.Group(); g.add(o); g.rotation.x = Math.PI / 2; const w = new THREE.Group(); w.add(g); arrowProto = w;   // w's head points along +z (lookAt aims it)
 }).catch(() => {});
 const fallbackArrow = () => { const g = new THREE.Group(); const m = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.85, 5).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x8a6440 })); g.add(m); return g; };
 

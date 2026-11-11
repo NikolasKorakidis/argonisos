@@ -18,10 +18,10 @@ function rotateWorld(bone, q) {
 
 export class FootIK {
   // bones: the rig's bones by name; ground(x, z, y) → the height of whatever you'd stand on there, reaching up to ~0.5 m
-  // above y; lift(y): moves the whole body up or down (the pelvis drop), e.g. a wrapper group's position
-  constructor(bones, ground) {
+  // above y; legs('Left' | 'Right') → the names of that leg's thigh, shin and foot bones (Mixamo's unless told)
+  constructor(bones, ground, legs = (s) => [`mixamorig${s}UpLeg`, `mixamorig${s}Leg`, `mixamorig${s}Foot`]) {
     this.ground = ground; this.w = 0; this.pelvis = 0;
-    this.legs = ['Left', 'Right'].map((s) => ({ up: bones[`mixamorig${s}UpLeg`], knee: bones[`mixamorig${s}Leg`], foot: bones[`mixamorig${s}Foot`], d: 0, tilt: new THREE.Quaternion() })).filter((l) => l.up && l.knee && l.foot);
+    this.legs = ['Left', 'Right'].map((s) => { const [up, knee, foot] = legs(s).map((n) => bones[n]); return { up, knee, foot, d: 0, tilt: new THREE.Quaternion() }; }).filter((l) => l.up && l.knee && l.foot);
   }
   // Before the pose is solved: where is the ground under each foot, relative to where the body stands (rootY)? Sets the
   // pelvis drop (returned, in metres, ≤ 0) for the caller to apply before solve()

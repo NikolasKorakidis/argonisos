@@ -4,6 +4,7 @@
 // [geometry, material] onto a site's part list, in site-local coordinates, like the rest of the kit.
 import * as THREE from 'three';
 import { wettable } from './wetness.js';
+import { siteProp } from './site-pack.js';
 
 const dice = (seed) => { let s = seed; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; };
 function tex(draw, w = 512, h = w, seed = 1) {
@@ -103,20 +104,23 @@ for (const [k, o] of Object.entries({ ashlar: [0.68, 0.3], whitewash: [0.75, 0.3
 const lathe = (pts, seg = 16) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg);
 // a transport amphora: pointed foot, swelling body, narrow neck and two handles
 export function amphora(P, x, y, z, s = 1, tilt = 0, rot = 0, mat = GMAT.pot) {
+  const pk = siteProp('amphora', 1.08 * s); if (pk) { P.push([pk[0].rotateZ(tilt).rotateY(rot).translate(x, y, z), pk[1]]); return; }   // (the pack's, when it's there: site-pack.js)
   const g = lathe([[0, 0], [0.05, 0.02], [0.08, 0.12], [0.2, 0.32], [0.24, 0.5], [0.22, 0.66], [0.13, 0.78], [0.07, 0.84], [0.07, 1.02], [0.1, 1.05], [0.09, 1.08], [0, 1.08]]);
   const parts = [g]; for (const sx of [-1, 1]) parts.push(new THREE.TorusGeometry(0.1, 0.022, 5, 10, Math.PI).rotateZ(sx > 0 ? -Math.PI / 2 : Math.PI / 2).translate(sx * 0.09, 0.9, 0));
   for (const q of parts) P.push([q.scale(s, s, s).rotateZ(tilt).rotateY(rot).translate(x, y, z), mat]);
 }
 // a great storage jar (pithos), often half sunk in the ground
 export function pithos(P, x, y, z, s = 1, mat = GMAT.clay) {
+  const pk = siteProp('pithos', 1.48 * s); if (pk) { P.push([pk[0].translate(x, y, z), pk[1]]); return; }
   P.push([lathe([[0, 0], [0.22, 0.02], [0.42, 0.3], [0.55, 0.7], [0.52, 1.05], [0.36, 1.32], [0.3, 1.38], [0.36, 1.42], [0.34, 1.48], [0.26, 1.46], [0.2, 1.3]]).scale(s, s, s).translate(x, y, z), mat]);
   for (let k = 0; k < 3; k++) P.push([new THREE.TorusGeometry(0.53 * s - k * 0.03 * s, 0.02 * s, 4, 20).rotateX(Math.PI / 2).translate(x, y + (0.62 + k * 0.18) * s, z), mat]);   // rope-pattern bands
 }
 // a bowl or a jug (small pottery for shelves and tables)
-export const bowl = (P, x, y, z, s = 1, mat = GMAT.pot) => P.push([lathe([[0, 0], [0.08, 0], [0.16, 0.05], [0.2, 0.12], [0.19, 0.13], [0.15, 0.06], [0, 0.03]], 12).scale(s, s, s).translate(x, y, z), mat]);
-export const jug = (P, x, y, z, s = 1, mat = GMAT.pot) => P.push([lathe([[0, 0], [0.07, 0], [0.11, 0.08], [0.12, 0.18], [0.07, 0.28], [0.05, 0.34], [0.07, 0.38], [0, 0.37]], 12).scale(s, s, s).translate(x, y, z), mat]);
+export const bowl = (P, x, y, z, s = 1, mat = GMAT.pot) => P.push(siteProp('bowl', 0.13 * s)?.map((g, i) => (i ? g : g.translate(x, y, z))) ?? [lathe([[0, 0], [0.08, 0], [0.16, 0.05], [0.2, 0.12], [0.19, 0.13], [0.15, 0.06], [0, 0.03]], 12).scale(s, s, s).translate(x, y, z), mat]);
+export const jug = (P, x, y, z, s = 1, mat = GMAT.pot) => P.push(siteProp('jug', 0.38 * s)?.map((g, i) => (i ? g : g.translate(x, y, z))) ?? [lathe([[0, 0], [0.07, 0], [0.11, 0.08], [0.12, 0.18], [0.07, 0.28], [0.05, 0.34], [0.07, 0.38], [0, 0.37]], 12).scale(s, s, s).translate(x, y, z), mat]);
 // a bronze tripod with a cauldron (light a fire in it with the site's fire())
 export function tripod(P, x, y, z, h = 1.3, mat = GMAT.bronze) {
+  const pk = siteProp('tripod', h + 0.25); if (pk) { P.push([pk[0].translate(x, y, z), pk[1]]); return; }
   for (let k = 0; k < 3; k++) { const a = (k / 3) * Math.PI * 2; P.push([new THREE.CylinderGeometry(0.035, 0.045, h * 1.04, 6).rotateZ(0.16).rotateY(-a).translate(x + Math.cos(a) * 0.22, y + h / 2, z + Math.sin(a) * 0.22), mat]);
     P.push([new THREE.TorusGeometry(0.1, 0.022, 5, 10).rotateY(-a + Math.PI / 2).translate(x + Math.cos(a) * 0.36, y + h + 0.2, z + Math.sin(a) * 0.36), mat]); }   // ring handles
   P.push([lathe([[0, 0], [0.18, 0.02], [0.34, 0.14], [0.38, 0.28], [0.36, 0.3], [0, 0.18]], 16).translate(x, y + h - 0.08, z), mat]);
@@ -146,6 +150,7 @@ export function cartWheel(P, x, y, z, rot = 0, lean = 0.25, r = 0.6, mat = GMAT.
   for (const g of q) P.push([g.rotateX(lean).rotateY(rot).translate(x, y + r * Math.cos(lean), z), mat]);
 }
 export function firewood(P, x, y, z, rot = 0, len = 1.4, rows = 3, mat = GMAT.wood) {
+  const pk = siteProp('firewood', rows * 0.15 + 0.05); if (pk) { P.push([pk[0].rotateY(rot).translate(x, y, z), pk[1]]); return; }
   for (let j = 0; j < rows; j++) for (let i = 0; i < rows - j + 2; i++) P.push([new THREE.CylinderGeometry(0.07, 0.08, len, 6).rotateX(Math.PI / 2).translate(-0.3 + i * 0.15 + j * 0.075, 0.08 + j * 0.13, 0).rotateY(rot).translate(x, y, z), mat]);
 }
 // low leafy mounds (a vine canopy, ivy cushions, a hedge): flattened, jittered blobs

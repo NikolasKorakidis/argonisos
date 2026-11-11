@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { heightAt, biomeWeights } from '../world/gen.js';
 import { SITES } from '../world/sites.js';
 import { icon } from '../ui/icons.js';
+import { loadGLB } from '../assets.js';
 import { input, lock, unlock } from '../input.js';
 
 const K = (k) => `<span class="kbd">${k}</span>`;
@@ -52,7 +53,23 @@ function owlModel() {
   x.font = '900 112px Cinzel, Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 10; x.strokeStyle = '#211610'; x.strokeText('!', 32, 68); x.fillStyle = '#ffcf4a'; x.fillText('!', 32, 68);
   const mark = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true })); mark.scale.set(0.32, 0.64, 1); mark.position.y = 1.0; mark.renderOrder = 10; g.add(mark);
   g.scale.setScalar(1.25);
-  return { g, head, wings, mark };
+  const o = { g, head, wings, mark, mixer: null, acts: {}, cur: null };
+  // the barn owl from the team's pack (tools/assets) takes the carved one's place once it has loaded: a metre and a bit
+  // across the wings, flapping, gliding and hovering with her own clips
+  loadGLB('pack/owl').then((gl) => {
+    const body = gl.scene; body.updateMatrixWorld(true); const size = new THREE.Box3().setFromObject(body).getSize(new THREE.Vector3()); body.scale.multiplyScalar(0.9 / Math.max(size.x, size.z));
+    body.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.frustumCulled = false; m.material.color.multiplyScalar(0.7); m.material.roughness = 0.95; } });   // (her white plumage glows in our light otherwise)
+    for (const c of [...g.children]) if (c !== mark) g.remove(c);
+    g.add(body); body.position.y = 0.3; o.wings.length = 0; o.head = new THREE.Object3D();
+    o.mixer = new THREE.AnimationMixer(body); for (const c of gl.animations) o.acts[c.name] = o.mixer.clipAction(c);
+  }).catch(() => {});
+  return o;
+}
+// her clip for the moment (the carved owl flaps its box wings instead)
+function owlPose(o, name, rate, dt) {
+  if (!o.mixer) return;
+  if (o.cur !== name) { o.acts[name].reset().fadeIn(0.3).play(); o.acts[o.cur]?.fadeOut(0.3); o.cur = name; }
+  o.acts[name].timeScale = rate; o.mixer.update(dt);
 }
 
 export class Owl {
@@ -128,12 +145,13 @@ export class Owl {
       if (sp > 0.4) o.g.rotation.y += Math.atan2(Math.sin(face - o.g.rotation.y), Math.cos(face - o.g.rotation.y)) * Math.min(1, dt * 5);
       else { const P = g.player.pos, look = Math.atan2(P.x - this.pos.x, P.z - this.pos.z); o.g.rotation.y += Math.atan2(Math.sin(look - o.g.rotation.y), Math.cos(look - o.g.rotation.y)) * Math.min(1, dt * 3); }
       const flap = sp > 3 ? 14 : 9; o.wings.forEach((w, i) => (w.rotation.z = Math.sin(this.t * flap) * (sp > 3 ? 0.75 : 0.5) * (i ? -1 : 1)));
+      owlPose(o, sp > 3 ? 'Flap' : sp > 0.4 ? 'Glide' : 'Hover', sp > 3 ? 1.2 : 1, dt);
       o.head.rotation.y = Math.sin(this.t * 0.8) * 0.25;
       o.mark.visible = this.hasNews && !this.open; o.mark.position.y = 1.0 + Math.sin(this.t * 3) * 0.06; o.mark.material.rotation = Math.sin(this.t * 2) * 0.08;
       if (!this.hasNews && !this.open) this.leave();
     } else if (this.state === 'leave') {
       o.mark.visible = false; const k = Math.min(1, this.t / 3.5); this.pos.copy(this.from).add(new THREE.Vector3(30 * k * k, 26 * k * k, -20 * k * k));
-      o.wings.forEach((w, i) => (w.rotation.z = Math.sin(this.t * 13) * 0.7 * (i ? -1 : 1))); o.g.rotation.y = Math.atan2(30, -20);
+      o.wings.forEach((w, i) => (w.rotation.z = Math.sin(this.t * 13) * 0.7 * (i ? -1 : 1))); owlPose(o, 'Flap', 1.3, dt); o.g.rotation.y = Math.atan2(30, -20);
       if (k >= 1) { this.state = 'away'; o.g.visible = false; }
     }
   }

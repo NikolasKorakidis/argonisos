@@ -11,6 +11,7 @@ import { heightAt } from './gen.js';
 import { propGeo, propMat, leafMat } from './trees.js';
 import { GMAT, amphora, pithos, bowl, jug, tripod, acroterion, antefixes, cartWheel, firewood, leaves, mist, dice } from './greek.js';
 import { wettable } from './wetness.js';
+import { siteProp } from './site-pack.js';
 
 const rnd = (() => { let s = 77; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; })(), rr = (a, b) => a + rnd() * (b - a);
 function canvasTex(draw, n = 512, rep = 1) { const c = document.createElement('canvas'); c.width = c.height = n; draw(c.getContext('2d'), n); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; }
@@ -68,6 +69,7 @@ const VIEW_R = { temple: 1700, labyrinth: 1400, chimera: 1200, house: 220, peak:
 // ---- kit: every helper pushes [geometry, material] onto a list in site-local coordinates
 const uvBox = (w, h, d, s = 1 / 3) => { const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, nn = g.attributes.normal; for (let i = 0; i < uv.count; i++) { const ax = Math.abs(nn.getX(i)), ay = Math.abs(nn.getY(i)); uv.setXY(i, uv.getX(i) * (ax > 0.5 ? d : w) * s, uv.getY(i) * (ay > 0.5 ? d : h) * s); } return g; };
 function column(P, x, y, z, h, r, mat = SMAT.marble, broken = 0) {
+  if (!broken && mat === SMAT.marble) { const pk = siteProp('column', h, r * 2.5); if (pk) { P.push([pk[0].translate(x, y, z), pk[1]]); return; } }   // (the pack's marble column: site-pack.js)
   const ch = broken ? h * broken : h - r * 1.1, g = new THREE.CylinderGeometry(r * 0.82, r, ch, 20, 6, false), p = g.attributes.position;
   for (let i = 0; i < p.count; i++) { const a = Math.atan2(p.getZ(i), p.getX(i)), f = 1 - 0.06 * Math.pow(Math.abs(Math.cos(a * 10)), 0.6), yy = p.getY(i) / ch + 0.5, ent = 1 + Math.sin(yy * Math.PI) * 0.04; p.setX(i, p.getX(i) * f * ent); p.setZ(i, p.getZ(i) * f * ent); if (broken && yy > 0.95) p.setY(i, p.getY(i) - rnd() * r * 0.8); }
   g.computeVertexNormals(); g.translate(x, y + ch / 2, z); P.push([g, mat]);
@@ -230,7 +232,7 @@ export class Structures {
       for (const [z, v] of [[D / 2 + 3.6, 0], [az + 3.4, 1]]) { this.plant(ctx, 'cypress', v, sx * 4.4, gy(sx * 4.4, z), z, 1.05); this.solid(ctx, sx * 4.4, z, 0.45); }
       const x = sx * 4.4, z = az, y = gy(x, z);
       P.push([uvBox(1.1, 1.4, 1.1).translate(x, y + 0.7, z), SMAT.marble], [uvBox(1.3, 0.2, 1.3).translate(x, y + 1.5, z), SMAT.marble], [uvBox(1.3, 0.2, 1.3).translate(x, y + 0.1, z), GMAT.ashlar]);
-      statue(ctx.grp, x, y + 1.6, z, 1.1, -sx * Math.PI / 2, { pose: sx > 0 ? 0.55 : 0.75, bolt: false }); this.solid(ctx, x, z, 0.75);
+      const pk = siteProp(sx > 0 ? 'statueA' : 'statueB', 2.15); if (pk) P.push([pk[0].rotateY(-sx * Math.PI / 2).translate(x, y + 1.6, z), pk[1]]); else statue(ctx.grp, x, y + 1.6, z, 1.1, -sx * Math.PI / 2, { pose: sx > 0 ? 0.55 : 0.75, bolt: false }); this.solid(ctx, x, z, 0.75);
     }
     // two offering stands for the heads, flanking the steps
     for (const [k, sx] of [['minotaur', -1], ['chimera', 1]]) {

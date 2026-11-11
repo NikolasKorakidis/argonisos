@@ -1,4 +1,6 @@
-// Sound, all synthesised with WebAudio (no files).
+// Sound, synthesised with WebAudio, with recordings from the team's sound packs where there are some (footsteps on each
+// ground, landings, doors, stone struck, the boss's growl and fire, close thunder; birdsong, crickets and rain as loops):
+// a sound with recordings plays one of them, the rest are synthesised (and everything is, if the pack isn't there).
 //   Mix: everything goes through a gentle compressor; a generated reverb gives space to thunder, birds, music and the
 //   echo of strikes.
 //   Ambience follows the world: layered rain (a far hiss, the heavy rumble of a downpour, droplets, drumming on the roof
@@ -45,6 +47,7 @@ function init() {
     amb.roof = bed(noiseBuf, [['bandpass', 600, 0.9], ['lowpass', 1400, 0.6]]);
     amb.sea = bed(brownBuf, [['lowpass', 500, 0.5]]);
     amb.fire = bed(brownBuf, [['lowpass', 280, 0.7]]);
+    loadBank();
     return true;
   } catch { return false; }
 }
@@ -54,6 +57,22 @@ addEventListener('keydown', () => { init(); ctx?.resume?.(); });
 // or key only resumes it. (A context made before any click starts suspended and stays silent until then.)
 (globalThis.requestIdleCallback || setTimeout)(() => init());
 const now = () => ctx.currentTime;
+// ---- recordings (tools/assets/sounds.mjs: assets/sounds/pack/<key>_<n>.mp3, index.json says how many of each)
+const BANK = {}, LOOPS = {}, SND = new URL('../../assets/sounds/pack/', import.meta.url);
+async function loadBank() {
+  try {
+    const index = await (await fetch(new URL('index.json', SND))).json();
+    await Promise.all(Object.entries(index).map(async ([k, n]) => { BANK[k] = await Promise.all([...Array(n)].map(async (_, i) => ctx.decodeAudioData(await (await fetch(new URL(`${k}_${i}.mp3`, SND))).arrayBuffer()))); }));
+    for (const k of ['loopBirds', 'loopCrickets', 'loopRain', 'loopStorm']) if (BANK[k]) { const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = BANK[k][0]; s.loop = true; g.gain.value = 0; s.connect(g).connect(ambBus); s.start(0, Math.random() * s.buffer.duration); LOOPS[k] = g; }
+  } catch { /* no pack: the synthesis plays */ }
+}
+// one of a sound's recordings, a little higher or lower each time; false if it has none
+function sample(k, { vol = 0.5, pan = 0, wet = 0.05, rate = [0.94, 1.06], bus } = {}) {
+  const list = BANK[k]; if (!list?.length) return false;
+  const s = ctx.createBufferSource(), g = ctx.createGain(), p = ctx.createStereoPanner(); s.buffer = list[Math.floor(Math.random() * list.length)]; s.playbackRate.value = rnd(rate[0], rate[1]); g.gain.value = vol; p.pan.value = pan;
+  s.connect(g).connect(p).connect(bus || sfxBus); if (wet) { const w = ctx.createGain(); w.gain.value = wet; p.connect(w).connect(verb); }
+  s.start(); return true;
+}
 // One shot of filtered noise. wet: how much goes to the reverb; pan: -1 left … 1 right
 function noise(dur, { type = 'bandpass', freq = 1000, q = 1, vol = 0.3, attack = 0.005, slide = 0, delay = 0, wet = 0.1, pan = 0, bus, brown } = {}) {
   if (!init()) return; const t = now() + delay, s = ctx.createBufferSource(); s.buffer = brown ? brownBuf : noiseBuf; s.playbackRate.value = 0.85 + Math.random() * 0.3;
@@ -79,17 +98,18 @@ function pluck(freq, { vol = 0.12, delay = 0, dur = 2.6, pan = 0 } = {}) {
 
 const SFX = {
   step: (surface) => {
+    if (sample(surface === 'wood' ? 'stepWood' : surface === 'water' ? 'stepWater' : surface === 'stone' ? 'stepRock' : Math.random() < 0.6 ? 'stepGrass' : 'stepDirt', { vol: 0.32, wet: 0 })) return;
     if (surface === 'wood') { noise(0.1, { freq: 420, q: 3, vol: 0.13 }); tone(140, 0.08, { type: 'triangle', vol: 0.05, wet: 0.2 }); }
     else if (surface === 'water') { noise(0.28, { type: 'lowpass', freq: 1200, vol: 0.14, slide: -800 }); noise(0.12, { freq: 2500, q: 2, vol: 0.05, delay: 0.05 }); }
     else if (surface === 'stone') noise(0.07, { freq: 1800, q: 1.5, vol: 0.09 });
     else { noise(0.12, { type: 'lowpass', freq: 380, vol: 0.12, brown: true }); noise(0.16, { freq: 3200, q: 0.7, vol: 0.035 }); }   // a soft thud and the swish of grass
   },
   jump: () => noise(0.14, { freq: 500, vol: 0.06 }),
-  land: () => { noise(0.22, { type: 'lowpass', freq: 260, vol: 0.28, brown: true }); noise(0.1, { freq: 2800, q: 0.8, vol: 0.05 }); },
+  land: () => { if (sample('landGrass', { vol: 0.45, wet: 0 })) return; noise(0.22, { type: 'lowpass', freq: 260, vol: 0.28, brown: true }); noise(0.1, { freq: 2800, q: 0.8, vol: 0.05 }); },
   chop: () => { noise(0.09, { freq: 1500, q: 3, vol: 0.32, wet: 0.25 }); tone(170, 0.14, { type: 'triangle', vol: 0.22, slide: -60, wet: 0.3 }); noise(0.25, { type: 'lowpass', freq: 400, vol: 0.12, brown: true }); },
   creak: () => { tone(95, 1.6, { type: 'sawtooth', vol: 0.045, slide: -30, attack: 0.4, wet: 0.4 }); tone(140, 1.2, { type: 'sawtooth', vol: 0.025, slide: 40, attack: 0.3, delay: 0.5, wet: 0.4 }); },
   thud: () => { noise(0.9, { type: 'lowpass', freq: 200, vol: 0.7, slide: -120, brown: true, wet: 0.4 }); tone(48, 0.7, { vol: 0.4, slide: -18 }); for (let i = 0; i < 6; i++) noise(0.2, { freq: 2500 + Math.random() * 2000, q: 1, vol: 0.05, delay: 0.1 + Math.random() * 0.5 }); },
-  mine: () => { tone(1800 + Math.random() * 400, 0.22, { type: 'triangle', vol: 0.12, slide: -400, wet: 0.35 }); noise(0.08, { freq: 2600, q: 2, vol: 0.2 }); noise(0.3, { type: 'lowpass', freq: 500, vol: 0.12, brown: true, delay: 0.03 }); },
+  mine: () => { if (sample('stoneHit', { vol: 0.5, wet: 0.2 })) return; tone(1800 + Math.random() * 400, 0.22, { type: 'triangle', vol: 0.12, slide: -400, wet: 0.35 }); noise(0.08, { freq: 2600, q: 2, vol: 0.2 }); noise(0.3, { type: 'lowpass', freq: 500, vol: 0.12, brown: true, delay: 0.03 }); },
   hit: () => { noise(0.14, { type: 'lowpass', freq: 650, vol: 0.38, brown: true, wet: 0.15 }); tone(110, 0.12, { type: 'square', vol: 0.05, slide: -40 }); noise(0.05, { freq: 2200, q: 1, vol: 0.08 }); },
   hurt: () => { noise(0.22, { freq: 480, q: 1.5, vol: 0.3 }); tone(210, 0.2, { type: 'sawtooth', vol: 0.06, slide: -90 }); },
   block: () => { tone(380, 0.18, { type: 'square', vol: 0.07, slide: -120, wet: 0.25 }); noise(0.12, { freq: 1100, q: 2, vol: 0.22 }); },
@@ -99,8 +119,8 @@ const SFX = {
   build: () => { noise(0.16, { type: 'lowpass', freq: 550, vol: 0.45, brown: true, wet: 0.25 }); noise(0.1, { freq: 900, q: 2, vol: 0.2, delay: 0.1 }); },
   break: () => { noise(0.6, { type: 'lowpass', freq: 800, vol: 0.45, slide: -600, wet: 0.3 }); for (let i = 0; i < 5; i++) noise(0.06, { freq: 1500, q: 3, vol: 0.15, delay: 0.05 + i * 0.07 }); },
   repair: () => { tone(500, 0.12, { type: 'triangle', vol: 0.08 }); tone(750, 0.18, { type: 'triangle', vol: 0.08, delay: 0.1, wet: 0.3 }); },
-  door: () => { tone(150, 0.6, { type: 'sawtooth', vol: 0.035, slide: 90, attack: 0.12, wet: 0.3 }); noise(0.12, { type: 'lowpass', freq: 400, vol: 0.15, delay: 0.45, brown: true }); },
-  chest: () => { noise(0.22, { type: 'lowpass', freq: 500, vol: 0.25, brown: true }); tone(230, 0.35, { type: 'sawtooth', vol: 0.03, slide: 60, wet: 0.3 }); },
+  door: () => { if (sample('door', { vol: 0.45, wet: 0.15 })) return; tone(150, 0.6, { type: 'sawtooth', vol: 0.035, slide: 90, attack: 0.12, wet: 0.3 }); noise(0.12, { type: 'lowpass', freq: 400, vol: 0.15, delay: 0.45, brown: true }); },
+  chest: () => { if (sample('creak', { vol: 0.4, wet: 0.1 })) return; noise(0.22, { type: 'lowpass', freq: 500, vol: 0.25, brown: true }); tone(230, 0.35, { type: 'sawtooth', vol: 0.03, slide: 60, wet: 0.3 }); },
   draw: () => noise(0.25, { freq: 2400, q: 6, vol: 0.06, slide: 800 }),
   sheathe: () => noise(0.2, { freq: 2000, q: 6, vol: 0.05, slide: -900 }),
   bow: () => { tone(130, 0.3, { type: 'triangle', vol: 0.2, slide: -40, wet: 0.25 }); noise(0.14, { freq: 1600, q: 1, vol: 0.12 }); noise(0.4, { freq: 900, q: 0.5, vol: 0.05, slide: -500, delay: 0.05 }); },
@@ -111,15 +131,17 @@ const SFX = {
   kill: () => tone(90, 0.5, { type: 'triangle', vol: 0.12, slide: -40, wet: 0.3 }),
   // the bosses: a ground-shaking slam, the Chimera's fire, a block of stone hurled through the air
   slam: () => { noise(0.7, { type: 'lowpass', freq: 220, vol: 0.6, brown: true, wet: 0.5 }); tone(55, 0.8, { type: 'sine', vol: 0.3, slide: -25, wet: 0.4 }); noise(0.15, { freq: 900, q: 1, vol: 0.18, delay: 0.02 }); },
-  breath: () => { noise(1.5, { type: 'lowpass', freq: 900, vol: 0.32, brown: true, attack: 0.15, wet: 0.4 }); noise(1.4, { freq: 1800, q: 0.7, vol: 0.12, attack: 0.2, slide: -600 }); },
+  breath: () => { if (sample('fireBurst', { vol: 0.6, wet: 0.3, rate: [0.8, 0.9] })) return; noise(1.5, { type: 'lowpass', freq: 900, vol: 0.32, brown: true, attack: 0.15, wet: 0.4 }); noise(1.4, { freq: 1800, q: 0.7, vol: 0.12, attack: 0.2, slide: -600 }); },
   boulder: () => { noise(0.45, { freq: 500, q: 0.8, vol: 0.22, slide: 300, attack: 0.05 }); tone(80, 0.3, { type: 'triangle', vol: 0.1, slide: -30 }); },
   // thunder: a crack when it's close, then a long roll of rumbling bursts under the reverb
   thunder: (k = 1) => {
-    const near = k > 0.9; if (near) { noise(0.25, { freq: 2200, q: 0.5, vol: 0.35 * k, wet: 0.6 }); noise(0.5, { type: 'lowpass', freq: 1200, vol: 0.4 * k, wet: 0.6, delay: 0.05 }); }
+    const near = k > 0.9; if (near && sample('thunder', { vol: 0.7 * k, wet: 0.3, rate: [0.9, 1.05], bus: ambBus })) return;
+    if (near) { noise(0.25, { freq: 2200, q: 0.5, vol: 0.35 * k, wet: 0.6 }); noise(0.5, { type: 'lowpass', freq: 1200, vol: 0.4 * k, wet: 0.6, delay: 0.05 }); }
     const n = 4 + Math.floor(Math.random() * 4);
     for (let i = 0; i < n; i++) noise(rnd(1.2, 2.6), { type: 'lowpass', freq: rnd(120, 260), vol: rnd(0.25, 0.5) * k * (1 - i / (n + 2)), slide: -80, attack: rnd(0.05, 0.3), delay: (near ? 0.2 : 0.6) + i * rnd(0.25, 0.55), brown: true, wet: 0.7, pan: rnd(-0.6, 0.6), bus: ambBus });
   },
-  roar: () => { tone(66, 1.5, { type: 'sawtooth', vol: 0.2, slide: -24, attack: 0.15, wet: 0.5 }); tone(99, 1.3, { type: 'square', vol: 0.06, slide: -38, attack: 0.15, wet: 0.5 }); noise(1.4, { type: 'lowpass', freq: 420, vol: 0.32, attack: 0.15, slide: -220, brown: true, wet: 0.5 }); },
+  roar: () => { sample('growl', { vol: 0.7, wet: 0.4, rate: [0.7, 0.8] });   // (the growl over the synthesised rumble, which gives it its size)
+    tone(66, 1.5, { type: 'sawtooth', vol: 0.2, slide: -24, attack: 0.15, wet: 0.5 }); tone(99, 1.3, { type: 'square', vol: 0.06, slide: -38, attack: 0.15, wet: 0.5 }); noise(1.4, { type: 'lowpass', freq: 420, vol: 0.32, attack: 0.15, slide: -220, brown: true, wet: 0.5 }); },
   summon: () => { tone(55, 3.2, { type: 'sawtooth', vol: 0.12, slide: 30, attack: 1, wet: 0.6 }); SFX.thunder(1.2); },
   reveal: () => [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => pluck(f, { vol: 0.1, delay: i * 0.14, pan: -0.3 + i * 0.2 })),
   owl: () => { tone(400, 0.4, { vol: 0.11, slide: -30, attack: 0.06, wet: 0.5 }); tone(380, 0.7, { vol: 0.11, slide: -50, attack: 0.06, delay: 0.5, wet: 0.5 }); },
@@ -141,7 +163,9 @@ export function updateAmbience(dt, w = {}) {
   sh(A.whistle, Math.max(0, gust - 0.65) * 0.05 * open); A.whistle.f[0].frequency.setTargetAtTime(1200 + gust * 900 + Math.sin(t * 0.7) * 150, t, 0.5);
   sh(A.leaves, forest * (0.02 + gust * 0.07) * open);
   // rain: hiss, body and droplets outside; drumming and a muffled hush under a roof
-  sh(A.rainHiss, rain * 0.2 * (1 - inside * 0.8) * (roof ? 0.6 : 1)); sh(A.rainBody, rain * rain * 0.3 * (1 - inside * 0.6));
+  const rec = !!LOOPS.loopRain, L = (k, v) => LOOPS[k]?.gain.setTargetAtTime(v, t, 0.8);   // (recorded rain, birds and crickets when there are some)
+  L('loopRain', rain * 0.45 * (1 - inside * 0.8) * (roof ? 0.6 : 1)); L('loopStorm', Math.max(0, rain - 0.6) * 1.2 * (1 - inside * 0.7));
+  sh(A.rainHiss, rain * 0.2 * (1 - inside * 0.8) * (roof ? 0.6 : 1) * (rec ? 0.3 : 1)); sh(A.rainBody, rain * rain * 0.3 * (1 - inside * 0.6));
   sh(A.roof, roof ? rain * 0.22 : 0, 0.4);
   dropT -= dt; if (rain > 0.15 && dropT <= 0) { dropT = rnd(0.01, 0.06) / rain;
     if (roof) noise(rnd(0.03, 0.07), { type: 'lowpass', freq: rnd(900, 1600), vol: rnd(0.03, 0.09) * rain, pan: rnd(-0.8, 0.8), bus: ambBus, wet: 0.05 });
@@ -153,8 +177,9 @@ export function updateAmbience(dt, w = {}) {
   if (fire > 0.1 && Math.random() < dt * 9 * fire) noise(rnd(0.01, 0.04), { freq: rnd(1800, 5000), q: 3, vol: rnd(0.04, 0.12) * fire, pan: rnd(-0.3, 0.3), bus: ambBus, wet: 0.05 });
   // creatures: birds by day, crickets, owls and frogs by night; the forest and the marsh have their own
   const calm = (1 - rain * 0.85) * open;
-  birdT -= dt; if (birdT <= 0) { birdT = rnd(1.5, 6) / (1 + forest * 0.6); if (night < 0.3 && calm > 0.2) bird(calm * (1 - night)); }
-  crickT -= dt; if (crickT <= 0) { crickT = rnd(0.25, 0.7); if (night > 0.5 && rain < 0.3) { const f = rnd(4100, 4600), p = rnd(-0.8, 0.8); for (let i = 0; i < 3; i++) tone(f, 0.035, { type: 'square', vol: 0.005 * calm * night, delay: i * 0.055, pan: p, wet: 0.1, bus: ambBus }); } }
+  L('loopBirds', night < 0.3 ? calm * (1 - night) * 0.3 : 0); L('loopCrickets', night > 0.5 && rain < 0.3 ? calm * 0.18 : 0);
+  birdT -= dt; if (birdT <= 0) { birdT = rnd(1.5, 6) / (1 + forest * 0.6); if (night < 0.3 && calm > 0.2 && !LOOPS.loopBirds) bird(calm * (1 - night)); }
+  crickT -= dt; if (crickT <= 0) { crickT = rnd(0.25, 0.7); if (night > 0.5 && rain < 0.3 && !LOOPS.loopCrickets) { const f = rnd(4100, 4600), p = rnd(-0.8, 0.8); for (let i = 0; i < 3; i++) tone(f, 0.035, { type: 'square', vol: 0.005 * calm * night, delay: i * 0.055, pan: p, wet: 0.1, bus: ambBus }); } }
   owlT -= dt; if (owlT <= 0) { owlT = rnd(18, 45); if (night > 0.6 && rain < 0.4) { const p = rnd(-0.7, 0.7), f = rnd(330, 380); tone(f, 0.35, { vol: 0.03 * calm, slide: -25, attack: 0.05, pan: p, wet: 0.7, bus: ambBus }); tone(f * 0.97, 0.55, { vol: 0.03 * calm, slide: -35, attack: 0.05, delay: 0.55, pan: p, wet: 0.7, bus: ambBus }); } }
   frogT -= dt; if (frogT <= 0) { frogT = rnd(0.4, 1.6); if (marsh > 0.3 && (night > 0.3 || rain > 0.3)) { const p = rnd(-0.9, 0.9), f = rnd(110, 180); for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) tone(f, 0.09, { type: 'sawtooth', vol: 0.02 * marsh, slide: -20, delay: i * 0.13, pan: p, wet: 0.3, bus: ambBus }); } }
   // music: a lyre phrase now and then; a drone that swells at dawn and dusk

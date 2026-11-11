@@ -4,6 +4,38 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-10', name: 'Patch 10', title: 'New Faces', date: '11 November 2026',
+    intro: 'Nisos has a new look: a new hero, new creatures and bosses, new trees, new buildings to build, new tools and new sounds.',
+    sections: [
+      { t: 'You', icon: 'goal', items: [
+        'You are a young Cretan in a white chiton now, with the same moves as before.',
+        'New tools in your hands: axes, club, daggers, a building mallet, a pickaxe, a spade for the garden, a wooden spear and a torch.',
+        'The Cretan Bow and its arrows, the two shields and the Lightstone Spear are new too: a labrys on the small shield, Athena\'s owl on the great one.',
+        '<b>You wear your armour now.</b> The Thrower set is a felt cap, a patterned linen corslet and greaves; the Cretan set a bronze helmet, a scaled corslet and gilded greaves. Each piece shows on its own, so you can mix them.',
+        'A torch\'s flame burns straight up and flickers, however you hold it.',
+      ] },
+      { t: 'Creatures', icon: 'bull', items: [
+        'Deer, stags, foxes, hares and boars are new, fully animated animals: they walk, run, graze, attack, flinch and fall with their own movements.',
+        '<b>The Minotaur</b> is new: horned and armoured, his great axe in hand. He paws the ground before he charges, roars, staggers when he runs into a wall, and his blows land when his axe does.',
+        'The skeletons that rise to help him, the dryads, the giants and the dryadlings all have new bodies. <b>The Chimera</b> is now a great spined beast.',
+        'The Owl is a real barn owl now, gliding, flapping and hovering beside you.',
+      ] },
+      { t: 'The World', icon: 'temple', items: [
+        'New trees everywhere: olives and cypresses, oaks, figs, pines and firs, with new rocks, bushes, reeds and ferns, and new ruins in the countryside.',
+        'The sites have new pottery, tripods, firewood, marble columns and painted statues.',
+        'What you find on the ground is new: stones, branches, fiber bushes, bones, and a sack for whatever you drop.',
+      ] },
+      { t: 'Building', icon: 'hammerBuild', items: [
+        'Every building piece has a new look: log walls, plank floors and doors, thatch roofs and gables, stairs, fences, a palisade and gates. They snap and hold up exactly as before.',
+        'The workbench, campfire, cooking stand, bed, chest and standing torch are new too.',
+      ] },
+      { t: 'Sound', icon: 'wet', items: [
+        'Real footsteps on grass, earth, stone, wood and water; landings, doors, chests and the ring of a pick on stone.',
+        'Birdsong by day, crickets at night, and recorded rain, storms and thunder.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-9', name: 'Patch 9', title: 'Firm Ground', date: '20 October 2026',
     intro: 'Building on hills: walls and floors now stand on the ground, however long the row.',
     sections: [

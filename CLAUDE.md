@@ -10,6 +10,21 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
 - **`concept/` is private.** The whole folder is git-ignored; its design docs must never be committed, pushed, quoted
   in commits, PRs or patch notes, or served (the dev and test servers refuse `/concept`, the deploy leaves it out).
 - Branch before committing; PRs go to `main` (CI refuses any other base: a stacked PR never reaches the live site). Push with `git -c credential.helper= -c credential.helper='!gh auth git-credential' push`.
+- **Licensed packs stay out of the public repo.** `incoming assets/` (the team's Unity packs, unzipped) and
+  `assets/models/pack/` (what's converted from them) are git-ignored until the repo is private. Convert with
+  `node tools/assets/convert.mjs [name…]` from `tools/assets/manifest.json`: Blender (`convert.py`) by default, three.js
+  in a page (`fbx-page.mjs`, `"via": "three"`) for rigs Blender bends out of shape (the Minotaur). `tools/assets/clips.mjs`
+  lists a .glb's clips and any root motion left in them. Check every new model in the game (`tools/shots.mjs`).
+  How pack models get in: shared atlases are one file each in `pack/tex/` (`loadPack` puts them on materials named
+  `tex:<key>`); trees, rocks and shrubs have the atlas baked into vertex colours (`bakeColors`) and take the carved
+  species' places in `propGeo` (`world/flora-pack.js`, fitted to the carved one's size); site props likewise
+  (`world/site-pack.js`); building pieces get the rustic kit's model fitted into their own box (`build/kit.js`; aiming
+  still meets the carved shape, kept invisible); the hero, dryads and giants are pack bodies fitted onto the Mixamo rig
+  in three.js (`refit` in `tools/assets/fbx-page.mjs`: the rig's bones keep their rest rotations, so the Mixamo clips play
+  unchanged; Blender's import turns them), with the armour from the pack's other Greek characters as parts of their own
+  (`wear_<item>`, shown by `hero.wear`). `tools/assets/lineup.py` lays every converted model out in one Blender file. Sounds: `node tools/assets/sounds.mjs` →
+  `assets/sounds/pack/` (also git-ignored), played by `sound.js` where it has a recording. Without the pack files the
+  world, buildings, tools, hero and sound fall back to the carved look; the animals and the bosses need the pack.
 - Player-facing changes go in the patch notes (`src/ui/patchnotes.js`, the `PATCHES` list) in plain player language.
 
 ## Run and test

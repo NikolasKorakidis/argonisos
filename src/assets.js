@@ -17,8 +17,31 @@ const buffer = (file) => { if (!buffers.has(file)) buffers.set(file, loadModelBu
 export function loadFBX(name) { return buffer(name + '.fbx').then((buf) => new FBXLoader().parse(buf, '')); }
 export function loadGLB(name) { return buffer(name + '.glb').then((buf) => new Promise((res, rej) => new GLTFLoader().parse(buf, '', res, rej))); }
 const texLoader = new THREE.TextureLoader();
+// A model converted from the team's packs (tools/assets). Most share one atlas per pack, kept once in pack/tex/ and put
+// here on every material named "tex:<key>" (glTF's UVs want the image unflipped)
+const atlases = {};
+const atlas = (key) => (atlases[key] ||= (() => { const t = texLoader.load(new URL(`pack/tex/${key}.webp`, ROOT).href); t.colorSpace = THREE.SRGBColorSpace; t.flipY = false; t.anisotropy = 4; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; })());   // (repeat: tiling ones, like the marble, run past the edge)
+export function loadPack(name) {
+  return loadGLB('pack/' + name).then((gl) => {
+    gl.scene.traverse((m) => { for (const mt of [].concat(m.material || [])) if (mt.name.startsWith('tex:')) { mt.map = atlas(mt.name.slice(4)); mt.needsUpdate = true; } });
+    return gl;
+  });
+}
 export function loadTex(file, srgb = true) {
   const t = texLoader.load(new URL(file, ROOT).href); if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
+// One geometry from all of a loaded model's meshes (positions, normals, UVs), in the model's own frame
+// (or, with colours, positions, normals and vertex colours as plain RGB floats)
+export function bake(root, colours = false) {
+  root.updateMatrixWorld(true); const geos = [], want = colours ? [['position', 3], ['normal', 3], ['color', 3]] : [['position', 3], ['normal', 3], ['uv', 2]];
+  root.traverse((m) => { if (m.isMesh) { const g = m.geometry.clone().applyMatrix4(m.matrixWorld); geos.push(g.index ? g.toNonIndexed() : g); } });
+  const n = geos.reduce((s, g) => s + g.attributes.position.count, 0), out = new THREE.BufferGeometry();
+  for (const [k, size] of want) {
+    const a = new Float32Array(n * size); let o = 0;
+    for (const g of geos) { const src = g.attributes[k]; if (src) for (let i = 0; i < src.count; i++) for (let c = 0; c < size; c++) a[o + i * size + c] = src.getComponent(i, c); else if (k === 'color') a.fill(1, o, o + g.attributes.position.count * size); o += g.attributes.position.count * size; }
+    out.setAttribute(k, new THREE.BufferAttribute(a, size));
+  }
+  return out;
 }
 // Swap imported materials for standard ones that sit well in our lighting
 export function fixMaterials(obj, roughness = 0.7) {

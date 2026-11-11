@@ -190,7 +190,7 @@ export class Trial {
         c.ctl = { want: 0, face: toP };
         if (!m.done) { m.done = true; g.sound?.('roar'); addShake(m.enrage ? 0.9 : 0.6); dust(at(1), 40, 0xb8a684, 0.9); g.flashSky?.(m.enrage ? 0.4 : 0);
           if (d < 9 && !P.blocking) { P.stats.add('stunned', m.enrage ? 1.6 : 1.2); g.hud.toast(`The roar <b>stuns</b> you!`); } else if (d < 9) g.hud.toast('You hold your guard against the roar'); }
-        return m.t <= 0 ? done() : c.type === 'chimera' ? 'roar' : 'idle';
+        return m.t <= 0 ? done() : 'roar';
       case 'slam':   // the labrys raised high, then brought down: a shockwave all round
         c.ctl = { want: 0, face: m.t > 0.35 ? toP : undefined };
         if (m.t <= 0) { const p = at(0.2).addScaledVector(fwd(), 2); for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; dust(p.clone().add(new THREE.Vector3(Math.cos(a) * 3, 0, Math.sin(a) * 3)), 6, 0x9a8a70, 0.8); }
@@ -204,7 +204,7 @@ export class Trial {
         if (m.ph === 0) {   // pawing the ground, head down
           c.ctl = { want: 0, face: toP }; m.dir = toP; if (Math.floor(m.e * 7) !== m.dust) { m.dust = Math.floor(m.e * 7); dust(at(0.1).addScaledVector(fwd(), -1), 6, 0x9a8a70, 0.5); }
           if (!m.snd) { m.snd = true; g.sound?.('roar'); }
-          if (m.t <= 0) { m.ph = 1; m.t = 1.8; } return 'idle';
+          if (m.t <= 0) { m.ph = 1; m.t = 1.8; } return 'paw';
         }
         if (m.ph === 1) {   // the charge: fast, turning only a little
           m.dir += clamp(angDiff(toP, m.dir), -0.55 * dt, 0.55 * dt); c.ctl = { want: c.enraged ? 14.5 : 13, face: m.dir, snap: true };
@@ -212,11 +212,11 @@ export class Trial {
           const ahead = g.colliders.pick(c.pos.x, c.pos.z, Math.sin(m.dir), Math.cos(m.dir), T.r + 1.1);
           if (m.e > 0.2 && (ahead || c.stuck > 0.15)) {   // straight into a wall: dazed
             m.ph = 2; m.t = 2.4; c.hitT = 2.4; addShake(0.8); g.sound?.('slam'); dust(at(1.5).addScaledVector(fwd(), 1.4), 30, 0x8a7a64, 1);
-            if (!this.dazeTold) { this.dazeTold = true; g.hud.toast('The Minotaur is <b>dazed</b>: strike now!'); } return 'hit';
+            if (!this.dazeTold) { this.dazeTold = true; g.hud.toast('The Minotaur is <b>dazed</b>: strike now!'); } return 'dazed';
           }
           if (m.t <= 0 || (m.hit && m.e > 0.9)) return done(); return 'run';
         }
-        c.ctl = { want: 0 }; return m.t <= 0 ? done() : 'hit';
+        c.ctl = { want: 0 }; return m.t <= 0 ? done() : 'dazed';
       case 'claw': case 'sting':   // the old strikes, now as moves
         c.ctl = { want: 0, face: toP };
         if (!m.hit && m.e > (m.k === 'sting' ? 0.45 : 0.35)) { m.hit = true;

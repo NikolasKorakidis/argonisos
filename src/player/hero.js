@@ -3,7 +3,7 @@
 // their tracks and blended over it: whole body when standing, upper body only while moving.
 import * as THREE from 'three';
 import { FootIK } from './footik.js';
-import { loadFBX, loadTex } from '../assets.js';
+import { loadFBX, loadGLB, loadTex } from '../assets.js';
 import { clamp, lerp } from '../util/math.js';
 
 const ss = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
@@ -49,11 +49,13 @@ export class Hero {
     return g;
   }
   async load() {
-    const obj = await loadFBX('hero_rig');
+    // the team's Cretan archer fitted onto the Mixamo rig (tools/assets/fbx-page.mjs refit: same bones, same clips), or
+    // the old model when the pack isn't there
+    let obj = await loadGLB('pack/hero').then((gl) => gl.scene).catch(() => null), mat;
+    if (obj) { obj.updateMatrixWorld(true); let map = null; obj.traverse((m) => { if (m.isMesh && !map) map = m.material.map; }); mat = new THREE.MeshStandardMaterial({ map, color: 0xc4c4c4, roughness: 0.8, metalness: 0 }); }   // (its palette is pale in our light)
+    else { obj = await loadFBX('hero_rig'); mat = new THREE.MeshStandardMaterial({ map: loadTex('hero_diffuse.jpg'), normalMap: loadTex('hero_normal.jpg', false), roughness: 0.8, metalness: 0 }); }
     const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
-    this.s = HEIGHT / size.y; obj.scale.setScalar(this.s);
-    const map = loadTex('hero_diffuse.jpg'), nrm = loadTex('hero_normal.jpg', false);
-    const mat = new THREE.MeshStandardMaterial({ map, normalMap: nrm, roughness: 0.8, metalness: 0 });
+    this.s = HEIGHT / size.y; obj.scale.multiplyScalar(this.s);
     obj.traverse((m) => {
       if (m.isBone) this.bones[m.name] = m;
       if (!m.isMesh) return;
@@ -61,6 +63,7 @@ export class Hero {
       m.material = mat;
     });
     obj.animations = [];
+    this.parts = {}; obj.traverse((m) => { if (m.isMesh) this.parts[m.name] = m; }); this.wear(this.wearing);
     this.wrap.remove(this.placeholder); this.wrap.add(obj); this.model = obj;
     this.mixer = new THREE.AnimationMixer(obj);
     // Bones are in centimetres: attachment points sit in bone space, the objects on them undo the model scale
@@ -69,6 +72,15 @@ export class Hero {
     for (const g of [this.back, this.backBow]) B.mixamorigSpine2.add(g);
     this.back.position.set(2, 8, -16); this.backBow.position.set(-2, 2, -17); this.backBow.rotation.set(0, 0, 0.6);
     return this;
+  }
+  // Show the armour worn ({ head, body, legs }: item ids). The pack's hero carries each piece as a part of its own
+  // (wear_<id>) and its own body in three (base_head, base_body, base_legs): armour takes the place of the body under it,
+  // and a helmet the hair's. The old model has none: nothing changes on it.
+  wear(ids = {}) {
+    this.wearing = ids; const P = this.parts; if (!P) return;
+    const on = (slot) => !!(ids[slot] && P['wear_' + ids[slot]]);
+    for (const [n, m] of Object.entries(P)) if (n.startsWith('wear_')) m.visible = Object.values(ids).includes(n.slice(5));
+    if (P.base_body) P.base_body.visible = !on('body'); if (P.base_legs) P.base_legs.visible = !on('legs'); if (P.hair) P.hair.visible = !on('head');
   }
   // Hold an object in the right hand. A long-handled tool (axe, club, spear...) runs across the palm and is gripped near its
   // end, head up and forward over the thumb (bone +X thumb side, +Y fingers, +Z palm)

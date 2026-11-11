@@ -184,5 +184,7 @@ function grow({ geo, mat }, k) {
   const f = (n) => (n > 1e-4 ? (n + 2 * d) / n : 1);
   return { geo: geo.translate(-c.x, -c.y, -c.z).scale(f(s.x), f(s.y), f(s.z)).translate(c.x, c.y, c.z), mat };
 }
-for (const p of PIECES) { p.meshes = null; p.build = () => (p.meshes ||= merge(p.parts().map((q, k) => (k && !p.door ? grow(q, k) : q)))); }
+// carved(): the piece's own carved shape, which aiming always uses; build(): its look, the kit's model once kit.js has
+// loaded it (p.meshes), the carved shape until then
+for (const p of PIECES) { p.meshes = null; p.carved = () => (p.carvedMeshes ||= merge(p.parts().map((q, k) => (k && !p.door ? grow(q, k) : q)))); p.build = () => p.meshes || p.carved(); }
 export const PIECE = Object.fromEntries(PIECES.map((p) => [p.id, p]));

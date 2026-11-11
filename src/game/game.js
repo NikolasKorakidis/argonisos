@@ -76,6 +76,8 @@ export function installGame(g) {
     const rid = r >= 0 ? inv.slots[r].id : null, lid = l >= 0 ? inv.slots[l].id : null;
     if (rid !== g._rid) { g._rid = rid; player.hero.holdRight(null); if (rid && !isLeftHanded(rid)) heldModel(rid).then((m) => { if (g._rid === rid) { player.hero.holdRight(m); g.torchLight = m?.userData.light || null; } }); else g.torchLight = null; }
     if (lid !== g._lid) { g._lid = lid; player.hero.holdLeft(null); if (lid) heldModel(lid).then((m) => { if (g._lid === lid) player.hero.holdLeft(m); }); }
+    const id = (slot) => { const i = worn(slot); return i >= 0 ? inv.slots[i].id : null; };
+    player.hero.wear({ head: id('head'), body: id('body'), legs: id('legs'), cape: id('cape') });
     let sp = 0; for (const s of inv.slots) if (s?.worn && ITEMS[s.id].speed) sp += ITEMS[s.id].speed; player.speedMod = sp;
     player.overweight = inv.overweight;
     hud.dirtyInv = true;
