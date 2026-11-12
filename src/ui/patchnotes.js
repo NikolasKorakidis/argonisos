@@ -4,6 +4,39 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-17', name: 'Patch 17', title: 'A Hero Who Moves', date: '12 November 2026',
+    intro: 'Your hero walks, sneaks, swims, fights, kneels and rests like a real person, and the woods are lit by real sunbeams.',
+    sections: [
+      { t: 'Moving', icon: 'jump', items: [
+        '<b>Sneaking</b> (Ctrl) crouches you low, creeping forward, back and sideways.',
+        'A real walk when you move slowly, and proper steps backwards and sideways while you aim or block.',
+        'Real swimming with your head above the water, treading water when you stop, a falling pose in long drops and a hard landing after big ones.',
+        'Your hero breathes while standing, and looks around if you wait a while.',
+        'Footsteps sound with every step, walking and sneaking too.',
+      ] },
+      { t: 'Fighting', icon: 'hammer', items: [
+        'Each weapon moves its own way: axes and clubs chop and sweep, daggers stab and slash, spears thrust.',
+        'A shield and a one-handed weapon give you a guard stance, and blocking shows it.',
+        '<b>Dodge roll:</b> press Space while blocking to roll out of the way (it costs stamina, and blows can\'t touch you mid-roll).',
+        '<b>Kick</b> (Q) to shove small creatures back.',
+        'You flinch from hits, stagger from big ones, and fall properly when you die, then get up again at your spawn.',
+      ] },
+      { t: 'Living', icon: 'fire', items: [
+        '<b>Praying</b> at Zeus\'s altar: you kneel for a few moments while the light gathers. Move away and the prayer is broken.',
+        '<b>Eating</b> takes a moment, bite by bite. Strike, block or take a heavy blow and you stop, keeping your food.',
+        '<b>Sit</b> (Z) on the ground, facing the fire if one is near. Rest by a burning fire for a while and you\'ll feel <b>Rested</b>.',
+        'You lie down to sleep in your bed and get up in the morning.',
+        'You bend to pick things up, throw what you drop, and swing your hammer as each piece goes into place.',
+        '<b>Wave</b> (G) and <b>cheer</b> (H). Your hero waves the owl goodbye and cheers when a great beast falls.',
+        'The man no longer looks like he\'s wearing dark glasses: real eyebrows at last.',
+      ] },
+      { t: 'Light', icon: 'blessing', items: [
+        'Sunlight through the woods comes from the real leaves now: the dappled light stays where it falls, and you walk through it.',
+        'Clear sunbeams slant between the trees, strongest at morning and evening.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-16', name: 'Patch 16', title: 'Light Between the Trees', date: '12 November 2026',
     intro: 'Sunbeams in the woods, moonlit nights and fireflies, a grander temple, families of animals, and a hero who holds his tools properly.',
     sections: [

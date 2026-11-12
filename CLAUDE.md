@@ -43,7 +43,7 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
   `node tools/assets/everything.mjs` exports every pack model on its own (`everything.py`) to `pack/all/<pack>/<model>.glb`
   (textures in `pack/tex/`, so `loadPack('all/…')` takes any of them as it is) and sorts them by kind and group
   (`kinds.mjs`, first matching rule wins; `--sort` re-sorts only) into `pack/all/catalogue.json`. It feeds the asset
-  browser (`dev/index.html`, `npm run dev` → `/dev/`) and the Blender catalogue (`catalogue.py` →
+  browser (`dev/index.html`, `npm run dev` → `/dev/`; `/dev/anims.html` is the animation viewer and checker, `src/dev/anim/`) and the Blender catalogue (`catalogue.py` →
   `incoming assets/catalogue/argonisos-by-kind.blend`: a collection per kind and group, every model an asset in the
   Asset Browser under "Kind/Group"). Manifest entries
   with `compose` or `house` are put together in Blender from Ancient Empire pieces (`compose.py`: each material slot keeps
@@ -153,10 +153,14 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
 - `src/render`: `core.js` renderer, composer, shadows, adaptive resolution · `atmosphere.js` mist, haze, sun shafts, cloud
   shadows, grade, and the woods' light (a half-resolution haze march lit through the crowns, dappled floor from the canopy
   shelter map; notes in `docs/plans/light-study.md`) · `occlusion.js` fades what blocks the camera · `fx.js`, `lights.js`.
-- `src/player`: `player.js` controller and camera · `hero.js` rig and clips (footsteps from the clips' foot contacts, `footfalls`;
-  the stance widened in motion, `STANCE`) · `cape.js` the worn cape (Synty's, fitted to the body, a short rope sim) · `footik.js` foot placement · `stats.js` ·
+- `src/player`: `player.js` controller and camera (`speeds.js` its speeds) · `hero.js` rig and clips: the old FBX clips plus the
+  Mixamo library `moves.glb`/`acts.glb` (made by `tools/assets/moves.mjs` from `incoming assets/mixamo/`, retargeted onto
+  our rig's rest pose); a base layer blending walk/run/sprint, backwards, strafes and sneak by speed and direction; the
+  action API `hero.action(name, {...})` for one-shots and loops (strikes, hits, deaths, actions); footsteps from the clips'
+  foot contacts (`footfalls`); the stance widened in motion (`STANCE`); `floorLift` keeps feet-off poses out of the floor · `cape.js` the worn cape (Synty's, fitted to the body, a short rope sim) · `footik.js` foot placement · `stats.js` ·
   `held.js`.
-- `src/game`: `game.js` wires the systems onto `game` · `items.js` items and recipes · `inventory.js` · `crafting.js` ·
+- `src/game`: `game.js` wires the systems onto `game` · `acts.js` the hero's timed actions (praying, eating, sitting, sleeping,
+  kick, emotes) and what cancels them · `items.js` items and recipes · `inventory.js` · `crafting.js` ·
   `harvest.js` · `combat.js` · `trial.js` bosses, clues, offerings · `guide.js` the guided steps · `owl.js` · `save.js`.
 - `src/build`: `pieces.js` piece definitions · `build.js` placement, snapping, support. `src/creatures`: `creatures.js`
   AI and spawning · `models.js` bodies. `src/ui`: HUD, map, title, menus, patch notes, `icons.js` (+ the black-figure

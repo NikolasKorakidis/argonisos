@@ -92,12 +92,12 @@ export function characterCreator(g) {
     el.classList.remove('hidden'); document.body.classList.add('creating'); draw();
     // the hero turned to the light, the camera ours (the player's own camera does nothing meanwhile), the focus blur off
     P.yaw = Math.atan2(lightDir.x, lightDir.z); P.root.rotation.y = P.yaw;
-    P.updateCamera = () => {}; focus0 = ATMO.focus.value; ATMO.focus.value = 0;
+    P.updateCamera = () => {}; focus0 = ATMO.focus.value; ATMO.focus.value = 0; H.calm = true;   // (no looking round while the face is framed)
     orbit = 0; idle = 0; view = viewAim = 0; last = performance.now(); raf = requestAnimationFrame(frame);
   };
   function close(keep) {
     C.open = false; cancelAnimationFrame(raf); el.classList.add('hidden'); document.body.classList.remove('creating');
-    delete P.updateCamera; ATMO.focus.value = focus0; P.camYaw = P.yaw + Math.PI;   // (back over the hero's shoulder, looking the way they face)
+    delete P.updateCamera; ATMO.focus.value = focus0; H.calm = false; P.camYaw = P.yaw + Math.PI;   // (back over the hero's shoulder, looking the way they face)
     if (keep) { rememberLook(look); done?.(look); } else { if (look !== before) H.setLook(before); back?.(); }
   }
   C.close = close;

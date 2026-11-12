@@ -22,6 +22,7 @@
   #side { left: 10px; top: 10px; bottom: 10px; width: 292px; display: flex; flex-direction: column; gap: 8px; padding: 10px; z-index: 5; }
   #side h1 { margin: 0; font-size: 14px; font-weight: 650; letter-spacing: .02em; display: flex; justify-content: space-between; align-items: baseline; } #side h1 small { color: var(--dim); font-weight: 400; font-size: 11px; }
   .tabs { display: flex; gap: 4px; } .tabs button { flex: 1; padding: 6px; font-weight: 600; }
+  .tabs a.tablink { flex: 1; padding: 6px 2px; white-space: nowrap; font-weight: 600; text-align: center; color: inherit; text-decoration: none; background: rgba(255, 255, 255, .08); border: 1px solid var(--line); border-radius: 5px; } .tabs a.tablink:hover { background: rgba(255, 255, 255, .16); }
   .checks { display: flex; flex-direction: column; gap: 3px; color: var(--dim); } .checks label { display: flex; gap: 6px; align-items: center; cursor: pointer; } .checks label:hover { color: var(--ink); }
   #tree { flex: 0 1 auto; max-height: 38%; overflow-y: auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 4px 0; }
   .node { display: flex; justify-content: space-between; padding: 2px 6px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
@@ -63,7 +64,7 @@
 <body>
 <div id="side" class="panel">
   <h1>Argonisos assets <small id="total"></small></h1>
-  <div class="tabs"><button data-tab="browse">Browse</button><button data-tab="build">Build</button></div>
+  <div class="tabs"><button data-tab="browse">Browse</button><button data-tab="build">Build</button><a class="tablink" href="anims.html" title="The animation viewer (anims.html): every clip the hero has, frame by frame">Animations</a></div>
   <input id="q" type="search" placeholder="Search names, ids, packs…  ( / )" autocomplete="off" spellcheck="false">
   <select id="pack"></select>
   <div class="checks">

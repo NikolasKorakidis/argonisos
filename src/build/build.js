@@ -491,7 +491,8 @@ export class Build {
     const g = this.g, S = g.S; S.bed = { x: p.pos.x + Math.sin(p.rot) * 1.4, z: p.pos.z + Math.cos(p.rot) * 1.4 };
     if (!this.underRoof(p.pos.clone().setY(p.pos.y + 0.3))) { g.hud.toast('Your spawn point is set. You need a roof over the bed to sleep.'); return; }
     if (S.time < 0.68) { g.hud.toast('Your spawn point is set. You can only sleep once evening comes.'); return; }
-    g.hud.sleep?.(() => { S.time = 0.01; S.day++; g.player.stats.add('rested'); g.player.stats.heal(99); g.hud.toast(`You wake <b>rested</b>. Day ${S.day}.`); });
+    const night = () => { S.time = 0.01; S.day++; g.player.stats.add('rested'); g.player.stats.heal(99); g.hud.toast(`You wake <b>rested</b>. Day ${S.day}.`); };
+    if (g.acts) g.acts.sleep(p, night); else g.hud.sleep?.(night);   // (lying down on it, getting up again: game/acts.js)
   }
   // ---- chest window: click an item to move it between the chest and your pack
   buildChestPanel() {
@@ -528,7 +529,7 @@ export class Build {
         if (r) g.hud.prompt('LMB', r.why || `Place ${this.ghostDef.name}`, r.why ? '' : Object.entries(this.ghostDef.mats).map(([m, n]) => `${n} ${ITEMS[m].name.toLowerCase()}`).join(', '));
         if (r && !r.why && input.clicks.includes(0)) {
           if (!g.S.freeBuild) g.inv.takeMats(this.ghostDef.mats);
-          const p = this.place(this.ghostDef.id, r.pos, r.rot); dust(p.pos.clone().setY(p.pos.y + 0.2), 8, 0xb8a684, 0.3); addShake(0.08); g.sound?.('build');
+          const p = this.place(this.ghostDef.id, r.pos, r.rot); dust(p.pos.clone().setY(p.pos.y + 0.2), 8, 0xb8a684, 0.3); addShake(0.08); g.sound?.('build'); g.acts?.hammer(p.pos);
           if (!g.inv.has(this.ghostDef.mats) && !g.S.freeBuild) g.hud.toast(`Out of materials for ${this.ghostDef.name.toLowerCase()}`);
         }
       } else if (tp) g.hud.prompt('MMB', `Remove ${tp.def.name}`, `${Math.ceil(tp.hp)} / ${tp.def.hp}`);

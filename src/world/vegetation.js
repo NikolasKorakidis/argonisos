@@ -9,6 +9,7 @@ import { MIST_R0, MIST_R1 } from './reach.js';
 import { heightAt } from './gen.js';
 import { renderer, sun, hemi } from '../render/core.js';
 import { PRIORITY } from './pool.js';
+import { LIGHT } from './sky.js';
 
 export const NEAR_R = 75;                     // full-detail radius
 export const MID_R = 180;                     // light meshes out to here, impostors beyond
@@ -314,13 +315,16 @@ export class Vegetation {
           if (cards) { const lm = new THREE.InstancedMesh(cards, cut(P.cardMat || leafMat, false), cap); lm.instanceMatrix = t.instanceMatrix; ms.push(lm); } return ms; };
         // (a pack tree has a lighter version for the band's further half, from SPLIT out: its leaves thinned)
         const near = pair(P.geo, P.cards), far = P.geo2 ? pair(P.geo2, P.cards2) : [];
-        // (and its shadow cast by its light far version, seen only by the sun's shadow camera: a pack tree's leaves are
-        // most of its triangles, and drawing them all twice, for the shadows too, cost more than the woods could spare)
+        // (and its shadow: by day, out to SPLIT the tree itself casts, every leaf card, so the light under the crowns is
+        // dappled by the real leaves, and the shade, the shafts in the haze and the light on the hero all come from one
+        // shadow; further out, and by night under the moon (whose shadows need no leaf detail), its light far version casts,
+        // seen only by the sun's shadow camera: a pack tree's leaves are most of its triangles, and drawing them all twice
+        // across the whole band cost more than the woods could spare. cull() swaps them.)
         const proxy = (ms) => { if (!sh || !P.geo2 || !P.lo) return []; const ps = pair(P.lo, P.loCards); for (const q of ps) { q.instanceMatrix = ms[0].instanceMatrix; q.layers.set(SHADE_LAYER); q.userData.shade = true; } return ps; };
         const nearShade = proxy(near), farShade = proxy(far), meshes = [...near, ...far, ...nearShade, ...farShade];
         P.geo.computeBoundingSphere(); const bs = P.geo.boundingSphere.clone(); if (P.cards) { P.cards.computeBoundingSphere(); bs.union(P.cards.boundingSphere); }
-        b = { meshes, near, far, nearShade, farShade, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), refs: [], slot: new Int32Array(cap), slot2: new Int32Array(cap), n: 0 };
-        for (const m of meshes) { m.castShadow = sh && (m.userData.shade || !nearShade.length); m.receiveShadow = true; m.frustumCulled = false; m.count = 0; m.userData.batch = b; m.userData.far = far.includes(m); this.group.add(m); }
+        b = { meshes, near, far, nearShade, farShade, sh, leaves: null, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), refs: [], slot: new Int32Array(cap), slot2: new Int32Array(cap), n: 0 };
+        for (const m of meshes) { m.castShadow = sh && (m.userData.shade || !far.includes(m) || !farShade.length); m.receiveShadow = true; m.frustumCulled = false; m.count = 0; m.userData.batch = b; m.userData.far = far.includes(m); this.group.add(m); }
         this.batches.set(key, b);
       }
       b.n = n; b.refs = refs;
@@ -372,7 +376,9 @@ export class Vegetation {
     _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _fr.setFromProjectionMatrix(_pm);
     const nr = NEAR_R + NF, keep2 = 48 * 48, now = performance.now() / 1000;
     for (const cell of this.shaken) { for (const [i, s] of cell.shake) if (now - s.t0 > SHAKE_T) cell.shake.delete(i); if (!cell.shake.size) { cell.shake = null; this.shaken.delete(cell); } }
+    const leaves = LIGHT.elev > -0.03;   // (the sun casts by day; the moon from about when the light hands over to it)
     for (const b of this.batches.values()) {
+      if (b.leaves !== leaves && b.nearShade.length) { b.leaves = leaves; for (const m of b.near) m.castShadow = b.sh && leaves; for (const m of b.nearShade) m.castShadow = !leaves; }
       const dst = b.near[0].instanceMatrix.array, dst2 = b.far[0]?.instanceMatrix.array, split2 = dst2 ? SPLIT * SPLIT : Infinity; let m = 0, m2 = 0;
       for (let k = 0; k < b.n; k++) {
         const x = b.cen[k * 4], y = b.cen[k * 4 + 1], z = b.cen[k * 4 + 2], r = b.cen[k * 4 + 3], dx = x - pos.x, dz = z - pos.z, d2 = dx * dx + dz * dz;

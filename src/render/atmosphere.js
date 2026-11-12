@@ -34,7 +34,7 @@ export const ATMO = {
   // direction and colour, how much haze (woodK: by the hour; the crowns overhead decide where), its colour where no shaft
   // lights it, the ground under the player (the haze lies low), and how strong the flecks of sun on the floor are
   tShadow: { value: null }, shadowMat: { value: new THREE.Matrix4() }, lightDir: { value: new THREE.Vector3(0, 1, 0) }, lightCol: { value: new THREE.Color() },
-  woodK: { value: 0 }, woodAmb: { value: new THREE.Color() }, woodFoot: { value: new THREE.Vector3() }, fleckK: { value: 0 },
+  woodK: { value: 0 }, woodBeam: { value: new THREE.Vector2(1, 1) }, woodAmb: { value: new THREE.Color() }, woodFoot: { value: new THREE.Vector3() }, fleckK: { value: 0 },
   uCanopy: WET_U.uCanopy, uShelter: WET_U.uShelter, uShelterBox: WET_U.uShelterBox, uShelterNF: WET_U.uShelterNF,
   // the haze as marched at half resolution (its light, and how much of the scene shows through), the size of one of its
   // texels, and the camera's near and far (to tell, as it's spread back over the screen, which of it lies at what depth)
@@ -42,7 +42,7 @@ export const ATMO = {
   // a little moonlit blue lifted into the darkest parts of the picture by night (more in the woods), so the dark stays readable
   nightLift: { value: new THREE.Color(0, 0, 0) },
 };
-const SAMPLES = 32, WOOD_STEPS = 14, WOOD_LEN = 38;   // (the haze is marched to 38 m: inside the 80 m shadow box round the player)
+const SAMPLES = 32, WOOD_STEPS = 24, WOOD_LEN = 38;   // (the haze is marched to 38 m: about as far as the 80 m shadow box round the player reaches)
 // (how deep in the woods the player stands, once per corner of the screen: the share of 13 spots within 12 m of them
 // with a tree's crown standing well over their head, from the canopy map)
 const WOODS_VERT = `${SHELTER} uniform float woodK; uniform vec3 woodFoot; varying vec2 vUv; varying float vWoods;
@@ -53,19 +53,17 @@ const WOODS_VERT = `${SHELTER} uniform float woodK; uniform vec3 woodFoot; varyi
           vWoods = smoothstep(0.12, 0.55, n / 13.0); }`;
 // what both passes need to know about where a pixel lies and what the light reaches
 const LIGHT_PARS = `${SHELTER} uniform sampler2D tDepth, tShadow; uniform mat4 projInv, camWorld, shadowMat; uniform vec3 camPos, lightDir, lightCol, woodAmb, woodFoot;
-  uniform float woodK; varying float vWoods; varying vec2 vUv;
+  uniform float woodK; uniform vec2 woodBeam; varying float vWoods; varying vec2 vUv;
   vec3 worldAt(vec2 uv, float d) { vec4 v = projInv * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0); v /= v.w; return (camWorld * v).xyz; }
-  // 1 where the light reaches a point (nothing between it and the sun or moon in the shadow map), 0 in shade
+  // 1 where the light reaches a point (nothing between it and the sun or moon in the shadow map: near the player the trees'
+  // own leaves cast into it, see vegetation.js), 0 in shade; outside the shadow box, where nothing is known, the woods'
+  // usual share. The shadow map is fixed in the world (its box steps by whole texels as it follows you), so this is too.
   float sunLit(vec3 p) { vec4 s = shadowMat * vec4(p, 1.0); s.xyz /= s.w;
-    if (s.x < 0.0 || s.y < 0.0 || s.x > 1.0 || s.y > 1.0 || s.z > 1.0) return 1.0;
+    if (s.x < 0.0 || s.y < 0.0 || s.x > 1.0 || s.y > 1.0 || s.z > 1.0) return 0.3;
     return step(s.z - 0.0015, dot(texture2D(tShadow, s.xy), vec4(255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0))); }
-  // the crowns' shade, from the canopy map: follow the light up from p, and if a crown stands over the way at 3, 9 or
-  // 18 m up, the light doesn't reach it (seen from above the map knows only the crowns' tops, which is enough)
-  float crownLit(vec3 p) { vec2 sl = lightDir.xz / max(lightDir.y, 0.2);
-    return smoothstep(-1.0, 1.0, p.y + 3.0 - coverTop(uCanopy, p.xz + sl * 3.0)) * smoothstep(-1.5, 1.5, p.y + 9.0 - coverTop(uCanopy, p.xz + sl * 9.0)) * smoothstep(-2.0, 2.0, p.y + 18.0 - coverTop(uCanopy, p.xz + sl * 18.0)); }
 `;
-// The woods' haze, at half resolution: marched from the eye through the shadow map, lying low over the ground and thicker
-// where crowns stand overhead; lit where the sun gets through (a shaft), dim where it doesn't. Each pixel starts its march
+// The woods' haze, at half resolution: marched from the eye through the sun's shadow map, lying low over the ground; lit
+// where the sun gets through the leaves (a shaft, lined up with the real gaps in the crowns), dim where it doesn't. Each pixel starts its march
 // at a different spot (a fixed pattern, so a still picture stays still), which the main pass smooths away as it spreads the
 // haze back over the screen. Out: the light gathered (rgb) and how much of the scene shows through (a).
 const HAZE_FRAG = `${LIGHT_PARS}
@@ -75,11 +73,15 @@ const HAZE_FRAG = `${LIGHT_PARS}
     float L = min(dist, ${WOOD_LEN}.0), st = L / ${WOOD_STEPS}.0, j = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
     vec3 rd0 = (P - camPos) / max(dist, 1e-3); float od = 0.0, lit = 0.0, amb = 0.0, mu = dot(rd0, lightDir);
     for (int i = 0; i < ${WOOD_STEPS}; i++) { vec3 s = camPos + rd0 * (float(i) + j) * st;
-      float den = woodK * vWoods * exp(-max(s.y - woodFoot.y, 0.0) / 6.0) * (0.45 + 0.55 * smoothstep(s.y + 1.0, s.y + 4.0, coverTop(uCanopy, s.xz)));
-      float tr = exp(-od), dd = den * st; lit += tr * dd * sunLit(s) * crownLit(s); amb += tr * dd; od += dd; }
-    // (the light scatters mostly forward: the shafts blaze when you look towards the sun, and still show across it)
-    float ph = 0.5 + 3.0 * pow(max(mu, 0.0), 8.0) + 1.0 * pow(max(mu, 0.0), 2.0);
-    gl_FragColor = vec4(lightCol * lit * ph * 0.9 + woodAmb * amb * 0.4, exp(-od));
+      // (thicker in the low air under the crowns, where the beams have something to light)
+      float den = woodK * vWoods * exp(-max(s.y - woodFoot.y, 0.0) / 7.0) * (0.6 + 0.9 * smoothstep(s.y + 1.0, s.y + 4.0, coverTop(uCanopy, s.xz)));
+      float tr = exp(-od), dd = den * st; lit += tr * dd * sunLit(s); amb += tr * dd; od += dd; }
+    // (the light scatters mostly forward: the shafts blaze when you look towards the sun, and still show across it; the
+    // unlit haze stays dim, so the beams stand out against it. With the sun high most of the air under the crowns is lit a
+    // little, which reads as a glow: woodBeam sharpens it, so a line of sight wholly in a shaft shines and one half in the
+    // shade falls away, and the beams stand out as columns)
+    float ph = 0.7 + 2.8 * pow(max(mu, 0.0), 10.0) + 1.4 * pow(max(mu, 0.0), 2.0), f = lit / max(amb, 1e-6);
+    gl_FragColor = vec4(lightCol * amb * pow(f, woodBeam.x) * woodBeam.y * ph * 1.4 + woodAmb * amb * 0.16, exp(-od));
   }`;
 // (until the first shadow map is drawn: a texel at the far plane, so everything reads as lit)
 const LIT = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); LIT.needsUpdate = true; ATMO.tShadow.value = LIT;
@@ -97,12 +99,6 @@ export class AtmospherePass extends Pass {
         uniform vec3 gTint, gShadow;
         float h12(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h12(i), h12(i + vec2(1, 0)), f.x), mix(h12(i + vec2(0, 1)), h12(i + vec2(1, 1)), f.x), f.y); }
-        // the same, softened: two looks side by side across the light, further apart the higher the crown (a crown's shade
-        // blurs with the distance it falls), so the pools of sun on the floor have soft edges
-        float crownLitSoft(vec3 p) { vec2 sl = lightDir.xz / max(lightDir.y, 0.2), side = normalize(vec2(-lightDir.z, lightDir.x) + 1e-4); float k = 0.0;
-          for (int i = 0; i < 2; i++) { vec2 o = side * (float(i) * 2.0 - 1.0);
-            k += smoothstep(-1.0, 1.0, p.y + 3.0 - coverTop(uCanopy, p.xz + sl * 3.0 + o * 0.35)) * smoothstep(-1.5, 1.5, p.y + 9.0 - coverTop(uCanopy, p.xz + sl * 9.0 + o * 0.7)) * smoothstep(-2.0, 2.0, p.y + 18.0 - coverTop(uCanopy, p.xz + sl * 18.0 + o * 1.2)); }
-          return k * 0.5; }
         // the woods' haze spread back over the screen: nine looks round the pixel in the half-sized haze, each counted as
         // much as it lies at the same depth (so a trunk's edge keeps its own haze, not the air's behind it); their varied
         // starting spots average out into a smooth veil
@@ -128,17 +124,13 @@ export class AtmospherePass extends Pass {
             // cloud shadows: soft patches of shade drifting across the land with the wind
             if (cloudK > 0.001) { vec2 q = (P.xz + cloudOff) * 0.0035; float n = vn(q) * 0.65 + vn(q * 2.3 + 7.1) * 0.35;
               col.rgb *= 1.0 - cloudK * smoothstep(cloudCover, cloudCover + 0.18, n); }
-            // the crowns' shade and flecks of sun on the forest floor: the shadow map holds only the trees' light stand-ins,
-            // so the crowns' own shade is read from the canopy map (what the light passes under on its way down). Under
-            // it the floor dims; where the light gets through it glows a little warmer, so the floor reads as pools of sun
-            // and shade; and through the leaves' little holes (a pattern fixed in the light's own space, so it lies still
-            // on everything) small coins of light fall even into the shade.
-            if (fleckK > 0.001 && vWoods > 0.01 && dist < 40.0) {
-              float fade = fleckK * vWoods * (1.0 - smoothstep(26.0, 40.0, dist)), sm = sunLit(P + lightDir * 0.12), cr = crownLitSoft(P);
-              vec4 sc = shadowMat * vec4(P, 1.0); vec2 lq = sc.xy / sc.w * 100.0;
-              float coins = smoothstep(0.7, 0.84, vn(lq) * 0.6 + vn(lq * 2.7 + 3.1) * 0.4) * (1.0 - cr), lit = sm * max(cr, coins);
-              col.rgb *= mix(1.0, 0.42, sm * (1.0 - max(cr, coins)) * fade);
-              col.rgb *= 1.0 + lit * fade * 0.3 * normalize(lightCol + 1e-4) * 1.7;
+            // the sun on the forest floor: where it gets through the leaves (the real shadow map, fixed in the world) it
+            // glows a little warmer and the shade beside it is a little deeper, so the floor under the crowns reads as pools
+            // of sun in the shade
+            if (fleckK > 0.001 && vWoods > 0.01 && dist < 36.0) {
+              vec3 fn = normalize(cross(dFdx(P), dFdy(P)));   // (only the ground: the hero and the trunks take the sun as it falls)
+              float k = fleckK * vWoods * (1.0 - smoothstep(24.0, 36.0, dist)) * smoothstep(0.6, 0.85, abs(fn.y)), lit = sunLit(P + lightDir * 0.12);
+              col.rgb *= (1.0 - 0.22 * k * (1.0 - lit)) * (1.0 + lit * k * 0.45 * normalize(lightCol + 1e-4) * 1.7);
             }
             // mist: density falling off with height above the valley floor, averaged along the ray from the camera's height
             // to the point's (the exact integral of an exponential), so it pools in hollows and thins up on the hills
@@ -220,11 +212,13 @@ export function updateAtmosphere(camera, o) {
   ATMO.mzCol.value.copy(o.fogCol).lerp(o.sunCol, 0.08 * o.day);
   ATMO.mistAmt.value = o.mist; ATMO.mistBase.value = o.ground - 6; ATMO.mistDen.value = o.mistDen;
   ATMO.hazeCol.value.copy(o.sunCol).multiplyScalar(0.35 * o.sunK); ATMO.hazeAmt.value = (0.25 + o.dusk * 0.9) * o.day;
-  // the woods' haze: thick in the low morning and evening sun, thinner at noon, thicker still in rain or fog; at night a
+  // the woods' haze: much the same through the day (the beams want it at noon too), thicker in rain or fog; at night a
   // thin blue air the moon lights. Unlit it takes the fog's colour, a little warmed by the sun by day (it's lit from all
   // round by the light coming through the leaves), deep blue by night.
   const high = Math.max(0, Math.min(1, (o.sunDir.y - 0.25) / 0.55)), wet = o.wetAir || 0;
-  ATMO.woodK.value = (0.035 * (1 - 0.5 * high) * o.day + 0.022 * o.night) * (1 + wet * 0.8);
+  ATMO.woodK.value = (0.026 * (1 - 0.1 * high) * o.day + 0.022 * o.night) * (1 + wet * 0.8);
+  // the beams sharpened (and brightened to make up for it) the higher the sun: a low sun's shafts are already crisp
+  const hb = Math.max(0, Math.min(1, (o.sunDir.y - 0.3) / 0.45)) * o.day; ATMO.woodBeam.value.set(1 + 2.4 * hb, 1 + 1.8 * hb);
   ATMO.woodAmb.value.copy(o.fogCol).lerp(o.sunCol, 0.35 * o.day).multiplyScalar(0.55 + 0.25 * o.day);
   if (o.player) ATMO.woodFoot.value.copy(o.player);
   ATMO.fleckK.value = o.day * (1 - o.overcast * 0.85);

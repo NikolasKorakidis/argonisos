@@ -14,7 +14,7 @@ export const TOPICS = {
   intro: [
     { title: 'The Trial', body: 'You wake on Nisos because Zeus wills it. This island is your trial: survive it, grow strong on it, and bring down the beasts that rule its lands.<br><br>I am the Owl. I will find you whenever there is something you should know.' },
     { title: 'Everything Teaches', body: `Whatever you pick up shows you what it can become. Fallen branches give you wood; wood and stone make a club, a dagger, a hammer.<br><br>Press ${K('C')} to see what you can make, ${K('Tab')} for your pack, ${K('M')} for your map. An abandoned house is marked on it. Somewhere out in the meadows stands Zeus's temple: find it.` },
-    { title: 'How You Move', body: `${K('WASD')} move · ${K('Shift')} sprint · ${K('Space')} jump · ${K('Ctrl')} sneak<br>${K('LMB')} strike · ${K('RMB')} block or draw the bow · ${K('E')} use · ${K('1')}–${K('8')} hotbar<br><br>Hunt with care: a beast that hasn't noticed you takes a sneak attack hard.` },
+    { title: 'How You Move', body: `${K('WASD')} move · ${K('Shift')} sprint · ${K('Space')} jump · ${K('Ctrl')} sneak<br>${K('LMB')} strike · ${K('RMB')} block or draw the bow · ${K('Q')} kick · ${K('E')} use · ${K('1')}–${K('8')} hotbar<br>${K('Z')} sit down (by a fire it rests you) · ${K('G')} wave · ${K('H')} cheer<br><br>Hunt with care: a beast that hasn't noticed you takes a sneak attack hard.` },
   ],
   night: [{ title: 'Night Is Coming', body: `Night and rain make you cold, and the cold slows your healing. Light a <b>campfire</b> (10 stone, 10 wood) and keep it fed with wood; rain drowns a fire that has no roof over it.<br><br>Make a <b>hammer</b> and hold ${K('RMB')} to build: walls, a roof, a <b>bed</b>. Sleep in it under a roof and the night passes, and you wake there if you fall.` }],
   house: [{ title: 'The Abandoned House', body: 'Someone lived here before you, and left in a hurry. Search the old chest: <b>rope</b> is precious early on, and you will need it for an axe and for building.<br><br>When it runs out, twist rope from the <b>fiber bushes</b> that grow in the meadows, or make it from <b>leather</b> at a workbench. Leather comes from the animals of the meadows.' }],
@@ -115,7 +115,7 @@ export class Owl {
   close() {
     this.open = false; this.box.classList.add('hidden'); input.uiOpen = this.g.hud.open || this.g.map?.open || false; if (!input.uiOpen) lock();
     for (const t of this.talked || []) { if (!this.st.done.includes(t)) this.st.done.push(t); this.st.queue.splice(this.st.queue.indexOf(t), 1); }
-    this.st.met = true; this.leave();
+    this.st.met = true; this.leave(); this.g.acts?.wave();   // (a wave as she flies off)
   }
   draw() { const c = this.cards[this.card]; this.box.querySelector('h3').textContent = c.title; this.box.querySelector('p').innerHTML = c.body; this.box.querySelector('.dots').innerHTML = this.cards.map((_, i) => `<i class="${i === this.card ? 'on' : ''}"></i>`).join(''); this.box.querySelector('#owlNext').textContent = this.card === this.cards.length - 1 ? 'Farewell' : 'Next'; }
   // is she roughly where the hero is facing (then E talks to her before anything else)
