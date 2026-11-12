@@ -152,7 +152,7 @@ function loop() {
   if (hit('F9') && !busy) game.setFly(!S.fly);
   if (S.debug && hit('KeyT')) S.timeScale = S.timeScale === 1 ? 60 : 1;
   if (!busy) game.update?.(dt, t);
-  player.frozen = S.fly || hud.open || busy; if (!game.paused) player.update(dt);
+  player.frozen = S.fly || hud.open || busy; player.hero.still = S.still; if (!game.paused) player.update(dt);
   if (S.fly) updateFly(dt);
   if (!busy) { updateConditions(); player.stats.update(dt); updateRegion(); }
   const focus = S.fly ? camera.position : player.pos;

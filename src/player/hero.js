@@ -550,6 +550,7 @@ export class Hero {
   // (where the body stands), for setting the feet on the ground }
   update(dt, st) {
     if (!this.mixer) return;
+    if (this.still) dt = 0;   // (screenshot tests, S.still: the breathing idle and its fidgets hold one pose, as the wind and water do)
     this.wrap.position.y = st.baseY ?? 0;
     const C = CLIPS, lib = move('walk').ready && move('breathe').ready, B = this.bones, speed = st.speed, e = (r) => Math.min(1, dt * r);
     // ---- the blends, eased: crouched, in the water, the guard, the block, falling (beyond a jump's arc), sprinting
