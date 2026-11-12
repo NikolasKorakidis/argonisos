@@ -55,13 +55,19 @@ export class Trial {
     }
     return null;
   }
+  // Kneel at the altar and pray a few seconds (game/acts.js); stand up first and Zeus doesn't hear you
   pray(u) {
     const g = this.g; if (this.st.prayDay === g.S.day) { g.hud.toast('Zeus has already blessed you today. Come back tomorrow.'); return; }
+    if (g.acts?.pose?.kind === 'pray') return;
+    if (!g.acts?.pray(u.at, { onDone: () => this.bless(u), onCancel: () => g.hud.toast('You rose before Zeus answered. Kneel again (<span class="kbd">E</span>) and stay still to pray.') })) this.bless(u);
+  }
+  bless(u) {
+    const g = this.g; if (this.st.prayDay === g.S.day) return;
     this.st.prayDay = g.S.day; g.player.stats.add('zeusBlessing'); g.player.stats.heal(99);
     burst(u.at.clone().setY(u.at.y + 1.8), { color: 0xffe08a, n: 40, speed: 3, size: 0.07, grav: -3, life: 1.6 }); g.flashSky(0.35); addShake(0.3); g.sound?.('thunder');
     g.hud.region("Zeus's Blessing", 'Your strength grows for a while');
   }
-  loot(u) { const g = this.g; this.st.looted.push(u.id); for (const [id, n] of u.items) g.give(id, n); if (u.lid) u.lid.rotation.x = -1.2; g.sound?.('chest'); }
+  loot(u) { const g = this.g; g.acts?.reach(); this.st.looted.push(u.id); for (const [id, n] of u.items) g.give(id, n); if (u.lid) u.lid.rotation.x = -1.2; g.sound?.('chest'); }
   clue(u, key, item) {
     const g = this.g; this.st[key].push(u.id); u.taken = true; g.give(item, 1); burst(u.at.clone().setY(u.at.y + 1.4), { color: 0xffe7a0, n: 16, speed: 1.4, grav: -1.5 });
     const n = this.st[key].length, boss = key === 'scraps' ? 'labyrinth' : 'chimera';
@@ -89,7 +95,7 @@ export class Trial {
   }
   summon(u) {
     const g = this.g, T = TRIBUTE[u.boss]; if (!g.inv.has(T)) { g.hud.toast('You don\'t have the tribute yet'); return; }
-    g.inv.takeMats(T); g.sound?.('summon'); setWeather('thunder'); g.flashSky(0.5); addShake(0.6);
+    g.inv.takeMats(T); g.sound?.('summon'); g.acts?.kneel(u.center, 2.8);   // (kneeling while the beast is called) setWeather('thunder'); g.flashSky(0.5); addShake(0.6);
     dust(u.center.clone().setY(u.center.y + 1), 40, 0x6a5a48, 0.9);
     g.hud.region(u.boss === 'minotaur' ? 'The Minotaur' : 'The Chimera', u.boss === 'minotaur' ? 'Lord of the Labyrinth' : 'The beast of three natures');
     setTimeout(() => {
@@ -104,11 +110,12 @@ export class Trial {
     const g = this.g; this.st.down[this.bossKind] = true; this.boss = null; this.bar.classList.add('hidden'); setWeather(null);
     for (const k of g.creatures.list) if (k.summoned && !k.dead) g.creatures.hurt(k, [[9999, 'force']], null);
     g.hud.region(`${BOSS_NAME[this.bossKind][0].toUpperCase()}${BOSS_NAME[this.bossKind].slice(1)} has fallen`, 'Take its head to Zeus at the Ancient Temple');
+    g.acts?.later.push({ t: 1.2, fn: () => g.acts.cheer() });   // (arms raised in triumph)
     g.map?.reveal(SITES.temple);
   }
   offer(u) {
     const g = this.g, head = u.boss + 'Head'; if (!g.inv.count(head)) { g.hud.toast(`Only the head of ${BOSS_NAME[u.boss]} belongs here`); return; }
-    g.inv.take(head, 1); this.st.offered[u.boss] = true; this.mountHead(u);
+    g.inv.take(head, 1); this.st.offered[u.boss] = true; this.mountHead(u); g.acts?.kneel(u.at, 2.6);   // (kneeling as Zeus answers)
     const tier = u.boss === 'minotaur' ? 1 : 2; g.S.tier = Math.max(g.S.tier || 0, tier);
     this.st.power = u.boss === 'minotaur' ? 'roar' : 'claw'; this.st.powerCd = 0;
     g.flashSky(0.6); addShake(0.6); burst(u.at.clone().setY(u.at.y + 2), { color: 0xffe08a, n: 60, speed: 4, size: 0.08, grav: -2, life: 2 }); g.sound?.('thunder');

@@ -7,6 +7,7 @@ import { Crafting } from './crafting.js';
 import { Build } from '../build/build.js';
 import { Creatures } from '../creatures/creatures.js';
 import { Combat } from './combat.js';
+import { Acts } from './acts.js';
 import { Structures } from '../world/structures.js';
 import { Trial } from './trial.js';
 import { SITES } from '../world/sites.js';
@@ -22,6 +23,7 @@ import { WEATHER, flashSky } from '../world/weather.js';
 import { heightAt, biomeWeights, isRock } from '../world/gen.js';
 import { groundAt } from '../world/groundcut.js';
 import { heldModel, isLeftHanded } from '../player/held.js';
+import { strikeKind } from '../player/hero.js';
 import { updateFx } from '../render/fx.js';
 import { askLight, updateLights } from '../render/lights.js';
 import { camera } from '../render/core.js';
@@ -44,6 +46,7 @@ export function installGame(g) {
   g.occlusion = new Occlusion(g);
   g.ITEMS = ITEMS; g.graves = new Graves(g); { const od = g.onDeath; g.onDeath = () => { g.graves.fall(); od?.(); }; }
   g.combat = new Combat(g);
+  g.acts = new Acts(g);
   g.pickups.landAt = (x, z, fy) => { const gy = Math.max(groundAt(x, z), -1.2); return fy === undefined ? gy : Math.max(gy, g.build.floorAt(x, z, fy + 0.3)); };
   player.floorAt = (p) => Math.max(g.build.floorAt(p.x, p.z, p.y), g.structures.floorAt(p.x, p.z, p.y));
   player.camBlock = (a, b) => g.build.rayBlock(a, b);
@@ -65,7 +68,11 @@ export function installGame(g) {
     const left = inv.add(id, n, extra); if (n - left > 0) hud.pickup(id, n - left);
     if (left > 0) { g.pickups.drop(id, left, player.pos.x + (Math.random() - 0.5), player.pos.z + (Math.random() - 0.5), extra, player.pos.y); hud.toast('Your pack is full'); }
   };
-  hud.onDrop = (i) => { const s = inv.slots[i]; if (!s) return; if (s.worn) unequip(i); const d = inv.drop(i); const f = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)); g.pickups.drop(d.id, d.n, player.pos.x + f.x * 1.2, player.pos.z + f.z * 1.2, d.dur ? { dur: d.dur } : undefined, player.pos.y); };
+  // dropping something out of the pack: tossed ahead of you (acts.toss), leaving the pack as it leaves your hand
+  hud.onDrop = (i) => { const s = inv.slots[i]; if (!s) return; g.acts.toss((far) => {
+    const j = inv.slots.indexOf(s); if (j < 0) return;   // (gone meanwhile: into a chest, a grave)
+    if (s.worn) unequip(j); const d = inv.drop(j), f = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw));
+    g.pickups.drop(d.id, d.n, player.pos.x + f.x * far, player.pos.z + f.z * far, d.dur ? { dur: d.dur } : undefined, player.pos.y); }); };
 
   // ---- equipment: one item in the right hand, a shield or bow in the left; armour in its own slots
   const worn = (slot) => inv.slots.findIndex((s) => s?.worn === slot);
@@ -126,7 +133,7 @@ export function installGame(g) {
   }
   g.interact = () => {
     const t = target(); if (!t) return;
-    if (t.kind === 'pickup') { const [id, n, extra] = g.pickups.take(t.p); g.give(id, n, extra?.dur ? { dur: extra.dur } : undefined); g.sound('pick'); return; }
+    if (t.kind === 'pickup') { const [id, n, extra] = g.pickups.take(t.p); g.give(id, n, extra?.dur ? { dur: extra.dur } : undefined); g.sound('pick'); g.acts.reach(); return; }
     if (t.kind === 'fruit') { g.harvest.pick(t.t); return; }
     t.use?.();
   };
@@ -136,7 +143,7 @@ export function installGame(g) {
   const olympos = (P) => { const pk = SITES.peak; if (!pk) return; const d = Math.hypot(P.x - pk.x, P.z - pk.z);
     if (d < 40 && P.y > pk.y - 25 && !g.atPeak) { g.atPeak = true; hud.region('Olympos', 'The seat of Zeus. All Argonisos lies below you'); sound('reveal'); } else if (d > 140) g.atPeak = false; };
   g.update = (dt) => {
-    g.altUsed = null;
+    g.altUsed = null; g.acts.update(dt);
     g.owl.update(dt); g.guide.update(dt); g.buildMenu.update();
     olympos(player.pos);
     if (g.owl.open) { hud.prompt(null); return; }
@@ -159,9 +166,9 @@ export function installGame(g) {
       const d = g.held();
       if (d?.tool === 'build' && g.build?.active) continue;
       if (g.bow()) { g.combat?.bowClick?.(); continue; }
-      player.strike(d ? 'tool' : 'punch', 5);
+      player.strike(strikeKind(d), 5);
     }
-    if (input.lmb && !input.clicks.length && player.swing <= 0 && !g.bow() && !(g.held()?.tool === 'build' && g.build?.active)) player.strike(g.held() ? 'tool' : 'punch', 5);   // hold to keep swinging
+    if (input.lmb && !input.clicks.length && player.swing <= 0 && !g.bow() && !(g.held()?.tool === 'build' && g.build?.active)) player.strike(strikeKind(g.held()), 5);   // hold to keep swinging
     g.pickups.update(player.pos, g.S.day);
     g.harvest.update(dt);
     g.build.update(dt);

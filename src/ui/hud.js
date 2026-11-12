@@ -21,6 +21,7 @@ export class HUD {
       <div id="region"><div class="rname"></div><div class="rsub"></div></div>
       <div id="cross"></div>
       <div id="prompt" class="hidden"></div>
+      <div id="act" class="hidden"><i></i><span></span></div>
       <div id="stam" class="full"><div class="vbar"><i class="ghost"></i><i class="val"></i></div></div>
       <div id="vitals"><div id="foods"></div><div class="vbar" id="hpBar"><span>${icon('health')}</span><i class="ghost"></i><i class="val"></i><u></u></div></div>`;
     document.body.appendChild(hud);
@@ -55,6 +56,14 @@ export class HUD {
     const p = $('prompt'), html = key ? `<kbd>${key}</kbd><span>${text}</span>${sub ? `<small>${sub}</small>` : ''}${alt ? `<i class="sep"></i><kbd>${alt.key}</kbd><span>${alt.label}</span>` : ''}` : '';
     if (html === this.last.prompt) return; this.last.prompt = html;
     p.classList.toggle('hidden', !key); p.innerHTML = html;
+  }
+  // Something under way that takes a few seconds (eating, praying): a ring filling round its icon, and what it is.
+  // k: 0..1, or null to hide it
+  progress(k, label, ic) {
+    const e = $('act');
+    if (k === null || k === undefined) { if (this.last.act) { e.classList.add('hidden'); this.last.act = null; } return; }
+    const key = label + '|' + ic; if (key !== this.last.act) { this.last.act = key; e.classList.remove('hidden'); e.querySelector('i').innerHTML = icon(ic); e.querySelector('span').textContent = label; }
+    e.style.setProperty('--k', (Math.min(1, Math.max(0, k)) * 100).toFixed(1) + '%');
   }
   // A number that pops off a creature when you hit it
   damageNumber(world, n) {

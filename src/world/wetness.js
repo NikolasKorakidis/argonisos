@@ -41,12 +41,14 @@ export function updateShelter(renderer, scene, pos, roots, dt, raining = true, f
   const r = roots();
   for (const o of r.solid) o?.traverse((m) => { if (m.isMesh) m.layers.enable(LAYER); });
   for (const o of r.canopy) o?.traverse((m) => { if (m.isMesh) m.layers.enable(CANOPY); });
-  cam.position.set(pos.x, pos.y + LIFT, pos.z); cam.lookAt(pos.x, pos.y, pos.z); cam.updateMatrixWorld();
+  // (centred on the texel grid, so what it holds never shifts by part of a texel as it follows you)
+  const T = SIZE / RES, cx = Math.round(pos.x / T) * T, cz = Math.round(pos.z / T) * T;
+  cam.position.set(cx, pos.y + LIFT, cz); cam.lookAt(cx, pos.y, cz); cam.updateMatrixWorld();
   const prev = { rt: renderer.getRenderTarget(), auto: renderer.shadowMap.autoUpdate, over: scene.overrideMaterial, bg: scene.background };
   renderer.shadowMap.autoUpdate = false; scene.overrideMaterial = depthMat; scene.background = null;
   for (const [t, layer] of [[solid, LAYER], [canopy, CANOPY]]) { cam.layers.set(layer); renderer.setRenderTarget(t); renderer.clear(); renderer.render(scene, cam); }
   renderer.setRenderTarget(prev.rt); renderer.shadowMap.autoUpdate = prev.auto; scene.overrideMaterial = prev.over; scene.background = prev.bg;
-  WET_U.uShelterBox.value.set(pos.x - SIZE / 2, pos.z - SIZE / 2, SIZE, cam.position.y);
+  WET_U.uShelterBox.value.set(cx - SIZE / 2, cz - SIZE / 2, SIZE, cam.position.y);
 }
 
 // ---- Shader code

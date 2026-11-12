@@ -42,7 +42,8 @@ export default {
       ${guide(12)}`);
     await t.step('13 a bed sets the spawn point', `AG.S.bed = { x: window._wb.x, z: window._wb.z }; ${guide(13)}`);
     await t.step('14 a bow and arrows at the roofed bench', `P.spawn(window._wb.x - 2, window._wb.z); g.give('wood', 20); g.give('rope', 6); g.give('leather', 2); g.give('feather', 2); C.discover(true); C.make('crudeBow'); C.make('crudeArrowx10'); g.guide.update(1); return g.guide.cur >= 14 || 'bow ' + inv.count('crudeBow') + ' arrows ' + inv.count('crudeArrow') + ': ' + C.blocker(C.list().find((r) => r.key === 'crudeBow'));`);
-    await t.step('15 pray at the temple altar', `${at('altar')} ${guide(15)}`);
+    // (praying takes a few seconds on your knees before Zeus answers: game/acts.js)
+    await t.step('15 pray at the temple altar', `${at('altar')} await new Promise((r) => setTimeout(r, 4500)); ${guide(15)}`);
     await t.step('16 copy the marks of three olives', `for (let i = 0; i < 3; i++) { ${at('scrap', " && !g.trial.st.scraps.includes(u.id)")} } g.guide.update(1); return g.guide.cur >= 16 || 'copied ' + g.trial.st.scraps.join(',');`);
     await t.step('17 the Minotaur’s tribute', `g.give('deerHide', 5); g.give('olive', 10); ${guide(17)}`);
     await t.step('18 call the Minotaur at the Labyrinth', `${at('summon', " && u.boss === 'minotaur'")} return true;`);

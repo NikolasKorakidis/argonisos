@@ -4,6 +4,7 @@
     "src/main.js",
     "src/world/terrain-worker.js",
     "src/dev/browser.js",
+    "src/dev/anim/main.js",
     "tests/suites/*.mjs",
     "tests/bot/*.{js,mjs}",
     "tools/*.mjs",

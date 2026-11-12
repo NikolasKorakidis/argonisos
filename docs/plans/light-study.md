@@ -99,12 +99,14 @@ documentation for the effects it uses. Each trait says which parts are sourced a
 
 ## What we built from it
 
-- **The woods' haze and shafts** (`atmosphere.js`): a 14-step march to 38 m through the sun's shadow map at half
-  resolution, jittered per pixel by a fixed pattern (still pictures stay still) and smoothed by a depth-aware 3×3 upsample. It is gated by how many crowns stand over and round the player
-  (the canopy map, read in the vertex shader), so meadows stay clear. The light scatters mostly forwards, so the shafts
-  blaze towards the sun and still show across it.
-- **Flecks of sun on the forest floor:** sunlit ground under the crowns brightens warm, and small coins of light (a
-  pattern fixed in the light's own space) fall into the shade.
+- **One light source for the woods:** within 20 m of the player the trees cast into the sun's shadow map with their own
+  leaf cards (`vegetation.js`); further out their light stand-ins cast. The shadow box steps by whole texels as it follows
+  you, so the dapple on the floor and on the hero, the floor's warm pools of sun and the shafts in the haze all come from
+  one shadow that stays put in the world.
+- **The woods' haze and shafts** (`atmosphere.js`): a 24-step march to 38 m through that shadow map at half resolution,
+  jittered per pixel by a fixed pattern (still pictures stay still) and smoothed by a depth-aware 3×3 upsample. It is
+  gated by how many crowns stand over and round the player (the canopy map, read in the vertex shader), so meadows stay
+  clear. The light scatters mostly forwards, so the beams blaze towards a low sun and still show across it at noon.
 - **Night** (`sky.js`, `weather.js`): bluer moonlight, ambient and fog, slightly higher night exposure, and a forest fog
   that turns navy instead of black.
 - **Fireflies** (`fireflies.js`, fed by `ambient.js`).

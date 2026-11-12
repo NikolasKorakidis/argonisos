@@ -81,10 +81,7 @@ function respawn() {
 hud.onUse = (i) => useSlot(i);
 function useSlot(i) {
   const s = inv.slots[i]; if (!s) return; const d = ITEMS[s.id];
-  if (d.type === 'food') {
-    const why = player.stats.eat(s.id, d.food); if (why) { hud.toast(`${d.name}: ${why}`); return; }
-    inv.take(s.id, 1); hud.toast(d.food.health < 0 ? `That ${d.name.toLowerCase()} made you sick` : `Ate ${d.name.toLowerCase()}`); return;
-  }
+  if (d.type === 'food') { game.acts.eat(i); return; }   // (it takes a moment: game/acts.js)
   if (['tool', 'weapon', 'shield', 'armor'].includes(d.type)) game.equip?.(i);
 }
 

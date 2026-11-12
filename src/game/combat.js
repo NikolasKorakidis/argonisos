@@ -46,6 +46,7 @@ export class Combat {
   // ---- a creature's blow lands on the player
   hitPlayer(c, [lo, hi, kind]) {
     const g = this.g, P = g.player, S = P.stats; let dmg = rr(lo, hi) * c.dmgK;
+    if (P.dodging) return;   // (rolled clear: player.js)
     // blocking: facing the attacker with a weapon or shield raised
     const facing = Math.abs(angDiff(Math.atan2(c.pos.x - P.pos.x, c.pos.z - P.pos.z), P.yaw)) < 1.2;
     if (P.blocking && facing) {
@@ -60,6 +61,8 @@ export class Combat {
     if (dmg <= 0.05) return;
     const final = armorReduce(dmg, g.armor?.() ?? 0);
     S.damage(final); g.hud.hurt(final / Math.max(10, S.maxHealth) * 2); addShake(clamp(final / 20, 0.2, 0.9)); g.sound?.('hurt');
+    if (!S.dead) P.hero.hurt(final, S.maxHealth);   // (a flinch, or a stagger back from a big blow)
+    g.acts?.hurt(final);   // (a hard enough blow breaks off eating, praying, sitting)
     if (c.T.heavy) { const d = P.pos.clone().sub(c.pos).setY(0).normalize(); P.hv.addScaledVector(d, 9); P.vel.y = 4; P.onGround = false; }
     // gear wears a little when you're hit
     for (const s of g.inv.slots) if (s?.worn && ITEMS[s.id].armor && s.dur !== undefined) s.dur = Math.max(0, s.dur - 0.5);
@@ -127,8 +130,10 @@ export class Combat {
   update(dt) {
     const g = this.g, P = g.player;
     // blocking with RMB (not with the bow or the hammer out)
-    const canBlock = !g.bow() && !g.equippedTool('build') && (g.held() || g.inv.slots.some((s) => s?.worn === 'left'));
+    const canBlock = !g.bow() && !g.equippedTool('build') && !P.seat && (g.held() || g.inv.slots.some((s) => s?.worn === 'left'));
     const was = P.blocking; P.blocking = canBlock && input.rmb && !input.uiOpen && !P.dead && P.swing <= 0 && !P.swimming;
+    // a one-handed weapon and a shield: the hero stands on guard (hero.js)
+    const r = g.held(); P.guard = !!r && r.type === 'weapon' && r.hands === 1 && g.inv.slots.some((s) => s?.worn === 'left' && ITEMS[s.id].type === 'shield');
     this.blockT = P.blocking ? (was ? this.blockT + dt : 0) : 0;
     this.updateBow(dt);
     // arrows: fly flat for a moment, then drop; stick where they land

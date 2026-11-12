@@ -43,12 +43,21 @@ export class Stats {
   static foodK(f) { const r = clamp(f.t / f.def.duration, 0, 1); return Math.pow(r, 0.3); }
   get maxHealth() { let h = BASE.health; for (const f of this.food) h += f.def.health * Stats.foodK(f); if (this.has('zeusBlessing')) h += 30; return h; }
   get maxStamina() { let s = BASE.stamina; for (const f of this.food) s += f.def.stamina * Stats.foodK(f); return s; }
+  // Why something can't be eaten now (null if it can): the same food still more than half fresh, or three foods that are.
+  // Spoiled or raw food can always be eaten (it hurts)
+  canEat(id, def) {
+    if (def.health < 0 || def.stamina < 0) return null;
+    const same = this.food.find((f) => f.id === id);
+    if (same) return same.t > def.duration * 0.5 ? 'not hungry for that yet' : null;
+    return this.food.length >= 3 && this.food.every((f) => Stats.foodK(f) > 0.5) ? 'too full' : null;
+  }
   // Eat something. Spoiled or raw food hurts instead. Returns a reason it couldn't be eaten, or null
   eat(id, def) {
+    const why = this.canEat(id, def); if (why) return why;
     if (def.health < 0 || def.stamina < 0) { this.damage(-Math.min(0, def.health)); this.stamina = Math.max(0, this.stamina + Math.min(0, def.stamina)); return null; }
     const same = this.food.find((f) => f.id === id);
-    if (same) { if (same.t > def.duration * 0.5) return 'not hungry for that yet'; same.t = def.duration; return null; }
-    if (this.food.length >= 3) { const low = this.food.reduce((a, b) => (Stats.foodK(b) < Stats.foodK(a) ? b : a)); if (Stats.foodK(low) > 0.5) return 'too full'; this.food.splice(this.food.indexOf(low), 1); }
+    if (same) { same.t = def.duration; return null; }
+    if (this.food.length >= 3) { const low = this.food.reduce((a, b) => (Stats.foodK(b) < Stats.foodK(a) ? b : a)); this.food.splice(this.food.indexOf(low), 1); }
     this.food.push({ id, def, t: def.duration });
     this.health = Math.min(this.health + def.health * 0.5, this.maxHealth); this.stamina = Math.min(this.stamina + def.stamina * 0.5, this.maxStamina);
     if (def.effect) this.add(def.effect.cond, def.effect.time);
