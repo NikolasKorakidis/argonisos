@@ -19,11 +19,23 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      # The licensed pack files (models, sounds, interface art) live in the team's private repo, not this public one
+      # (tools/assets/backup.mjs keeps it up to date). A read-only deploy key on that repo, kept here as the secret
+      # ASSETS_DEPLOY_KEY, fetches only its assets/ folder; its catalogue notes stay behind.
+      - uses: actions/checkout@v4
+        with:
+          repository: NikolasKorakidis/argonisos-assets
+          ssh-key: ${{ secrets.ASSETS_DEPLOY_KEY }}
+          path: _assets
+          sparse-checkout: assets
+          sparse-checkout-cone-mode: true
       - uses: actions/configure-pages@v5
       - name: Stage site (skip source-only folders)
         run: |
           mkdir _site
-          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' ./ _site/
+          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' --exclude '_assets' --exclude 'concept' ./ _site/
+          rsync -a _assets/assets/ _site/assets/
+          test -f _site/assets/models/pack/hero.glb   # (without the packs the game falls back to its carved look: don't publish that by mistake)
           touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v3
         with:
