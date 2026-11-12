@@ -6,11 +6,14 @@ import * as THREE from 'three';
 import { propGeo, propMat, leafMat, TREE_BUILDERS, mergeParts, rr, isLow as PROP_LOW, A2C_FRAG } from './trees.js';
 import { SPECIES, STRIDE, CELL } from './flora.js';
 import { MIST_R0, MIST_R1 } from './reach.js';
+import { heightAt } from './gen.js';
 import { renderer, sun, hemi } from '../render/core.js';
 import { PRIORITY } from './pool.js';
 
 export const NEAR_R = 75;                     // full-detail radius
-export const MID_R = 260;                     // light meshes out to here, impostors beyond
+export const MID_R = 180;                     // light meshes out to here, impostors beyond
+const SHADE_LAYER = 6; sun.shadow.camera.layers.enable(SHADE_LAYER);   // (the trees' shadow stand-ins: the sun's shadow camera sees them, no other camera does)
+const SPLIT = 20;                             // (a pack tree's own detail out to here; its thinned version beyond, to NEAR_R)
 const NEAR_KEEP = NEAR_R + CELL * 1.5, FAR = 256, FAR_R = 600;
 // Behind the player's mist (tester feedback, 15 and 16 Oct; see atmosphere.js and reach.js) the distant land is drawn
 // with much less: from MIST_R0 out to MIST_R1 things drop away one by one (each at its own distance, so there's no ring
@@ -187,8 +190,13 @@ impMat.customProgramCacheKey = () => 'vegImpostor';
 const quad = new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0);
 const _pm = new THREE.Matrix4(), _fr = new THREE.Frustum(), _sp = new THREE.Sphere();
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
+// A tree stands a little into the ground, deeper on a slope, so its spreading roots don't stand clear of the land on the
+// downhill side (the layout's height is the ground at the trunk; drawing only)
+const ROOTED = SPECIES.map((s) => s.res === 'tree' && s.name !== 'titan');
 function matrixOf(items, i, hidden) {
-  const o = i * STRIDE; _e.set(0, items[o + 5], 0); _q.setFromEuler(_e); _p.set(items[o + 2], items[o + 3], items[o + 4]); _s.setScalar(hidden ? 0 : items[o + 6]);
+  const o = i * STRIDE, x = items[o + 2], z = items[o + 4], sc = items[o + 6]; let y = items[o + 3];
+  if (ROOTED[items[o]]) { const h = heightAt(x, z), g = Math.hypot(heightAt(x + 1, z) - h, heightAt(x, z + 1) - h); y -= sc * Math.min(1.3, 0.12 + g * 1.2); }
+  _e.set(0, items[o + 5], 0); _q.setFromEuler(_e); _p.set(x, y, z); _s.setScalar(hidden ? 0 : sc);
   return _m.compose(_p, _q, _s);
 }
 
@@ -292,11 +300,17 @@ export class Vegetation {
       if (!b || b.cap < n) {
         if (b) for (const m of b.meshes) { this.group.remove(m); m.dispose(); }
         const P = this.geoFor(sp, v), cap = Math.ceil(n * 1.4) + 16, sh = !SPECIES[sp].noShadow;
-        const trunk = new THREE.InstancedMesh(P.geo, cut(propMat, false), cap), meshes = [trunk];
-        if (P.cards) { const lm = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, false), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
+        const pair = (geo, cards) => { const t = new THREE.InstancedMesh(geo, cut(propMat, false), cap), ms = [t];
+          if (cards) { const lm = new THREE.InstancedMesh(cards, cut(P.cardMat || leafMat, false), cap); lm.instanceMatrix = t.instanceMatrix; ms.push(lm); } return ms; };
+        // (a pack tree has a lighter version for the band's further half, from SPLIT out: its leaves thinned)
+        const near = pair(P.geo, P.cards), far = P.geo2 ? pair(P.geo2, P.cards2) : [];
+        // (and its shadow cast by its light far version, seen only by the sun's shadow camera: a pack tree's leaves are
+        // most of its triangles, and drawing them all twice, for the shadows too, cost more than the woods could spare)
+        const proxy = (ms) => { if (!sh || !P.geo2 || !P.lo) return []; const ps = pair(P.lo, P.loCards); for (const q of ps) { q.instanceMatrix = ms[0].instanceMatrix; q.layers.set(SHADE_LAYER); q.userData.shade = true; } return ps; };
+        const nearShade = proxy(near), farShade = proxy(far), meshes = [...near, ...far, ...nearShade, ...farShade];
         P.geo.computeBoundingSphere(); const bs = P.geo.boundingSphere.clone(); if (P.cards) { P.cards.computeBoundingSphere(); bs.union(P.cards.boundingSphere); }
-        b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), refs: [], slot: new Int32Array(cap), n: 0 };
-        for (const m of meshes) { m.castShadow = sh; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; m.userData.batch = b; this.group.add(m); }
+        b = { meshes, near, far, nearShade, farShade, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), refs: [], slot: new Int32Array(cap), slot2: new Int32Array(cap), n: 0 };
+        for (const m of meshes) { m.castShadow = sh && (m.userData.shade || !nearShade.length); m.receiveShadow = true; m.frustumCulled = false; m.count = 0; m.userData.batch = b; m.userData.far = far.includes(m); this.group.add(m); }
         this.batches.set(key, b);
       }
       b.n = n; b.refs = refs;
@@ -348,19 +362,21 @@ export class Vegetation {
     _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _fr.setFromProjectionMatrix(_pm);
     const nr = NEAR_R + NF, keep2 = 48 * 48;
     for (const b of this.batches.values()) {
-      const dst = b.meshes[0].instanceMatrix.array; let m = 0;
+      const dst = b.near[0].instanceMatrix.array, dst2 = b.far[0]?.instanceMatrix.array, split2 = dst2 ? SPLIT * SPLIT : Infinity; let m = 0, m2 = 0;
       for (let k = 0; k < b.n; k++) {
         const x = b.cen[k * 4], y = b.cen[k * 4 + 1], z = b.cen[k * 4 + 2], r = b.cen[k * 4 + 3], dx = x - pos.x, dz = z - pos.z, d2 = dx * dx + dz * dz;
         if (d2 > (nr + r) * (nr + r)) continue;                                            // beyond the near band: the mid band draws it
         const cell = b.refs[k * 2]; if (cell.hidden && cell.hidden.has(b.refs[k * 2 + 1])) continue;   // faded out of the way of the camera
         if (d2 > keep2) { _sp.center.set(x, y, z); _sp.radius = r; if (!_fr.intersectsSphere(_sp)) continue; }
         if (d2 > b.keep[k] * b.keep[k]) continue;                                           // (the small things drop away well before the mist)
+        if (d2 > split2) { for (let e = 0; e < 16; e++) dst2[m2 * 16 + e] = b.mats[k * 16 + e]; if (b.keep[k] < Infinity) shrink(dst2, m2, b.keep[k] - Math.sqrt(d2)); b.slot2[m2++] = k; continue; }
         for (let e = 0; e < 16; e++) dst[m * 16 + e] = b.mats[k * 16 + e];
         if (b.keep[k] < Infinity) shrink(dst, m, b.keep[k] - Math.sqrt(d2));
         b.slot[m++] = k;
       }
-      for (const mesh of b.meshes) { mesh.count = m; mesh.boundingSphere = null; }
-      b.meshes[0].instanceMatrix.needsUpdate = true;
+      for (const mesh of [...b.near, ...b.nearShade]) { mesh.count = m; mesh.boundingSphere = null; }
+      for (const mesh of [...b.far, ...b.farShade]) { mesh.count = m2; mesh.boundingSphere = null; }
+      b.near[0].instanceMatrix.needsUpdate = true; if (dst2) b.far[0].instanceMatrix.needsUpdate = true;
     }
     if (this.midDirty) this.rebuildMid();
     const lo = NEAR_R - NF, hi = MID_R + MF;
@@ -387,7 +403,7 @@ export class Vegetation {
     return top;
   }
   // which tree an instance hit by a ray belongs to: { cell, i }
-  treeAt(mesh, instanceId) { const b = mesh.userData.batch; if (!b) return null; const k = b.slot[instanceId]; return { cell: b.refs[k * 2], i: b.refs[k * 2 + 1] }; }
+  treeAt(mesh, instanceId) { const b = mesh.userData.batch; if (!b) return null; const k = (mesh.userData.far ? b.slot2 : b.slot)[instanceId]; return { cell: b.refs[k * 2], i: b.refs[k * 2 + 1] }; }
   hideTree(cell, i, on) { if (on) (cell.hidden ||= new Set()).add(i); else cell.hidden?.delete(i); }
   // One tree or rock as its own little object (for felling animations): instanced meshes of count 1 in a group
   single(sp, v) {

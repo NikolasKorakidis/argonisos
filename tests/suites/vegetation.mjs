@@ -12,7 +12,8 @@ export default {
       if (!tr) return 'no tree'; window._t = tr; P.camBlock = () => null; P.spawn(tr.x, tr.z - 3.2); P.camYaw = 0; P.camPitch = -0.05; P.camDist = 7; return true;`);
     await t.wait(600);
     // the camera sits off the hero's shoulder: shift the hero so the line from the camera passes through the trunk
-    await t.step('…(lined up so the camera looks through the trunk)', `const tr = window._t, c = AG.camera.position, x = c.x + ((tr.z - c.z) / (P.pos.z - c.z)) * (P.pos.x - c.x); P.spawn(P.pos.x + tr.x - x, P.pos.z); return true;`);
+    await t.step('…(lined up so the camera looks through the trunk)', `for (let i = 0, last = null; i < 60; i++) { const c = AG.camera.position.clone(); if (last && c.distanceTo(last) < 0.005) break; last = c; await new Promise((r) => setTimeout(r, 50)); }   // (once the camera has caught up with the jump)
+      const tr = window._t, c = AG.camera.position, x = c.x + ((tr.z - c.z) / (P.pos.z - c.z)) * (P.pos.x - c.x); P.spawn(P.pos.x + tr.x - x, P.pos.z); return true;`);
     await t.wait(1200);
     await t.step('…(hidden in its batch, a faded copy stands in)', `const e = [...g.occlusion.faded.values()].find((e) => e.kind === 'tree'); return (e && window._t.c.hidden?.has(window._t.i)) || 'faded: ' + [...g.occlusion.faded.keys()].join(',');`);
     await t.step('…turn the camera away', `P.camYaw = Math.PI; return true;`);

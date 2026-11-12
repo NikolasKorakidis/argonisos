@@ -106,10 +106,10 @@ function posed(m, pose) {
 }
 // the part of the body a Mixamo bone moves
 const REGION = (b) => (/Neck|Head$|HeadTop/.test(b) ? 'head' : /Hips|UpLeg|Leg$|Foot|Toe/.test(b) ? 'legs' : 'body');
-// A plain mesh (hair) in world space, on the head
-function rigid(m) {
-  const g = m.geometry, P = g.attributes.position, N = g.attributes.normal, UV = g.attributes.uv, nm = new THREE.Matrix3().getNormalMatrix(m.matrixWorld), out = [];
-  for (let i = 0; i < P.count; i++) out.push({ pos: V().fromBufferAttribute(P, i).applyMatrix4(m.matrixWorld), nrm: N ? V().fromBufferAttribute(N, i).applyMatrix3(nm).normalize() : V(), uv: UV ? [UV.getX(i), UV.getY(i)] : [0, 0], bones: [[null, 1]] });
+// A plain mesh (hair) in world space, on the head (on: the matrix of the bone whose space it was modelled in)
+function rigid(m, on) {
+  const g = m.geometry, P = g.attributes.position, N = g.attributes.normal, UV = g.attributes.uv, M = on ? on.clone().multiply(m.matrixWorld) : m.matrixWorld, nm = new THREE.Matrix3().getNormalMatrix(M), out = [];
+  for (let i = 0; i < P.count; i++) out.push({ pos: V().fromBufferAttribute(P, i).applyMatrix4(M), nrm: N ? V().fromBufferAttribute(N, i).applyMatrix3(nm).normalize() : V(), uv: UV ? [UV.getX(i), UV.getY(i)] : [0, 0], bones: [[null, 1]] });
   return out;
 }
 
@@ -156,6 +156,7 @@ window.refit = async (job) => {
   const keep = job.meshes, drop = job.drop || [], parts = [];
   src.traverse((o) => { if (o.isSkinnedMesh && !(keep && !keep.some((k) => o.name === k)) && !drop.some((k) => o.name.includes(k))) parts.push(o); });
   if (!parts.length) throw new Error('no body in ' + job.srcRel);
+  if (keep) parts.sort((x, y) => keep.indexOf(x.name) - keep.indexOf(y.name));   // (the body first, as the manifest lists it: its bones and its floor are the ones used)
   // the body's bones by the Mixamo name they stand for (those of its first part: the loader gives each part its own copies)
   const S = {}; for (const b of parts[0].skeleton.bones) { const n = mixamoName(b); if (n && !S[n]) S[n] = b; }
   const map = (b) => { for (let p = b; p; p = p.parent) { const n = mixamoName(p); if (n) return n; } return 'mixamorigHips'; };
@@ -171,14 +172,17 @@ window.refit = async (job) => {
     }
   }
   const E = proportions(src, S, job.proportions), head = S.mixamorigHead;
-  const verts = parts.map((p) => ({ name: job.wear ? 'base' : p.name, v: posed(p) })); for (const part of verts) for (const v of part.v) reshape(E, v, head);
+  const verts = parts.map((p, i) => ({ name: job.wear && !i ? 'base' : p.name, v: posed(p) })); for (const part of verts) for (const v of part.v) reshape(E, v, head);
   const floor = Math.min(...verts[0].v.map((v) => v.pos.y));
   // sized so its hips stand as high as the rig's, standing where the rig stands
   const hipS = wpos(S.mixamorigHips), hipR = wpos(R.mixamorigHips), k = (hipR.y - rigFloor) / (hipS.y - floor);
   const place = (p) => p.sub(new THREE.Vector3(hipS.x, floor, hipS.z)).multiplyScalar(k).add(new THREE.Vector3(hipR.x, rigFloor, hipR.z));
   for (const part of verts) for (const v of part.v) place(v.pos);
-  // pieces modelled in place on the body (hair): on the head
-  for (const f of job.attachRel || []) { const a = await load(f); a.updateMatrixWorld(true); a.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh) { const v = rigid(o); for (const x of v) { reshape(E, x, head); place(x.pos); } verts.push({ name: job.wear ? 'hair' : o.name, v }); } }); }
+  // pieces modelled in place on the body (hair): on the head. Or, with attachAt (a bone's name), pieces modelled in that
+  // bone's own space, as Synty's hair, beards and wreaths are (their prefabs hang them on the head bone as they are): each
+  // keeps its own name, for the game to show the one chosen
+  const at = job.attachAt && parts[0].skeleton.bones.find((b) => b.name === job.attachAt); if (job.attachAt && !at) throw new Error('no bone ' + job.attachAt);
+  for (const f of job.attachRel || []) { const a = await load(f); a.updateMatrixWorld(true); a.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh) { const v = rigid(o, at?.matrixWorld); for (const x of v) { reshape(E, x, head); place(x.pos); } verts.push({ name: job.wear && !at ? 'hair' : o.name, v }); } }); }
   // clothes and armour from the pack's other characters (on this very skeleton): each posed as the body is, cut to the
   // part of the body it covers, and named wear_<item> for the game to show when that item is worn
   const files = {}, pose = new Map(parts[0].skeleton.bones.map((b) => [b.name, b]));

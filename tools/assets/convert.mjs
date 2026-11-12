@@ -88,9 +88,13 @@ function atlases(log) {
   }
 }
 
-for (const [name0, e0] of Object.entries(manifest.models).flatMap(([n, e]) => (e.far ? [[n, e], [n + '_far', { ...e, lod: e.far.lod, decimate: e.far.tris, cardShare: undefined, cardMin: 0.12, solidMin: undefined, far: undefined }]] : [[n, e]]))) {
+// (a tree's other versions: "mid", the near band's further half, its leaves thinned, and "far", the mid band's)
+const versions = (n, e) => [[n, e],
+  ...(e.mid ? [[n + '_mid', { ...e, decimate: e.mid.tris, solidMin: e.mid.solidMin ?? 1, cardShare: 0.8, mid: undefined, far: undefined }]] : []),
+  ...(e.far ? [[n + '_far', { ...e, lod: e.far.lod, decimate: e.far.tris, cardShare: undefined, cardMin: 0.12, solidMin: e.far.solidMin, mid: undefined, far: undefined }]] : [])];
+for (const [name0, e0] of Object.entries(manifest.models).flatMap(([n, e]) => versions(n, e))) {
   const name = name0, e = e0;
-  if (want.length && !want.includes(name.replace(/_far$/, ''))) continue;
+  if (want.length && !want.includes(name.replace(/_(far|mid)$/, ''))) continue;
   if (e.compose || e.house) { compose(name, e, path.join(ROOT, 'assets/models/pack', name + '.glb')); continue; }
   if (e.shared && !manifest.textures?.[e.shared]) throw new Error(`${name}: no texture ${e.shared} in the manifest`);
   // (a plant comes from the catalogue's export of its model, everything.mjs, which has the right texture on each part)

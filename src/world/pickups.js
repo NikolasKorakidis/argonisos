@@ -47,9 +47,20 @@ export const KINDS = {
 // all; petals, a colour given to every part that isn't green; lift, one end raised that much and double, seen from both
 // sides: the feather is a single sheet that would lie flat in the earth; shade, its pale colours taken down, or it's lost
 // among the pebbles)
+// A branch comes from a tree's crown standing as it grew there: flat, it's turned (about x, then z, in twelfths of a half
+// turn) to the way it lies lowest, so it lies on the ground instead of standing up out of it
+function layFlat(geo) {
+  const p = geo.attributes.position, v = new THREE.Vector3(), e = new THREE.Euler(), q = new THREE.Quaternion(), step = Math.max(1, Math.floor(p.count / 1500)); let best = [Infinity, 0, 0];
+  for (let a = 0; a < 12; a++) for (let c = 0; c < 12; c++) {
+    q.setFromEuler(e.set(a * Math.PI / 12, 0, c * Math.PI / 12)); let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < p.count; i += step) { const y = v.fromBufferAttribute(p, i).applyQuaternion(q).y; lo = Math.min(lo, y); hi = Math.max(hi, y); }
+    if (hi - lo < best[0]) best = [hi - lo, a, c];
+  }
+  geo.applyQuaternion(q.setFromEuler(e.set(best[1] * Math.PI / 12, 0, best[2] * Math.PI / 12)));
+}
 const PACKED = {
   stone: [['pStone'], [0.42, 0.2]],
-  branch: [['pBranch', 'pBranch1', 'pBranch2', 'pBranch3', 'pBranch4'], [1.3, 0.25]],
+  branch: [['pBranch', 'pBranch1', 'pBranch2', 'pBranch3', 'pBranch4'], [1.3, 0.25], { flat: true }],
   lightstone: [['pLight0', 'pLight1'], [0.34, 0.24], { bright: 4, color: 0xe8e2d0, emissive: 0x5a5a48, emissiveIntensity: 0.3, roughness: 0.5 }],
   dandelion: [['pDandelion0', 'pDandelion1'], [0.42, 0.36]],
   moonflower: [['pMoon0', 'pMoon1'], [0.5, 0.6], { petals: 0xcfe0ff, glow: 0x6080c0 }],
@@ -71,6 +82,7 @@ function packedLook(gl, [W, H], o = {}) {
     green.multiplyScalar(0.82 * (o.bright ?? o.shade ?? 1)).toArray(col, j); }
   geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   if (n1) { if (n0) geo.addGroup(0, n0, 0); geo.addGroup(n0, n1, 1); }
+  if (o.flat) layFlat(geo);
   // about the same size whatever the model's own, standing on the ground and centred
   geo.computeBoundingBox(); let b = geo.boundingBox; const s = (W + H) / (Math.max(b.max.x - b.min.x, b.max.z - b.min.z) + b.max.y - b.min.y); geo.scale(s, s, s);
   geo.computeBoundingBox(); b = geo.boundingBox; geo.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);

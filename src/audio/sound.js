@@ -96,16 +96,19 @@ function pluck(freq, { vol = 0.12, delay = 0, dur = 2.6, pan = 0 } = {}) {
   const p = ctx.createStereoPanner(); p.pan.value = pan; o1.connect(f); o2.connect(g2).connect(f); f.connect(g).connect(p).connect(musicBus); o1.start(t); o2.start(t); o1.stop(t + dur + 0.1); o2.stop(t + dur + 0.1);
 }
 
+// the recordings for each ground the feet can be on (game.js: the boards of a building, water, paving or bare rock, the
+// shore's sand, the forest's leaf litter; anything else is the meadows' grass and earth)
+const STEPS = { wood: 'stepWood', water: 'stepWater', stone: 'stepRock', sand: 'stepSand', leaves: 'stepLeaves' }, LANDS = { wood: 'landWood', water: 'landWater', stone: 'landRock' };
 const SFX = {
   step: (surface) => {
-    if (sample(surface === 'wood' ? 'stepWood' : surface === 'water' ? 'stepWater' : surface === 'stone' ? 'stepRock' : Math.random() < 0.6 ? 'stepGrass' : 'stepDirt', { vol: 0.32, wet: 0 })) return;
+    if (sample(STEPS[surface] || (Math.random() < 0.6 ? 'stepGrass' : 'stepDirt'), { vol: 0.32, wet: 0 })) return;
     if (surface === 'wood') { noise(0.1, { freq: 420, q: 3, vol: 0.13 }); tone(140, 0.08, { type: 'triangle', vol: 0.05, wet: 0.2 }); }
     else if (surface === 'water') { noise(0.28, { type: 'lowpass', freq: 1200, vol: 0.14, slide: -800 }); noise(0.12, { freq: 2500, q: 2, vol: 0.05, delay: 0.05 }); }
     else if (surface === 'stone') noise(0.07, { freq: 1800, q: 1.5, vol: 0.09 });
     else { noise(0.12, { type: 'lowpass', freq: 380, vol: 0.12, brown: true }); noise(0.16, { freq: 3200, q: 0.7, vol: 0.035 }); }   // a soft thud and the swish of grass
   },
   jump: () => noise(0.14, { freq: 500, vol: 0.06 }),
-  land: () => { if (sample('landGrass', { vol: 0.45, wet: 0 })) return; noise(0.22, { type: 'lowpass', freq: 260, vol: 0.28, brown: true }); noise(0.1, { freq: 2800, q: 0.8, vol: 0.05 }); },
+  land: (surface) => { if (sample(LANDS[surface] || 'landGrass', { vol: 0.45, wet: 0 })) return; noise(0.22, { type: 'lowpass', freq: 260, vol: 0.28, brown: true }); noise(0.1, { freq: 2800, q: 0.8, vol: 0.05 }); },
   chop: () => { noise(0.09, { freq: 1500, q: 3, vol: 0.32, wet: 0.25 }); tone(170, 0.14, { type: 'triangle', vol: 0.22, slide: -60, wet: 0.3 }); noise(0.25, { type: 'lowpass', freq: 400, vol: 0.12, brown: true }); },
   creak: () => { tone(95, 1.6, { type: 'sawtooth', vol: 0.045, slide: -30, attack: 0.4, wet: 0.4 }); tone(140, 1.2, { type: 'sawtooth', vol: 0.025, slide: 40, attack: 0.3, delay: 0.5, wet: 0.4 }); },
   thud: () => { noise(0.9, { type: 'lowpass', freq: 200, vol: 0.7, slide: -120, brown: true, wet: 0.4 }); tone(48, 0.7, { vol: 0.4, slide: -18 }); for (let i = 0; i < 6; i++) noise(0.2, { freq: 2500 + Math.random() * 2000, q: 1, vol: 0.05, delay: 0.1 + Math.random() * 0.5 }); },

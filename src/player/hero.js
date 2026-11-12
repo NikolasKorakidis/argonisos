@@ -5,13 +5,108 @@ import * as THREE from 'three';
 import { FootIK } from './footik.js';
 import { loadFBX, loadGLB, loadTex } from '../assets.js';
 import { clamp, lerp } from '../util/math.js';
-import { SETTINGS, onHeroChange } from '../ui/settings.js';
+import { SETTINGS } from '../ui/settings.js';
 
 const ss = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 const UPPER = /Spine|Neck|Head|Shoulder|Arm|Hand/, UPV = new THREE.Vector3(0, 1, 0);
-// The bodies to choose from (Settings): Synty's plain man and woman in their underwear, fitted onto the Mixamo rig
-// (tools/assets/fbx-page.mjs refit: same bones, same clips), each this tall; the tint takes the palette's glare off in our light
-export const BODIES = { man: { file: 'hero', height: 1.95, tint: 0xb4aeb4 }, woman: { file: 'heroWoman', height: 1.86, tint: 0xb4aeb4 } };
+// The bodies to choose from (the character creator, ui/creator.js): Synty's plain man and woman in their underwear, fitted
+// onto the Mixamo rig (tools/assets/fbx-page.mjs refit: same bones, same clips), each this tall; the tint takes the
+// palette's glare off in our light
+// (brows: the man's are one heavy band, read as a pair of dark glasses: drawn this much thinner, and parted over the nose)
+export const BODIES = { man: { file: 'hero', height: 1.95, tint: 0xb4aeb4, name: 'Man', brows: 0.45 }, woman: { file: 'heroWoman', height: 1.86, tint: 0xb4aeb4, name: 'Woman' } };
+
+// ---- The hero's look, chosen in the character creator and kept with the saved game. Hair, beards and wreaths are
+// Synty's (Ancient Empire and Generic: pack/heroLooks, each a part of its own, fitted on the head like the helmets);
+// colours are the body's palette recoloured where it shows skin, hair, brows, eyes and cloth (lookMaterial)
+// [id, name, colour]: the colour each takes, in sRGB
+export const SKINS = [['pale', 'Pale', 0xffd8c0], ['fair', 'Fair', 0xffcbad], ['olive', 'Olive', 0xe0ae84], ['tan', 'Sun-browned', 0xc89068], ['bronze', 'Bronze', 0xa8704c], ['brown', 'Brown', 0x845438], ['dark', 'Dark', 0x5e3c28], ['deep', 'Deep', 0x40281c]];
+export const HAIR_COLOURS = [['black', 'Black', 0x1a1614], ['darkBrown', 'Dark brown', 0x30221a], ['brown', 'Brown', 0x4f402c], ['chestnut', 'Chestnut', 0x693a22], ['auburn', 'Auburn', 0x80341e], ['copper', 'Copper', 0xa05228], ['darkBlond', 'Dark blond', 0x8c6c40], ['blond', 'Blond', 0xc4a060], ['grey', 'Grey', 0x8c8882], ['white', 'White', 0xdcd8ce]];
+export const EYES = [['brown', 'Brown', 0x2a1a10], ['dark', 'Dark', 0x100c0a], ['hazel', 'Hazel', 0x3a2c14], ['green', 'Green', 0x1e3622], ['blue', 'Blue', 0x1c2e4c], ['grey', 'Grey', 0x30363c]];   // (dark: the eye is a flat little panel, a bright one reads as paint)
+export const CLOTHS = [['linen', 'Linen', 0xb8ae9a], ['white', 'White', 0xdcd8d0], ['saffron', 'Saffron', 0xd29628], ['madder', 'Madder red', 0xa02c1e], ['purple', 'Tyrian purple', 0x6a1e48], ['indigo', 'Indigo', 0x2c3a6a], ['olive', 'Olive', 0x66693a], ['umber', 'Umber', 0x6e5034]];
+// [id, name, part(s)] (the parts in pack/heroLooks; 'hair' is the Greek warriors' curls, from pack/heroArmour), and whom
+// it suits first ('m' / 'f': the creator lists those first for the body chosen, and Randomise picks among them)
+const G = (n) => 'SM_Gen_Chr_Attach_' + n, AE = (n) => 'SM_Chr_Hair_' + n;
+export const HAIRS = [['none', 'Shaven', null, 'mf'], ['curls', 'Warrior\'s curls', 'hair', 'm'],
+  ['m1', 'Cropped', AE('Male_01'), 'm'], ['m2', 'Short', AE('Male_02'), 'm'], ['m4', 'Swept up', AE('Male_04'), 'm'], ['m6', 'Thick crop', AE('Male_06'), 'm'],
+  ['m5', 'Shaggy', AE('Male_05'), 'm'], ['m3', 'Tied back', AE('Male_03'), 'mf'], ['m7', 'Balding', AE('Male_07'), 'm'],
+  ['g9', 'Slicked back', G('Hair_09'), 'm'], ['g9b', 'Close crop', G('Hair_09_alt'), 'm'], ['g10', 'Brush cut', G('Hair_10'), 'm'], ['g11', 'Neat', G('Hair_11'), 'mf'], ['g6', 'Fringe', G('Hair_06'), 'mf'],
+  ['f3', 'Bob', AE('Female_03'), 'f'], ['f1', 'Long waves', AE('Female_01'), 'f'], ['f6', 'Long curls', AE('Female_06'), 'f'], ['f2', 'Gathered up', AE('Female_02'), 'f'], ['f4', 'Bound up', AE('Female_04'), 'f'],
+  ['f5', 'Banded', AE('Female_05'), 'f'], ['g5', 'Ribboned', G('Hair_05'), 'f'], ['bun', 'Bun', [G('Hair_09'), G('Bun_01')], 'f'], ['tail', 'Ponytail', [G('Hair_09'), G('Ponytail_01')], 'f'],
+  ['g1', 'Long and loose', G('Hair_01'), 'f'], ['g1b', 'Long, parted', G('Hair_01_alt'), 'f'], ['g2', 'Flowing', G('Hair_02'), 'f'], ['g3', 'Long and straight', G('Hair_03'), 'f'],
+  ['g4', 'Long and thick', G('Hair_04'), 'f'], ['g7', 'Locks', G('Hair_07'), 'f'], ['g8', 'Wild curls', G('Hair_08'), 'f']];
+export const BEARDS = [['none', 'None', null], ['full', 'Full beard', AE('Beard_01')], ['short', 'Short beard', AE('Beard_03')], ['philosopher', 'Philosopher\'s', AE('Beard_04')],
+  ['long', 'Long beard', G('Beard_01')], ['trim', 'Trimmed', G('Beard_02')], ['moustache', 'Moustache', G('Moustache_01')], ['whiskers', 'Long whiskers', AE('Beard_02')], ['chops', 'Side whiskers', G('Chops_01')]];
+export const WREATHS = [['none', 'None', null], ['laurel', 'Laurel wreath', 'SM_Chr_Attach_Crown_Leaf_01'], ['golden', 'Golden wreath', 'SM_Chr_Attach_Crown_Leaf_02']];
+// what can be chosen, in the order the creator shows it
+const LOOK_OPTIONS = { skin: SKINS, hair: HAIRS, hairColour: HAIR_COLOURS, beard: BEARDS, eyes: EYES, cloth: CLOTHS, wreath: WREATHS };
+// the look before anything is chosen (and for ?play and the tests): the hero as he has always been
+const LOOK0 = { body: 'man', skin: 'fair', hair: 'curls', hairColour: 'brown', beard: 'none', eyes: 'brown', cloth: 'linen', wreath: 'none' };
+// a look made whole: unknown or missing choices fall back to the first look's (older saves had only a body)
+export function normLook(l) {
+  const o = { ...LOOK0 }; if (!l) return o;
+  if (BODIES[l.body]) o.body = l.body;
+  for (const [k, list] of Object.entries(LOOK_OPTIONS)) if (list.some((x) => x[0] === l[k])) o[k] = l[k];
+  return o;
+}
+// A random look for a body: its own hair styles mostly, a beard on half the men, eyes and skin from anywhere
+export function randomLook(body = Math.random() < 0.5 ? 'man' : 'woman') {
+  const pick = (a) => a[Math.floor(Math.random() * a.length)][0], sex = body === 'man' ? 'm' : 'f';
+  const hairs = HAIRS.filter((h) => h[0] !== 'none' && h[3].includes(sex));
+  return { body, skin: pick(SKINS), hair: Math.random() < 0.08 ? 'none' : pick(hairs), hairColour: pick(HAIR_COLOURS.slice(0, 8)), beard: body === 'man' && Math.random() < 0.55 ? pick(BEARDS.slice(1)) : 'none',
+    eyes: pick(EYES), cloth: pick(CLOTHS), wreath: Math.random() < 0.15 ? pick(WREATHS.slice(1)) : 'none' };
+}
+const LOOK_PARTS = new Set([...HAIRS, ...BEARDS, ...WREATHS].flatMap((x) => [].concat(x[2] || [])));
+const colourOf = (list, id) => (list.find((x) => x[0] === id) || list[0])[2];
+const lin = (hex) => new THREE.Color(hex);   // (three keeps colours linear: the palette's are compared there)
+// The palette's cells (in the refit model's UVs: u across, v up from the bottom of Synty's Generic_01_A), as Synty's own
+// SkinMask / HairMask place them, and the colours they hold, which the chosen ones replace
+const BASE = { skin: lin(0xffcbad), hair: lin(0x4f402c), cloth: lin(0xc6c2be), curls: lin(0x3e2616) };   // (curls: the Greek warriors' hair, in their own palette)
+// The armour's bare arms and legs (the Greek warriors' palette has its skin in two columns) take the chosen skin too
+function armourSkin(m, U) {
+  if (!U) return m;
+  m.onBeforeCompile = (s) => {
+    s.uniforms.uSkin = U.uSkin;
+    s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uSkin;')
+      .replace('#include <map_fragment>', '#include <map_fragment>\n      if (vMapUv.x > 0.505 && vMapUv.x < 0.575 && vMapUv.y < 0.125) diffuseColor.rgb *= uSkin;');
+  };
+  m.customProgramCacheKey = () => 'heroArmourSkin'; return m;
+}
+// The brows (the near-black cell they're drawn in) made thinner: each point drawn towards the middle of the brow where it
+// stands, and the two parted where they meet over the nose
+const isBrow = (u, v) => v < 0.0156 && u > 0.0938 && u < 0.125;
+function thinBrows(g, k) {
+  const P = g.attributes.position, UV = g.attributes.uv, at = [];
+  for (let i = 0; i < P.count; i++) if (isBrow(UV.getX(i), UV.getY(i))) at.push(i);
+  const xs = at.map((i) => P.getX(i)), mid = (Math.min(...xs) + Math.max(...xs)) / 2, half = (Math.max(...xs) - Math.min(...xs)) / 2;
+  const ys = at.map((i) => P.getY(i));
+  at.forEach((i, j) => {
+    const x = xs[j], near = ys.filter((_, n) => Math.abs(xs[n] - x) < half * 0.25), cy = near.reduce((s, y) => s + y, 0) / near.length;
+    // (within a seventh of the middle the brow is pushed out to the side: a gap over the nose)
+    const gap = half * 0.14, nx = Math.abs(x - mid) < gap ? mid + Math.sign(x - mid || 1) * gap : x;
+    P.setXY(i, nx, cy + (ys[j] - cy) * k);
+  });
+  P.needsUpdate = true; g.computeBoundingBox();
+}
+// The body's material, its palette recoloured where it shows skin (by how much the chosen skin differs from the palette's,
+// so lips and stubble keep their shade), hair (the hair cell: Synty's hair and beards, all made on it), the brows (a near
+// black band on the man, too heavy: the hair's colour, a little darker), the eyes and the cloth (a grey column)
+function lookMaterial(map, tint) {
+  const U = { uSkin: { value: new THREE.Color(1, 1, 1) }, uShade: { value: new THREE.Color(1, 1, 1) }, uHair: { value: new THREE.Color(1, 1, 1) }, uBrow: { value: new THREE.Color(0.02, 0.02, 0.02) }, uEyes: { value: new THREE.Color(0, 0, 0) }, uCloth: { value: new THREE.Color(1, 1, 1) } };
+  const m = new THREE.MeshStandardMaterial({ map, color: tint, roughness: 0.8, metalness: 0 });
+  m.onBeforeCompile = (s) => {
+    Object.assign(s.uniforms, U);
+    s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uSkin, uShade, uHair, uBrow, uEyes, uCloth;').replace('#include <map_fragment>', `#include <map_fragment>
+      { vec2 q = vMapUv;
+        if (q.x < 0.0361 && q.y > 0.1577 && q.y < 0.1743) diffuseColor.rgb = diffuse * uShade;   // (the man's stubble, a pale grey mask: the skin in shadow)
+        else if (q.x < 0.0415 && q.y > 0.1289 && q.y < 0.2188) diffuseColor.rgb *= uSkin;
+        else if (q.x > 0.042 && q.x < 0.0586 && q.y > 0.1875 && q.y < 0.2031) diffuseColor.rgb *= uHair;
+        else if (q.x > 0.245 && q.x < 0.256 && q.y > 0.0996 && q.y < 0.2188) diffuseColor.rgb *= uCloth;
+        else if (q.y < 0.0156 && q.x > 0.0938 && q.x < 0.125) diffuseColor.rgb = diffuse * uBrow;
+        else if (q.y < 0.0156 && q.x < 0.0313) diffuseColor.rgb = diffuse * uEyes; }`);
+  };
+  m.customProgramCacheKey = () => 'heroLook';
+  m.userData.look = U; return m;
+}
 // How the right hand holds a handle, in the hand bone's space (+x thumb side, +y fingers, +z palm; units of the rig, ~0.8 cm):
 // where the handle's grip point sits, how far the handle tips from across the palm, and how far each finger joint curls
 export const GRIP = { at: [0, 10.6, 4.1], tilt: -1.8, curl: 1.0 };
@@ -50,8 +145,15 @@ export class Hero {
     // attachment points, filled once the rig loads: right hand (tools and weapons), left hand (bow, shield), back
     this.handR = new THREE.Group(); this.handL = new THREE.Group(); this.armL = new THREE.Group(); this.back = new THREE.Group(); this.backBow = new THREE.Group();
     this.placeholder = this.makePlaceholder(); this.wrap.add(this.placeholder);
+    // the look last chosen on this computer (or the first one), until a saved game or the creator gives another
+    this.look = normLook(SETTINGS.look || (SETTINGS.hero && { body: SETTINGS.hero }));
     this.ready = this.load();
-    onHeroChange(() => { this.ready = this.ready.then(() => this.load()); });
+  }
+  // Take a look (the creator, a saved game): another body is loaded and swapped in; anything else changes at once
+  setLook(look) {
+    const next = normLook(look), body = next.body !== this.look.body; this.look = next;
+    if (body) this.ready = this.ready.then(() => this.load()); else this.show();
+    return this.ready;
   }
   makePlaceholder() {      // a simple figure while the model streams in
     const g = new THREE.Group(), m = new THREE.MeshStandardMaterial({ color: 0xe9e0cc, roughness: 0.8 });
@@ -62,10 +164,10 @@ export class Hero {
   async load() {
     // the chosen body, the armour to dress it in (pack/heroArmour: the Greek warriors' pieces, converted on a body of
     // their own and moved onto this one's bones), or the old model when the pack isn't there
-    const kind = BODIES[SETTINGS.hero] || BODIES.man;
-    const [gl, dress] = await Promise.all([loadGLB('pack/' + kind.file).catch(() => null), loadGLB('pack/heroArmour').catch(() => null)]);
+    const kind = BODIES[this.look.body] || BODIES.man;
+    const [gl, dress, looks] = await Promise.all(['pack/' + kind.file, 'pack/heroArmour', 'pack/heroLooks'].map((f) => loadGLB(f).catch(() => null)));
     let obj = gl?.scene, mat;
-    if (obj) { obj.updateMatrixWorld(true); let map = null; obj.traverse((m) => { if (m.isMesh && !map) map = m.material.map; }); mat = new THREE.MeshStandardMaterial({ map, color: kind.tint, roughness: 0.8, metalness: 0 }); }
+    if (obj) { obj.updateMatrixWorld(true); let map = null; obj.traverse((m) => { if (m.isMesh && !map) map = m.material.map; }); mat = lookMaterial(map, kind.tint); }
     else { obj = await loadFBX('hero_rig'); mat = new THREE.MeshStandardMaterial({ map: loadTex('hero_diffuse.jpg'), normalMap: loadTex('hero_normal.jpg', false), roughness: 0.8, metalness: 0 }); }
     const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
     const bones = {};
@@ -75,13 +177,16 @@ export class Hero {
       m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;   // skinned bounds don't follow the pose
       m.material = mat;
     });
+    if (gl && kind.brows) obj.traverse((m) => { if (m.name === 'base_head') thinBrows(m.geometry, kind.brows); });
+    this.mat = gl ? mat : null;
     if (gl && dress) this.dress(obj, dress.scene, bones);
+    if (gl && looks) this.dress(obj, looks.scene, bones, mat);
     this.s = (gl ? kind.height : 1.95) / size.y; obj.scale.multiplyScalar(this.s);
     obj.animations = [];
     // (a body swapped in the settings: the old one goes, with what it held, the clips bound to it and its feet)
     const held = [this.handR, this.handL, this.armL, this.back, this.backBow];
     if (this.model) { this.wrap.remove(this.model); this.mixer.stopAllAction(); this.acts = {}; this.samplers = {}; this.ik = null; }
-    this.bones = bones; this.parts = {}; obj.traverse((m) => { if (m.isMesh) this.parts[m.name] = m; }); this.wear(this.wearing);
+    this.bones = bones; this.parts = {}; obj.traverse((m) => { if (m.isMesh) this.parts[m.name] = m; }); this.show();
     this.wrap.remove(this.placeholder); this.wrap.add(obj); this.model = obj;
     this.mixer = new THREE.AnimationMixer(obj);
     // Bones are in centimetres: attachment points sit in bone space, the objects on them undo the model scale
@@ -92,23 +197,27 @@ export class Hero {
     this.back.position.set(2, 8, -16); this.backBow.position.set(-2, 2, -17); this.backBow.rotation.set(0, 0, 0.6);
     return this;
   }
-  // The armour's pieces (wear_<item>) and the hair from their own file onto this body: each keeps its bind (where it
-  // sat on the warrior it came from) and follows the bones of the same name here, so every piece goes where its joints
-  // went. Helmets and hair are fitted to this head first (the warrior's was smaller): moved and scaled from his head's
-  // box onto this one's, less the head bone's own move, which the bones then make. Both bodies stand in their rest pose here.
-  dress(obj, src, bones) {
+  // The armour's pieces (wear_<item>) and the hair from their own file onto this body, or (looks: the body's material)
+  // the hair, beards and wreaths of pack/heroLooks: each keeps its bind (where it sat on the body it came from) and
+  // follows the bones of the same name here, so every piece goes where its joints went. Helmets, hair, beards and
+  // wreaths are fitted to this head first (the warrior's was smaller, the looks' a man's): moved and scaled from that
+  // head's box onto this one's, less the head bone's own move, which the bones then make. Both stand in their rest pose here.
+  dress(obj, src, bones, looks) {
     src.updateMatrixWorld(true); obj.updateMatrixWorld(true);
     let host = null; obj.traverse((m) => { if (m.isSkinnedMesh && !host) host = m.parent; });
     let map = null, headA = null; const wear = [];
-    src.traverse((m) => { if (!m.isSkinnedMesh) return; if (m.name === 'base_head') headA = m; if (m.name.startsWith('wear_') || m.name === 'hair') { wear.push(m); map ||= m.material.map; } });
+    src.traverse((m) => { if (!m.isSkinnedMesh) return; if (m.name === 'base_head') headA = m; if (looks ? !m.name.startsWith('base_') : m.name.startsWith('wear_') || m.name === 'hair') { wear.push(m); map ||= m.material.map; } });
     const headB = host?.children.find((m) => m.name === 'base_head');
     const box = (m) => m.geometry.boundingBox.clone().applyMatrix4(m.bindMatrix), Ba = headA && headB && box(headA), Bb = Ba && box(headB);
-    const mat = new THREE.MeshStandardMaterial({ map, color: 0xc4c4c4, roughness: 0.8, metalness: 0 });
+    const mat = looks || armourSkin(new THREE.MeshStandardMaterial({ map, color: 0xc4c4c4, roughness: 0.8, metalness: 0 }), this.mat?.userData.look);
+    // (the wreaths are coloured from the Ancient Empire's palette, not the body's; the curls take the chosen hair colour)
+    if (looks) this.wreathMat ||= new THREE.MeshStandardMaterial({ map: loadTex('pack/tex/empire.webp'), color: 0xb4b4b4, roughness: 0.75, metalness: 0 });
+    else { this.curlsMat = new THREE.MeshStandardMaterial({ map, color: 0xffffff, roughness: 0.85, metalness: 0 }); this.curlsMat.userData.base = map; }
     const ca = new THREE.Vector3(), cb = new THREE.Vector3(), ja = new THREE.Vector3(), jb = new THREE.Vector3(), v = new THREE.Vector3(), inv = new THREE.Matrix4();
     for (const m of wear) {
       const list = m.skeleton.bones.map((b) => bones[b.name]); if (!host || list.some((b) => !b)) continue;
       const hi = m.skeleton.bones.findIndex((b) => b.name === 'mixamorigHead');
-      if (Bb && hi >= 0 && /Helmet$|^hair$/.test(m.name)) {
+      if (Bb && hi >= 0 && (looks || /Helmet$|^hair$/.test(m.name))) {
         const k = (Bb.max.x - Bb.min.x) / (Ba.max.x - Ba.min.x); Ba.getCenter(ca); Bb.getCenter(cb);
         ja.setFromMatrixPosition(inv.copy(m.skeleton.boneInverses[hi]).invert()); jb.setFromMatrixPosition(bones.mixamorigHead.matrixWorld);
         const P = m.geometry.attributes.position; inv.copy(m.bindMatrix).invert();
@@ -116,17 +225,28 @@ export class Hero {
         P.needsUpdate = true; m.geometry.computeBoundingBox();
       }
       host.add(m); m.bind(new THREE.Skeleton(list, m.skeleton.boneInverses), m.bindMatrix);
-      m.material = mat; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
+      m.material = m.name === 'hair' ? this.curlsMat : /Crown/.test(m.name) ? this.wreathMat : mat; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
     }
   }
   // Show the armour worn ({ head, body, legs }: item ids). The pack's hero carries each piece as a part of its own
   // (wear_<id>, from dress) and its own body in three (base_head, base_body, base_legs): armour takes the place of the
   // body under it, and a helmet the hair's. The old model has none: nothing changes on it.
-  wear(ids = {}) {
-    this.wearing = ids; const P = this.parts; if (!P) return;
-    const on = (slot) => !!(ids[slot] && P['wear_' + ids[slot]]);
-    for (const [n, m] of Object.entries(P)) if (n.startsWith('wear_')) m.visible = Object.values(ids).includes(n.slice(5));
-    if (P.base_body) P.base_body.visible = !on('body'); if (P.base_legs) P.base_legs.visible = !on('legs'); if (P.hair) P.hair.visible = !on('head');
+  wear(ids = {}) { this.wearing = ids; this.show(); }
+  // Show the armour worn and the look chosen: the chosen hair, beard and wreath (hair and wreath go under a helmet, the
+  // beard stays), the body's colours
+  show() {
+    const P = this.parts; if (!P) return; const ids = this.wearing || {}, L = this.look;
+    const on = (slot) => !!(ids[slot] && P['wear_' + ids[slot]]), part = (list, id) => list.find((x) => x[0] === id)?.[2];
+    for (const [n, m] of Object.entries(P)) if (n.startsWith('wear_')) m.visible = Object.values(ids).includes(n.slice(5)); else if (LOOK_PARTS.has(n)) m.visible = false;
+    if (P.base_body) P.base_body.visible = !on('body'); if (P.base_legs) P.base_legs.visible = !on('legs');
+    const want = [part(BEARDS, L.beard), ...(on('head') ? [] : [part(HAIRS, L.hair), part(WREATHS, L.wreath)])].flat();
+    for (const n of want) if (n && P[n]) P[n].visible = true;
+    const U = this.mat?.userData.look; if (!U) return;
+    const hair = lin(colourOf(HAIR_COLOURS, L.hairColour));
+    const over = (c, a, b) => c.setRGB(a.r / b.r, a.g / b.g, a.b / b.b);   // (how much the chosen colour differs from the palette's)
+    const skin = lin(colourOf(SKINS, L.skin)); over(U.uSkin.value, skin, BASE.skin); U.uShade.value.copy(skin).multiply(new THREE.Color(0.88, 0.8, 0.78)); over(U.uHair.value, hair, BASE.hair);
+    U.uBrow.value.copy(hair).multiplyScalar(0.8); U.uEyes.value.copy(lin(colourOf(EYES, L.eyes))); over(U.uCloth.value, lin(colourOf(CLOTHS, L.cloth)), BASE.cloth);
+    if (this.curlsMat) over(this.curlsMat.color, hair, BASE.curls);
   }
   // Hold an object in the right hand. A long-handled tool (axe, club, spear...) runs across the palm and is gripped near its
   // end, head up and forward over the thumb (bone +X thumb side, +Y fingers, +Z palm)

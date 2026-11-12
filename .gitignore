@@ -11,5 +11,7 @@ incoming assets/
 assets/models/pack/
 # Sounds converted from the licensed packs: the same
 assets/sounds/pack/
+# Item icons rendered from the pack models and the SharpUI interface sprites (tools/assets/icons.mjs): the same
+assets/ui/pack/
 # The private backup of the above (tools/assets/backup.mjs): its own git history, pushed to the team's private repo
 .assets-git/

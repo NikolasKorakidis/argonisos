@@ -35,7 +35,7 @@ export class BuildMenu {
     const known = this.pieces();
     this.el.querySelector('nav').innerHTML = CATS.map((c) => { const n = known.filter((p) => (p.cat || 'Tools') === c).length; return `<button data-c="${c}" class="${c === this.cat ? 'on' : ''}" ${n ? '' : 'disabled'}>${c} <b>[${n}]</b></button>`; }).join('');
     const list = known.filter((p) => (p.cat || 'Tools') === this.cat), sel = this.g.build.sel;
-    const cells = list.map((p) => `<button class="bmtile${p.id === sel ? ' on' : ''}${this.missing(p) ? ' no' : ''}" data-id="${p.id}" title="${p.name}">${icon(p.icon)}<i>${p.name.replace(/^Wooden /, '')}</i></button>`);
+    const cells = list.map((p) => `<button class="bmtile${p.id === sel ? ' on' : ''}${this.missing(p) ? ' no' : ''}" data-id="${p.id}" title="${p.name}">${icon(p.icon, '', 'p_' + p.id)}<i>${p.name.replace(/^Wooden /, '')}</i></button>`);
     while (cells.length < 18) cells.push('<div class="bmtile empty"></div>');
     this.el.querySelector('.bmgrid').innerHTML = cells.join('');
     if (!list.find((p) => p.id === this.hover)) this.hover = list[0]?.id || null;
@@ -45,7 +45,7 @@ export class BuildMenu {
     const box = this.el.querySelector('.bminfo'), p = this.g.build.piece(this.hover);
     if (!p) { box.innerHTML = '<p class="empty">Gather wood and stone to learn what you can build.</p>'; return; }
     const cost = Object.entries(p.mats).map(([m, n]) => { const have = this.g.inv.count(m); return `<div class="slot${have < n && !this.g.S.freeBuild ? ' no' : ''}" title="${ITEMS[m].name}">${icon(ITEMS[m].icon)}<em>${have}/${n}</em></div>`; }).join('');
-    box.innerHTML = `<div class="big">${icon(p.icon)}</div><div class="txt"><h3>${p.name}</h3><p>${p.desc || (p.hp ? `${p.hp} hit points` : '')}</p></div><div class="cost">${cost || '<span class="free">No cost</span>'}</div>`;
+    box.innerHTML = `<div class="big">${icon(p.icon, '', 'p_' + p.id)}</div><div class="txt"><h3>${p.name}</h3><p>${p.desc || (p.hp ? `${p.hp} hit points` : '')}</p></div><div class="cost">${cost || '<span class="free">No cost</span>'}</div>`;
   }
   update() {
     if (!this.open) return;

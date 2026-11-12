@@ -1,8 +1,33 @@
 // Patch notes, newest first, shown from the title screen and the pause menu. A new patch goes at the top of the list;
 // players see a "New" mark on the button until they've opened the notes for the newest one.
-import { icon } from './icons.js';
+import { glyph } from './icons.js';
 
 export const PATCHES = [
+  {
+    id: 'patch-15', name: 'Patch 15', title: 'Who Wakes on the Shore', date: '12 November 2026',
+    intro: 'Make your own hero, walk through sturdier woods, and see the great places of Nisos rebuilt.',
+    sections: [
+      { t: 'Your Hero', icon: 'you', items: [
+        'A new trial begins by choosing <b>who wakes on the shore</b>: man or woman, skin, hair and its colour, beard, eyes, clothes, and a laurel or golden wreath. Change your look any time from the pause menu (Appearance); your saved game remembers it.',
+        'No more heavy "sunglasses" brows on the man\'s face.',
+      ] },
+      { t: 'The Woods', icon: 'tree', items: [
+        'Fixed: trees no longer look crooked or broken up close, their crowns are full again (no more seeing through the olives), and their roots sit in the ground instead of standing clear of it on slopes.',
+        'Silver birches no longer glare white in the sun.',
+      ] },
+      { t: 'The Great Places', icon: 'temple', items: [
+        'The <b>Temple of Zeus</b>, the Labyrinth, the abandoned farmhouse, the Chimera\'s shrine and the summit of Olympos are rebuilt: a great painted temple with gold reliefs on its pediment, ashlar walls and a horned gate for the Minotaur\'s arena, a farmhouse with its loom and bread oven, and a mossy shrine with the Chimera in bronze on its altar.',
+      ] },
+      { t: 'Creatures', icon: 'bull', items: [
+        'Most animals you meet are now grown, and their coats look like they belong in Greece (no more glowing markings). The dryad carries her staff where you can see it.',
+      ] },
+      { t: 'Things and Places', icon: 'build', items: [
+        'Every tool, weapon, piece of armour, food, material and building piece has an icon showing its own model, and the pack, crafting and build menus have new copper-rimmed frames, bars and buttons.',
+        'Fallen branches lie on the ground, felled trees leave proper logs, the bed is a real low bed, and log walls no longer let daylight through their corners.',
+        'Your footsteps now sound different on rock, sand, leaves, boards and water, and land the same way.',
+      ] },
+    ],
+  },
   {
     id: 'patch-14', name: 'Patch 14', title: 'New Leaves', date: '12 November 2026',
     intro: 'A new look for much of Nisos, chosen by our playtesters: the trees, the creatures, the hero and what you build.',
@@ -357,7 +382,7 @@ export const PATCHES = [
 export function patchHTML(p) {
   return `<div class="pnhead"><span class="pnname">${p.name}</span><h3>${p.title}</h3><span class="pndate">${p.date}</span></div>
     <p class="pnintro">${p.intro}</p>
-    ${p.sections.map((s) => `<p class="psub">${icon(s.icon)} ${s.t}</p><ul>${s.items.map((i) => `<li>${i}</li>`).join('')}</ul>`).join('')}`;
+    ${p.sections.map((s) => `<p class="psub">${glyph(s.icon)} ${s.t}</p><ul>${s.items.map((i) => `<li>${i}</li>`).join('')}</ul>`).join('')}`;
 }
 // The same notes as plain text, for pasting into a post or a message (headings, then "- " bullets)
 export function patchText(p) {

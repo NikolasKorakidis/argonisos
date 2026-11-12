@@ -48,7 +48,7 @@ const LIST = {
   driftwood: ['fl_driftwood0', 'fl_driftwood1', 'fl_driftwood2'],
   moss: ['fl_moss0', 'fl_moss1', 'fl_moss2'],
 };
-// (the species converted with a far version too: fl_…_far, tools/assets manifest "far")
+// (the species converted with lighter versions too: fl_…_mid and fl_…_far, tools/assets manifest "mid" and "far")
 const FAR = new Set(['olive', 'oak', 'cypress', 'pomegranate', 'fig', 'holm', 'plane', 'qtree', 'qpine', 'fir', 'dead', 'qdead', 'myrtle', 'broom', 'redbush', 'fern']);
 const NATURAL = new Set(SPECIES.filter((s) => s.natural).map((s) => s.name));
 // species → per model: its solid parts, vertex-coloured (geo), and the see-through ones that keep their texture (cards:
@@ -59,37 +59,59 @@ const parts = (gl) => {
   let card = null; gl.scene.traverse((m) => { if (m.isMesh && isCard(m)) card ||= m.material; });
   return { geo: bake(gl.scene, true, (m) => !isCard(m)), cards: card && bake(gl.scene, false, (m) => m.material === card), map: card?.map };
 };
-// (and the trees' and shrubs' far versions, <file>_far: the mid band's, a few hundred triangles where the near one has thousands)
+// (and the trees' and shrubs' lighter versions: <file>_mid, the near band's further half (leaves thinned), and <file>_far,
+// the mid band's, a few hundred triangles where the near one has thousands)
 export function loadFlora() {
-  return Promise.all(Object.entries(LIST).map(([sp, files]) => Promise.all(files.map((f) => Promise.all([loadPack(f), FAR.has(sp) ? loadPack(f + '_far').catch(() => null) : null]).then(([gl, far]) => {
-    const p = parts(gl); if (far) { const q = parts(far); p.lo = q.geo; p.loCards = q.cards; } return p;
+  const opt = (f) => loadPack(f).catch(() => null);
+  return Promise.all(Object.entries(LIST).map(([sp, files]) => Promise.all(files.map((f) => Promise.all([loadPack(f), ...(FAR.has(sp) ? [opt(f + '_mid'), opt(f + '_far')] : [])]).then(([gl, mid, far]) => {
+    const p = parts(gl);
+    if (mid) { const q = parts(mid); p.mid = q.geo; p.midCards = q.cards; }
+    if (far) { const q = parts(far); p.lo = q.geo; p.loCards = q.cards; }
+    return p;
   }))).then((gs) => { FLORA[sp] = gs; }).catch(() => {})));
 }
+// Leaf patches whose lowest corner is under y taken out (cards come as loose triangles: a patch is the triangles that
+// share corners)
+function prune(g, y) {
+  const P = g.attributes.position, n = P.count / 3, up = new Int32Array(n).map((_, i) => i), at = new Map();
+  const find = (i) => { while (up[i] !== i) i = up[i] = up[up[i]]; return i; };
+  for (let t = 0; t < n; t++) for (let k = 0; k < 3; k++) { const v = t * 3 + k, key = `${Math.round(P.getX(v) * 500)},${Math.round(P.getY(v) * 500)},${Math.round(P.getZ(v) * 500)}`, o = at.get(key);
+    if (o === undefined) at.set(key, t); else up[find(t)] = find(o); }
+  const low = new Float32Array(n).fill(Infinity);
+  for (let t = 0; t < n; t++) { const r = find(t); for (let k = 0; k < 3; k++) low[r] = Math.min(low[r], P.getY(t * 3 + k)); }
+  const keep = []; for (let t = 0; t < n; t++) if (low[find(t)] >= y) keep.push(t);
+  if (keep.length === n) return g;
+  const out = new THREE.BufferGeometry();
+  for (const [name, a] of Object.entries(g.attributes)) { const w = a.itemSize, arr = new Float32Array(keep.length * 3 * w);
+    keep.forEach((t, j) => arr.set(a.array.subarray(t * 3 * w, t * 3 * w + 3 * w), j * 3 * w)); out.setAttribute(name, new THREE.BufferAttribute(arr, w)); }
+  return out;
+}
 // variant v of a species, fitted into the carved one's place (box: the carved geometry's bounds), or at its own size:
-// { geo, cards, map }
+// { geo, cards, map, mid, midCards, lo, loCards }
 export function floraGeo(sp, v, box, tree) {
   const list = FLORA[sp]; if (!list) return null;
-  const src = list[v % list.length], g = src.geo.clone(), c = src.cards?.clone(), parts = c ? [g, c] : [g];
-  const lo = src.lo?.clone(), lc = src.loCards?.clone(), far = [lo, lc].filter((q) => q && q.attributes.position.count);
+  const src = list[v % list.length], g = src.geo.clone(), parts = [g]; let c = src.cards?.clone(); if (c) parts.push(c);
+  let mid = src.mid?.clone(), mc = src.midCards?.clone(), lo = src.lo?.clone(), lc = src.loCards?.clone();
+  const others = () => [mid, mc, lo, lc].filter((q) => q && q.attributes.position.count);
   const b = new THREE.Box3(); for (const p of parts) { p.computeBoundingBox(); if (p.attributes.position.count) b.union(p.boundingBox); }
-  const S = box.getSize(new THREE.Vector3()), s0 = b.getSize(new THREE.Vector3()), k = NATURAL.has(sp) ? 1 : tree ? S.y / s0.y : S.length() / s0.length();
+  const S = box.getSize(new THREE.Vector3()), s0 = b.getSize(new THREE.Vector3()); let k = NATURAL.has(sp) ? 1 : tree ? S.y / s0.y : S.length() / s0.length();
+  // A tree's crown starts above 1.5× the hero even at its smallest (Patch 4; tests/suites/woods.mjs). The packs' trees
+  // branch low: such a one grows a little (up to a third), and the leaf patches still hanging under that height go, as
+  // a tree's lowest boughs do (its branches stay; nothing is stretched, so trunks and roots keep their shapes).
+  let need = -Infinity;
+  if (tree && c) {
+    const c0 = (c.boundingBox.min.y - b.min.y) * k; need = 3 / SPECIES.find((s) => s.name === sp).s[0];
+    if (c0 + box.min.y < need && c0 > 0.05) k *= Math.min(1.33, (need - box.min.y) / c0);
+  }
   // its foot: the middle of what's near the ground (a trunk, the base of a rock)
   const foot = g.attributes.position.count ? g : c, p = foot.attributes.position, lim = b.min.y + (b.max.y - b.min.y) * 0.06; let fx = 0, fz = 0, n = 0;
   for (let i = 0; i < p.count; i++) if (p.getY(i) <= lim) { fx += p.getX(i); fz += p.getZ(i); n++; }
-  for (const q of [...parts, ...far]) { q.translate(-fx / Math.max(n, 1), -b.min.y, -fz / Math.max(n, 1)); q.scale(k, k, k); q.translate(0, NATURAL.has(sp) ? 0 : box.min.y, 0); }   // (the far version moved with it: the same pivot)
-  // A tree's crown starts above 1.5× the hero even at its smallest (Patch 4; tests/suites/woods.mjs): the packs' trees
-  // branch low, so the bare trunk is drawn out. Everything from the lowest leaf up rises together; the stretch of trunk
-  // between half that height and the leaves takes it up, so the roots and the crown keep their shapes.
-  if (tree && c) {
-    c.computeBoundingBox(); const c0 = c.boundingBox.min.y, need = 3 / SPECIES.find((s) => s.name === sp).s[0];
-    if (c0 < need && c0 > 0.05) { const lo0 = c0 * 0.5, up = need - c0;
-      for (const q of [...parts, ...far]) { const p = q.attributes.position;
-        for (let i = 0; i < p.count; i++) { const y = p.getY(i); if (y >= c0) p.setY(i, y + up); else if (y > lo0) p.setY(i, lo0 + (y - lo0) * (need - lo0) / (c0 - lo0)); }
-        p.needsUpdate = true; } }
-  }
+  for (const q of [...parts, ...others()]) { q.translate(-fx / Math.max(n, 1), -b.min.y, -fz / Math.max(n, 1)); q.scale(k, k, k); q.translate(0, NATURAL.has(sp) ? 0 : box.min.y, 0); }   // (the lighter versions moved with it: the same pivot)
+  if (need > -Infinity) { c = prune(c, need); if (mc) mc = prune(mc, need); if (lc) lc = prune(lc, need); }
   if (!g.attributes.position.count) { g.setAttribute('position', new THREE.Float32BufferAttribute(9, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0], 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(9, 3)); }   // (all cards: an empty trunk)
   // (a touch darker: the packs' palettes come out pale in our light)
-  for (const q of [g, lo].filter(Boolean)) { const col = q.attributes.color; if (col) for (let i = 0; i < col.array.length; i++) col.array[i] *= 0.82; }
-  for (const q of [...parts, ...far]) { q.computeBoundingBox(); q.computeBoundingSphere(); }
-  return { geo: g, cards: c || null, map: src.map, lo: lo?.attributes.position.count ? lo : null, loCards: lc?.attributes.position.count ? lc : null };
+  for (const q of [g, mid, lo].filter(Boolean)) { const col = q.attributes.color; if (col) for (let i = 0; i < col.array.length; i++) col.array[i] *= 0.82; }
+  const has = (q) => (q?.attributes.position.count ? q : null);
+  for (const q of [g, c, mid, mc, lo, lc].filter(has)) { q.computeBoundingBox(); q.computeBoundingSphere(); }
+  return { geo: g, cards: has(c), map: src.map, mid: has(mid), midCards: has(mc), lo: has(lo), loCards: has(lc) };
 }

@@ -35,14 +35,16 @@ const TEX = {
 // ---- the rigged animal pack (PolyArt forest animals, converted by tools/assets: Idle / Walk / Gallop / Attack / Death...)
 // len: nose to tail in metres (the young as much smaller as the pack draws them); walk and run: the speeds (m/s) its walk
 // and gallop are drawn for; looks: the pack's variations of that animal (coats and builds, each a mesh of its own on the
-// same skeleton), one picked for each creature. The pack's palette is bright in our light, so its colours are taken down
-// a little (tint).
+// same skeleton), one picked for each creature; drop: the numbers of the pack's fantasy looks, painted with bright cyan or
+// red markings, which have no place on a Greek island. The pack's palette is bright in our light, so its colours are
+// taken down a little (tint).
 const PACK = { calf: { file: 'pack/calf', looks: 'pack/calfLooks', len: 0.94, walk: 0.95, run: 4.5 }, deer: { file: 'pack/doe', looks: 'pack/doeLooks', len: 1.6, walk: 1.6, run: 7.6 },
   stag: { file: 'pack/stag', looks: 'pack/stagLooks', len: 1.9, walk: 1.7, run: 7.6 },
-  foxCub: { file: 'pack/foxCub', looks: 'pack/foxCubLooks', len: 0.55, walk: 0.7, run: 3.5 }, fox: { file: 'pack/fox', looks: 'pack/foxLooks', len: 0.95, walk: 1.2, run: 6 },
-  rabbitCub: { file: 'pack/hareCub', looks: 'pack/hareCubLooks', len: 0.26, walk: 0.3, run: 2.4 }, rabbit: { file: 'pack/hare', looks: 'pack/hareLooks', len: 0.5, walk: 0.6, run: 4.6 },
-  hogCub: { file: 'pack/boarCub', looks: 'pack/boarCubLooks', len: 0.67, walk: 0.65, run: 3.8 }, hog: { file: 'pack/boar', looks: 'pack/boarLooks', len: 1.35, walk: 1.3, run: 7.6 } };
-// which body each level wears: the smallest the young, the middling and the big ones grown (a deer's big ones are stags)
+  foxCub: { file: 'pack/foxCub', looks: 'pack/foxCubLooks', drop: [8, 9, 10], len: 0.55, walk: 0.7, run: 3.5 }, fox: { file: 'pack/fox', looks: 'pack/foxLooks', drop: [8, 9, 10], len: 0.95, walk: 1.2, run: 6 },
+  rabbitCub: { file: 'pack/hareCub', looks: 'pack/hareCubLooks', drop: [9, 10], len: 0.26, walk: 0.3, run: 2.4 }, rabbit: { file: 'pack/hare', looks: 'pack/hareLooks', drop: [9, 10], len: 0.5, walk: 0.6, run: 4.6 },
+  hogCub: { file: 'pack/boarCub', looks: 'pack/boarCubLooks', drop: [6], len: 0.67, walk: 0.65, run: 3.8 }, hog: { file: 'pack/boar', looks: 'pack/boarLooks', drop: [9, 10], len: 1.35, walk: 1.3, run: 7.6 } };
+// which body each level wears: the smallest the young, the middling and the big ones grown (a deer's big ones are stags);
+// at level 0 only one in four is young (YOUNG), the rest grown
 const AGES = { deer: ['calf', 'deer', 'stag'], fox: ['foxCub', 'fox', 'fox'], rabbit: ['rabbitCub', 'rabbit', 'rabbit'], hog: ['hogCub', 'hog', 'hog'] };
 const TINT = 0.8;
 const tpl = {};
@@ -53,7 +55,7 @@ function packTemplate(kind) {
     const size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3()); root.scale.multiplyScalar(A.len / Math.max(size.x, size.z));
     root.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; for (const mt of [].concat(m.material)) mt.color.multiplyScalar(TINT); } }); share(root);
     const clips = {}; for (const c of gl.animations) clips[c.name] = c;
-    const looks = []; if (lk) { lk.scene.traverse((o) => { if (o.isSkinnedMesh) looks.push(o); }); share(lk.scene); }
+    const looks = []; if (lk) { lk.scene.traverse((o) => { if (o.isSkinnedMesh && !A.drop?.includes(+o.name.match(/(\d+)$/)?.[1])) looks.push(o); }); share(lk.scene); }
     return { root, clips, looks };
   }));
 }
@@ -119,11 +121,13 @@ function rigTemplate(kind) {
 }
 // what each carries in its right hand, from the pack: { model, len: its length in the hand's bone units, at, turn: how
 // it sits in the hand } (the giant's club as long as the carved one it falls back to, swung from over the shoulder; the
-// dryad's staff stood upright beside her; the dryadling's blade held as the hero holds a tool)
+// dryad's staff, a thin dark crook taller than she is, held like a walking staff: its knob over her head, its foot on
+// the ground, a little in front of her hand so her arm doesn't hide it; the dryadling's blade held as the hero holds a
+// tool)
 const held = {}, CLUB = { at: [0, 8, 3], turn: [0, 0, -1.9] };
 const packHeld = ({ model, len }) => (held[model] ||= loadPack(model).then((gl) => { const h = normalizeHandle(gl.scene, len); h.position.y = -8; share(h); return h; }).catch(() => null));
 const DRESS = {
-  dryad: () => ({ file: 'pack/dryad', mat: new THREE.MeshStandardMaterial({ map: TEX.bark, roughness: 0.95, color: 0xb8c49a }), scale: 1.05, crown: 0x5d8a34, eyes: 0xc8ff8a, hold: { model: 'witchStaff', len: 150, at: [0, 9, 2], turn: [0, 0, Math.PI] } }),
+  dryad: () => ({ file: 'pack/dryad', mat: new THREE.MeshStandardMaterial({ map: TEX.bark, roughness: 0.95, color: 0xb8c49a }), scale: 1.05, crown: 0x5d8a34, eyes: 0xc8ff8a, hold: { model: 'witchStaff', len: 230, at: [0, -140, 6], turn: [0, 0, 0] } }),
   // a dryadling: a little one, the dryad's height brought down to its own (creatures.js h)
   dryadling: () => ({ file: 'pack/dryadling', mat: new THREE.MeshStandardMaterial({ map: TEX.bark, roughness: 0.95, color: 0x9aa878 }), scale: 1.1 / 1.95, crown: 0x4d7a2c, eyes: 0xc8ff8a, hold: { model: 'evilGodWeapon', len: 80, at: GRIP.at, turn: [0, Math.PI * 1.5, GRIP.tilt, 'ZYX'] } }),
   giant: () => ({ file: 'pack/giant', mat: new THREE.MeshStandardMaterial({ map: TEX.hide, roughness: 0.9, color: 0x8a8f9a }), scale: 3.1, crown: null, eyes: 0xffd27a, club: true, hold: { model: 'mutantClub', len: 95, ...CLUB }, tint: 0.5 }),
@@ -233,12 +237,14 @@ class KitBody {
   dispose() { this.gone = true; this.mixer?.stopAllAction(); free(this.obj); }
 }
 
-export function makeBody(kind, level = 0) {
+// A level-0 animal is young one time in four: picked by where it was born, as its looks are (with dice of its own)
+const YOUNG = 0.25;
+export function makeBody(kind, level = 0, x = 0, z = 0) {
   if (kind === 'chimera') return new KitBody('chimera');
   if (kind === 'minotaur' || kind === 'skeleton') return new KitBody(kind);
   if (kind === 'dryadling') return new RigBody('dryadling', 1 + level * 0.1);
   if (kind === 'dryad' || kind === 'giant') return new RigBody(kind);
-  const ages = AGES[kind] || AGES.rabbit, lv = clamp(level, 0, 2);   // (the biggest of the grown ones a little bigger still, but a stag is big enough)
-  return new PackBody(ages[lv], lv === 2 && kind !== 'deer' ? 1.12 : 1);
+  const ages = AGES[kind] || AGES.rabbit, lv = clamp(level, 0, 2), young = lv === 0 && hash21(Math.round(x * 10) + 0.5, Math.round(z * 10) - 0.5) < YOUNG;
+  return new PackBody(ages[young ? 0 : Math.max(lv, 1)], lv === 2 && kind !== 'deer' ? 1.12 : 1);   // (the biggest of the grown ones a little bigger still, but a stag is big enough)
 }
 export function preloadBodies() { for (const k of ['calf', 'rabbitCub']) packTemplate(k); rigTemplate('dryad'); rigTemplate('dryadling'); }

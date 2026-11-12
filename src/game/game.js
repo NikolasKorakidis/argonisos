@@ -19,7 +19,7 @@ import { save, load, Graves } from './save.js';
 import { sound, updateAmbience } from '../audio/sound.js';
 import { LIGHT } from '../world/sky.js';
 import { WEATHER, flashSky } from '../world/weather.js';
-import { heightAt, biomeWeights } from '../world/gen.js';
+import { heightAt, biomeWeights, isRock } from '../world/gen.js';
 import { groundAt } from '../world/groundcut.js';
 import { heldModel, isLeftHanded } from '../player/held.js';
 import { updateFx } from '../render/fx.js';
@@ -53,7 +53,12 @@ export function installGame(g) {
   g.flashSky = flashSky;
   g.nearMsg = (pos, m) => { if (pos.distanceTo(player.pos) < 25) hud.toast(m); };
   g.sound = sound;
-  player.onStep = (k) => { if (k === 'step') sound('step', player.swimming ? 'water' : g.build.floorAt(player.pos.x, player.pos.z, player.pos.y) > player.pos.y - 0.1 ? 'wood' : 'ground'); else sound(k); };
+  // what the feet come down on, for the footsteps and landings: water (swimming or wading), a building's boards, a site's
+  // paving or bare rock (the one slope rule), the sand along the shore (not the marsh), the forest's leaf litter, or the
+  // meadows' grass and earth
+  const surface = () => { const p = player.pos; if (player.swimming || groundAt(p.x, p.z) < 0) return 'water'; if (g.build.floorAt(p.x, p.z, p.y) > p.y - 0.1) return 'wood';
+    if (g.structures.floorAt(p.x, p.z, p.y) > p.y - 0.1 || isRock(p.x, p.z)) return 'stone'; const w = biomeWeights(p.x, p.z); return heightAt(p.x, p.z) < 1.6 && w.v < 0.5 ? 'sand' : w.y > 0.5 ? 'leaves' : 'ground'; };
+  player.onStep = (k) => sound(k, k === 'step' || k === 'land' ? surface() : undefined);
 
   // ---- giving items: into the pack, the rest at your feet
   g.give = (id, n = 1, extra) => {

@@ -384,7 +384,7 @@ function propGeo(species, v) {
   const P = PROPS[k];
   if (!P.packed && FLORA[species]) {
     const box = new THREE.Box3(); for (const g of [P.geo, P.cards]) if (g) { g.computeBoundingBox(); box.union(g.boundingBox); }
-    const g = floraGeo(species, v, box, TREE_TYPES.has(species)); if (g) Object.assign(P, { geo: g.geo, lo: g.lo || g.geo, cards: g.cards, loCards: g.lo ? g.loCards : g.cards, cardMat: g.cards && packCardMat(g.map), leafFar: !!g.cards, packed: true });
+    const g = floraGeo(species, v, box, TREE_TYPES.has(species)); if (g) Object.assign(P, { geo: g.geo, lo: g.lo || g.geo, cards: g.cards, loCards: g.lo ? g.loCards : g.cards, geo2: g.mid, cards2: g.mid ? g.midCards : null, cardMat: g.cards && packCardMat(g.map), leafFar: !!g.cards, packed: true });   // (geo2: the near band's further half, vegetation.js)
   }
   return P;
 }

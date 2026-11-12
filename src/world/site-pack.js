@@ -34,11 +34,18 @@ export function sitePropAt(k, sc = 1) { const S = SITE[k]; return S ? [S.geo.clo
 // Empire pieces, each material keeping its own texture: plaster, roof tiles, marble, the atlas). Each comes as a list of
 // { geo, mat }, one per material, standing on the ground and centred; a missing pack leaves the list empty and the
 // places stand bare.
-const PIECES = {};
+const PIECES = {}, OWN = {};   // (OWN: where each one's own origin went when it was centred)
 export const PIECE_NAMES = ['twHouseA', 'twHouseB', 'twHouseC', 'twHouseD', 'twHouseE', 'twHouseF', 'twShed', 'twShell', 'twStoa', 'twTempleRuin', 'twFountain', 'twWell', 'twAwning', 'twTable',
   'twBench', 'twCart', 'twCartB', 'twBaskets', 'twBasket', 'twSack', 'twSacks', 'twVases', 'twJars', 'twVase', 'twJar', 'twStatue', 'twStatueBroken', 'twMarblePile', 'twDrum', 'twRubbleA',
   'twRubbleB', 'twRubbleC', 'twStack', 'twColumn', 'twColumnBase', 'twBrazier', 'twStraw', 'twStrawBundle', 'twFence', 'twBanner', 'twAnvil', 'twForge', 'twKiln', 'twPlinth', 'twRoad', 'twGrind',
-  'twFirepit', 'twCenser', 'twBowl', 'twLogs', 'twPergola'];
+  'twFirepit', 'twCenser', 'twBowl', 'twLogs', 'twPergola',
+  // the trial's places (structures.js), whole or in parts: the temple out of the pack's demo scene; the Labyrinth's ashlar
+  // walls and posts, its gate, columns, braziers and the stepped altar; the farmhouse and its furniture; the shrine's steps,
+  // the reliefs of the Chimera and the Minotaur, the summit's altar and fire bowl; the bones of the beasts' meals (other
+  // packs' own models)
+  'plTemple', 'plWall', 'plWallPost', 'plGatePost', 'plBeam', 'plBrazier', 'plColumn', 'plColumnHalf', 'plPile', 'plBlock', 'plDais',
+  'plFarmhouse', 'plLoom', 'plBed', 'plTable', 'plStool', 'plSteps', 'plSymChimera', 'plSymMinotaur', 'plBomos', 'plFireBowl',
+  'all/pnb-swamp-marshland/sm-prop-bone-pile-01', 'all/pnb-swamp-marshland/sm-prop-bone-pile-02', 'all/pnb-swamp-marshland/sm-prop-bone-ribcage-01', 'all/pnb-swamp-marshland/sm-prop-bone-skull-01'];
 export function loadPieces() {
   const mats = new Map();   // (one material per texture or colour, wet in the rain; pale palettes taken down as above)
   const matFor = (src) => { const key = src.map ? src.map.uuid : src.color.getHexString(); if (!mats.has(key)) mats.set(key, wettable(new THREE.MeshStandardMaterial({ map: src.map, color: src.map ? 0xb4b4b4 : src.color.clone().multiplyScalar(0.8), roughness: 0.85 }), { dark: 0.68, gloss: 0.3 })); return mats.get(key); };
@@ -47,8 +54,13 @@ export function loadPieces() {
     gl.scene.traverse((m) => { if (!m.isMesh) return; const g = m.geometry.clone().applyMatrix4(m.matrixWorld); for (const a of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(a)) g.deleteAttribute(a); if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); const mt = matFor(m.material); (by.get(mt) || by.set(mt, []).get(mt)).push(g.index ? g.toNonIndexed() : g); });
     const all = new THREE.Box3(); for (const gs of by.values()) for (const g of gs) { g.computeBoundingBox(); all.union(g.boundingBox); }
     const c = all.getCenter(new THREE.Vector3());
-    PIECES[k] = [...by].map(([mat, gs]) => ({ geo: mergeGeometries(gs).translate(-c.x, -all.min.y, -c.z), mat }));
+    PIECES[k] = [...by].map(([mat, gs]) => ({ geo: mergeGeometries(gs).translate(-c.x, -all.min.y, -c.z), mat })); OWN[k] = [c.x, all.min.y, c.z];
   }).catch(() => {})));
 }
-// A piece placed for a site's merged parts: [[geo, mat]...] at (x, y, z), turned rot about y and scaled s (empty without the pack)
-export function piece(k, x, y, z, rot = 0, s = 1) { return (PIECES[k] || []).map(({ geo, mat }) => [geo.clone().scale(s, s, s).rotateY(rot).translate(x, y, z), mat]); }
+// A piece placed for a site's merged parts: [[geo, mat]...] at (x, y, z), turned rot about y and scaled s (or [sx, sy, sz]
+// along its own axes) (empty without the pack)
+export function piece(k, x, y, z, rot = 0, s = 1) { const [a, b, c] = Array.isArray(s) ? s : [s, s, s]; return (PIECES[k] || []).map(({ geo, mat }) => [geo.clone().scale(a, b, c).rotateY(rot).translate(x, y, z), mat]); }
+// The same, with the model's own origin (not the middle of its foot) at x, y, z: for the places put together from the demo
+// scene, whose floors, walls and steps the site builders know by where they stand from that origin
+export function pieceAt(k, x, y, z, rot = 0, s = 1) { const o = OWN[k]; if (!o) return []; const c = Math.cos(rot), sn = Math.sin(rot); return piece(k, x + s * (o[0] * c + o[2] * sn), y + s * o[1], z + s * (-o[0] * sn + o[2] * c), rot, s); }
+export const hasPiece = (k) => !!PIECES[k];

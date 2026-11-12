@@ -1,7 +1,7 @@
 // The world map (M) and the compass. The map is painted once by a worker and uncovered as you travel; places appear
 // on it when you find them, or when a clue or the trial reveals them. The compass band at the top shows the bearing
 // and the marked places ahead.
-import { icon, iconImg } from './icons.js';
+import { glyph as icon, iconImg } from './icons.js';   // (the map's marks stay drawn: symbols, not pictures)
 import { SITES } from '../world/sites.js';
 import { BIOME_NAMES, biomeAt } from '../world/gen.js';
 import { input, lock, unlock } from '../input.js';

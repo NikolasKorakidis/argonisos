@@ -10,13 +10,17 @@ import * as THREE from 'three';
 import { loadPack, bake } from '../assets.js';
 import { wettable } from '../world/wetness.js';
 
-const wall = (h) => [-1.5, 1.5, 0, h, -0.15, 0.15];
+// (a wall's logs end rounded, short of the corner: drawn half the wall's thickness longer at each end, so they reach the
+// outer face of the wall across the corner and overlap their neighbours in a row, and 4 cm down into the floor, so no
+// daylight shows through the corners, the joints or under the bottom log; the door frame only 2 cm, or its opening
+// would grow wider than the door)
+const wall = (h, w = 1.65) => [-w, w, -0.04, h, -0.15, 0.15];
 const roof = (run, rise) => ({ box: [-1.5, 1.5, -0.45 * rise / run, rise + 0.3, -run - 0.05, 0.45], slope: true });
 // a gable end: the triangle of logs, and over its sloping edges the thatch's end cap (the kit's "roof end"), sized like the
 // roof panels it closes (out to their eaves, up to their top) and centred on the gable, so it caps the panels' cut ends
 const end = (file, trim, run, rise) => ({ file, box: [-run, run, 0, rise, -0.15, 0.15], trim: { file: trim, box: [-run - 0.45, run + 0.45, -0.45 * rise / run, rise + 0.3, -0.4, 0.4] } });
 const KIT = {
-  wall: { file: 'kWall', box: wall(3) }, wallHalf: { file: 'kWallLow', box: wall(1) }, doorframe: { file: 'kDoorWall', box: wall(3) },
+  wall: { file: 'kWall', box: wall(3) }, wallHalf: { file: 'kWallLow', box: wall(1) }, doorframe: { file: 'kDoorWall', box: wall(3, 1.52) },
   door: { file: 'kDoor', box: [0, 1.36, 0, 2.28, -0.05, 0.05] },
   beamV: { file: 'kBeam', box: [-0.13, 0.13, 0, 3, -0.13, 0.13] },
   beamH: { file: 'kBeamH', box: [-1.5, 1.5, -0.13, 0.13, -0.13, 0.13] },   // (a squared beam, lying as it comes)
@@ -29,7 +33,7 @@ const KIT = {
   awning: { file: 'kAwning', box: [-1.5, 1.5, 0, 0.67, -1.5, 0.1], slope: true },
   gateL: { file: 'kGateL', box: [0, 2, 0, 2.4, -0.08, 0.08] }, gateR: { file: 'kGateR', box: [-2, 0, 0, 2.4, -0.08, 0.08] },
   workbench: { file: 'kWorkbench', box: [-1, 1, 0, 0.98, -0.45, 0.45] }, campfire: { file: 'kCampfire', box: [-0.7, 0.7, 0, 0.5, -0.7, 0.7], uniform: true },
-  bed: { file: 'kBed', box: [-0.55, 0.55, 0, 0.6, -1.05, 1.05] },
+  bed: { file: 'kBed', box: [-0.55, 0.55, 0, 0.6, -1.05, 1.05], uniform: true },   // (a low pallet bed: in proportion it's lower than the bed you lie on)
   cookingStand: { file: 'kCookStand', box: [-0.85, 0.85, 0, 1.12, -0.45, 0.45], uniform: true },   // (the fish rack at half its size, its bar where the meat hangs)
   chest: { file: 'kChest', box: [-0.5, 0.5, 0, 0.7, -0.3, 0.3], uniform: true }, torchStand: { file: 'kTorchStand', box: [-0.15, 0.15, 0, 1.62, -0.15, 0.15], uniform: true },
 };

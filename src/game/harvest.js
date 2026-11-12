@@ -24,8 +24,10 @@ const woodOf = (name, s) => Math.round((BIG.has(name) ? 9 : SMALL.has(name) ? 3 
 const rockHP = (name, s) => (name === 'boulder' ? 70 : 30) * s;
 // The log a felled tree leaves: one of the packs' fallen trunks (tools/assets, pLog…), turned to lie along x and centred,
 // then stretched to the log's own length and girth, so its colliders and the grass cleared round it stay as they were.
-// Which one from a hash of where the tree stood; the carved cylinder stands in without the pack.
-const LOGS = ['pLog0', 'pLog1', 'pLog2', 'pLog3', 'pLog4', 'pLog5'], LOOKS = [];
+// Which one from a hash of where the tree stood; the carved cylinder stands in without the pack. (Only the two cut
+// trunks: the others are fallen trees with their root plates, or pale swamp logs, which squashed to a log's girth came
+// out as flat wedges and grey tangles.)
+const LOGS = ['pLog2', 'pLog3'], LOOKS = [];
 const logMat = wettable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { dark: 0.66, gloss: 0.3 });
 LOGS.forEach((f, i) => loadPack(f).then((gl) => {
   const g = bake(gl.scene, true); g.computeBoundingBox(); let s = g.boundingBox.getSize(new THREE.Vector3()); if (s.z > s.x) g.rotateY(Math.PI / 2);
