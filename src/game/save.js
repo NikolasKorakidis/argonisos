@@ -1,6 +1,7 @@
 // Saving the world in the browser: the player, the pack, time and the trial's progress, everything built, every tree
 // felled and stone taken, the explored map, graves. Saved every minute and when the page closes.
 import * as THREE from 'three';
+import { loadPack, bake } from '../assets.js';
 
 const KEY = 'argonisos.world.v1';
 export const hasSave = () => { try { return !!localStorage.getItem(KEY); } catch { return false; } };
@@ -52,23 +53,36 @@ export function load(g) {
   return true;
 }
 
-// ---- graves: when you fall, everything you carried stays where you fell, under a little marble stele with a light
+// ---- graves: when you fall, everything you carried stays where you fell, under a little marble stele with a light (the
+// Ancient Empire pack's marble finial on its plinth, tools/assets sStele, once it's loaded; a carved slab without the pack)
+const STELE_H = 1.1, steleMat = new THREE.MeshStandardMaterial({ color: 0xe0d8c8, roughness: 0.6 });
 export class Graves {
-  constructor(g) { this.g = g; this.list = []; }
+  constructor(g) {
+    this.g = g; this.list = []; this.stele = null;
+    loadPack('sStele').then((gl) => {
+      let map = null; gl.scene.traverse((m) => { if (m.isMesh && !map) map = m.material.map; });
+      const geo = bake(gl.scene); geo.computeBoundingBox(); const b = geo.boundingBox, k = STELE_H / (b.max.y - b.min.y);
+      geo.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2).scale(k, k, k);
+      this.stele = { geo, mat: new THREE.MeshStandardMaterial({ map, color: 0xa8a49c, roughness: 0.6 }) }; for (const gr of this.list) this.dress(gr);
+    }).catch(() => {});
+  }
+  dress(gr) {
+    const st = gr.stone; st.clear(); const add = (geo, mat, y = 0) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; m.castShadow = m.receiveShadow = true; st.add(m); };
+    if (this.stele) { add(this.stele.geo, this.stele.mat); return; }
+    add(new THREE.BoxGeometry(0.5, 0.9, 0.16), steleMat, 0.45); add(new THREE.CylinderGeometry(0.25, 0.25, 0.16, 12, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2), steleMat, 0.9);
+  }
   make(x, y, z, slots) {
     const grp = new THREE.Group(); grp.position.set(x, y, z);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xe0d8c8, roughness: 0.6 });
-    const st = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.9, 0.16), mat); st.position.y = 0.45; st.castShadow = true; grp.add(st);
-    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.16, 12, 1, false, 0, Math.PI).rotateX(Math.PI / 2).rotateZ(Math.PI / 2), mat); top.rotation.set(0, 0, 0); top.position.y = 0.9; grp.add(top);
+    const stone = new THREE.Group(); grp.add(stone);
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.25, 40, 8, 1, true).translate(0, 20, 0), new THREE.MeshBasicMaterial({ color: 0xffe0a0, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
     grp.add(beam); this.g.scene.add(grp);
-    const gr = { grp, x, y, z, slots }; this.list.push(gr); return gr;
+    const gr = { grp, stone, beam, x, y, z, slots }; this.dress(gr); this.list.push(gr); return gr;
   }
   // on death: put everything you carry in a grave
   fall() { const P = this.g.player, slots = this.g.inv.slots.map((s) => (s ? { ...s, worn: undefined } : null)).filter(Boolean); if (!slots.length) return; this.make(P.pos.x, P.pos.y, P.pos.z, slots); this.g.inv.slots.fill(null); this.g.inv.onChange?.(); }
   interactable(pos) { for (const gr of this.list) if (Math.hypot(gr.x - pos.x, gr.z - pos.z) < 2.2) return { label: 'Take back your belongings', sub: 'Your grave', use: () => this.recover(gr) }; return null; }
   recover(gr) { for (const s of gr.slots) { const left = this.g.inv.add(s.id, s.n, s.dur !== undefined ? { dur: s.dur } : {}); if (left) this.g.pickups.drop(s.id, left, gr.x, gr.z, undefined, gr.y); } this.g.scene.remove(gr.grp); this.list.splice(this.list.indexOf(gr), 1); this.g.sound?.('reveal'); this.g.hud.toast('You take back what was yours'); }
-  update(dt) { const t = performance.now() * 0.001; for (const gr of this.list) gr.grp.children[2].material.opacity = 0.14 + Math.sin(t * 2) * 0.05; void dt; }
+  update(dt) { const t = performance.now() * 0.001; for (const gr of this.list) gr.beam.material.opacity = 0.14 + Math.sin(t * 2) * 0.05; void dt; }
   toJSON() { return this.list.map((g) => ({ x: g.x, y: g.y, z: g.z, slots: g.slots })); }
   load(list) { for (const o of list) this.make(o.x, o.y, o.z, o.slots); }
 }

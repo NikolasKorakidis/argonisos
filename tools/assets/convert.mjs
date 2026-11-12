@@ -66,12 +66,35 @@ function compose(name, e, out) {
   console.log(name.padEnd(10), (fs.statSync(out).size / 1024).toFixed(0).padStart(6), 'KB ', '(composed)');
 }
 
-for (const [name, e] of Object.entries(manifest.models)) {
-  if (want.length && !want.includes(name)) continue;
+// A plant's lighter versions (manifest "lod": the level of detail its near version is made from; "far": { lod, tris },
+// the mid band's, brought down to about that many triangles): the catalogue's export again, of that level
+// (everything.py, KEEP_LOD), in assets/models/pack/all-lod<n>/
+let catalogue = null, index = null;
+function lodOf(id, lod) {
+  if (!lod) return path.join(ROOT, 'assets/models/pack/all', id + '.glb');
+  const out = path.join(ROOT, `assets/models/pack/all-lod${lod}`, id + '.glb'); if (fs.existsSync(out)) return out;
+  catalogue ||= JSON.parse(fs.readFileSync(path.join(ROOT, 'assets/models/pack/all/catalogue.json'), 'utf8')).items;
+  if (!index) { index = path.join(tmp, 'index.json'); execFileSync('node', [path.join(HERE, 'library-index.mjs'), index], { stdio: 'ignore' }); }
+  const it = catalogue.find((i) => i.id === id); if (!it) throw new Error('no ' + id + ' in the catalogue');
+  execFileSync(BLENDER, ['-b', '--factory-startup', '-P', path.join(HERE, 'everything.py'), '--', index, it.pack, path.dirname(out), path.join(tmp, 'rec.json')],
+    { env: { ...process.env, ONLY: it.file, KEEP_LOD: String(lod) }, stdio: 'ignore' });
+  if (!fs.existsSync(out)) throw new Error(`no LOD ${lod} export of ${id}`); return out;
+}
+// (an atlas convert.py made of a model's card textures: to WebP beside the others)
+function atlases(log) {
+  for (const l of log.split('\n').filter((x) => x.startsWith('ATLAS '))) {
+    const [, key, png] = l.split(' '), t = path.join(TEX_OUT, key + '.webp');
+    execFileSync('cwebp', ['-quiet', '-q', '88', '-alpha_q', '100', png, '-o', t]); fs.rmSync(png); console.log('atlas', key, (fs.statSync(t).size / 1024).toFixed(0), 'KB');
+  }
+}
+
+for (const [name0, e0] of Object.entries(manifest.models).flatMap(([n, e]) => (e.far ? [[n, e], [n + '_far', { ...e, lod: e.far.lod, decimate: e.far.tris, cardShare: undefined, cardMin: 0.12, solidMin: undefined, far: undefined }]] : [[n, e]]))) {
+  const name = name0, e = e0;
+  if (want.length && !want.includes(name.replace(/_far$/, ''))) continue;
   if (e.compose || e.house) { compose(name, e, path.join(ROOT, 'assets/models/pack', name + '.glb')); continue; }
   if (e.shared && !manifest.textures?.[e.shared]) throw new Error(`${name}: no texture ${e.shared} in the manifest`);
   // (a plant comes from the catalogue's export of its model, everything.mjs, which has the right texture on each part)
-  const job = { ...e, name, src: e.plant ? path.join(ROOT, 'assets/models/pack/all', e.plant + '.glb') : path.join(PACK, e.src), plant: e.plant && path.join(ROOT, 'assets/models/pack/tex'), texture: e.texture && path.join(PACK, e.texture), out: path.join(ROOT, 'assets/models/pack', name + '.glb'),
+  const job = { ...e, name, src: e.plant ? lodOf(e.plant, e.lod) : path.join(PACK, e.src), plant: e.plant && path.join(ROOT, 'assets/models/pack/tex'), texture: e.texture && path.join(PACK, e.texture), out: path.join(ROOT, 'assets/models/pack', name + '.glb'),
     clips: typeof e.clips === 'string' ? manifest.clipSets[e.clips] : e.clips, also: e.also?.map((f) => path.join(PACK, f)), bakeColors: e.bakeColors && path.join(PACK, e.bakeColors) };
   if (e.metaClips) job.splits = metaSplits(job.src, e.metaClips);
   fs.mkdirSync(path.dirname(job.out), { recursive: true });
@@ -80,6 +103,7 @@ for (const [name, e] of Object.entries(manifest.models)) {
   const log = execFileSync(BLENDER, ['-b', '--factory-startup', '-P', path.join(HERE, 'convert.py'), '--', jf], { encoding: 'utf8', maxBuffer: 64e6 });
   const done = log.split('\n').find((l) => l.startsWith('CONVERTED'));
   if (!done) { console.error(log.slice(-3000)); process.exit(1); }
-  console.log(name.padEnd(10), (fs.statSync(job.out).size / 1024).toFixed(0).padStart(6), 'KB ', done.split(' clips ')[1]);
+  atlases(log);
+  console.log(name.padEnd(10), (fs.statSync(job.out).size / 1024).toFixed(0).padStart(6), 'KB ', done.split(' clips ')[1], log.split('\n').find((l) => l.startsWith('DECIMATED')) || '');
 }
 await page?.close();

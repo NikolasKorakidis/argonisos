@@ -23,23 +23,74 @@
       "palette": true,
       "clips": "polyart"
     },
+    "calf": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/FBX/Calf/LowPoly_Deer_Calf_IP.fbx",
+      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/Textures/PolyArt_Forest_color.png",
+      "palette": true,
+      "clips": "polyart"
+    },
     "fox": {
       "src": "PolyArt/Animals/PolyArt_Forest_Animals/Foxes/FBX/Adult/Fox_IP.fbx",
-      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/Textures/PolyArt_Forest_color.png",
+      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Foxes/Textures/PolyArt_Forest_color.png",
+      "palette": true,
+      "clips": "polyart"
+    },
+    "foxCub": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Foxes/FBX/Cub/Fox_cub_IP.fbx",
+      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Foxes/Textures/PolyArt_Forest_color.png",
       "palette": true,
       "clips": "polyart"
     },
     "hare": {
       "src": "PolyArt/Animals/PolyArt_Forest_Animals/Hares/FBX/Adult/LowPoly_Hare_IP.fbx",
-      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/Textures/PolyArt_Forest_color.png",
+      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Hares/Textures/PolyArt_Forest_color.png",
+      "palette": true,
+      "clips": "polyart"
+    },
+    "hareCub": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Hares/FBX/Cub/LowPoly_Hare_Cub_IP.fbx",
+      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Hares/Textures/PolyArt_Forest_color.png",
       "palette": true,
       "clips": "polyart"
     },
     "boar": {
       "src": "PolyArt/Animals/PolyArt_Forest_Animals/Boars/FBX/Adult/LowPoly_Boar_IP.fbx",
-      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/Textures/PolyArt_Forest_color.png",
+      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Boars/Texture/PolyArt_Forest_color.png",
       "palette": true,
       "clips": "polyart"
+    },
+    "boarCub": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Boars/FBX/Cub/LowPoly_Boar_cub_IP.fbx",
+      "texture": "PolyArt/Animals/PolyArt_Forest_Animals/Boars/Texture/PolyArt_Forest_color.png",
+      "palette": true,
+      "clips": "polyart"
+    },
+    "stagLooks": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/FBX/Stag/LowPoly_Deer_stag_All.fbx"
+    },
+    "doeLooks": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/FBX/Doe/LowPoly_Deer_Doe_All.fbx"
+    },
+    "calfLooks": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Deers/FBX/Calf/LowPoly_Deer_Calf_All.fbx"
+    },
+    "foxLooks": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Foxes/FBX/Adult/Fox_All.fbx"
+    },
+    "foxCubLooks": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Foxes/FBX/Cub/Fox_cub_All.fbx"
+    },
+    "hareLooks": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Hares/FBX/Adult/LowPoly_Hare_All.fbx"
+    },
+    "hareCubLooks": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Hares/FBX/Cub/LowPoly_Hare_Cub_All.fbx"
+    },
+    "boarLooks": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Boars/FBX/Adult/LowPoly_Boar_All.fbx"
+    },
+    "boarCubLooks": {
+      "src": "PolyArt/Animals/PolyArt_Forest_Animals/Boars/FBX/Cub/LowPoly_Boar_cub_All.fbx"
     },
     "minotaur": {
       "src": "Magic Pig Games (Infinity PBR)/Characters/Minotaur/Models/Minotaur_LP.fbx",
@@ -217,11 +268,11 @@
       "static": true,
       "join": true,
       "also": [
-        "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_door_frame_01.fbx"
+        "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_door_frame_05.fbx"
       ]
     },
     "kDoor": {
-      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_door_04a.fbx",
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_door_03a.fbx",
       "shared": "rpgpp",
       "static": true,
       "join": true
@@ -232,26 +283,38 @@
       "static": true,
       "join": true
     },
+    "kBeamD": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_support_beam_int_01a_4m.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kBeamH": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_balcony_01_support_b.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
     "kFloor": {
-      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_floor_02a_3x3.fbx",
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_floor_01b_3x3.fbx",
       "shared": "rpgpp",
       "static": true,
       "join": true
     },
     "kRoof63": {
-      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_02a_6x3x3_half.fbx",
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_02b_6x3x3_half.fbx",
       "shared": "rpgpp",
       "static": true,
       "join": true
     },
     "kRoof65": {
-      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_02a_6x5x3_half.fbx",
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_02b_6x5x3_half.fbx",
       "shared": "rpgpp",
       "static": true,
       "join": true
     },
     "kRoof94": {
-      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_02a_9x4x3_half.fbx",
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_02b_9x4x3_half.fbx",
       "shared": "rpgpp",
       "static": true,
       "join": true
@@ -274,15 +337,39 @@
       "static": true,
       "join": true
     },
+    "kTrim63": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_02_6x3x3_end_01.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kTrim65": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_02_6x5x3_end_01.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kTrim94": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_roof_02_9x4x3_end_01.fbx",
+      "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
     "kStairs": {
       "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_stairs_interior_02a_3m.fbx",
       "shared": "rpgpp",
       "static": true,
       "join": true
     },
-    "kFence": {
-      "src": "RPGPP_AG/Models/Structures/Exterior/rpgpp_ag_fence_01a_2m.fbx",
+    "kStairsShort": {
+      "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_stairs_entrance_01.fbx",
       "shared": "rpgpp",
+      "static": true,
+      "join": true
+    },
+    "kFence": {
+      "src": "Synty/PolygonVikings/Models/SM_Prop_Fence_Stick_01.fbx",
+      "shared": "vikings",
       "static": true,
       "join": true
     },
@@ -317,26 +404,26 @@
       "join": true
     },
     "kCampfire": {
-      "src": "RPGPP_AG/Models/Props/rpgpp_ag_camp_fire_01.fbx",
-      "shared": "rpgpp",
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Prop_Campfire_01.fbx",
+      "shared": "alpine",
       "static": true,
       "join": true
     },
     "kCookStand": {
-      "src": "RPGPP_AG/Models/Props/rpgpp_ag_hanger_wood_02a.fbx",
-      "shared": "rpgpp",
+      "src": "Synty/PolygonVikings/Models/SM_Prop_Fish_Rack_02.fbx",
+      "shared": "vikings",
       "static": true,
       "join": true
     },
     "kBed": {
-      "src": "RPGPP_AG/Models/Props/rpgpp_ag_bed_02b.fbx",
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_bed_02a.fbx",
       "shared": "rpgpp",
       "static": true,
       "join": true
     },
     "kTorchStand": {
-      "src": "RPGPP_AG/Models/Props/rpgpp_ag_torch_standing_01.fbx",
-      "shared": "rpgpp",
+      "src": "Synty/PolygonNatureBiomes/PNB_Tropical_Jungle/Models/SM_Prop_Tiki_Torch_02.fbx",
+      "shared": "tropical",
       "static": true,
       "join": true
     },
@@ -347,268 +434,260 @@
       "join": true
     },
     "pStone": {
-      "src": "Synty/PolygonNature/Models/SM_Rock_01.fbx",
-      "shared": "nature",
+      "src": "Synty/PolygonVikings/Models/SM_Env_Stone_01.fbx",
+      "plant": "polygonvikings/sm-env-stone-01",
       "static": true,
-      "join": true
+      "join": true,
+      "tint": [
+        1.25,
+        1.25,
+        1.25
+      ]
     },
     "pBranch": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Branch_01.fbx",
-      "shared": "nature",
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Branch_04.fbx",
+      "plant": "pnb-alpine-mountain/sm-env-branch-04",
+      "static": true,
+      "join": true,
+      "tint": [
+        2.25,
+        2.25,
+        2.25
+      ]
+    },
+    "pBranch1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Models/SM_Env_Branch_04.fbx",
+      "plant": "pnb-enchanted-forest/sm-env-branch-04",
+      "static": true,
+      "join": true,
+      "tint": [
+        2.1,
+        2.1,
+        2.1
+      ]
+    },
+    "pBranch2": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Models/SM_Env_Branch_02.fbx",
+      "plant": "pnb-enchanted-forest/sm-env-branch-02",
+      "static": true,
+      "join": true,
+      "tint": [
+        2.1,
+        2.1,
+        2.1
+      ]
+    },
+    "pBranch3": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Models/SM_Env_Branch_03.fbx",
+      "plant": "pnb-enchanted-forest/sm-env-branch-03",
+      "static": true,
+      "join": true,
+      "tint": [
+        2.1,
+        2.1,
+        2.1
+      ]
+    },
+    "pBranch4": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Branch_02.fbx",
+      "plant": "pnb-alpine-mountain/sm-env-branch-02",
+      "static": true,
+      "join": true,
+      "tint": [
+        2.25,
+        2.25,
+        2.25
+      ]
+    },
+    "pLight0": {
+      "src": "GreekWarfare/Meshes/Stone_Big_StoneThrower.fbx",
+      "plant": "greekwarfare/stone-big-stonethrower",
       "static": true,
       "join": true
     },
-    "pBush": {
-      "src": "Synty/PolygonNature/Models/SM_Plant_Bush_01.fbx",
-      "shared": "nature",
+    "pLight1": {
+      "src": "GreekWarfare/Meshes/Stone_Small_StoneThrower.fbx",
+      "plant": "greekwarfare/stone-small-stonethrower",
+      "static": true,
+      "join": true
+    },
+    "pDandelion0": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_flower_04a.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-flower-04a",
+      "static": true,
+      "join": true
+    },
+    "pDandelion1": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_flower_04b.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-flower-04b",
+      "static": true,
+      "join": true
+    },
+    "pMoon0": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_flower_03a.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-flower-03a",
+      "static": true,
+      "join": true
+    },
+    "pMoon1": {
+      "src": "RPGPP_AG/Models/Nature/rpgpp_ag_flower_03b.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-flower-03b",
+      "static": true,
+      "join": true
+    },
+    "pFeather": {
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_feather pen_01b.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-feather-pen-01b",
       "static": true,
       "join": true
     },
     "pBones": {
-      "src": "Synty/PolygonFantasyRivals/Models/SM_Prop_Bones_01.fbx",
-      "shared": "rivals",
+      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Prop_Bone_Pile_02.fbx",
+      "plant": "pnb-swamp-marshland/sm-prop-bone-pile-02",
+      "static": true,
+      "join": true,
+      "tint": [
+        1.45,
+        1.45,
+        1.45
+      ]
+    },
+    "pBones1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Arid_Desert/Models/SM_Prop_Bones_06.fbx",
+      "plant": "pnb-arid-desert/sm-prop-bones-06",
+      "static": true,
+      "join": true
+    },
+    "pBones2": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Arid_Desert/Models/SM_Prop_Bones_07.fbx",
+      "plant": "pnb-arid-desert/sm-prop-bones-07",
+      "static": true,
+      "join": true
+    },
+    "pBush": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Bush_01.fbx",
+      "texture": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Textures/Alpine_Bush_01.tga",
+      "static": true,
+      "join": true
+    },
+    "pBush1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Bush_02.fbx",
+      "texture": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Textures/Alpine_Bush_02.tga",
+      "static": true,
+      "join": true
+    },
+    "pBush2": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Bush_02_Alt.fbx",
+      "texture": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Textures/Alpine_Bush_02.tga",
+      "static": true,
+      "join": true
+    },
+    "pBush3": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Bush_03.fbx",
+      "plant": "pnb-meadow-forest/sm-env-bush-03",
+      "static": true,
+      "join": true,
+      "lod": 2
+    },
+    "pBush4": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Tropical_Jungle/Models/SM_Env_Bush_Tropical_01.fbx",
+      "plant": "pnb-tropical-jungle/sm-env-bush-tropical-01",
+      "static": true,
+      "join": true
+    },
+    "pBush5": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Tropical_Jungle/Models/SM_Env_Bush_Tropical_04.fbx",
+      "plant": "pnb-tropical-jungle/sm-env-bush-tropical-04",
+      "static": true,
+      "join": true,
+      "lod": 1,
+      "decimate": 1500,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "pBush6": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Grass_Bush_01.fbx",
+      "texture": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Textures/Plants/Grass_01.tga",
       "static": true,
       "join": true
     },
     "pSack": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Prop_Sack_01.fbx",
-      "shared": "generic",
+      "src": "RPGPP_AG/Models/Props/rpgpp_ag_basket_02e.fbx",
+      "plant": "rpgpp-ag/rpgpp-ag-basket-02e",
       "static": true,
       "join": true
     },
-    "fl_olive0": {
-      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_01.fbx",
+    "pLog0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Models/SM_Env_Log_01.fbx",
+      "plant": "pnb-enchanted-forest/sm-env-log-01",
       "static": true,
       "join": true,
-      "plant": "polygonancientempire/sm-env-tree-01"
-    },
-    "fl_olive1": {
-      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_03.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonancientempire/sm-env-tree-03"
-    },
-    "fl_olive2": {
-      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_04.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonancientempire/sm-env-tree-04"
-    },
-    "fl_oak0": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Round_05.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-round-05"
-    },
-    "fl_oak1": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Round_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-round-01"
-    },
-    "fl_oak2": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_04.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-04"
-    },
-    "fl_cypress0": {
-      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_Thin_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonancientempire/sm-env-tree-thin-01"
-    },
-    "fl_cypress1": {
-      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_Thin_02.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonancientempire/sm-env-tree-thin-02"
-    },
-    "fl_pomegranate0": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Round_02.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-round-02"
-    },
-    "fl_fig0": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Round_04.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-round-04"
-    },
-    "fl_fig1": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_04.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-04"
-    },
-    "fl_plane0": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Round_05.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-round-05"
-    },
-    "fl_plane1": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Round_02.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-round-02"
-    },
-    "fl_qtree0": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-01"
-    },
-    "fl_qtree1": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_02.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-02"
-    },
-    "fl_qpine0": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_TallRound_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-tallround-01"
-    },
-    "fl_fir0": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_PolyPine_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-polypine-01"
-    },
-    "fl_holm0": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Round_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-round-01"
-    },
-    "fl_qdead0": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Pine_Dead_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-pine-dead-01"
-    },
-    "fl_dead0": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Arid_Desert/Models/SM_Env_Tree_Dead_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "pnb-arid-desert/sm-env-tree-dead-01"
-    },
-    "fl_dead1": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Arid_Desert/Models/SM_Env_Tree_Dead_02.fbx",
-      "static": true,
-      "join": true,
-      "plant": "pnb-arid-desert/sm-env-tree-dead-02"
-    },
-    "fl_rock0": {
-      "src": "Synty/PolygonNature/Models/SM_Rock_Rounded_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-rock-rounded-01",
       "tint": [
-        0.8,
-        0.8,
-        0.8
+        1.5,
+        1.5,
+        1.5
       ]
     },
-    "fl_rock1": {
-      "src": "Synty/PolygonNature/Models/SM_Rock_Small_01.fbx",
+    "pLog1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Models/SM_Env_Log_02.fbx",
+      "plant": "pnb-enchanted-forest/sm-env-log-02",
       "static": true,
       "join": true,
-      "plant": "polygonnature/sm-rock-small-01",
       "tint": [
-        0.8,
-        0.8,
-        0.8
+        1.5,
+        1.5,
+        1.5
       ]
     },
-    "fl_boulder0": {
-      "src": "Synty/PolygonNature/Models/SM_Rock_Boulder_01.fbx",
+    "pLog2": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Models/SM_Env_Log_03.fbx",
+      "plant": "pnb-enchanted-forest/sm-env-log-03",
       "static": true,
       "join": true,
-      "plant": "polygonnature/sm-rock-boulder-01",
       "tint": [
-        0.8,
-        0.8,
-        0.8
+        1.5,
+        1.5,
+        1.5
       ]
     },
-    "fl_boulder1": {
-      "src": "Synty/PolygonNature/Models/SM_Rock_Rounded_01.fbx",
+    "pLog3": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Enchanted_Forest/Models/SM_Env_Log_04.fbx",
+      "plant": "pnb-enchanted-forest/sm-env-log-04",
       "static": true,
       "join": true,
-      "plant": "polygonnature/sm-rock-rounded-01",
       "tint": [
-        0.8,
-        0.8,
-        0.8
+        1.5,
+        1.5,
+        1.5
       ]
     },
-    "fl_reeds0": {
-      "src": "Synty/PolygonNature/Models/SM_Plant_Reeds_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-plant-reeds-01"
-    },
-    "fl_myrtle0": {
-      "src": "Synty/PolygonNature/Models/SM_Plant_Hedge_Bush_02.fbx",
+    "pLog4": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_Swamp_Log_01.fbx",
+      "plant": "pnb-swamp-marshland/sm-env-swamp-log-01",
       "static": true,
       "join": true,
       "tint": [
-        1.35,
-        1.35,
-        1.3
-      ],
-      "plant": "polygonnature/sm-plant-hedge-bush-02"
+        1.4,
+        1.4,
+        1.4
+      ]
     },
-    "fl_broom0": {
-      "src": "Synty/PolygonNature/Models/SM_Plant_Bush_03.fbx",
+    "pLog5": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_Swamp_Log_02.fbx",
+      "plant": "pnb-swamp-marshland/sm-env-swamp-log-02",
       "static": true,
       "join": true,
       "tint": [
-        1.15,
-        1.1,
-        0.6
-      ],
-      "plant": "polygonnature/sm-plant-bush-03"
-    },
-    "fl_redbush0": {
-      "src": "Synty/PolygonNature/Models/SM_Plant_Bush_02.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-plant-bush-02"
-    },
-    "fl_fern0": {
-      "src": "Synty/PolygonNature/Models/SM_Plant_Fern_02.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-plant-fern-02"
-    },
-    "fl_colfall0": {
-      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Block_04.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonancientempire/sm-prop-marble-block-04"
-    },
-    "fl_colfall1": {
-      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Pile_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonancientempire/sm-prop-marble-pile-01"
+        1.4,
+        1.4,
+        1.4
+      ]
     },
     "fl_colstand0": {
       "src": "Synty/PolygonAncientEmpire/Models/SM_Bld_Pillar_01.fbx",
       "static": true,
       "join": true,
       "plant": "polygonancientempire/sm-bld-pillar-01"
-    },
-    "fl_wallruin0": {
-      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Stack_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonancientempire/sm-prop-marble-stack-01"
     },
     "fl_amphorae0": {
       "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Vase_Pile_02.fbx",
@@ -676,21 +755,91 @@
       "static": true,
       "join": true
     },
+    "sStatue01": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_01.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sStatue04": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_04.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sStatue07": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_07.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sLion": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_Lion_01.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sBroken1": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_Broken_01.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sBroken2": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_Broken_02.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sBroken3": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_Broken_03.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sBroken4": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_Broken_04.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sBroken5": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_Broken_05.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sBroken6": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_Broken_06.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sBroken7": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_Broken_07.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sBroken8": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_Broken_08.fbx",
+      "shared": "statue",
+      "static": true,
+      "join": true
+    },
+    "sStele": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Bld_Roof_Topper_05.fbx",
+      "shared": "marble",
+      "static": true,
+      "join": true
+    },
     "dryadling": {
-      "src": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 1/Models/MonsterCreature1_LP.fbx",
-      "texture": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 1/Textures & Mateirals/MonsterCreature1_2.png",
-      "palette": true,
-      "via": "three",
-      "metaClips": {
-        "Idle": "Idle",
-        "Walk": "Walk",
-        "Hop": "Hop",
-        "Attack1": "Attack 1",
-        "Attack2": "Attack 2",
-        "GotHit": "Got Hit",
-        "Taunt": "Taunt",
-        "Death": "Death"
-      }
+      "src": "Synty/PolygonFantasyRivals/Models/Characters.fbx",
+      "meshes": [
+        "Character_EvilGod_01"
+      ],
+      "texture": "Synty/PolygonFantasyRivals/Textures/FantasyRivals_01_A.png",
+      "refit": "hero_rig.fbx"
     },
     "chimera": {
       "src": "Magic Pig Games (Infinity PBR)/Characters/Monster Creature 2/Model/MonsterCreature2_LP.fbx",
@@ -710,15 +859,47 @@
       }
     },
     "hero": {
+      "src": "Synty/PolygonGeneric/Models/Generic_Characters.fbx",
+      "meshes": [
+        "SM_Gen_Chr_Underwear_Male_01"
+      ],
+      "texture": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
+      "palette": true,
+      "refit": "hero_rig.fbx",
+      "proportions": {
+        "UpLeg": 1.06,
+        "Leg": 1.06,
+        "Arm": 0.95,
+        "ForeArm": 0.95
+      },
+      "wear": {}
+    },
+    "heroWoman": {
+      "src": "Synty/PolygonGeneric/Models/Generic_Characters.fbx",
+      "meshes": [
+        "SM_Gen_Chr_Underwear_Female_01"
+      ],
+      "texture": "Synty/PolygonGeneric/Textures/Alts/Generic_01_A.png",
+      "palette": true,
+      "refit": "hero_rig.fbx",
+      "proportions": {
+        "UpLeg": 1.06,
+        "Leg": 1.06,
+        "Arm": 0.95,
+        "ForeArm": 0.95
+      },
+      "wear": {}
+    },
+    "heroArmour": {
       "src": "GreekWarfare/Meshes/Character_CretanArcher.fbx",
       "texture": "GreekWarfare/Textures/GreekWarfareTextureRed.png",
       "palette": true,
       "refit": "hero_rig.fbx",
       "proportions": {
-        "UpLeg": 1.14,
-        "Leg": 1.14,
-        "Arm": 0.94,
-        "ForeArm": 0.94,
+        "UpLeg": 1.17,
+        "Leg": 1.31,
+        "Arm": 1.04,
+        "ForeArm": 1.05,
         "Hand": 0.85
       },
       "drop": [
@@ -761,7 +942,7 @@
     "dryad": {
       "src": "Synty/PolygonFantasyRivals/Models/Characters.fbx",
       "meshes": [
-        "Character_ForestGuardian_01"
+        "Character_ForestWitch_01"
       ],
       "texture": "Synty/PolygonFantasyRivals/Textures/FantasyRivals_01_A.png",
       "refit": "hero_rig.fbx"
@@ -769,13 +950,31 @@
     "giant": {
       "src": "Synty/PolygonFantasyRivals/Models/Characters_BR.fbx",
       "meshes": [
-        "Character_Troll_01"
+        "Character_MutantGuy_01"
       ],
-      "texture": "Synty/PolygonFantasyRivals/Textures/FantasyRivals_01_D.png",
+      "texture": "Synty/PolygonFantasyRivals/Textures/FantasyRivals_01_A.png",
       "refit": "hero_rig.fbx"
     },
     "trollClub": {
       "src": "Synty/PolygonFantasyRivals/Models/SM_Wep_Troll_01.fbx",
+      "shared": "rivals",
+      "static": true,
+      "join": true
+    },
+    "mutantClub": {
+      "src": "Synty/PolygonFantasyRivals/Models/SM_Wep_MutantGuy_01.fbx",
+      "shared": "rivals",
+      "static": true,
+      "join": true
+    },
+    "witchStaff": {
+      "src": "Synty/PolygonFantasyRivals/Models/SM_Wep_ForestWitch_01.fbx",
+      "shared": "rivals",
+      "static": true,
+      "join": true
+    },
+    "evilGodWeapon": {
+      "src": "Synty/PolygonFantasyRivals/Models/SM_Wep_EvilGod_01.fbx",
       "shared": "rivals",
       "static": true,
       "join": true
@@ -1954,60 +2153,6 @@
       "join": true,
       "plant": "pnb-tropical-jungle/sm-env-driftwood-04"
     },
-    "fl_qpine1": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Pine_Large_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-pine-large-01"
-    },
-    "fl_qpine2": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Pine_Large_02.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-pine-large-02"
-    },
-    "fl_fir1": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_PolyPine_02.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-polypine-02"
-    },
-    "fl_fir2": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Pine_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-pine-01"
-    },
-    "fl_holm1": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_03.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-03"
-    },
-    "fl_holm2": {
-      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_02.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonancientempire/sm-env-tree-02"
-    },
-    "fl_qdead1": {
-      "src": "Synty/PolygonNature/Models/SM_Tree_Birch_Dead_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonnature/sm-tree-birch-dead-01"
-    },
-    "fl_qdead2": {
-      "src": "Synty/PolygonGeneric/Models/SM_Gen_Env_Tree_Dead_01.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygongeneric/sm-gen-env-tree-dead-01"
-    },
-    "fl_pomegranate1": {
-      "src": "Synty/PolygonAncientEmpire/Models/SM_Env_Tree_03.fbx",
-      "static": true,
-      "join": true,
-      "plant": "polygonancientempire/sm-env-tree-03"
-    },
     "fl_flowers0": {
       "src": "RPGPP_AG/Models/Nature/rpgpp_ag_flower_01a.fbx",
       "plant": "rpgpp-ag/rpgpp-ag-flower-01a",
@@ -2140,18 +2285,6 @@
       "static": true,
       "join": true
     },
-    "fl_reeds1": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_Reeds_01.fbx",
-      "plant": "pnb-swamp-marshland/sm-env-reeds-01",
-      "static": true,
-      "join": true
-    },
-    "fl_reeds2": {
-      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_Reeds_02.fbx",
-      "plant": "pnb-swamp-marshland/sm-env-reeds-02",
-      "static": true,
-      "join": true
-    },
     "fl_bush0": {
       "src": "RPGPP_AG/Models/Nature/rpgpp_ag_bush_01.fbx",
       "plant": "rpgpp-ag/rpgpp-ag-bush-01",
@@ -2187,6 +2320,566 @@
       "static": true,
       "join": true,
       "height": 2.3
+    },
+    "fl_lavender0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Wildflowers_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-wildflowers-01",
+      "lod": 1
+    },
+    "fl_lavender1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Wildflowers_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-wildflowers-02",
+      "lod": 1
+    },
+    "fl_lavender2": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Wildflowers_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-wildflowers-03",
+      "lod": 1
+    },
+    "fl_reeds0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Grass_Tall_Clump_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-grass-tall-clump-01"
+    },
+    "fl_reeds1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Grass_Tall_Clump_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-grass-tall-clump-02"
+    },
+    "fl_reeds2": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Grass_Tall_Clump_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-grass-tall-clump-03"
+    },
+    "fl_reeds3": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Grass_Tall_Clump_04.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-grass-tall-clump-04"
+    },
+    "fl_reeds4": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Grass_Tall_Clump_05.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-grass-tall-clump-05"
+    },
+    "fl_reeds5": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Grass_Bush_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-grass-bush-01"
+    },
+    "fl_rock0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Rock_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-rock-01",
+      "tint": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "fl_rock1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Rock_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-rock-02",
+      "tint": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "fl_rock2": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Rock_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-rock-03",
+      "tint": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "fl_rock3": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Rock_Round_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-rock-round-01",
+      "tint": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "fl_boulder0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Rock_04.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-rock-04",
+      "tint": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "fl_boulder1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Rock_05.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-rock-05",
+      "tint": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "fl_boulder2": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Rock_06.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-rock-06",
+      "tint": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "fl_boulder3": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Rock_Cliff_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-rock-cliff-01",
+      "tint": [
+        0.8,
+        0.8,
+        0.8
+      ]
+    },
+    "fl_colfall0": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Block_04.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-marble-block-04"
+    },
+    "fl_colfall1": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Pile_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-marble-pile-01"
+    },
+    "fl_colfall2": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Pile_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-marble-pile-02"
+    },
+    "fl_wallruin0": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Block_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-marble-block-01"
+    },
+    "fl_wallruin1": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Block_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-marble-block-02"
+    },
+    "fl_wallruin2": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Block_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-marble-block-03"
+    },
+    "fl_wallruin3": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Rubble_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-marble-rubble-01"
+    },
+    "fl_wallruin4": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Marble_Rubble_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-marble-rubble-02"
+    },
+    "fl_herm0": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_Broken_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-statue-broken-02"
+    },
+    "fl_herm1": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_Broken_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-statue-broken-03"
+    },
+    "fl_herm2": {
+      "src": "Synty/PolygonAncientEmpire/Models/SM_Prop_Statue_Broken_05.fbx",
+      "static": true,
+      "join": true,
+      "plant": "polygonancientempire/sm-prop-statue-broken-05"
+    },
+    "fl_olive0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Tree_Meadow_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-tree-meadow-01",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1300,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_oak0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Tree_Fruit_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-tree-fruit-02",
+      "lod": 1,
+      "far": {
+        "lod": 1,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_oak1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Tree_Fruit_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-tree-fruit-03",
+      "lod": 1,
+      "far": {
+        "lod": 1,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_cypress0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Pine_04.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-alpine-mountain/sm-env-pine-04",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.35
+    },
+    "fl_cypress1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Pine_05.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-alpine-mountain/sm-env-pine-05",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.35
+    },
+    "fl_pomegranate0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Tree_Birch_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-tree-birch-01",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_pomegranate1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Tree_Birch_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-tree-birch-03",
+      "lod": 1,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_fig0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Tree_Birch_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-tree-birch-02",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_fig1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Tree_Fruit_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-tree-fruit-01",
+      "lod": 1,
+      "far": {
+        "lod": 1,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_holm0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Tree_Meadow_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-tree-meadow-02",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1300,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_plane0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Tree_Meadow_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-tree-meadow-01",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1300,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_plane1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Tree_Meadow_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-tree-meadow-02",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1300,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_qtree0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Tree_Meadow_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-tree-meadow-02",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1300,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_qtree1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Tree_Fruit_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-tree-fruit-01",
+      "lod": 1,
+      "far": {
+        "lod": 1,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_qpine0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Pine_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-alpine-mountain/sm-env-pine-03",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.35
+    },
+    "fl_qpine1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Pine_04.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-alpine-mountain/sm-env-pine-04",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.35
+    },
+    "fl_qpine2": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Pine_05.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-alpine-mountain/sm-env-pine-05",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.35
+    },
+    "fl_fir0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Pine_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-alpine-mountain/sm-env-pine-03",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.35
+    },
+    "fl_dead0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Models/SM_Env_Pine_NoLeaves_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-alpine-mountain/sm-env-pine-noleaves-01",
+      "lod": 1,
+      "far": {
+        "lod": 1,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_qdead0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Swamp_Marshland/Models/SM_Env_Tree_Dead_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-swamp-marshland/sm-env-tree-dead-02",
+      "far": {
+        "lod": 0,
+        "tris": 280
+      },
+      "decimate": 1100,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_myrtle0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Bush_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-bush-01",
+      "lod": 1,
+      "far": {
+        "lod": 1,
+        "tris": 200
+      },
+      "decimate": 700,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_broom0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Bush_02.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-bush-02",
+      "lod": 1,
+      "far": {
+        "lod": 1,
+        "tris": 200
+      },
+      "decimate": 700,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_redbush0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Bush_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-bush-03",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 200
+      },
+      "decimate": 700,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_fern0": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Bush_01.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-bush-01",
+      "lod": 1,
+      "far": {
+        "lod": 1,
+        "tris": 200
+      },
+      "decimate": 700,
+      "cardShare": 0.8,
+      "solidMin": 0.55
+    },
+    "fl_fern1": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Meadow_Forest/Models/SM_Env_Bush_03.fbx",
+      "static": true,
+      "join": true,
+      "plant": "pnb-meadow-forest/sm-env-bush-03",
+      "lod": 2,
+      "far": {
+        "lod": 2,
+        "tris": 200
+      },
+      "decimate": 700,
+      "cardShare": 0.8,
+      "solidMin": 0.55
     }
   },
   "textures": {
@@ -2221,25 +2914,31 @@
     "rivalsStone": {
       "src": "Synty/PolygonFantasyRivals/Textures/FantasyRivals_01_D.png",
       "size": 1024
+    },
+    "alpine": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Alpine_Mountain/Textures/PolygonNatureBiomesS2_Alpine_Texture_01.png",
+      "size": 1024
+    },
+    "tropical": {
+      "src": "Synty/PolygonNatureBiomes/PNB_Tropical_Jungle/Textures/PolygonNatureBiomes_Tropical_Texture_01.png",
+      "size": 1024
     }
   },
   "flora": {
     "olive": [
-      "fl_olive0",
-      "fl_olive1",
-      "fl_olive2"
+      "fl_olive0"
     ],
     "oak": [
       "fl_oak0",
-      "fl_oak1",
-      "fl_oak2"
+      "fl_oak1"
     ],
     "cypress": [
       "fl_cypress0",
       "fl_cypress1"
     ],
     "pomegranate": [
-      "fl_pomegranate0"
+      "fl_pomegranate0",
+      "fl_pomegranate1"
     ],
     "fig": [
       "fl_fig0",
@@ -2254,7 +2953,9 @@
       "fl_qtree1"
     ],
     "qpine": [
-      "fl_qpine0"
+      "fl_qpine0",
+      "fl_qpine1",
+      "fl_qpine2"
     ],
     "fir": [
       "fl_fir0"
@@ -2266,19 +2967,27 @@
       "fl_qdead0"
     ],
     "dead": [
-      "fl_dead0",
-      "fl_dead1"
+      "fl_dead0"
     ],
     "rock": [
       "fl_rock0",
-      "fl_rock1"
+      "fl_rock1",
+      "fl_rock2",
+      "fl_rock3"
     ],
     "boulder": [
       "fl_boulder0",
-      "fl_boulder1"
+      "fl_boulder1",
+      "fl_boulder2",
+      "fl_boulder3"
     ],
     "reeds": [
-      "fl_reeds0"
+      "fl_reeds0",
+      "fl_reeds1",
+      "fl_reeds2",
+      "fl_reeds3",
+      "fl_reeds4",
+      "fl_reeds5"
     ],
     "myrtle": [
       "fl_myrtle0"
@@ -2290,45 +2999,67 @@
       "fl_redbush0"
     ],
     "fern": [
-      "fl_fern0"
+      "fl_fern0",
+      "fl_fern1"
     ],
     "colfall": [
       "fl_colfall0",
-      "fl_colfall1"
+      "fl_colfall1",
+      "fl_colfall2"
     ],
     "colstand": [
       "fl_colstand0"
     ],
     "wallruin": [
-      "fl_wallruin0"
+      "fl_wallruin0",
+      "fl_wallruin1",
+      "fl_wallruin2",
+      "fl_wallruin3",
+      "fl_wallruin4"
     ],
     "amphorae": [
       "fl_amphorae0"
+    ],
+    "lavender": [
+      "fl_lavender0",
+      "fl_lavender1",
+      "fl_lavender2"
+    ],
+    "herm": [
+      "fl_herm0",
+      "fl_herm1",
+      "fl_herm2"
     ]
   },
   "sounds": {
     "stepGrass": [
-      "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Walk/Footsteps_Walk_Grass_Mono_01.wav",
-      "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Walk/Footsteps_Walk_Grass_Mono_02.wav",
-      "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Walk/Footsteps_Walk_Grass_Mono_03.wav",
-      "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Walk/Footsteps_Walk_Grass_Mono_04.wav"
+      "Classic Footstep SFX/Forest ground/Forest_ground_step0.wav",
+      "Classic Footstep SFX/Forest ground/Forest_ground_step1.wav",
+      "Classic Footstep SFX/Forest ground/Forest_ground_step2.wav",
+      "Classic Footstep SFX/Forest ground/Forest_ground_step3.wav"
     ],
     "stepDirt": [
-      "Footsteps - Essentials/Footsteps_DirtyGround/Footsteps_DirtyGround_Walk/Footsteps_DirtyGround_Walk_01.wav",
-      "Footsteps - Essentials/Footsteps_DirtyGround/Footsteps_DirtyGround_Walk/Footsteps_DirtyGround_Walk_02.wav",
-      "Footsteps - Essentials/Footsteps_DirtyGround/Footsteps_DirtyGround_Walk/Footsteps_DirtyGround_Walk_03.wav",
-      "Footsteps - Essentials/Footsteps_DirtyGround/Footsteps_DirtyGround_Walk/Footsteps_DirtyGround_Walk_04.wav"
+      "Classic Footstep SFX/Ground/Ground_Step0.wav",
+      "Classic Footstep SFX/Ground/Ground_Step1.wav",
+      "Classic Footstep SFX/Ground/Ground_Step2.wav",
+      "Classic Footstep SFX/Ground/Ground_Step3.wav",
+      "Classic Footstep SFX/Ground/Ground_Step4.wav"
     ],
     "stepRock": [
-      "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Walk/Footsteps_Rock_Walk_01.wav",
-      "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Walk/Footsteps_Rock_Walk_02.wav",
-      "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Walk/Footsteps_Rock_Walk_03.wav",
-      "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Walk/Footsteps_Rock_Walk_04.wav"
+      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step0.wav",
+      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step1.wav",
+      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step2.wav",
+      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step3.wav",
+      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step4.wav",
+      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step5.wav"
     ],
     "stepWood": [
-      "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Walk/Footsteps_Wood_Walk_01.wav",
-      "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Walk/Footsteps_Wood_Walk_02.wav",
-      "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Walk/Footsteps_Wood_Walk_03.wav"
+      "Classic Footstep SFX/Floor/Floor_step0.wav",
+      "Classic Footstep SFX/Floor/Floor_step1.wav",
+      "Classic Footstep SFX/Floor/Floor_step2.wav",
+      "Classic Footstep SFX/Floor/Floor_step3.wav",
+      "Classic Footstep SFX/Floor/Floor_step4.wav",
+      "Classic Footstep SFX/Floor/Floor_step5.wav"
     ],
     "stepWater": [
       "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_01.wav",
@@ -2336,9 +3067,9 @@
       "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_03.wav"
     ],
     "stepLeaves": [
-      "Footsteps - Essentials/Footsteps_Leaves/Footsteps_Leaves_Walk/Footsteps_Leaves_Walk_01.wav",
-      "Footsteps - Essentials/Footsteps_Leaves/Footsteps_Leaves_Walk/Footsteps_Leaves_Walk_02.wav",
-      "Footsteps - Essentials/Footsteps_Leaves/Footsteps_Leaves_Walk/Footsteps_Leaves_Walk_03.wav"
+      "Classic Footstep SFX/Forest ground/Forest_ground_step4.wav",
+      "Classic Footstep SFX/Forest ground/Forest_ground_step5.wav",
+      "Classic Footstep SFX/Forest ground/Forest_ground_step6.wav"
     ],
     "stepSand": [
       "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_01.wav",
@@ -2346,10 +3077,10 @@
       "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_03.wav"
     ],
     "landGrass": [
-      "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Jump/Footsteps_Grass_Jump_Land_01.wav"
+      "Classic Footstep SFX/Forest ground/Forest_ground_jump0.wav"
     ],
     "landRock": [
-      "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Jump/Footsteps_Rock_Jump_Land_01.wav"
+      "Classic Footstep SFX/Rocky_ground/Rocky_ground_jump0.wav"
     ],
     "landWood": [
       "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Jump/Footsteps_Wood_Jump_Land_01.wav"

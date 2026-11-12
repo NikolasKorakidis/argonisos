@@ -328,8 +328,9 @@ export class Vegetation {
         if (b) for (const m of b.meshes) { this.group.remove(m); m.dispose(); }
         const it0 = refs[0].items, o0 = refs[1] * STRIDE, P = this.geoFor(it0[o0], it0[o0 + 1]), cap = Math.ceil(n * 1.3) + 32;
         const trunk = new THREE.InstancedMesh(P.lo, cut(propMat, true), cap), meshes = [trunk];
-        if (P.cards && P.leafFar) { const lm = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, true), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
-        P.lo.computeBoundingSphere(); const bs = P.lo.boundingSphere.clone(); if (meshes[1]) { P.cards.computeBoundingSphere(); bs.union(P.cards.boundingSphere); }
+        const lc = P.loCards === undefined ? P.cards : P.loCards;   // (a pack plant's far version has cards of its own, thinned)
+        if (lc && P.leafFar) { const lm = new THREE.InstancedMesh(lc, cut(P.cardMat || leafMat, true), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
+        P.lo.computeBoundingSphere(); const bs = P.lo.boundingSphere.clone(); if (meshes[1]) { lc.computeBoundingSphere(); bs.union(lc.boundingSphere); }
         b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), sinks: sinks(it0[o0]), refs: [], n: 0 };
         for (const m of meshes) { m.castShadow = false; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; this.group.add(m); }
         this.mids.set(key, b);

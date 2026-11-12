@@ -7,7 +7,11 @@ import { mergeGeometries } from '../../vendor/three/jsm/utils/BufferGeometryUtil
 import { loadPack, bake } from '../assets.js';
 import { wettable } from './wetness.js';
 
-const LIST = { amphora: 'sAmphora', pithos: 'sPithos', bowl: 'sBowl', jug: 'sJug', tripod: 'sTripod', firewood: 'sFirewood', column: 'sColumn', statueA: 'sStatueA', statueB: 'sStatueB', statueC: 'sStatueC' };
+const LIST = { amphora: 'sAmphora', pithos: 'sPithos', bowl: 'sBowl', jug: 'sJug', tripod: 'sTripod', firewood: 'sFirewood', column: 'sColumn',
+  // the statues (structures.js): the robed elder who is Zeus in the temple, the hoplite and the soldier guarding the sacred
+  // way, the water-bearer by the old olives, the lions at the temple's gate, and the broken ones lying about the ruins
+  zeus: 'sStatueB', hoplite: 'sStatue01', soldier: 'sStatue07', bearer: 'sStatue04', lion: 'sLion',
+  broken1: 'sBroken1', broken2: 'sBroken2', broken3: 'sBroken3', broken4: 'sBroken4', broken5: 'sBroken5', broken6: 'sBroken6', broken7: 'sBroken7', broken8: 'sBroken8' };
 const SITE = {};   // name → { geo (standing on the ground, centred), mat }
 export function loadSiteProps() {
   const mats = new Map();   // (one material per atlas, wet in the rain like the carved stone; the packs' palettes are pale in our light)
@@ -23,6 +27,8 @@ export function siteProp(k, h, w) {
   const S = SITE[k]; if (!S) return null; const g = S.geo.clone(); g.computeBoundingBox(); const s = g.boundingBox.getSize(new THREE.Vector3());
   const ky = h / s.y, kx = w ? w / Math.max(s.x, s.z) : ky; g.scale(kx, ky, kx); return [g, S.mat];
 }
+// a copy of prop k at k times its own size (the broken statues: each piece as big as the figure it came from), or null
+export function sitePropAt(k, sc = 1) { const S = SITE[k]; return S ? [S.geo.clone().scale(sc, sc, sc), S.mat] : null; }
 
 // The abandoned town's buildings and the props of the island's small scenes (tools/assets: put together from the Ancient
 // Empire pieces, each material keeping its own texture: plaster, roof tiles, marble, the atlas). Each comes as a list of

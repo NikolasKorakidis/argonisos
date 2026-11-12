@@ -4,6 +4,35 @@ import { icon } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-14', name: 'Patch 14', title: 'New Leaves', date: '12 November 2026',
+    intro: 'A new look for much of Nisos, chosen by our playtesters: the trees, the creatures, the hero and what you build.',
+    sections: [
+      { t: 'The Woods', icon: 'tree', items: [
+        'All-new trees: broad <b>meadow trees</b> with great spreading trunks, orchard trees, silver birches, and tall pines in the hills and the forest of Yleos. Every crown is made of real leaves that move in the wind.',
+        'New bushes, flowering lavender, new rocks and boulders, and the marble ruins in the grass: fallen column drums, scattered blocks and broken statues.',
+        'Bare pines in the marsh and dead trees in the woods.',
+      ] },
+      { t: 'You', icon: 'you', items: [
+        'You begin as a plain islander, and the armour you make now shows on you piece by piece.',
+        'Play as a <b>man or a woman</b>: choose under Hero in the settings.',
+      ] },
+      { t: 'Creatures', icon: 'bull', items: [
+        'Animals come young and grown: <b>fawns, does and stags</b>, fox cubs, leverets and piglets, each with its own coat, so no two herds look alike.',
+        'New bodies for the giants (now swinging a spiked mace), the dryads (forest witches with a staff) and the dryadlings.',
+      ] },
+      { t: 'Around the Island', icon: 'temple', items: [
+        'A new <b>statue of Zeus</b> in the temple, hoplite guardians along the sacred way and a pair of stone lions where it comes in. Broken statues lie in the labyrinth and at the Chimera\'s shrine, and a water-bearer stands by the ancient olives.',
+        'New looks for what you gather: stones, branches, lightstone, dandelions, moonflowers, feathers, bones and fiber bushes, each in several shapes. Fallen trees leave proper logs, what you drop lies in a basket, and graves are marked with a marble stele.',
+      ] },
+      { t: 'Building', icon: 'build', items: [
+        'Buildings have a new look: plank floors, a heavy timber door frame and plank door, thatched gable ends, a stick fence, a stone campfire, a smaller rack for the cooking stand, a new bed and a tall standing torch.',
+      ] },
+      { t: 'Sound', icon: 'jump', items: [
+        'New footsteps on grass, earth, rock and wooden floors.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-13', name: 'Patch 13', title: 'Each in Its Place', date: '11 November 2026',
     intro: 'The plants of Nisos now grow where they belong, and look as they should up close.',
     sections: [

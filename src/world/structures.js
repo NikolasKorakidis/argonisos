@@ -11,7 +11,7 @@ import { heightAt } from './gen.js';
 import { propGeo, propMat, leafMat } from './trees.js';
 import { GMAT, amphora, pithos, bowl, jug, tripod, acroterion, antefixes, cartWheel, firewood, leaves, mist, dice } from './greek.js';
 import { wettable } from './wetness.js';
-import { siteProp } from './site-pack.js';
+import { siteProp, sitePropAt } from './site-pack.js';
 import { buildTown, buildSpot } from './town.js';
 
 const rnd = (() => { let s = 77; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; })(), rr = (a, b) => a + rnd() * (b - a);
@@ -213,7 +213,8 @@ export class Structures {
     // Zeus on his stepped base, the pool before him, tripods burning either side, shields hung on the walls
     const sz = cz - cd / 2 + 2.6;
     P.push([uvBox(3.5, 0.3, 3.5).translate(0, top + 0.15, sz), GMAT.ashlar], [uvBox(3.0, 0.8, 3.0).translate(0, top + 0.7, sz), SMAT.marble], [uvBox(3.05, 0.1, 3.05).translate(0, top + 0.98, sz), GMAT.gold], [uvBox(3.2, 0.3, 3.2).translate(0, top + 1.25, sz), SMAT.marble]);
-    statue(ctx.grp, 0, top + 1.4, sz, 2.3, 0, { mat: SMAT.ivory });
+    const zeus = siteProp('zeus', 4.4);   // (the pack's robed and wreathed elder, site-pack.js, its marble tinted ivory; the hero's figure without the pack)
+    if (zeus) P.push([zeus[0].translate(0, top + 1.4, sz), new THREE.MeshStandardMaterial({ map: zeus[1].map, color: 0xd9c49a, roughness: 0.45 })]); else statue(ctx.grp, 0, top + 1.4, sz, 2.3, 0, { mat: SMAT.ivory });
     const pz = sz + 3.5; P.push([plane(2.5, 3.0, 3).rotateX(-Math.PI / 2).translate(0, top + 0.04, pz), GMAT.water]);
     for (const [w, d, x, z] of [[2.86, 0.18, 0, pz - 1.59], [2.86, 0.18, 0, pz + 1.59], [0.18, 3.0, -1.34, pz], [0.18, 3.0, 1.34, pz]]) P.push([uvBox(w, 0.12, d).translate(x, top + 0.06, z), SMAT.marble]);
     for (const sx of [-1, 1]) { tripod(P, sx * 2.45, top, sz - 0.6, 1.25); this.fire(ctx, sx * 2.45, top + 1.4, sz - 0.6, 0.9); this.solid(ctx, sx * 2.45, sz - 0.6, 0.45);
@@ -229,14 +230,17 @@ export class Structures {
     P.push([uvBox(2.62, 0.16, 1.62).translate(0, 0.86, az), GMAT.tymp]); for (const sx of [-1, 1]) P.push([new THREE.CylinderGeometry(0.16, 0.16, 1.64, 10).rotateX(Math.PI / 2).translate(sx * 1.3, 1.02, az), SMAT.marble]);   // painted band, volutes
     this.solid(ctx, 0, az, 1.3, 1.3); this.top(ctx, -1.45, 1.45, az - 0.95, az + 0.95, 1.28);
     this.uses.push({ kind: 'altar', at: this.w(ctx, 0, az), r: 2.6 });
-    // the sacred way: paving from the steps past the altar, cypresses and two votive statues along it
+    // the sacred way: paving from the steps past the altar, cypresses and two statues guarding it, a hoplite and a soldier
     for (let z = D / 2 + 1.9; z < az + 4; z += 2) P.push([uvBox(3.2, 0.16, 2.02, 1 / 2.4).translate(0, gy(0, z + 1) + 0.04, z + 1), SMAT.flags]);
     for (const sx of [-1, 1]) {
       for (const [z, v] of [[D / 2 + 3.6, 0], [az + 3.4, 1]]) { this.plant(ctx, 'cypress', v, sx * 4.4, gy(sx * 4.4, z), z, 1.05); this.solid(ctx, sx * 4.4, z, 0.45); }
       const x = sx * 4.4, z = az, y = gy(x, z);
       P.push([uvBox(1.1, 1.4, 1.1).translate(x, y + 0.7, z), SMAT.marble], [uvBox(1.3, 0.2, 1.3).translate(x, y + 1.5, z), SMAT.marble], [uvBox(1.3, 0.2, 1.3).translate(x, y + 0.1, z), GMAT.ashlar]);
-      const pk = siteProp(sx > 0 ? 'statueA' : 'statueB', 2.15); if (pk) P.push([pk[0].rotateY(-sx * Math.PI / 2).translate(x, y + 1.6, z), pk[1]]); else statue(ctx.grp, x, y + 1.6, z, 1.1, -sx * Math.PI / 2, { pose: sx > 0 ? 0.55 : 0.75, bolt: false }); this.solid(ctx, x, z, 0.75);
+      const pk = siteProp(sx > 0 ? 'hoplite' : 'soldier', 2.15); if (pk) P.push([pk[0].rotateY(-sx * Math.PI / 2).translate(x, y + 1.6, z), pk[1]]); else statue(ctx.grp, x, y + 1.6, z, 1.1, -sx * Math.PI / 2, { pose: sx > 0 ? 0.55 : 0.75, bolt: false }); this.solid(ctx, x, z, 0.75);
     }
+    // a pair of marble lions where the way comes in, looking out
+    for (const sx of [-1, 1]) { const x = sx * 2.6, z = az + 4.9, y = gy(x, z), pk = siteProp('lion', 1.9); if (!pk) break;
+      P.push([uvBox(1.2, 0.8, 1.95).translate(x, y - 0.05, z), SMAT.marble], [pk[0].translate(x, y + 0.35, z), pk[1]]); this.solid(ctx, x, z, 0.95, 2.3); }
     // two offering stands for the heads, flanking the steps
     for (const [k, sx] of [['minotaur', -1], ['chimera', 1]]) {
       const x = sx * (W / 2 + 0.5), z = D / 2 + 3.2; P.push([new THREE.CylinderGeometry(0.55, 0.65, 1.3, 10).translate(x, 0.65, z), SMAT.marble]); P.push([uvBox(1.4, 0.16, 1.4).translate(x, 1.38, z), SMAT.marble]);
@@ -352,6 +356,12 @@ export class Structures {
       for (let k = 0; k < 4; k++) P.push([new THREE.CylinderGeometry(0.035, 0.03, lr(0.35, 0.6), 5).rotateZ(Math.PI / 2).rotateY(lr(0, 6.3)).translate(x + lr(-0.4, 0.4), 0.11, z + lr(-0.4, 0.4)), SMAT.bone]);
       if (i % 3 === 0) { P.push([new THREE.IcosahedronGeometry(0.15, 1).scale(1, 0.9, 1.2).translate(x, 0.2, z), SMAT.bone], [new THREE.BoxGeometry(0.16, 0.06, 0.12).translate(x, 0.09, z + 0.12), SMAT.bone]); }
     }
+    // and their statues, broken: a headless warrior and a pair of legs still standing, the rest fallen where the way isn't
+    // (fixed places, clear of the paths between the gaps, so the dice above come out as they always have)
+    for (const [k, R, a, rot, r] of [['broken1', 20.3, 3.75, 2.2, 0.45], ['broken4', 12.2, 0.7, 3.6, 0.4], ['broken3', 20.0, 5.0, 1.2], ['broken5', 11.8, 5.6, 2.2], ['broken2', 12.6, 1.35, 0.4], ['broken8', 19.6, 4.35, 2.8], ['broken6', 11.6, 0.95, 1.7], ['broken7', 20.6, 3.95, 0.9]]) {
+      const x = Math.cos(a) * R, z = Math.sin(a) * R, pk = sitePropAt(k, 1.15); if (!pk) break;
+      P.push([pk[0].rotateY(rot).translate(x, 0.08, z), pk[1]]); if (r) this.solid(ctx, x, z, r, 2);
+    }
     this.lab = { c: this.w(ctx, 0, 0), gaps };
     this.labyrinthCtx = ctx; this.finish(ctx, { r: 23.5 });
   }
@@ -401,6 +411,11 @@ export class Structures {
     for (let i = 0; i < 9; i++) { const a = rr(0, 6.28), r0 = rr(4, 12); P.push([new THREE.TorusGeometry(rr(1, 2.2), rr(0.12, 0.22), 5, 9, Math.PI * rr(0.5, 0.9)).rotateX(Math.PI / 2 + rr(-0.3, 0.3)).rotateY(a).translate(Math.cos(a) * r0, 0, Math.sin(a) * r0), SMAT.wood]); }
     for (let k = 0; k < 16; k++) { const a = lr() * 6.28, r0 = 6.4 + lr() * 2.5; P.push([new THREE.CylinderGeometry(0.04, 0.035, 0.4 + lr() * 0.5, 5).rotateZ(Math.PI / 2).rotateY(lr() * 3).translate(Math.cos(a) * r0, 0.12, Math.sin(a) * r0), SMAT.bone]); if (k % 5 === 0) P.push([new THREE.IcosahedronGeometry(0.15, 1).scale(1, 0.9, 1.2).translate(Math.cos(a) * r0 + 0.3, 0.2, Math.sin(a) * r0), SMAT.bone]); }
     for (let k = 0; k < 4; k++) { const a = 0.6 + k * 1.6, x = Math.cos(a) * 5.4, z = Math.sin(a) * 5.4; amphora(P, x, 0.25, z, 0.8, 1.4 + lr() * 0.3, a); bowl(P, x + 0.5, 0.09, z + 0.3, 1.1); }
+    // a statue of some hero who came for the beast, broken and fallen among the drums (fixed places: the dice above keep theirs)
+    for (const [k, R, a, rot, r] of [['broken1', 15.0, 4.25, 1.0, 0.45], ['broken3', 14.2, 1.45, 2.4], ['broken5', 13.4, 3.45, 0.6], ['broken8', 14.6, 5.65, 1.9], ['broken7', 13.0, 1.75, 0.3]]) {
+      const x = Math.cos(a) * R, z = Math.sin(a) * R, pk = sitePropAt(k, 1.15); if (!pk) break;
+      P.push([pk[0].rotateY(rot).translate(x, 0.08, z), pk[1]]); if (r) this.solid(ctx, x, z, r, 2);
+    }
     mist(ctx.grp, 14, 15, 0x9fb0a6, 5);
     this.solid(ctx, 0, 0, 1.7, top + 1.2);
     this.stepTops(ctx, 7, 7, 4, 0.4);
@@ -415,6 +430,8 @@ export class Structures {
     P.push([uvBox(0.6, 1.25, 0.24).translate(0, 0.62, 1.55), SMAT.marble], [uvBox(0.74, 0.12, 0.36).translate(0, 1.3, 1.55), SMAT.marble], [uvBox(0.84, 0.14, 0.46).translate(0, 0.07, 1.55), GMAT.ashlar]);
     amphora(P, 0.6, 0, 1.75, 0.55, 0.12); bowl(P, -0.5, 0.02, 1.85, 1.1); for (let k = 0; k < 6; k++) P.push([new THREE.SphereGeometry(0.035, 6, 4).translate(-0.5 + Math.cos(k) * 0.08, 0.1, 1.85 + Math.sin(k) * 0.08), GMAT.basalt]);
     this.solid(ctx, 0, 1.55, 0.45, 1.4);
+    // at every other one a water-bearer in marble, left by those who tended it
+    const kore = i % 2 ? null : siteProp('bearer', 1.75); if (kore) { P.push([uvBox(0.62, 0.5, 0.62).translate(-1.75, 0.1, 1.0), GMAT.ashlar], [kore[0].rotateY(0.45).translate(-1.75, 0.35, 1.0), kore[1]]); this.solid(ctx, -1.75, 1.0, 0.42, 2.2); }
     const glyphs = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.6), SMAT.glyph.clone()); glyphs.material.map = glyphTex(i); glyphs.position.set(0, 0.78, 1.55 + 0.125); ctx.grp.add(glyphs);
     this.uses.push({ kind: 'scrap', id: 'olive' + i, at: this.w(ctx, 0, 1.2), r: 2.2, glyphs });
     this.finish(ctx, { r: 2.2 });

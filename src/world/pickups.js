@@ -1,6 +1,6 @@
 // Things lying on the ground to pick up with E: stones, fallen branches, fiber bushes, lightstone, flowers, feathers, bone piles, and
 // anything the player drops. Natural ones are laid out per 64 m cell from the seed (stable ids "cx,cz,i") and grow back
-// a few days after they are taken. Each kind is one instanced mesh holding every visible copy near the player.
+// a few days after they are taken. Each look of each kind is one instanced mesh holding every visible copy near the player.
 import * as THREE from 'three';
 import { heightAt } from './gen.js';
 import { clearGrass } from './grass.js';
@@ -36,16 +36,60 @@ export const KINDS = {
     return { geo: merge(P), mat: vc() }; } },
   drop: { item: null, model: () => ({ geo: merge([[new THREE.BoxGeometry(0.34, 0.24, 0.3).translate(0, 0.12, 0), 0xa9824e], [new THREE.BoxGeometry(0.36, 0.04, 0.32).translate(0, 0.25, 0), 0x6e5238]]), mat: vc() }) },   // a little bundle for dropped items
 };
-// Models from the team's packs (tools/assets) for the kinds that have one: [model, size across in metres]. Each takes
-// its kind's place in the instanced mesh once loaded; the carved ones above stand in until then (and for lightstone,
-// the flowers and feathers, which no pack has).
-const PACKED = { stone: ['pStone', 0.42], branch: ['pBranch', 1.4], bush: ['pBush', 0.85], bones: ['pBones', 0.7], drop: ['pSack', 0.42] };
-function dressPacked(meshes) {
-  for (const [k, [file, across]] of Object.entries(PACKED)) loadPack(file).then((gl) => {
-    let map = null; gl.scene.traverse((m) => { if (m.isMesh && !map) map = m.material.map; });
-    const geo = bake(gl.scene); geo.computeBoundingBox(); let b = geo.boundingBox; const s = across / Math.max(b.max.x - b.min.x, b.max.z - b.min.z); geo.scale(s, s, s);
-    geo.computeBoundingBox(); b = geo.boundingBox; geo.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
-    const m = meshes[k]; m.geometry.dispose(); m.geometry = geo; m.material = new THREE.MeshStandardMaterial({ map, color: 0xb0b0b0, roughness: 0.9 });
+// Models from the team's packs (tools/assets: most converted from the catalogue's export, "plant", their colours in the
+// vertices and any see-through leaf cards keeping their texture; the alpine bushes and the grass tuft with their own leaf
+// texture, drawn cut out the same way), several looks for most kinds: [models, [across, tall] in metres, look]. Each look
+// is brought to about the same size (the sum of its width and height made W + H, so a tall bush and a wide one come out
+// alike) and lies on its own instanced mesh; which one a pickup gets comes from a hash of where it lies, so the layout
+// itself (and the world's fingerprint) never changes. The carved ones above stand in until they load, or for good
+// without the pack. (look: bright, the vertex colours taken up that much, tinted color: the lightstone's grey stone made
+// pale; glow, an emissive colour shown in proportion to the vertex colours, so the petals glow and the stalks hardly at
+// all; petals, a colour given to every part that isn't green; lift, one end raised that much and double, seen from both
+// sides: the feather is a single sheet that would lie flat in the earth; shade, its pale colours taken down, or it's lost
+// among the pebbles)
+const PACKED = {
+  stone: [['pStone'], [0.42, 0.2]],
+  branch: [['pBranch', 'pBranch1', 'pBranch2', 'pBranch3', 'pBranch4'], [1.3, 0.25]],
+  lightstone: [['pLight0', 'pLight1'], [0.34, 0.24], { bright: 4, color: 0xe8e2d0, emissive: 0x5a5a48, emissiveIntensity: 0.3, roughness: 0.5 }],
+  dandelion: [['pDandelion0', 'pDandelion1'], [0.42, 0.36]],
+  moonflower: [['pMoon0', 'pMoon1'], [0.5, 0.6], { petals: 0xcfe0ff, glow: 0x6080c0 }],
+  feather: [['pFeather'], [0.36, 0.02], { lift: 0.05, double: true, shade: 0.6 }],
+  bones: [['pBones', 'pBones1', 'pBones2'], [0.8, 0.15]],
+  bush: [['pBush', 'pBush1', 'pBush2', 'pBush3', 'pBush4', 'pBush5', 'pBush6'], [0.85, 0.55]],
+  drop: [['pSack'], [0.42, 0.34]],
+};
+const isCard = (m) => m.material.name.startsWith('tex:') || !!m.material.map;   // (a shared atlas named on it, or a leaf texture of its own)
+function packedLook(gl, [W, H], o = {}) {
+  let card = null; gl.scene.traverse((m) => { if (m.isMesh && isCard(m)) card ||= m.material; });
+  const solid = bake(gl.scene, true, (m) => !isCard(m)), cards = card ? bake(gl.scene, false, (m) => m.material === card) : null;
+  const n0 = solid.attributes.position.count, n1 = cards ? cards.attributes.position.count : 0, geo = new THREE.BufferGeometry();
+  for (const [k, size] of [['position', 3], ['normal', 3]]) { const a = new Float32Array((n0 + n1) * size); a.set(solid.attributes[k].array); if (cards) a.set(cards.attributes[k].array, n0 * size); geo.setAttribute(k, new THREE.BufferAttribute(a, size)); }
+  const col = new Float32Array((n0 + n1) * 3).fill(1), uv = new Float32Array((n0 + n1) * 2), green = new THREE.Color(), pet = o.petals !== undefined && new THREE.Color(o.petals);
+  col.set(solid.attributes.color.array); if (cards) uv.set(cards.attributes.uv.array, n0 * 2);
+  for (let i = 0; i < n0; i++) { const j = i * 3; green.fromArray(col, j);   // (a touch darker: the packs' palettes come out pale in our light)
+    if (pet && !(green.g > green.r * 1.05 && green.g > green.b)) { const l = 0.45 + (green.r + green.g + green.b) / 3; green.copy(pet).multiplyScalar(Math.min(l, 1.1)); }
+    green.multiplyScalar(0.82 * (o.bright ?? o.shade ?? 1)).toArray(col, j); }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3)); geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  if (n1) { if (n0) geo.addGroup(0, n0, 0); geo.addGroup(n0, n1, 1); }
+  // about the same size whatever the model's own, standing on the ground and centred
+  geo.computeBoundingBox(); let b = geo.boundingBox; const s = (W + H) / (Math.max(b.max.x - b.min.x, b.max.z - b.min.z) + b.max.y - b.min.y); geo.scale(s, s, s);
+  geo.computeBoundingBox(); b = geo.boundingBox; geo.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
+  if (o.lift) { const sx = b.max.x - b.min.x, sz = b.max.z - b.min.z; if (sx > sz) geo.rotateZ(Math.atan2(o.lift, sx)); else geo.rotateX(-Math.atan2(o.lift, sz)); geo.computeBoundingBox(); geo.translate(0, 0.01 - geo.boundingBox.min.y, 0); }
+  geo.computeBoundingSphere();
+  const base = o.bright ? vc({ color: o.color, emissive: o.emissive, emissiveIntensity: o.emissiveIntensity, roughness: o.roughness }) : vc({ flatShading: false, roughness: 0.9 });
+  if (o.double) base.side = THREE.DoubleSide;
+  if (o.glow !== undefined) {   // (the moonflower: its pale petals light up, plainest at night)
+    base.emissive.setHex(o.glow); base.emissiveIntensity = 0.9;
+    base.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance *= vColor.rgb;'); };
+  }
+  if (!n1) return { geo, mat: base };
+  const cm = new THREE.MeshStandardMaterial({ map: card.map, vertexColors: true, color: 0xa3ad92, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85, alphaToCoverage: true });
+  return { geo, mat: [base, cm] };
+}
+function dressPacked(pk) {
+  for (const [k, [files, fit, o]] of Object.entries(PACKED)) Promise.all(files.map((f) => loadPack(f).then((gl) => packedLook(gl, fit, o)))).then((looks) => {
+    for (const m of pk.meshes[k]) { pk.scene.remove(m); m.geometry.dispose(); }
+    pk.meshes[k] = looks.map(({ geo, mat }) => pk.instanced(geo, mat)); pk.dirty = true;
   }).catch(() => {});
 }
 export class Pickups {
@@ -53,8 +97,8 @@ export class Pickups {
     this.scene = scene; this.pool = pool; this.cells = new Map(); this.taken = new Map();   // id → day taken
     this.drops = [];                                                     // { id, item, n, x, y, z, extra }
     this.meshes = {}; this.dirty = true; this.day = 1; this.seq = 0;
-    for (const [k, K] of Object.entries(KINDS)) { const { geo, mat } = K.model(); const m = new THREE.InstancedMesh(geo, mat, 1024); m.count = 0; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; scene.add(m); this.meshes[k] = m; }
-    dressPacked(this.meshes);
+    for (const [k, K] of Object.entries(KINDS)) { const { geo, mat } = K.model(); this.meshes[k] = [this.instanced(geo, mat)]; }   // (kind → one mesh per look)
+    dressPacked(this);
     this.visible = []; onCutsChanged.add(() => { this.dirty = true; });
     // a patch of bare earth and pebbles under each one, tilted to the slope
     const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
@@ -65,6 +109,7 @@ export class Pickups {
     this.patch = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 2048);
     this.patch.count = 0; this.patch.receiveShadow = true; this.patch.frustumCulled = false; this.patch.renderOrder = -1; scene.add(this.patch);
   }
+  instanced(geo, mat) { const m = new THREE.InstancedMesh(geo, mat, 1024); m.count = 0; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; this.scene.add(m); return m; }
   isTaken(id) { const d = this.taken.get(id); return d !== undefined && this.day - d < REGROW_DAYS; }
   update(pos, day) {
     if (day !== this.day) { this.day = day; this.dirty = true; }
@@ -80,12 +125,14 @@ export class Pickups {
     for (const key of this.cells.keys()) if (!want.has(key)) { this.cells.delete(key); this.dirty = true; }
     if (!this.dirty) return; this.dirty = false;
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), n = {};
-    for (const k in this.meshes) n[k] = 0;
+    for (const k in this.meshes) n[k] = this.meshes[k].map(() => 0);
     this.visible = [];
     let np = 0; const up = new THREE.Vector3(0, 1, 0), nrm = new THREE.Vector3(), qq = new THREE.Quaternion(), ss = new THREE.Vector3();
     const put = (kind, p) => {
-      const mesh = this.meshes[kind]; if (n[kind] >= 1024) return; const [k, rad] = SHOW[kind];
-      e.set(0, p.rot, 0); q.setFromEuler(e); v.set(p.x, p.y, p.z); mesh.setMatrixAt(n[kind]++, m4.compose(v, q, ss.setScalar(k))); this.visible.push(p);
+      // (its look: from where it lies, the same each time)
+      const looks = this.meshes[kind], l = looks.length > 1 ? Math.floor(rnd(p.x * 3.7 + 17.3, p.z * 2.9 - 5.1) * looks.length) % looks.length : 0;
+      if (n[kind][l] >= 1024) return; const [k, rad] = SHOW[kind];
+      e.set(0, p.rot, 0); q.setFromEuler(e); v.set(p.x, p.y, p.z); looks[l].setMatrixAt(n[kind][l]++, m4.compose(v, q, ss.setScalar(k))); this.visible.push(p);
       if (np < 2048) { nrm.set(heightAt(p.x - 0.5, p.z) - heightAt(p.x + 0.5, p.z), 1, heightAt(p.x, p.z - 0.5) - heightAt(p.x, p.z + 0.5)).normalize(); qq.setFromUnitVectors(up, nrm).multiply(q);
         v.set(p.x, p.y + 0.03, p.z); this.patch.setMatrixAt(np++, m4.compose(v, qq, ss.setScalar(rad))); }
     };
@@ -97,7 +144,7 @@ export class Pickups {
     for (const k of this.cleared || []) if (!keep.has(k)) clearGrass(k, null);
     for (const p of this.visible) if (!this.cleared?.has('pk' + p.id)) clearGrass('pk' + p.id, { x: p.x, z: p.z, r: SHOW[p.kind][1] * 1.05 });
     this.cleared = keep;
-    for (const k in this.meshes) { this.meshes[k].count = n[k]; this.meshes[k].instanceMatrix.needsUpdate = true; }
+    for (const k in this.meshes) this.meshes[k].forEach((m, l) => { m.count = n[k][l]; m.instanceMatrix.needsUpdate = true; });
     this.patch.count = np; this.patch.instanceMatrix.needsUpdate = true;
   }
   // The nearest thing to pick up within reach of a point

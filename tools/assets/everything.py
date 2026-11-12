@@ -13,6 +13,10 @@ root = os.path.join(idx['pack'], key); mats = {k.lower(): v for k, v in idx['mat
 SKIP = re.compile(r'(^|/)(collision|colliders|[a-z_]*_col|lods?|animations?)(/|$)', re.I)
 files = sorted(f for f in glob.glob(os.path.join(root, '**', '*'), recursive=True)
                if f.lower().endswith('.fbx') and '@' not in os.path.basename(f) and not SKIP.search(os.path.relpath(os.path.dirname(f), root).replace(os.sep, '/')))
+# (for convert.mjs: ONLY, a few files of the pack, one per line; KEEP_LOD, the level of detail kept instead of the finest,
+# or the lightest real one it has short of that: a plant's lighter versions for the game's near and mid bands)
+ONLY = set(filter(None, os.environ.get('ONLY', '').split('\n'))); KEEP_LOD = os.environ.get('KEEP_LOD')
+if ONLY: files = [f for f in files if os.path.relpath(f, idx['pack']) in ONLY]
 slug = lambda s: re.sub(r'[^a-z0-9]+', '-', s.lower()).strip('-')
 packslug = slug(re.sub(r'^Synty/(PolygonNatureBiomes/)?', '', key))
 os.makedirs(outdir, exist_ok=True)
@@ -71,7 +75,14 @@ for i, f in enumerate(files):
     try: bpy.ops.import_scene.fbx(filepath=f, ignore_leaf_bones=True)
     except Exception as e: print('FAILED', f, e); continue
     new = [o for o in bpy.data.objects if o not in before]
-    for o in [o for o in new if o.type in ('LIGHT', 'CAMERA') or re.search(r'_LOD[1-9]|_COL(\.\d+)?$|^UCX_', o.name)]: new.remove(o); bpy.data.objects.remove(o, do_unlink=True)
+    lod = lambda o: int(re.search(r'_LOD(\d)', o.name).group(1)) if re.search(r'_LOD(\d)', o.name) else None
+    keep = 0
+    if KEEP_LOD:   # (the cards Synty ends on, a dozen triangles, don't count as a level)
+        tris = {}
+        for o in new:
+            if o.type == 'MESH' and lod(o) is not None: o.data.calc_loop_triangles(); tris[lod(o)] = tris.get(lod(o), 0) + len(o.data.loop_triangles)
+        keep = max([l for l, t in tris.items() if t > 60 and l <= int(KEEP_LOD)] or [0])
+    for o in [o for o in new if o.type in ('LIGHT', 'CAMERA') or (o.type == 'MESH' and lod(o) is not None and lod(o) != keep) or re.search(r'_COL(\.\d+)?$|^UCX_', o.name)]: new.remove(o); bpy.data.objects.remove(o, do_unlink=True)
     meshes = [o for o in new if o.type == 'MESH' and len(o.data.polygons)]
     for o in new:
         o.animation_data_clear()

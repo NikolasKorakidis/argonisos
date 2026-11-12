@@ -5,9 +5,13 @@ import * as THREE from 'three';
 import { FootIK } from './footik.js';
 import { loadFBX, loadGLB, loadTex } from '../assets.js';
 import { clamp, lerp } from '../util/math.js';
+import { SETTINGS, onHeroChange } from '../ui/settings.js';
 
 const ss = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
-const UPPER = /Spine|Neck|Head|Shoulder|Arm|Hand/, UPV = new THREE.Vector3(0, 1, 0), HEIGHT = 1.95;
+const UPPER = /Spine|Neck|Head|Shoulder|Arm|Hand/, UPV = new THREE.Vector3(0, 1, 0);
+// The bodies to choose from (Settings): Synty's plain man and woman in their underwear, fitted onto the Mixamo rig
+// (tools/assets/fbx-page.mjs refit: same bones, same clips), each this tall; the tint takes the palette's glare off in our light
+export const BODIES = { man: { file: 'hero', height: 1.95, tint: 0xb4aeb4 }, woman: { file: 'heroWoman', height: 1.86, tint: 0xb4aeb4 } };
 // How the right hand holds a handle, in the hand bone's space (+x thumb side, +y fingers, +z palm; units of the rig, ~0.8 cm):
 // where the handle's grip point sits, how far the handle tips from across the palm, and how far each finger joint curls
 export const GRIP = { at: [0, 10.6, 4.1], tilt: -1.8, curl: 1.0 };
@@ -47,6 +51,7 @@ export class Hero {
     this.handR = new THREE.Group(); this.handL = new THREE.Group(); this.armL = new THREE.Group(); this.back = new THREE.Group(); this.backBow = new THREE.Group();
     this.placeholder = this.makePlaceholder(); this.wrap.add(this.placeholder);
     this.ready = this.load();
+    onHeroChange(() => { this.ready = this.ready.then(() => this.load()); });
   }
   makePlaceholder() {      // a simple figure while the model streams in
     const g = new THREE.Group(), m = new THREE.MeshStandardMaterial({ color: 0xe9e0cc, roughness: 0.8 });
@@ -55,33 +60,68 @@ export class Hero {
     return g;
   }
   async load() {
-    // the team's Cretan archer fitted onto the Mixamo rig (tools/assets/fbx-page.mjs refit: same bones, same clips), or
-    // the old model when the pack isn't there
-    let obj = await loadGLB('pack/hero').then((gl) => gl.scene).catch(() => null), mat;
-    if (obj) { obj.updateMatrixWorld(true); let map = null; obj.traverse((m) => { if (m.isMesh && !map) map = m.material.map; }); mat = new THREE.MeshStandardMaterial({ map, color: 0xc4c4c4, roughness: 0.8, metalness: 0 }); }   // (its palette is pale in our light)
+    // the chosen body, the armour to dress it in (pack/heroArmour: the Greek warriors' pieces, converted on a body of
+    // their own and moved onto this one's bones), or the old model when the pack isn't there
+    const kind = BODIES[SETTINGS.hero] || BODIES.man;
+    const [gl, dress] = await Promise.all([loadGLB('pack/' + kind.file).catch(() => null), loadGLB('pack/heroArmour').catch(() => null)]);
+    let obj = gl?.scene, mat;
+    if (obj) { obj.updateMatrixWorld(true); let map = null; obj.traverse((m) => { if (m.isMesh && !map) map = m.material.map; }); mat = new THREE.MeshStandardMaterial({ map, color: kind.tint, roughness: 0.8, metalness: 0 }); }
     else { obj = await loadFBX('hero_rig'); mat = new THREE.MeshStandardMaterial({ map: loadTex('hero_diffuse.jpg'), normalMap: loadTex('hero_normal.jpg', false), roughness: 0.8, metalness: 0 }); }
     const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
-    this.s = HEIGHT / size.y; obj.scale.multiplyScalar(this.s);
+    const bones = {};
     obj.traverse((m) => {
-      if (m.isBone) this.bones[m.name] = m;
+      if (m.isBone) bones[m.name] = m;
       if (!m.isMesh) return;
       m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;   // skinned bounds don't follow the pose
       m.material = mat;
     });
+    if (gl && dress) this.dress(obj, dress.scene, bones);
+    this.s = (gl ? kind.height : 1.95) / size.y; obj.scale.multiplyScalar(this.s);
     obj.animations = [];
-    this.parts = {}; obj.traverse((m) => { if (m.isMesh) this.parts[m.name] = m; }); this.wear(this.wearing);
+    // (a body swapped in the settings: the old one goes, with what it held, the clips bound to it and its feet)
+    const held = [this.handR, this.handL, this.armL, this.back, this.backBow];
+    if (this.model) { this.wrap.remove(this.model); this.mixer.stopAllAction(); this.acts = {}; this.samplers = {}; this.ik = null; }
+    this.bones = bones; this.parts = {}; obj.traverse((m) => { if (m.isMesh) this.parts[m.name] = m; }); this.wear(this.wearing);
     this.wrap.remove(this.placeholder); this.wrap.add(obj); this.model = obj;
     this.mixer = new THREE.AnimationMixer(obj);
     // Bones are in centimetres: attachment points sit in bone space, the objects on them undo the model scale
     const B = this.bones;
     B.mixamorigRightHand.add(this.handR); B.mixamorigLeftHand.add(this.handL); B.mixamorigLeftForeArm.add(this.armL);
     for (const g of [this.back, this.backBow]) B.mixamorigSpine2.add(g);
+    for (const g of held) for (const o of g.children) o.scale.setScalar(1 / this.s);
     this.back.position.set(2, 8, -16); this.backBow.position.set(-2, 2, -17); this.backBow.rotation.set(0, 0, 0.6);
     return this;
   }
+  // The armour's pieces (wear_<item>) and the hair from their own file onto this body: each keeps its bind (where it
+  // sat on the warrior it came from) and follows the bones of the same name here, so every piece goes where its joints
+  // went. Helmets and hair are fitted to this head first (the warrior's was smaller): moved and scaled from his head's
+  // box onto this one's, less the head bone's own move, which the bones then make. Both bodies stand in their rest pose here.
+  dress(obj, src, bones) {
+    src.updateMatrixWorld(true); obj.updateMatrixWorld(true);
+    let host = null; obj.traverse((m) => { if (m.isSkinnedMesh && !host) host = m.parent; });
+    let map = null, headA = null; const wear = [];
+    src.traverse((m) => { if (!m.isSkinnedMesh) return; if (m.name === 'base_head') headA = m; if (m.name.startsWith('wear_') || m.name === 'hair') { wear.push(m); map ||= m.material.map; } });
+    const headB = host?.children.find((m) => m.name === 'base_head');
+    const box = (m) => m.geometry.boundingBox.clone().applyMatrix4(m.bindMatrix), Ba = headA && headB && box(headA), Bb = Ba && box(headB);
+    const mat = new THREE.MeshStandardMaterial({ map, color: 0xc4c4c4, roughness: 0.8, metalness: 0 });
+    const ca = new THREE.Vector3(), cb = new THREE.Vector3(), ja = new THREE.Vector3(), jb = new THREE.Vector3(), v = new THREE.Vector3(), inv = new THREE.Matrix4();
+    for (const m of wear) {
+      const list = m.skeleton.bones.map((b) => bones[b.name]); if (!host || list.some((b) => !b)) continue;
+      const hi = m.skeleton.bones.findIndex((b) => b.name === 'mixamorigHead');
+      if (Bb && hi >= 0 && /Helmet$|^hair$/.test(m.name)) {
+        const k = (Bb.max.x - Bb.min.x) / (Ba.max.x - Ba.min.x); Ba.getCenter(ca); Bb.getCenter(cb);
+        ja.setFromMatrixPosition(inv.copy(m.skeleton.boneInverses[hi]).invert()); jb.setFromMatrixPosition(bones.mixamorigHead.matrixWorld);
+        const P = m.geometry.attributes.position; inv.copy(m.bindMatrix).invert();
+        for (let i = 0; i < P.count; i++) { v.fromBufferAttribute(P, i).applyMatrix4(m.bindMatrix).sub(ca).multiplyScalar(k).add(cb).sub(jb).add(ja).applyMatrix4(inv); P.setXYZ(i, v.x, v.y, v.z); }
+        P.needsUpdate = true; m.geometry.computeBoundingBox();
+      }
+      host.add(m); m.bind(new THREE.Skeleton(list, m.skeleton.boneInverses), m.bindMatrix);
+      m.material = mat; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
+    }
+  }
   // Show the armour worn ({ head, body, legs }: item ids). The pack's hero carries each piece as a part of its own
-  // (wear_<id>) and its own body in three (base_head, base_body, base_legs): armour takes the place of the body under it,
-  // and a helmet the hair's. The old model has none: nothing changes on it.
+  // (wear_<id>, from dress) and its own body in three (base_head, base_body, base_legs): armour takes the place of the
+  // body under it, and a helmet the hair's. The old model has none: nothing changes on it.
   wear(ids = {}) {
     this.wearing = ids; const P = this.parts; if (!P) return;
     const on = (slot) => !!(ids[slot] && P['wear_' + ids[slot]]);

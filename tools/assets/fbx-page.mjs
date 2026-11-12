@@ -81,7 +81,7 @@ const CORE = { Hips: 'Hips', Spine_01: 'Spine', Spine_02: 'Spine1', Spine_03: 'S
 function mixamoName(b) {
   const n = b.name; if (CORE[n]) return 'mixamorig' + CORE[n];
   const m = n.match(/^(\w+)_([LR])$/); if (m && SIDE[m[1]]) return `mixamorig${m[2] === 'L' ? 'Left' : 'Right'}${SIDE[m[1]]}`;
-  const f = n.match(/^(Thumb_0\d|IndexFinger_0\d|Finger_0\d)(\d{3})?$/); if (f && FINGER[f[1]]) {   // (the right hand's fingers share the left's names)
+  const f = n.match(/^(Thumb_0\d|IndexFinger_0\d|Finger_0\d)(\d{3}|_[LR])?$/); if (f && FINGER[f[1]]) {   // (the right hand's fingers share the left's names)
     let p = b.parent; while (p && !/^Hand_[LR]$/.test(p.name)) p = p.parent;
     return p ? `mixamorig${p.name.endsWith('_L') ? 'Left' : 'Right'}Hand${FINGER[f[1]]}` : null;
   }

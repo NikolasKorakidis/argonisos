@@ -99,6 +99,64 @@ if job.get('plant'):
         me.polygons.foreach_set('material_index', [0 if k is None else mats.index(k) for k in slot])
         ca = me.color_attributes.new('Col', 'BYTE_COLOR', 'CORNER'); ca.data.foreach_set('color_srgb', col.ravel())
         me.color_attributes.active_color = ca; me.color_attributes.render_color_index = me.color_attributes.find('Col')
+    # The game draws a model's cards with one texture: a model whose cards use several (Synty's trees: branches and
+    # leaves) gets them side by side in one atlas of their own (pack/tex/atlas-<hash>.png, made WebP by convert.mjs),
+    # each card's UVs moved into its texture's tile
+    ms = [o for o in bpy.data.objects if o.type == 'MESH']; ck = sorted(cards)
+    if len(ck) > 1:
+        import hashlib
+        T = max(max(pix[k].shape[:2]) for k in ck); N = len(ck); A = np.zeros((T, T * N, 4), np.float32)
+        for i, k in enumerate(ck):
+            H, W = pix[k].shape[:2]; A[:, i * T:(i + 1) * T] = pix[k][(np.arange(T) * H // T)][:, (np.arange(T) * W // T)]
+        akey = 'atlas-' + hashlib.md5('+'.join(ck).encode()).hexdigest()[:10]
+        im = bpy.data.images.new(akey, T * N, T, alpha=True); im.pixels.foreach_set(A.ravel())
+        im.filepath_raw = os.path.join(job['plant'], akey + '.png'); im.file_format = 'PNG'; im.save(); print('ATLAS', akey, im.filepath_raw)
+        amat = bpy.data.materials.new('tex:' + akey)
+        for o in ms:
+            me = o.data; names = [s.material.name if s.material else '' for s in o.material_slots]; uvl = me.uv_layers.active; n = len(me.loops)
+            uv = np.zeros(n * 2, np.float32); uvl.data.foreach_get('uv', uv); uv = uv.reshape(n, 2); idx = []
+            for p in me.polygons:
+                nm = names[p.material_index]
+                if nm.startswith('tex:') and nm[4:] in ck:
+                    li = list(p.loop_indices); u = uv[li]; u = np.clip(u - np.floor(u.mean(0)), 0, 1); u[:, 0] = (u[:, 0] + ck.index(nm[4:])) / N; uv[li] = u; idx.append(1)
+                else: idx.append(0)
+            uvl.data.foreach_set('uv', uv.ravel()); me.materials.clear(); me.materials.append(plain); me.materials.append(amat); me.polygons.foreach_set('material_index', idx)
+        cards = {akey: amat}
+    # A far version (the game's mid band, out to 260 m, draws hundreds): brought down to about `decimate` triangles. Cards
+    # are thinned (whole leaf patches dropped, the rest grown so the crown stays as full), the solid parts collapsed.
+    if job.get('decimate'):
+        import bmesh
+        from mathutils import Vector
+        card = lambda o, f: o.material_slots[f.material_index].material.name.startswith('tex:')
+        S = sum(len(p.vertices) - 2 for o in ms for p in o.data.polygons if not card(o, p)); C = sum(len(p.vertices) - 2 for o in ms for p in o.data.polygons if card(o, p))
+        T = job['decimate']; fc = min(1, max(job.get('cardMin', 0.2), job.get('cardShare', 0.6) * T / C)) if C else 1; fs = min(1, max(0.08, (T - C * fc) / max(S, 1)))
+        if job.get('solidMin') and fs < job['solidMin']:   # (close by, a jagged trunk shows more than a thinner crown: the leaves give way)
+            fs = job['solidMin']; fc = min(fc, max(job.get('cardMin', 0.2), (T - S * fs) / max(C, 1)))
+        for o in ms:   # (each mesh split into one per material first, so the collapse only meets solid faces)
+            with bpy.context.temp_override(active_object=o, object=o, selected_objects=[o], selected_editable_objects=[o]):
+                bpy.ops.object.mode_set(mode='EDIT'); bpy.ops.mesh.select_all(action='SELECT'); bpy.ops.mesh.separate(type='MATERIAL'); bpy.ops.object.mode_set(mode='OBJECT')
+        ms = [o for o in bpy.data.objects if o.type == 'MESH' and len(o.data.polygons)]
+        for o in ms:
+            bm = bmesh.new(); bm.from_mesh(o.data); seen, isles, drop = set(), [], []
+            for f in bm.faces:
+                if f in seen or not card(o, f): continue
+                isl, todo = [], [f]; seen.add(f)
+                while todo:
+                    g = todo.pop(); isl.append(g)
+                    for e in g.edges:
+                        for h in e.link_faces:
+                            if h not in seen and card(o, h): seen.add(h); todo.append(h)
+                isles.append(isl)
+            for k, isl in enumerate(isles):   # (every so many patches, evenly through the crown: the golden ratio's steps)
+                if ((k + 1) * 0.6180339) % 1 >= fc: drop += isl; continue
+                vs = {v for g in isl for v in g.verts}; c = sum((v.co for v in vs), Vector()) / len(vs); s = min(1.6, fc ** -0.5)
+                for v in vs: v.co = c + (v.co - c) * s
+            if drop: bmesh.ops.delete(bm, geom=drop, context='FACES')
+            bm.to_mesh(o.data); bm.free()
+            if fs < 1 and o.data.polygons and not card(o, o.data.polygons[0]):
+                m = o.modifiers.new('far', 'DECIMATE'); m.ratio = fs
+                with bpy.context.temp_override(object=o, active_object=o): bpy.ops.object.modifier_apply(modifier='far')
+        o_tris = sum(len(p.vertices) - 2 for o in bpy.data.objects if o.type == 'MESH' for p in o.data.polygons); print('DECIMATED', S + C, '->', o_tris, 'cards kept', round(fc, 2), 'solid', round(fs, 2))
     if job.get('height'):   # (brought to a height in metres: a pack's bush can be knee-high where the game wants a shrub)
         from mathutils import Matrix, Vector
         bpy.context.view_layer.update(); ms = [o for o in bpy.data.objects if o.type == 'MESH']

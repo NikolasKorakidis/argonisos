@@ -1,4 +1,5 @@
-// Settings: graphics preset, render resolution, fullscreen, volume and mouse sensitivity. Kept in browser storage.
+// Settings: graphics preset, render resolution, fullscreen, volume, mouse sensitivity and the hero's body (a man or a
+// woman). Kept in browser storage.
 // Fullscreen captures the Escape key where the browser allows it (Keyboard Lock), so a tap still opens the pause menu
 // and you hold Esc for two seconds to leave fullscreen. Where it doesn't (Safari, Firefox), Esc leaves fullscreen and
 // the game puts it back on your next click.
@@ -10,7 +11,7 @@ import { setVolume, setMusicVolume } from '../audio/sound.js';
 import { input } from '../input.js';
 
 const KEY = 'argonisos.settings.v1';
-export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, music: 0.5, sens: 1, fullscreen: false };
+export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, music: 0.5, sens: 1, fullscreen: false, hero: 'man' };
 try { Object.assign(SETTINGS, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* defaults */ }
 const store = () => { try { localStorage.setItem(KEY, JSON.stringify(SETTINGS)); } catch { /* private mode */ } };
 
@@ -38,6 +39,11 @@ export function setRes(r) { SETTINGS.res = r; store(); applyGraphics(); }
 export function setVol(v) { SETTINGS.volume = v; store(); setVolume(v); }
 export function setMusic(v) { SETTINGS.music = v; store(); setMusicVolume(v); }
 export function setSens(s) { SETTINGS.sens = s; store(); input.sens = s; }
+// the hero's body: 'man' or 'woman' (the hero swaps it as soon as the new one has loaded)
+const heroHooks = [];
+export const HERO_BODIES = [['man', 'Man'], ['woman', 'Woman']];
+export function onHeroChange(f) { heroHooks.push(f); }
+export function setHero(kind) { if (kind === SETTINGS.hero) return; SETTINGS.hero = kind; store(); for (const f of heroHooks) f(kind); }
 
 // ---- fullscreen
 let wantFs = false;

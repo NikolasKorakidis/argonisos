@@ -12,21 +12,25 @@ import { wettable } from '../world/wetness.js';
 
 const wall = (h) => [-1.5, 1.5, 0, h, -0.15, 0.15];
 const roof = (run, rise) => ({ box: [-1.5, 1.5, -0.45 * rise / run, rise + 0.3, -run - 0.05, 0.45], slope: true });
+// a gable end: the triangle of logs, and over its sloping edges the thatch's end cap (the kit's "roof end"), sized like the
+// roof panels it closes (out to their eaves, up to their top) and centred on the gable, so it caps the panels' cut ends
+const end = (file, trim, run, rise) => ({ file, box: [-run, run, 0, rise, -0.15, 0.15], trim: { file: trim, box: [-run - 0.45, run + 0.45, -0.45 * rise / run, rise + 0.3, -0.4, 0.4] } });
 const KIT = {
   wall: { file: 'kWall', box: wall(3) }, wallHalf: { file: 'kWallLow', box: wall(1) }, doorframe: { file: 'kDoorWall', box: wall(3) },
   door: { file: 'kDoor', box: [0, 1.36, 0, 2.28, -0.05, 0.05] },
   beamV: { file: 'kBeam', box: [-0.13, 0.13, 0, 3, -0.13, 0.13] },
-  beamH: { file: 'kBeam', lay: 'x', box: [-1.5, 1.5, -0.13, 0.13, -0.13, 0.13] },
-  beamD: { file: 'kBeam', lay: 'd', box: [-1.06, 1.06, 0, 2.12, -0.13, 0.13] },
+  beamH: { file: 'kBeamH', box: [-1.5, 1.5, -0.13, 0.13, -0.13, 0.13] },   // (a squared beam, lying as it comes)
+  beamD: { file: 'kBeamD', lay: 'd', box: [-1.06, 1.06, 0, 2.12, -0.13, 0.13] },   // (the 4 m post: tilted, it keeps a slimmer section than the 3 m one)
   floor: { file: 'kFloor', box: [-1.5, 1.5, -0.1, 0, -1.5, 1.5] },
   roof63: { file: 'kRoof63', ...roof(3, 3) }, roof65: { file: 'kRoof65', ...roof(3, 5) }, roof94: { file: 'kRoof94', ...roof(4.5, 4) },
-  end63: { file: 'kEnd63', box: [-3, 3, 0, 3, -0.15, 0.15] }, end65: { file: 'kEnd65', box: [-3, 3, 0, 5, -0.15, 0.15] }, end94: { file: 'kEnd94', box: [-4.5, 4.5, 0, 4, -0.15, 0.15] },
-  stairs: { file: 'kStairs', box: [-1, 1, 0, 1.5, -2, 0], slope: true }, stairsLong: { file: 'kStairs', box: [-1, 1, 0, 3, -4, 0], slope: true },
+  end63: end('kEnd63', 'kTrim63', 3, 3), end65: end('kEnd65', 'kTrim65', 3, 5), end94: end('kEnd94', 'kTrim94', 4.5, 4),
+  stairs: { file: 'kStairsShort', box: [-1, 1, 0, 1.5, -2, 0], slope: true }, stairsLong: { file: 'kStairs', box: [-1, 1, 0, 3, -4, 0], slope: true },
   fence: { file: 'kFence', box: [-1, 1, 0, 1.2, -0.12, 0.12] }, stockade: { file: 'kStockade', box: [-2, 2, 0, 4.1, -0.22, 0.22] },
   awning: { file: 'kAwning', box: [-1.5, 1.5, 0, 0.67, -1.5, 0.1], slope: true },
   gateL: { file: 'kGateL', box: [0, 2, 0, 2.4, -0.08, 0.08] }, gateR: { file: 'kGateR', box: [-2, 0, 0, 2.4, -0.08, 0.08] },
   workbench: { file: 'kWorkbench', box: [-1, 1, 0, 0.98, -0.45, 0.45] }, campfire: { file: 'kCampfire', box: [-0.7, 0.7, 0, 0.5, -0.7, 0.7], uniform: true },
-  cookingStand: { file: 'kCookStand', box: [-0.85, 0.85, 0, 1.12, -0.25, 0.25] }, bed: { file: 'kBed', box: [-0.55, 0.55, 0, 0.6, -1.05, 1.05] },
+  bed: { file: 'kBed', box: [-0.55, 0.55, 0, 0.6, -1.05, 1.05] },
+  cookingStand: { file: 'kCookStand', box: [-0.85, 0.85, 0, 1.12, -0.45, 0.45], uniform: true },   // (the fish rack at half its size, its bar where the meat hangs)
   chest: { file: 'kChest', box: [-0.5, 0.5, 0, 0.7, -0.3, 0.3], uniform: true }, torchStand: { file: 'kTorchStand', box: [-0.15, 0.15, 0, 1.62, -0.15, 0.15], uniform: true },
 };
 
@@ -51,8 +55,6 @@ export function loadKit(pieces) {
   const mats = new Map();   // (one material per atlas, made wettable like the carved planks)
   // (the kit's paint is pale in our light: taken down a little)
   const matFor = (src) => { const key = src.map?.uuid ?? src.uuid; if (!mats.has(key)) mats.set(key, wettable(new THREE.MeshStandardMaterial({ map: src.map, color: 0xa8a8a8, roughness: 0.9 }), { dark: 0.62, gloss: 0.32 })); return mats.get(key); };
-  return Promise.all(pieces.filter((p) => KIT[p.id]).map((p) => loadPack(KIT[p.id].file).then((gl) => {
-    let src = null; gl.scene.traverse((m) => { if (m.isMesh && !src) src = m.material; });
-    p.meshes = [{ geo: fit(bake(gl.scene), KIT[p.id]), mat: matFor(src) }];
-  }).catch(() => {})));
+  const look = (K) => loadPack(K.file).then((gl) => { let src = null; gl.scene.traverse((m) => { if (m.isMesh && !src) src = m.material; }); return { geo: fit(bake(gl.scene), K), mat: matFor(src) }; });
+  return Promise.all(pieces.filter((p) => KIT[p.id]).map((p) => Promise.all([KIT[p.id], KIT[p.id].trim].filter(Boolean).map(look)).then((m) => { p.meshes = m; }).catch(() => {})));
 }
