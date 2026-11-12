@@ -46,7 +46,7 @@ const LOOK = {
   crudeSpear: 'spear', lightstoneSpear: 'spearDoru', torch: 'torch', crudeBow: 'bow', cretanBow: 'cretanBow', crudeShield: 'shieldCretan', crudeTowerShield: 'shieldHoplon',
 };
 let axeP = null, bowP = null; const props = {};
-const axeModel = () => (axeP ||= loadFBX('axe').then((o) => { const h = normalizeHandle(fixMaterials(o), 0.85); h.position.y = -0.09; return h; }));
+const axeModel = () => (axeP ||= loadFBX('axe').then((o) => { const h = headAlong(normalizeHandle(fixMaterials(o), 0.85)); h.position.y = -0.09; return h; }));
 const bowModel = () => (bowP ||= loadFBX('bow').then((o) => { const tex = loadTex('bow.jpg'), mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 });
   o.traverse((m) => { if (m.isMesh) { m.material = mat; m.castShadow = true; } });
   const box = new THREE.Box3().setFromObject(o), s = 1.35 / box.getSize(new THREE.Vector3()).y; o.scale.multiplyScalar(s);
@@ -70,12 +70,27 @@ const PACKED = {
   // tools: length, and how far below the grip the handle's end sits
   axe: () => prop('axeCrude', (o) => tool(o, 0.75, 0.09)), axeLight: () => prop('axeGood', (o) => tool(o, 0.85, 0.09)),
   club: () => prop('club', (o) => tool(o, 0.85, 0.08)), dagger: () => prop('knifeCrude', (o) => tool(o, 0.42, 0.02)), daggerLight: () => prop('knifeGood', (o) => tool(o, 0.38, 0.02)),
-  hammer: () => prop('mallet', (o) => tool(o, 0.55, 0.06)), pickaxe: () => prop('pickaxe', (o) => tool(o, 0.8, 0.08)), hoe: () => prop('spade', (o) => tool(o, 1.0, 0.15)),
+  hammer: () => prop('mallet', (o) => tool(o, 0.55, 0.06)), pickaxe: () => prop('pickaxe', (o) => tool(o, 0.8, 0.08)), hoe: () => prop('spade', (o) => tool(o, 1.0, 0.15, true)),
   spear: () => prop('stake', (o) => { const g = tool(o, 1.8, 0.35); g.scale.set(0.3, 1, 0.3); return grp(g); }),   // (a stake for a palisade, thinned to a shaft; the hand sets the outer group's scale)
   torch: () => prop('torch', (o) => { const g = tool(o, 0.8, 0.05), top = new THREE.Box3().setFromObject(g).max.y;   // our flame and light on its head
     g.add(flame(top - 0.04)); const L = new THREE.Object3D(); L.name = 'torchLight'; L.position.y = top + 0.12; g.add(L); return g; }),
 };
-function tool(o, len, below) { const h = normalizeHandle(o, len); h.position.y = -below; return grp(h); }
+function tool(o, len, below, flat) { const h = headAlong(normalizeHandle(o, len), flat); h.position.y = -below; return grp(h); }
+// Each pack model comes out of normalizeHandle with its head pointing whichever way its maker turned it. The hand holds
+// them all one way (hero.holdRight: +x to the knuckles, the way the hand strikes), so each is turned about its handle until
+// its head (the top two fifths) lies widest along x, the longer side (an axe's blade, not its poll) to +x. flat: a blade
+// that strikes with its face (the spade used as a hoe) turns a quarter more, its face to the knuckles
+function headAlong(h, flat) {
+  h.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(h), top = box.min.y + (box.max.y - box.min.y) * 0.6, v = new THREE.Vector3(), pts = [];
+  h.traverse((m) => { if (!m.isMesh) return; const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld); if (v.y > top) pts.push(v.x, v.z); } });
+  let cx = 0, cz = 0, xx = 0, zz = 0, xz = 0; const n = pts.length / 2; if (!n) return h;
+  for (let i = 0; i < pts.length; i += 2) { cx += pts[i] / n; cz += pts[i + 1] / n; }
+  for (let i = 0; i < pts.length; i += 2) { const x = pts[i] - cx, z = pts[i + 1] - cz; xx += x * x; zz += z * z; xz += x * z; }
+  let a = 0.5 * Math.atan2(2 * xz, xx - zz), lo = 0, hi = 0;
+  for (let i = 0; i < pts.length; i += 2) { const x = pts[i] * Math.cos(a) + pts[i + 1] * Math.sin(a); lo = Math.min(lo, x); hi = Math.max(hi, x); }
+  if (-lo > hi * 1.15) a += Math.PI; if (flat) a += Math.PI / 2;   // (a near even head, a mallet's or a pick's, keeps the way it came)
+  const g = grp(h); h.rotation.y = a; return g;
+}
 // A fresh model for an item (a promise: the imported ones stream in)
 export async function heldModel(id) {
   const k = LOOK[id]; if (!k) return null;

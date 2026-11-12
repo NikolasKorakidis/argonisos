@@ -39,7 +39,7 @@ const sceneRT = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THR
 export const composer = new EffectComposer(renderer, sceneRT);
 composer.setPixelRatio(GFX.scale); composer.setSize(innerWidth, innerHeight);
 composer.addPass(new RenderPass(scene, camera));
-export const atmosphere = new AtmospherePass(); composer.addPass(atmosphere);
+export const atmosphere = new AtmospherePass(); atmosphere.light = sun; composer.addPass(atmosphere);   // (it marches the woods' haze through the sun's shadow map)
 export const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.18, 0.5, 0.92); composer.addPass(bloom);
 // (the vignette lives in the atmosphere pass now: one full-screen pass fewer)
 composer.addPass(new OutputPass());

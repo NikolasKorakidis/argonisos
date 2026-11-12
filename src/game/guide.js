@@ -11,6 +11,7 @@ const nearest = (P, list) => list.slice().sort((a, b) => Math.hypot(a.x - P.x, a
 export function steps(g) {
   const inv = g.inv, seen = (id) => inv.seen.has(id), has = (id, n) => inv.count(id) >= n, tr = () => g.trial.st, P = () => g.player.pos;
   const placed = (id) => g.build.placed.some((p) => p.id === id);
+  const stand = (boss) => { const u = g.structures.uses.find((q) => q.kind === 'offering' && q.boss === boss); return u ? { x: u.at.x, z: u.at.z } : SITES.temple; };   // (the head's own stand before the temple)
   const left = (key) => (key === 'scraps' ? SITES.olives.filter((s, i) => !tr().scraps.includes('olive' + i)) : SITES.caves.filter((s, i) => !tr().carvings.includes('cave' + i)));
   return [
     { t: 'Pick something up', h: `Stones, branches and flowers lie in the grass. Walk up to one and press ${K('E')}.`, done: () => inv.seen.size > 0 },
@@ -32,13 +33,13 @@ export function steps(g) {
     { t: 'Gather the Minotaur\'s tribute', h: () => `<b>${Math.min(5, inv.count('deerHide'))} / 5</b> deer hides (deer) · <b>${Math.min(10, inv.count('olive'))} / 10</b> olives (olive trees, once a day each).`, done: () => (has('deerHide', 5) && has('olive', 10)) || !!g.trial.boss || tr().down.minotaur },
     { t: 'Call the Minotaur', h: `Go to the Labyrinth and lay the tribute on its altar (${K('E')}). Eat well first.`, done: () => !!g.trial.boss || tr().down.minotaur, go: () => SITES.labyrinth },
     { t: 'Defeat the Minotaur', h: 'Arrows and spears hurt him most. Skeletons rise every 30 seconds. Don\'t leave the arena.', done: () => tr().down.minotaur, go: () => SITES.labyrinth },
-    { t: 'Offer the Minotaur\'s head', h: `Pick up his head, then lay it on its stand at the Ancient Temple (${K('E')}).`, done: () => tr().offered.minotaur, go: () => SITES.temple },
+    { t: 'Bring the Minotaur\'s head to Zeus\'s temple', h: `Pick up his head, then lay it on its stand before the temple's steps, the one on the left with the bull in gold and the light over it (${K('E')}).`, done: () => tr().offered.minotaur, go: () => stand('minotaur') },
     { t: 'Enter the forest of Yleos', h: `The dark forest ring around the meadows. Try the Minotaur's Roar (${K('F')}). Dryads fear fire; giants hit very hard.`, done: () => g.owl.st.done.includes('yleos') || biomeWeights(P().x, P().z).y > 0.75 },
     { t: 'Take rubbings in three Giant caves', h: () => `Each cave on the forest's edge has a giant guard and a carving inside. <b>${tr().carvings.length} / 3</b>`, done: () => tr().carvings.length >= 3 || tr().revealed.chimera, go: () => nearest(P(), left('carvings')) },
     { t: 'Gather the Chimera\'s tribute', h: () => `<b>${Math.min(3, inv.count('dryadHeart'))} / 3</b> dryad hearts (some dryads carry one) · <b>${Math.min(10, inv.count('pomegranate'))} / 10</b> pomegranates (meadow groves).`, done: () => (has('dryadHeart', 3) && has('pomegranate', 10)) || !!g.trial.boss || tr().down.chimera },
     { t: 'Call the Chimera', h: `Lay the tribute on the altar of its shrine (${K('E')}). Lightstone gear and Cretan armour help.`, done: () => (g.trial.boss?.type === 'chimera') || tr().down.chimera, go: () => SITES.chimera },
     { t: 'Defeat the Chimera', h: 'Never stand behind it: the tail stings and poisons. Dryads join every 30 seconds.', done: () => tr().down.chimera, go: () => SITES.chimera },
-    { t: 'Offer the Chimera\'s head', h: 'Lay it on its stand at the Ancient Temple.', done: () => tr().offered.chimera, go: () => SITES.temple },
+    { t: 'Bring the Chimera\'s head to Zeus\'s temple', h: `Lay it on its stand before the temple's steps, the one on the right with the beast in gold and the light over it (${K('E')}).`, done: () => tr().offered.chimera, go: () => stand('chimera') },
   ];
 }
 

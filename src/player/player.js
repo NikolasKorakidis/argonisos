@@ -22,11 +22,13 @@ export class Player {
     this.yaw = 0; this.camYaw = 0; this.camPitch = -0.25; this.camDist = 5.5; this.camT = new THREE.Vector3(); this.camInit = false;
     this.onGround = true; this.swimming = false; this.sprinting = false; this.sneaking = false; this.jumped = false; this.jumpBuf = 0;
     this.speed = 0; this.winded = false; this.swing = 0; this.swingKind = 'punch'; this.swingHit = false; this.equip = null; this.bow = null;
-    this.stats = new Stats(); this.dead = false; this.deadT = 0; this.lean = 0; this.bank = 0; this.lastYaw = 0; this.stepD = 0; this.swimD = 0; this.sprintD = 0;
+    this.stats = new Stats(); this.dead = false; this.deadT = 0; this.lean = 0; this.bank = 0; this.lastYaw = 0; this.swimD = 0; this.sprintD = 0;
     this.speedMod = 0;            // from equipment (-0.05 per heavy item etc.)
     this.overweight = false; this.frozen = false;  // frozen: no control (menus, cutscenes)
     this.onStrike = null; this.onStep = null; this.onToast = null;
     this.stats.onDeath = () => this.die();
+    // a footstep each time a foot comes down in the stride the legs are playing (hero.update), on the ground
+    this.hero.onFootfall = () => { if (this.onGround && !this.swimming) this.onStep?.('step'); };
   }
   spawn(x, z) { this.pos.set(x, Math.max(groundAt(x, z), -SWIM_DEPTH), z); this.vel.set(0, 0, 0); this.hv.set(0, 0, 0); this.camInit = false; }
   get camForward() { return new THREE.Vector3(-Math.sin(this.camYaw) * Math.cos(this.camPitch), Math.sin(this.camPitch), -Math.cos(this.camYaw) * Math.cos(this.camPitch)); }
@@ -113,7 +115,6 @@ export class Player {
         this.pos.y = fl; this.vel.y = 0; this.onGround = true; this.jumped = false;
       } else if (this.pos.y > fl + 0.05) this.onGround = false;
     }
-    if (speed > 0 && this.onGround) { this.stepD += speed * dt; if (this.stepD > (this.sprinting ? 2.3 : 1.6)) { this.stepD = 0; this.onStep?.('step'); } }
     // ---- strikes
     if (this.swing > 0) {
       this.swing -= dt * (this.swingKind === 'punch' ? 2.2 : 1.35);

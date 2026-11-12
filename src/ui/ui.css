@@ -384,7 +384,7 @@ body.titling > *:not(canvas):not(#title):not(#notes):not(#creator), body.creatin
 
 /* minimap and biome (bottom right) */
 #minimap { position:absolute; right:16px; bottom:18px; display:flex; flex-direction:column; align-items:center; gap:6px; }
-#minimap canvas { width:176px; height:176px; border-radius:50%; box-shadow:0 0 0 2px var(--glaze), 0 0 0 5px rgba(212,132,74,.55), 0 6px 18px rgba(0,0,0,.4); background:#d4c49a; }
+#minimap canvas { width:240px; height:240px; border-radius:50%; box-shadow:0 0 0 2px var(--glaze), 0 0 0 5px rgba(212,132,74,.55), 0 6px 18px rgba(0,0,0,.4); background:#d4c49a; }
 #biomeLabel { padding:3px 12px; border-radius:12px; font:700 12px Cinzel,serif; letter-spacing:.08em; color:var(--cream); background:rgba(31,22,16,.72); box-shadow:0 0 0 1px rgba(0,0,0,.5); white-space:nowrap; }
 #compassStrip span.poi.spawn { color:#ffb090; }
 

@@ -14,6 +14,7 @@ import { dust, burst, addShake } from '../render/fx.js';
 import { setWeather } from '../world/weather.js';
 import { hit } from '../input.js';
 import { clamp, rr } from '../util/math.js';
+import { loadGLB } from '../assets.js';
 
 const FT = 0.3048, angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 TYPES.minotaur = { name: 'The Minotaur', boss: true, hp: [500, 500], block: 24, speed: [6 * FT, 9], sight: 70, dmg: [18, 22, 'slash'], reach: 2.8, r: 1.0, h: 3.4, mob: [1, 1], heavy: true,
@@ -43,7 +44,7 @@ export class Trial {
     if (u.kind === 'altar') return { label: st.prayDay === this.g.S.day ? 'Zeus has heard you today' : 'Pray to Zeus', sub: 'Altar of Zeus', use: () => this.pray(u) };
     if (u.kind === 'offering') { const head = u.boss + 'Head'; if (st.offered[u.boss]) return { label: `${ITEMS[head].name} offered`, sub: POWERS[u.boss === 'minotaur' ? 'roar' : 'claw'].name, use: () => this.choosePower(u.boss) };
       return { label: inv.count(head) ? `Offer the ${ITEMS[head].name.toLowerCase()}` : `A place for the head of ${BOSS_NAME[u.boss]}`, sub: 'Offering stand', use: () => this.offer(u) }; }
-    if (u.kind === 'loot') return st.looted.includes(u.id) ? { label: 'Empty', sub: 'Old chest', use: () => {} } : { label: 'Search the old chest', sub: 'Abandoned house', use: () => this.loot(u) };
+    if (u.kind === 'loot') return st.looted.includes(u.id) ? { label: 'Empty', sub: 'Old chest', use: () => {} } : { label: 'Search the old chest', sub: u.sub || 'Abandoned house', use: () => this.loot(u) };
     if (u.kind === 'scrap') return st.scraps.includes(u.id) ? { label: 'You already copied these marks', sub: this.nextHint('scraps'), use: () => this.pointNext('scraps', true) } : { label: 'Copy the carved marks', sub: 'Ancient olive', use: () => this.clue(u, 'scraps', 'oliveScrap') };
     if (u.kind === 'carving') return st.carvings.includes(u.id) ? { label: 'You already took this carving', sub: this.nextHint('carvings'), use: () => this.pointNext('carvings', true) } : { label: 'Take a rubbing of the carving', sub: 'Giant cave', use: () => this.clue(u, 'carvings', 'caveCarving') };
     if (u.kind === 'summon') {
@@ -117,12 +118,11 @@ export class Trial {
     g.crafting.discover(); this.drawPower();
   }
   choosePower(boss) { this.st.power = boss === 'minotaur' ? 'roar' : 'claw'; this.g.hud.toast(`Power set: <b>${POWERS[this.st.power].name}</b>`); this.drawPower(); }
+  // the head on its stand (on offering, and for heads offered before, as the save loads): the boss's own (bossHead), or
+  // a carved one without the pack
   mountHead(u) {
-    const g = new THREE.Group(), hide = new THREE.MeshStandardMaterial({ color: u.boss === 'minotaur' ? 0x4a2c1c : 0xb88a4a, roughness: 0.9 }), horn = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.5 });
-    const m = (geo, mat, x, y, z) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.castShadow = true; g.add(o); return o; };
-    if (u.boss === 'minotaur') { m(new THREE.IcosahedronGeometry(0.35, 1), hide, 0, 0.35, 0).scale.set(1.1, 1, 1.2); m(new THREE.CylinderGeometry(0.2, 0.25, 0.35, 8).rotateX(Math.PI / 2), hide, 0, 0.25, 0.35); for (const sx of [-1, 1]) m(new THREE.TorusGeometry(0.35, 0.06, 6, 12, Math.PI * 0.6), horn, sx * 0.25, 0.55, 0).rotation.z = sx > 0 ? -0.35 : Math.PI + 0.35; }
-    else { m(new THREE.IcosahedronGeometry(0.4, 1), hide, 0, 0.4, 0); m(new THREE.IcosahedronGeometry(0.45, 1), new THREE.MeshStandardMaterial({ color: 0x6a3a1a, roughness: 1 }), 0, 0.45, -0.15).scale.set(1.1, 1.1, 0.8); m(new THREE.BoxGeometry(0.36, 0.28, 0.36), hide, 0, 0.3, 0.38); }
-    u.mount.add(g);
+    if (u.mounted) return; u.mounted = true;
+    bossHead(u.boss).catch((e) => { console.warn(u.boss, 'head failed', e); return null; }).then((h) => u.mount.add(h ? h.clone() : carvedHead(u.boss)));
   }
   // ---- powers (F)
   usePower() {
@@ -251,10 +251,80 @@ export class Trial {
       if (this.helperT <= 0 && !c.dead) { this.helperT = 30; for (let i = 0; i < 2; i++) { const a = Math.random() * 6.28, x = c.arena.x + Math.cos(a) * 14, z = c.arena.z + Math.sin(a) * 14; const h = g.creatures.spawn(c.T.helpers, x, z, { summoned: true, aware: true }); h.state = 'chase'; dust(h.pos.clone().setY(h.pos.y + 0.5), 14, 0x8a7a68, 0.5); } g.hud.toast(c.T.helpers === 'skeleton' ? 'The dead of the Labyrinth rise to fight for their master' : 'Dryads answer the Chimera\'s call'); }
       if (g.player.pos.distanceTo(c.arena) > 70 && !c.dead) { g.creatures.remove(c); this.boss = null; this.bar.classList.add('hidden'); setWeather(null); g.hud.toast('You fled. The altar waits for another tribute.'); }
     }
+    // a boss's head in the pack: the light over its stand at the temple, and the stand on the compass and map, until it's offered
+    this.headT = (this.headT || 0) - dt;
+    if (this.headT <= 0 && g.structures) {
+      this.headT = 0.25; let want = null;
+      for (const u of g.structures.uses) if (u.kind === 'offering') { const on = !st.offered[u.boss] && g.inv.count(u.boss + 'Head') > 0; if (u.beacon) u.beacon.visible = on; if (on) want ||= u; }
+      if (want && !this.told?.[want.boss]) { (this.told ||= {})[want.boss] = true; g.map?.reveal(SITES.temple);
+        g.hud.toast(`Lay ${BOSS_NAME[want.boss]}'s head on its stand before <b>Zeus's temple</b>, the one with the light over it. It's on your compass and map.`); }
+      if (g.map && !g.guide?.on) { if (want) { g.map.guideTarget = { x: want.at.x, z: want.at.z, label: 'Offering stand' }; this.marked = true; } else if (this.marked) { g.map.guideTarget = null; this.marked = false; } }
+    }
     // a giant guards each cave whose carving hasn't been taken
     SITES.caves.forEach((cv, i) => {
       if (st.carvings.includes('cave' + i)) return; const d = Math.hypot(cv.x - g.player.pos.x, cv.z - g.player.pos.z), day = g.S.day;
       if (d < 70 && st.guards[i] !== day) { st.guards[i] = day; const gi = g.creatures.spawn('giant', cv.x + 4, cv.z + 6, { level: 0 }); gi.home.set(cv.x, cv.y, cv.z); gi.guard = true; }
     });
   }
+}
+
+// ---- the offered heads. The boss's own: its model in the pose it stands in, cut at the neck (every triangle the head's
+// bones and the top of the neck carry, horns, jaw and eyes with them), the stump closed over, drawn a little bigger than the
+// boss is (models.js) and sat upright on the stand, looking out the way the stand faces. Loaded once, the first time one is shown.
+// (cut: which way the neck's cut is turned: down under the Minotaur's head; behind the Chimera's, a beast's head lying on
+// its jaw looking out)
+const HEAD = { minotaur: { file: 'pack/minotaur', head: 'Head', neck: 'Neck', h: 3.2, cut: [0, -1, 0] }, chimera: { file: 'pack/chimera', head: 'head', neck: 'neck', len: 6, cut: [0, 0, -1] } };
+const NECK = 0.6, KEEP = 0.5;   // (how much of the neck's own pull counts as the head's, and how much a vertex needs to be kept)
+const TROPHY = 1.4;   // (a little bigger than the boss wore it, so it reads as a trophy on the stand)
+const heads = {};
+function bossHead(kind) {
+  return (heads[kind] ||= loadGLB(HEAD[kind].file).then((gl) => {
+    const H = HEAD[kind], root = gl.scene; root.updateMatrixWorld(true);
+    const size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3()), k = (H.len ? H.len / Math.max(size.x, size.z) : H.h / size.y) * TROPHY;
+    let sm = null; root.traverse((o) => { if (o.isSkinnedMesh && !sm) sm = o; }); if (!sm) return null;
+    const under = (b) => { for (let o = b; o; o = o.parent) if (o.name === H.head) return true; return false; }, pull = sm.skeleton.bones.map((b) => (under(b) ? 1 : b.name === H.neck ? NECK : 0));
+    // where each vertex stands in the pose, and how much of it the head carries
+    const G = sm.geometry, pos = G.attributes.position, si = G.attributes.skinIndex, sw = G.attributes.skinWeight, n = pos.count, v = new THREE.Vector3();
+    const P = new Float32Array(n * 3), w = new Float32Array(n);
+    for (let i = 0; i < n; i++) { for (let c = 0; c < 4; c++) w[i] += sw.getComponent(i, c) * pull[si.getComponent(i, c)]; sm.applyBoneTransform(i, v.fromBufferAttribute(pos, i)).applyMatrix4(sm.matrixWorld).multiplyScalar(k); v.toArray(P, i * 3); }
+    const idx = G.index ? G.index.array : Array.from({ length: n }, (_, i) => i), tri = [];
+    for (let t = 0; t < idx.length; t += 3) if (Math.min(w[idx[t]], w[idx[t + 1]], w[idx[t + 2]]) >= KEEP) tri.push(idx[t], idx[t + 1], idx[t + 2]);
+    if (tri.length < 30) return null;
+    // the open edges (welded, since the model splits its vertices along seams), chained into loops: the cut at the neck is
+    // the longest; it and any nearly as long are closed with a fan of flesh to their middle
+    const weld = new Map(), wid = (i) => { const key = `${Math.round(P[i * 3] * 500)},${Math.round(P[i * 3 + 1] * 500)},${Math.round(P[i * 3 + 2] * 500)}`; if (!weld.has(key)) weld.set(key, i); return weld.get(key); };
+    const edges = new Map(); for (let t = 0; t < tri.length; t += 3) for (let e = 0; e < 3; e++) { const a = wid(tri[t + e]), b = wid(tri[t + (e + 1) % 3]), back = b + ',' + a; if (edges.has(back)) edges.delete(back); else edges.set(a + ',' + b, [a, b]); }
+    const next = new Map(); for (const [a, b] of edges.values()) next.set(a, b);
+    const loops = [], seen = new Set();
+    for (const a0 of next.keys()) { if (seen.has(a0)) continue; const L = []; let a = a0; while (a !== undefined && !seen.has(a)) { seen.add(a); L.push(a); a = next.get(a); } if (a === a0 && L.length > 2) loops.push(L); }
+    const len = (L) => L.reduce((s, a, i) => s + Math.hypot(...[0, 1, 2].map((c) => P[a * 3 + c] - P[L[(i + 1) % L.length] * 3 + c])), 0);
+    loops.sort((p, q) => len(q) - len(p)); const caps = loops.filter((L) => len(L) > len(loops[0] ?? []) * 0.4);
+    const cap = [], down = new THREE.Vector3(), mid = new THREE.Vector3(), a3 = new THREE.Vector3(), b3 = new THREE.Vector3(), c3 = new THREE.Vector3();
+    caps.forEach((L, li) => {
+      const c = new THREE.Vector3(); for (const a of L) c.add(a3.fromArray(P, a * 3)); c.divideScalar(L.length); if (li === 0) mid.copy(c);
+      L.forEach((a, i) => { a3.fromArray(P, L[(i + 1) % L.length] * 3); b3.fromArray(P, a * 3); cap.push(a3.x, a3.y, a3.z, b3.x, b3.y, b3.z, c.x, c.y, c.z);   // (wound against the edge: facing out of the head)
+        if (li === 0) down.add(c3.subVectors(b3, a3).cross(mid.clone().sub(a3))); });
+    });
+    // set on the stand: the neck's cut turned the way it should face (no more turn than that, so it still looks ahead),
+    // its lowest point on the tray, over the middle of the cut (the Minotaur's) or of the whole head (the Chimera's)
+    const want = new THREE.Vector3(...H.cut), turn = new THREE.Matrix4().makeRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(down.lengthSq() ? down.normalize() : want, want));
+    const place = (g) => g.translate(-mid.x, -mid.y, -mid.z).applyMatrix4(turn);
+    const used = [...new Set(tri)], at = new Map(used.map((i, j) => [i, j])), uv = G.attributes.uv, hg = new THREE.BufferGeometry();
+    hg.setAttribute('position', new THREE.Float32BufferAttribute(used.flatMap((i) => [P[i * 3], P[i * 3 + 1], P[i * 3 + 2]]), 3));
+    if (uv) hg.setAttribute('uv', new THREE.Float32BufferAttribute(used.flatMap((i) => [uv.getX(i), uv.getY(i)]), 2));
+    hg.setIndex(tri.map((i) => at.get(i))); hg.computeVertexNormals(); place(hg);
+    const cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.Float32BufferAttribute(cap, 3)); cg.computeVertexNormals(); place(cg);
+    hg.computeBoundingBox(); const bb = hg.boundingBox.clone(), c = H.cut[1] < 0 ? new THREE.Vector3() : bb.getCenter(new THREE.Vector3()); for (const g of [hg, cg]) g.translate(-c.x, 0.02 - bb.min.y, -c.z);
+    const out = new THREE.Group(), m = sm.material.clone(); m.color?.setScalar(0.78);   // (the pack's palette is pale in our light)
+    for (const [g, mt] of [[hg, m], [cg, new THREE.MeshStandardMaterial({ color: 0x5a1c16, roughness: 0.8 })]]) { const o = new THREE.Mesh(g, mt); o.castShadow = o.receiveShadow = true; out.add(o); }
+    return out;
+  }));
+}
+// the carved heads, without the pack
+function carvedHead(boss) {
+  const g = new THREE.Group(), hide = new THREE.MeshStandardMaterial({ color: boss === 'minotaur' ? 0x4a2c1c : 0xb88a4a, roughness: 0.9 }), horn = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.5 });
+  const m = (geo, mat, x, y, z) => { const o = new THREE.Mesh(geo, mat); o.position.set(x, y, z); o.castShadow = true; g.add(o); return o; };
+  if (boss === 'minotaur') { m(new THREE.IcosahedronGeometry(0.35, 1), hide, 0, 0.35, 0).scale.set(1.1, 1, 1.2); m(new THREE.CylinderGeometry(0.2, 0.25, 0.35, 8).rotateX(Math.PI / 2), hide, 0, 0.25, 0.35); for (const sx of [-1, 1]) m(new THREE.TorusGeometry(0.35, 0.06, 6, 12, Math.PI * 0.6), horn, sx * 0.25, 0.55, 0).rotation.z = sx > 0 ? -0.35 : Math.PI + 0.35; }
+  else { m(new THREE.IcosahedronGeometry(0.4, 1), hide, 0, 0.4, 0); m(new THREE.IcosahedronGeometry(0.45, 1), new THREE.MeshStandardMaterial({ color: 0x6a3a1a, roughness: 1 }), 0, 0.45, -0.15).scale.set(1.1, 1.1, 0.8); m(new THREE.BoxGeometry(0.36, 0.28, 0.36), hide, 0, 0.3, 0.38); }
+  return g;
 }

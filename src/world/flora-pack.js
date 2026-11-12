@@ -86,6 +86,31 @@ function prune(g, y) {
     keep.forEach((t, j) => arr.set(a.array.subarray(t * 3 * w, t * 3 * w + 3 * w), j * 3 * w)); out.setAttribute(name, new THREE.BufferAttribute(arr, w)); }
   return out;
 }
+// How high a pack tree's roots reach above its lowest point (in the model's own units). The packs' trees stand on roots
+// splayed out like legs (tester, 12 Nov: "it's very disturbing"), and their trunks spread a long way down into them.
+// Cut across in 1% slices of the height, a slice through the roots is a few thin legs far apart: little area for how far
+// it reaches. Going up they close into one round trunk; the first slice whose area fills at least 0.36 of the circle
+// round its widest point (the trunk's own girth, a little flared) is where the ground should meet it.
+function rootTop(g, b, fx, fz) {
+  const P = g.attributes.position, ix = g.index?.array, H = b.max.y - b.min.y, N = 30, r = new Float32Array(N), A = new Float32Array(N);
+  const at = (t, k) => (ix ? ix[t * 3 + k] : t * 3 + k), v = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()], e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), nn = new THREE.Vector3(), pts = [];
+  for (let t = 0, tc = (ix ? ix.length : P.count) / 3; t < tc; t++) {
+    for (let k = 0; k < 3; k++) v[k].fromBufferAttribute(P, at(t, k));
+    const lo = Math.min(v[0].y, v[1].y, v[2].y), hi = Math.max(v[0].y, v[1].y, v[2].y), s0 = Math.max(0, Math.ceil((lo - b.min.y) / (0.01 * H) - 0.5)); if (s0 >= N) continue;
+    nn.crossVectors(e1.subVectors(v[1], v[0]), e2.subVectors(v[2], v[0]));
+    for (let s = s0; s < N; s++) {
+      const h = b.min.y + (s + 0.5) * 0.01 * H; if (h > hi) break; pts.length = 0;
+      for (const [a, c] of [[0, 1], [1, 2], [2, 0]]) { const ya = v[a].y, yc = v[c].y; if ((ya - h) * (yc - h) > 0 || ya === yc) continue; const f = (h - ya) / (yc - ya); pts.push(v[a].x + (v[c].x - v[a].x) * f - fx, v[a].z + (v[c].z - v[a].z) * f - fz); }
+      if (pts.length < 4) continue;
+      r[s] = Math.max(r[s], Math.hypot(pts[0], pts[1]), Math.hypot(pts[2], pts[3]));
+      // (the slice's area, by the divergence theorem: each cut edge adds ½ · length · its distance out along the face's normal)
+      const dx = pts[2] - pts[0], dz = pts[3] - pts[1], L = Math.hypot(dx, dz); if (!L) continue; let nx = dz / L, nz = -dx / L; if (nx * nn.x + nz * nn.z < 0) { nx = -nx; nz = -nz; }
+      A[s] += 0.5 * L * ((pts[0] + pts[2]) / 2 * nx + (pts[1] + pts[3]) / 2 * nz);
+    }
+  }
+  for (let s = 0; s < N; s++) if (r[s] > 0 && A[s] >= 0.36 * Math.PI * r[s] * r[s]) return (s + 0.5) * 0.01 * H;
+  return 0;
+}
 // variant v of a species, fitted into the carved one's place (box: the carved geometry's bounds), or at its own size:
 // { geo, cards, map, mid, midCards, lo, loCards }
 export function floraGeo(sp, v, box, tree) {
@@ -95,18 +120,24 @@ export function floraGeo(sp, v, box, tree) {
   const others = () => [mid, mc, lo, lc].filter((q) => q && q.attributes.position.count);
   const b = new THREE.Box3(); for (const p of parts) { p.computeBoundingBox(); if (p.attributes.position.count) b.union(p.boundingBox); }
   const S = box.getSize(new THREE.Vector3()), s0 = b.getSize(new THREE.Vector3()); let k = NATURAL.has(sp) ? 1 : tree ? S.y / s0.y : S.length() / s0.length();
-  // A tree's crown starts above 1.5× the hero even at its smallest (Patch 4; tests/suites/woods.mjs). The packs' trees
-  // branch low: such a one grows a little (up to a third), and the leaf patches still hanging under that height go, as
-  // a tree's lowest boughs do (its branches stay; nothing is stretched, so trunks and roots keep their shapes).
-  let need = -Infinity;
-  if (tree && c) {
-    const c0 = (c.boundingBox.min.y - b.min.y) * k; need = 3 / SPECIES.find((s) => s.name === sp).s[0];
-    if (c0 + box.min.y < need && c0 > 0.05) k *= Math.min(1.33, (need - box.min.y) / c0);
-  }
   // its foot: the middle of what's near the ground (a trunk, the base of a rock)
   const foot = g.attributes.position.count ? g : c, p = foot.attributes.position, lim = b.min.y + (b.max.y - b.min.y) * 0.06; let fx = 0, fz = 0, n = 0;
   for (let i = 0; i < p.count; i++) if (p.getY(i) <= lim) { fx += p.getX(i); fz += p.getZ(i); n++; }
-  for (const q of [...parts, ...others()]) { q.translate(-fx / Math.max(n, 1), -b.min.y, -fz / Math.max(n, 1)); q.scale(k, k, k); q.translate(0, NATURAL.has(sp) ? 0 : box.min.y, 0); }   // (the lighter versions moved with it: the same pivot)
+  fx /= Math.max(n, 1); fz /= Math.max(n, 1);
+  // A tree stands sunk into the ground up to where its roots close into the trunk (rootTop; at least as deep as the carved
+  // one's roots went), the same for every version of it, so no band shows the legs; on a slope it sinks further (matrixOf)
+  const roots = tree && g.attributes.position.count ? (src.roots ??= rootTop(src.geo, b, fx, fz)) : 0;
+  const footY = (q) => (roots ? Math.min(box.min.y, -roots * q) : box.min.y);
+  // A tree's crown starts above 1.5× the hero even at its smallest (Patch 4; tests/suites/woods.mjs), sunk as it stands.
+  // The packs' trees branch low: such a one grows a little (up to a third), and the leaf patches still hanging under that
+  // height go, as a tree's lowest boughs do (its branches stay; nothing is stretched, so trunks and roots keep their shapes).
+  let need = -Infinity;
+  if (tree && c) {
+    const cc = c.boundingBox.min.y - b.min.y; need = 3 / SPECIES.find((s) => s.name === sp).s[0];
+    // (the crown's foot, cc·k + footY(k), is the lower of two lines in k: both must clear the height)
+    if (cc * k > 0.05 && cc > roots) k = Math.min(k * 1.33, Math.max(k, (need - box.min.y) / cc, need / (cc - roots)));
+  }
+  for (const q of [...parts, ...others()]) { q.translate(-fx, -b.min.y, -fz); q.scale(k, k, k); q.translate(0, NATURAL.has(sp) ? 0 : footY(k), 0); }   // (the lighter versions moved with it: the same pivot)
   if (need > -Infinity) { c = prune(c, need); if (mc) mc = prune(mc, need); if (lc) lc = prune(lc, need); }
   if (!g.attributes.position.count) { g.setAttribute('position', new THREE.Float32BufferAttribute(9, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0], 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(9, 3)); }   // (all cards: an empty trunk)
   // (a touch darker: the packs' palettes come out pale in our light)

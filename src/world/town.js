@@ -105,6 +105,14 @@ export function buildTown(st, s) {
   for (const [k, x, z] of [['twRubbleA', -21.5, -12.8], ['twRubbleB', 27, 10.4], ['twRubbleC', -1.2, 13.2], ['twRubbleA', -8.6, 33.5], ['twDrum', 10.8, -10.8], ['twMarblePile', 26.5, -15.5], ['twStack', 31, -24]])
     put(k, x, z, rr(0, 6), k === 'twStack' ? 0 : 1.0);
   st.wall(ctx, 29, -24.4, 33, -24.4, 2, 0.5);
+  // old chests left behind, worth searching (trial.js opens them; each remembered by its id): plain things for the road
+  // under the stoa, arrows at the smithy, odds and ends in two of the houses that still have their roofs, and in one of
+  // those a leather cap someone forgot
+  const chest = (id, x, z, rot, items) => st.chest(ctx, x, z, rot, { id, items, sub: 'Abandoned town' }, Math.max(0, st.groundY(ctx, x, z)));
+  chest('townStoa', -11.4, -17.1, 0, [['rope', 5], ['resin', 3], ['stone', 6], ['olive', 6], ['torch', 1]]);
+  chest('townSmithy', -17.2, 21.0, 0.3, [['crudeArrow', 20], ['feather', 3], ['wood', 6]]);
+  chest('townHouseW', ...at(-26, 5.6, Math.PI, -2.6, -1.75), Math.PI, [['leather', 3], ['fiber', 6], ['rope', 2], ['wood', 4]]);
+  chest('townHouseE', ...at(24, -5.6, 0, -1.3, -1.75), 0, [['throwerHelmet', 1], ['leather', 2], ['resin', 1]]);
   put('twStatueBroken', 11.2, -8.6, 2.6, 0.5); put('twColumn', -31, -5, 0, 0.4); put('twColumnBase', -31, 5, 0, 0.45); put('twDrum', -29.5, 9, 1.2, 0);
   // and the green that has come back: cypresses at the street ends, olives and figs in the yards, bushes in the ruins
   for (const [n, v, x, z, sc, r] of [['cypress', 0, -4.2, -36, 1, 0.4], ['cypress', 1, 4.2, -36, 0.95, 0.4], ['cypress', 0, -4.2, 36, 1.05, 0.4], ['cypress', 1, 4.2, 36, 1, 0.4], ['cypress', 0, -36, -4.2, 0.95, 0.4], ['cypress', 1, 36, 4.2, 1, 0.4],

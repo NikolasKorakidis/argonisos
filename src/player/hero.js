@@ -3,7 +3,8 @@
 // their tracks and blended over it: whole body when standing, upper body only while moving.
 import * as THREE from 'three';
 import { FootIK } from './footik.js';
-import { loadFBX, loadGLB, loadTex } from '../assets.js';
+import { Cape, CAPE_MODEL } from './cape.js';
+import { loadFBX, loadGLB, loadPack, loadTex } from '../assets.js';
 import { clamp, lerp } from '../util/math.js';
 import { SETTINGS } from '../ui/settings.js';
 
@@ -113,6 +114,10 @@ export const GRIP = { at: [0, 10.6, 4.1], tilt: -1.8, curl: 1.0 };
 // A shield is strapped to the left forearm (bone space: +y elbow to wrist, the body's side +z): its middle this far down
 // the forearm, its back this far out from the bone, on the outside of the arm, so the arm never passes through it
 export const STRAP = { along: 15, out: 5 };
+// The run and sprint clips put each foot down across the line under the body (the run's right foot most), a catwalk
+// stride on our long-legged heroes: in motion each thigh turns out this far (radians, [left, right] at full stride, the
+// run's and the sprint's), its foot turned back flat, which sets the feet down a hand's width either side of it
+const STANCE = { run: [0.12, 0.19], sprint: [0.095, 0.095] };
 
 // A clip from an animation-only FBX, with its root motion flattened (we move the player ourselves)
 function loadClip(name) {
@@ -135,6 +140,9 @@ export const CLIPS = {
 export const BOW_DUR = { equip: 0.88, draw: 0.8, lower: 0.3, disarm: 1.0, blend: 0.14 };
 
 const _hq = new THREE.Quaternion(), _ab = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()];
+const _sq = new THREE.Quaternion(), _sp = new THREE.Quaternion(), _sb = new THREE.Quaternion(), _sv = new THREE.Vector3();
+// turn a bone by a world-space rotation q, keeping its parent where it is
+function turnWorld(bone, q) { bone.parent.getWorldQuaternion(_sp); bone.getWorldQuaternion(_sb); bone.quaternion.copy(_sp.invert().multiply(_sb.premultiply(q))); }
 
 export class Hero {
   constructor(scene) {
@@ -165,7 +173,7 @@ export class Hero {
     // the chosen body, the armour to dress it in (pack/heroArmour: the Greek warriors' pieces, converted on a body of
     // their own and moved onto this one's bones), or the old model when the pack isn't there
     const kind = BODIES[this.look.body] || BODIES.man;
-    const [gl, dress, looks] = await Promise.all(['pack/' + kind.file, 'pack/heroArmour', 'pack/heroLooks'].map((f) => loadGLB(f).catch(() => null)));
+    const [gl, dress, looks, cape] = await Promise.all([...['pack/' + kind.file, 'pack/heroArmour', 'pack/heroLooks'].map((f) => loadGLB(f).catch(() => null)), loadPack(CAPE_MODEL).catch(() => null)]);
     let obj = gl?.scene, mat;
     if (obj) { obj.updateMatrixWorld(true); let map = null; obj.traverse((m) => { if (m.isMesh && !map) map = m.material.map; }); mat = lookMaterial(map, kind.tint); }
     else { obj = await loadFBX('hero_rig'); mat = new THREE.MeshStandardMaterial({ map: loadTex('hero_diffuse.jpg'), normalMap: loadTex('hero_normal.jpg', false), roughness: 0.8, metalness: 0 }); }
@@ -188,6 +196,8 @@ export class Hero {
     if (this.model) { this.wrap.remove(this.model); this.mixer.stopAllAction(); this.acts = {}; this.samplers = {}; this.ik = null; }
     this.bones = bones; this.parts = {}; obj.traverse((m) => { if (m.isMesh) this.parts[m.name] = m; }); this.show();
     this.wrap.remove(this.placeholder); this.wrap.add(obj); this.model = obj;
+    // the cape (cape.js), fitted to this body while it stands in its rest pose, shown when worn
+    this.cape = gl && cape ? new Cape(cape, obj, bones, this.parts) : null; this.show();
     this.mixer = new THREE.AnimationMixer(obj);
     // Bones are in centimetres: attachment points sit in bone space, the objects on them undo the model scale
     const B = this.bones;
@@ -239,6 +249,7 @@ export class Hero {
     const on = (slot) => !!(ids[slot] && P['wear_' + ids[slot]]), part = (list, id) => list.find((x) => x[0] === id)?.[2];
     for (const [n, m] of Object.entries(P)) if (n.startsWith('wear_')) m.visible = Object.values(ids).includes(n.slice(5)); else if (LOOK_PARTS.has(n)) m.visible = false;
     if (P.base_body) P.base_body.visible = !on('body'); if (P.base_legs) P.base_legs.visible = !on('legs');
+    this.cape?.show(!!ids.cape, on('body'));
     const want = [part(BEARDS, L.beard), ...(on('head') ? [] : [part(HAIRS, L.hair), part(WREATHS, L.wreath)])].flat();
     for (const n of want) if (n && P[n]) P[n].visible = true;
     const U = this.mat?.userData.look; if (!U) return;
@@ -249,8 +260,10 @@ export class Hero {
     if (this.curlsMat) over(this.curlsMat.color, hair, BASE.curls);
   }
   // Hold an object in the right hand. A long-handled tool (axe, club, spear...) runs across the palm and is gripped near its
-  // end, head up and forward over the thumb (bone +X thumb side, +Y fingers, +Z palm)
-  holdRight(obj) { this.handR.clear(); if (obj) { this.handR.add(obj); obj.scale.setScalar(1 / this.s); obj.position.fromArray(GRIP.at); obj.rotation.set(0, Math.PI * 1.5, GRIP.tilt, 'ZYX'); } this.gripR = !!obj; }
+  // end, head up and forward over the thumb (bone +X thumb side, +Y fingers, +Z palm); its head (the model's +x: an axe's
+  // blade, a hammer's face, a dagger's edge; held.js turns each so) faces the way the knuckles do, the way the hand
+  // strikes, so a blade cuts edge first instead of lying flat across the swing
+  holdRight(obj) { this.handR.clear(); if (obj) { this.handR.add(obj); obj.scale.setScalar(1 / this.s); obj.position.fromArray(GRIP.at); obj.rotation.set(0, Math.PI, GRIP.tilt, 'ZYX'); } this.gripR = !!obj; }
   // Sling something across the back (scaled out of bone space like the hand items)
   sling(obj, slot = this.back) { slot.clear(); if (obj) { slot.add(obj); obj.scale.setScalar(1 / this.s); } }
   // Hold something in the left hand (the bow), or strap it on the forearm (a shield: userData.strap, its face along -z)
@@ -280,6 +293,36 @@ export class Hero {
     if (hp && this.bones.mixamorigHips) S.hips = { bone: this.bones.mixamorigHips, interp: hp.createInterpolant() };
     return (this.samplers[C.clip.uuid] = S);
   }
+  // When each foot comes down in a looping clip, as fractions of it: the legs are posed at 60 points through the clip,
+  // and a foot is down where the lower of its heel (the ankle) and its ball (the toe) comes within 3.5 cm of the lowest
+  // it gets (fwd); played backwards, a foot comes down where it lifted (back). Found once per clip and body, before the
+  // mixer poses the frame
+  footfalls(C) {
+    const S = this.sampler(C); if (!S) return null; if (S.feet) return S.feet;
+    const B = this.bones, N = 60, legs = S.filter((x) => /Hips$|UpLeg$|Leg$|Foot$|ToeBase$/.test(x.bone.name)), h = { Left: [[], []], Right: [[], []] };
+    const inv = new THREE.Matrix4().copy(this.model.matrixWorld).invert(), k = this.s * 100;   // (heights in centimetres)
+    for (let i = 0; i < N; i++) {
+      const time = i / N * C.dur; for (const x of legs) x.bone.quaternion.fromArray(x.interp.evaluate(time));
+      if (S.hips) S.hips.bone.position.fromArray(S.hips.interp.evaluate(time));
+      B.mixamorigHips.updateMatrixWorld(true);
+      for (const side in h) ['Foot', 'ToeBase'].forEach((n, j) => { const b = B[`mixamorig${side}${n}`] || B[`mixamorig${side}Foot`]; h[side][j].push(_sv.setFromMatrixPosition(b.matrixWorld).applyMatrix4(inv).y * k); });
+    }
+    const fwd = [], back = [];
+    for (const [side, [heel, ball]] of Object.entries(h)) {
+      const hl = Math.min(...heel), bl = Math.min(...ball), y = heel.map((v, i) => Math.min(v - hl, ball[i] - bl)), up = Math.max(...y) / 2, down = 3.5;
+      if (up < 2 * down) continue;
+      // (a foot only counts as down again once it has been half way up: no double steps from a wobble on the ground)
+      for (const [list, dir] of [[fwd, 1], [back, -1]]) {
+        let armed = false;
+        for (let n = 0; n < N * 2; n++) {
+          const i = (N * 2 + dir * n) % N, j = (N * 2 + i + dir) % N;
+          if (y[i] > up) armed = true;
+          if (armed && y[i] > down && y[j] <= down) { armed = false; if (n >= N) list.push({ side, at: ((i + dir * (y[i] - down) / (y[i] - y[j])) / N + 1) % 1 }); }
+        }
+      }
+    }
+    return (S.feet = { fwd, back });
+  }
   // Blend clip C at normalised time t over the current pose with weight w. upper: true = upper body only, false = whole
   // body, or 0..1 to fade the legs out. hipsY: take the clip's hip height too (crouched stances)
   overlay(C, t, w, upper, hipsY) {
@@ -303,6 +346,8 @@ export class Hero {
     if (run) { run.setEffectiveWeight(moveW * (1 - this.sprintW)); run.timeScale = (back ? -1 : 1) * clamp(speed / runV, 0.55, 1.5); }
     if (sprint) { sprint.setEffectiveWeight(moveW * this.sprintW); sprint.timeScale = clamp(speed / sprV, 0.7, 1.4); if (run) sprint.time = (run.time / C.run.dur) * C.sprint.dur; }
     if (idle) idle.setEffectiveWeight(Math.max(1 - moveW, run ? 0 : 1));
+    // (where the stride stands before this frame: run and sprint share one cycle, the sprint kept in step with the run)
+    const feet = run && this.footfalls(C.run), feetS = sprint && this.footfalls(C.sprint), ph0 = run ? run.time / C.run.dur : 0;
     this.mixer.update(dt);
     // The mixer only writes a bone when its value changed; the idle is a held frame, so re-apply every binding or the
     // overlays below would pile up frame after frame
@@ -317,6 +362,12 @@ export class Hero {
     if (!st.onGround && !st.swimming) this.airT += dt; else { if (this.airT > 0.3) this.landT = 0.25; this.airT = 0; }
     const jumpT = st.jumped || this.airT > 0.25 ? this.airT : 0;
     if (this.landT > 0) this.landT -= dt;
+    // footsteps: a foot came down in the stride this frame (onFootfall: the player's step sound), while the legs show it
+    if (feet && moveW > 0.25 && st.onGround && !st.swimming && jumpT === 0) {
+      const dir = run.timeScale < 0 ? -1 : 1, list = (this.sprintW > 0.5 && feetS ? feetS : feet)[dir > 0 ? 'fwd' : 'back'];
+      let d = (run.time / C.run.dur - ph0) * dir; d -= Math.floor(d);   // (how far through the cycle this frame went, its own way round)
+      if (d < 0.5) for (const f of list) { let e = (f.at - ph0) * dir; e -= Math.floor(e); if (e > 0 && e <= d) this.onFootfall?.(f.side); }
+    }
     if (jumpT > 0) this.overlay(C.jump, 0.28 + jumpT / 0.7 * 0.5, Math.min(1, jumpT * 8), false);
     else if (this.landT > 0) this.overlay(C.jump, 0.8 + (0.25 - this.landT) * 0.6, this.landT / 0.25, false);
     if (st.equip) { const E = st.equip.kind === 'equip' ? C.equip : C.disarm, w = Math.min(1, Math.sin(Math.min(st.equip.t, 1) * Math.PI) * 2.5); this.overlay(E, st.equip.t, w, this.upperK); }
@@ -324,6 +375,16 @@ export class Hero {
     if (st.bow) this.poseBow(st.bow, st.aimPt, st.sprinting);
     // swimming: lean forward into a crawl-ish stroke on top of the run
     if (st.swimming && B.mixamorigHips) B.mixamorigHips.rotateX(0.9);
+    // a wider stance in motion: each thigh turned out about the way the legs face (the hips', strafing too), its foot
+    // turned back flat; before the feet find the ground, so they're set down where the wider legs put them
+    const spread = moveW * (st.swimming ? 0 : 1) * (1 - Math.min(1, jumpT * 8));
+    if (spread > 0.02 && B.mixamorigLeftUpLeg && B.mixamorigRightUpLeg) {
+      const ax = _sv.set(Math.sin(this.strafeA), 0, Math.cos(this.strafeA)).applyQuaternion(this.root.quaternion);
+      for (const [side, k, i] of [['Left', 1, 0], ['Right', -1, 1]]) {
+        const up = B[`mixamorig${side}UpLeg`], foot = B[`mixamorig${side}Foot`], a = spread * k * lerp(STANCE.run[i], STANCE.sprint[i], this.sprintW);
+        turnWorld(up, _sq.setFromAxisAngle(ax, a)); if (foot) turnWorld(foot, _sq.setFromAxisAngle(ax, -a));
+      }
+    }
     // a closed fist round a held handle, the bow or the shield's grip (the clips leave the hands open)
     for (const [side, on] of [['Right', this.gripR], ['Left', this.gripL]]) if (on) for (const f of ['Index', 'Middle', 'Ring', 'Pinky']) for (let k = 1; k <= 3; k++) { const b = B[`mixamorig${side}Hand${f}${k}`]; if (b) b.rotation.x += GRIP.curl; }
     // feet on the real ground: the hips drop for the lower foot, the legs bend, planted feet follow the slope
@@ -332,6 +393,7 @@ export class Hero {
       this.wrap.position.y += this.ik.plan(dt, st.rootY, st.onGround && !st.swimming && jumpT === 0);
       this.root.updateMatrixWorld(true); this.ik.solve(st.rootY);
     }
+    this.cape?.update(dt);
   }
   // Bow states: equip → ready → draw (hold RMB) → aim (full draw) → lower → ready → disarm
   poseBow(b, aimPt, sprinting) {

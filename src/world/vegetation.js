@@ -30,6 +30,14 @@ const SHRINK = 6;
 const sinks = (sp) => SMALL.has(SPECIES[sp].name) || TINY.has(SPECIES[sp].name);   // (trees and rocks don't: they drop away behind the mist as before)
 function shrink(m, i, left) { if (left >= SHRINK) return; const f = Math.max(left, 0) / SHRINK; for (const e of [0, 1, 2, 4, 5, 6, 8, 9, 10]) m[i * 16 + e] *= f; }
 const keepTo = (sp, x, z) => { const k = farKeep(sp), h = dice(x, z); if (TINY.has(SPECIES[sp].name)) return 35 + 40 * h; return h < k ? Infinity : MIST_R0 + (MIST_R1 - MIST_R0) * ((h - k) / (1 - k)); };
+// A tree struck by an axe shakes (tester, 12 Nov): its crown sways away from the blow and back, dying out within
+// SHAKE_T seconds, while its foot stays put. Drawn as a shear about the instance's foot (each point moved along the blow
+// by its height above it), so trunk, leaves and shadow move as one and the bent tree keeps its height.
+const SHAKE_T = 0.75, SHAKE_A = 0.07;
+function sway(m, i, s, t) {
+  const a = SHAKE_A * s.k * Math.exp(-t * 6) * Math.sin(t * 15);   // (the first swing, away from the blow, the biggest)
+  for (const c of [0, 4, 8]) { const up = m[i * 16 + c + 1] * a; m[i * 16 + c] += s.dx * up; m[i * 16 + c + 2] += s.dz * up; }
+}
 
 // ---- extra species the new world needs
 TREE_BUILDERS.pomegranate = (v) => {            // a small, bushy tree with glossy leaves and red fruit
@@ -191,7 +199,8 @@ const quad = new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0);
 const _pm = new THREE.Matrix4(), _fr = new THREE.Frustum(), _sp = new THREE.Sphere();
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
 // A tree stands a little into the ground, deeper on a slope, so its spreading roots don't stand clear of the land on the
-// downhill side (the layout's height is the ground at the trunk; drawing only)
+// downhill side (the layout's height is the ground at the trunk; drawing only). This is on top of the sink each pack
+// model already has in its geometry, down to where its roots close into the trunk (rootTop in flora-pack.js).
 const ROOTED = SPECIES.map((s) => s.res === 'tree' && s.name !== 'titan');
 function matrixOf(items, i, hidden) {
   const o = i * STRIDE, x = items[o + 2], z = items[o + 4], sc = items[o + 6]; let y = items[o + 3];
@@ -210,6 +219,7 @@ export class Vegetation {
     this.scene = scene; this.pool = pool; this.group = new THREE.Group(); this.group.name = 'vegetation'; scene.add(this.group);
     this.near = new Map(); this.far = new Map(); this.timer = 0; this.removed = new Set();   // removed: "cx,cz,i" of felled trees
     this.batches = new Map(); this.nearDirty = false;   // the near band, batched (see rebuildNear)
+    this.shaken = new Set();                             // near cells with a tree shaking (shake)
     this.mids = new Map(); this.midDirty = false;        // and the mid band, batched the same way (rebuildMid)
     this.onCell = null;            // callback(cellKey, items, cx, cz, added) so gameplay can index harvestable things
   }
@@ -360,7 +370,8 @@ export class Vegetation {
   cull(camera, pos) {
     if (this.nearDirty) this.rebuildNear();
     _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _fr.setFromProjectionMatrix(_pm);
-    const nr = NEAR_R + NF, keep2 = 48 * 48;
+    const nr = NEAR_R + NF, keep2 = 48 * 48, now = performance.now() / 1000;
+    for (const cell of this.shaken) { for (const [i, s] of cell.shake) if (now - s.t0 > SHAKE_T) cell.shake.delete(i); if (!cell.shake.size) { cell.shake = null; this.shaken.delete(cell); } }
     for (const b of this.batches.values()) {
       const dst = b.near[0].instanceMatrix.array, dst2 = b.far[0]?.instanceMatrix.array, split2 = dst2 ? SPLIT * SPLIT : Infinity; let m = 0, m2 = 0;
       for (let k = 0; k < b.n; k++) {
@@ -369,9 +380,11 @@ export class Vegetation {
         const cell = b.refs[k * 2]; if (cell.hidden && cell.hidden.has(b.refs[k * 2 + 1])) continue;   // faded out of the way of the camera
         if (d2 > keep2) { _sp.center.set(x, y, z); _sp.radius = r; if (!_fr.intersectsSphere(_sp)) continue; }
         if (d2 > b.keep[k] * b.keep[k]) continue;                                           // (the small things drop away well before the mist)
-        if (d2 > split2) { for (let e = 0; e < 16; e++) dst2[m2 * 16 + e] = b.mats[k * 16 + e]; if (b.keep[k] < Infinity) shrink(dst2, m2, b.keep[k] - Math.sqrt(d2)); b.slot2[m2++] = k; continue; }
+        const sh = cell.shake?.get(b.refs[k * 2 + 1]);                                     // (struck by an axe just now: shaking)
+        if (d2 > split2) { for (let e = 0; e < 16; e++) dst2[m2 * 16 + e] = b.mats[k * 16 + e]; if (b.keep[k] < Infinity) shrink(dst2, m2, b.keep[k] - Math.sqrt(d2)); if (sh) sway(dst2, m2, sh, now - sh.t0); b.slot2[m2++] = k; continue; }
         for (let e = 0; e < 16; e++) dst[m * 16 + e] = b.mats[k * 16 + e];
         if (b.keep[k] < Infinity) shrink(dst, m, b.keep[k] - Math.sqrt(d2));
+        if (sh) sway(dst, m, sh, now - sh.t0);
         b.slot[m++] = k;
       }
       for (const mesh of [...b.near, ...b.nearShade]) { mesh.count = m; mesh.boundingSphere = null; }
@@ -405,6 +418,11 @@ export class Vegetation {
   // which tree an instance hit by a ray belongs to: { cell, i }
   treeAt(mesh, instanceId) { const b = mesh.userData.batch; if (!b) return null; const k = (mesh.userData.far ? b.slot2 : b.slot)[instanceId]; return { cell: b.refs[k * 2], i: b.refs[k * 2 + 1] }; }
   hideTree(cell, i, on) { if (on) (cell.hidden ||= new Set()).add(i); else cell.hidden?.delete(i); }
+  // Shake tree i of near cell cx,cz, struck from the side (dx, dz: the way the blow went, across the ground). k: how hard
+  shake(cx, cz, i, dx, dz, k = 1) {
+    const cell = this.near.get(cx + ',' + cz), l = Math.hypot(dx, dz); if (!cell?.items || !l) return;
+    (cell.shake ||= new Map()).set(i, { t0: performance.now() / 1000, dx: dx / l, dz: dz / l, k }); this.shaken.add(cell);
+  }
   // One tree or rock as its own little object (for felling animations): instanced meshes of count 1 in a group
   single(sp, v) {
     const P = this.geoFor(sp, v), g = new THREE.Group(), I = new THREE.Matrix4();

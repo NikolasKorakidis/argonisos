@@ -27,7 +27,8 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
   `<name>_far.glb` for the mid band (`FAR` in `flora-pack.js`). Near trees cast their shadows from the far version, on
   `SHADE_LAYER` (only the sun's shadow camera sees it): the woods stay under the perf budget only so. A pack tree whose
   crown starts too low grows a little and loses its lowest leaf patches (`floraGeo`); trees are drawn sunk into the
-  ground by the slope (`matrixOf`), so roots don't stand clear downhill. They take the carved species' places
+  ground by their root flare (`rootTop` in `flora-pack.js`, baked into the pivot so every band and the shadow stand-ins
+  agree) and by the slope (`matrixOf`), so roots don't stand clear. A hit tree sways (`veg.shake`, applied in `cull`). They take the carved species' places
   in `propGeo` (`world/flora-pack.js`, fitted to the carved one's size; look at a new one in the game's light, which
   makes vertex colours much brighter than the dev page does); site props likewise
   (`world/site-pack.js`); building pieces get the rustic kit's model fitted into their own box (`build/kit.js`; aiming
@@ -37,7 +38,7 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
   (`wear_<item>` in `heroArmour.glb`, moved onto the hero's bones by `dress` in `hero.js`, shown by `hero.wear`);
   animals come young, grown and (deer) stag by level, each in one of the pack's looks (`*Looks.glb`, bound to the body's bones); a `proportions` entry lengthens limbs and scales hands as it fits (the pack's
   people are stylised: short legs, long arms, big hands). Held things: `GRIP` in `hero.js` (in the fist, hand-bone space;
-  tools come out centred on their handle, `normalizeHandle`), shields strapped on the left forearm (`STRAP`). `tools/assets/lineup.py` lays every converted model out in one Blender file; `library.py` (with
+  tools come out centred on their handle, `normalizeHandle`, and turned so the head's edge leads, `headAlong` in `held.js`), shields strapped on the left forearm (`STRAP`). `tools/assets/lineup.py` lays every converted model out in one Blender file; `library.py` (with
   `library-index.mjs` for the textures) does the same for every model in the packs, one file per pack.
   `node tools/assets/everything.mjs` exports every pack model on its own (`everything.py`) to `pack/all/<pack>/<model>.glb`
   (textures in `pack/tex/`, so `loadPack('all/…')` takes any of them as it is) and sorts them by kind and group
@@ -147,11 +148,13 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   logs, moss, pebbles, lilies… whose pack models keep their own size, `natural`; each piece goes by the biome where it
   stands, and some kinds pick their looks by land: `FLOWER_KINDS` per stretch of meadow, `BUSH`, `MUSHROOM`) · `reach.js` how far the mist and grass reach · `vegetation.js` near/mid/impostor bands · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
   `terrain.js` + `terrain-worker.js` (worker pool, `pool.js`) · `structures.js` + `greek.js` the sites' buildings and
-  props · `town.js` the abandoned town and the small scenes about the island (`SITES.town`, `SITES.spots`) · `sky.js`, `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`), `water.js`, `giantwood.js`, `ambient.js`, `stormwall.js` · `groundcut.js` · `pickups.js`
+  props · `town.js` the abandoned town and the small scenes about the island (`SITES.town`, `SITES.spots`) · `sky.js`, `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`), `water.js`, `giantwood.js`, `ambient.js` (+ `fireflies.js`, GPU), `stormwall.js` · `groundcut.js` · `pickups.js`
   (+ `pickup-layout.js`) · `colliders.js`. `src/util/math.js` shared helpers. `src/assets.js` model and texture loading.
 - `src/render`: `core.js` renderer, composer, shadows, adaptive resolution · `atmosphere.js` mist, haze, sun shafts, cloud
-  shadows, grade · `occlusion.js` fades what blocks the camera · `fx.js`, `lights.js`.
-- `src/player`: `player.js` controller and camera · `hero.js` rig and clips · `footik.js` foot placement · `stats.js` ·
+  shadows, grade, and the woods' light (a half-resolution haze march lit through the crowns, dappled floor from the canopy
+  shelter map; notes in `docs/plans/light-study.md`) · `occlusion.js` fades what blocks the camera · `fx.js`, `lights.js`.
+- `src/player`: `player.js` controller and camera · `hero.js` rig and clips (footsteps from the clips' foot contacts, `footfalls`;
+  the stance widened in motion, `STANCE`) · `cape.js` the worn cape (Synty's, fitted to the body, a short rope sim) · `footik.js` foot placement · `stats.js` ·
   `held.js`.
 - `src/game`: `game.js` wires the systems onto `game` · `items.js` items and recipes · `inventory.js` · `crafting.js` ·
   `harvest.js` · `combat.js` · `trial.js` bosses, clues, offerings · `guide.js` the guided steps · `owl.js` · `save.js`.

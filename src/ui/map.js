@@ -27,7 +27,7 @@ export class WorldMap {
     addEventListener('pointermove', (e) => { if (!drag) return; const k = EXT / this.zoom / this.cv.clientWidth; this.cx = drag.cx - (e.clientX - drag.x) * k; this.cz = drag.cz - (e.clientY - drag.y) * k; this.draw(); });
     addEventListener('pointerup', () => (drag = null));
     // compass
-    const mm = document.createElement('div'); mm.id = 'minimap'; mm.innerHTML = '<canvas width="176" height="176"></canvas><div id="biomeLabel"></div>'; document.getElementById('hud').appendChild(mm); this.mini = mm.querySelector('canvas'); this.biomeEl = mm.querySelector('#biomeLabel');
+    const mm = document.createElement('div'); mm.id = 'minimap'; mm.innerHTML = '<canvas width="240" height="240"></canvas><div id="biomeLabel"></div>'; document.getElementById('hud').appendChild(mm); this.mini = mm.querySelector('canvas'); this.biomeEl = mm.querySelector('#biomeLabel');
     const c = document.createElement('div'); c.id = 'compass'; c.innerHTML = '<div id="compassStrip"></div><i></i>'; document.getElementById('hud').appendChild(c); this.strip = c.querySelector('#compassStrip');
     this.know(SITES.house);   // the temple is found by exploring (the abandoned town is always known: isKnown)
   }

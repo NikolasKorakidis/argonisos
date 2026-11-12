@@ -4,6 +4,45 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-16', name: 'Patch 16', title: 'Light Between the Trees', date: '12 November 2026',
+    intro: 'Sunbeams in the woods, moonlit nights and fireflies, a grander temple, families of animals, and a hero who holds his tools properly.',
+    sections: [
+      { t: 'Light', icon: 'blessing', items: [
+        '<b>Light in the woods:</b> sunbeams slant down between the trees through a soft haze, golden and thickest at morning and evening, and the forest floor is dappled with sun and shade.',
+        '<b>Moonlit nights:</b> nights are blue and dark but readable, in the woods too, and your torches and fires glow warm against them.',
+        '<b>Fireflies</b> drift over the meadows on clear nights.',
+      ] },
+      { t: 'Your Hero', icon: 'you', items: [
+        'Tools and weapons sit properly in the hand: axe blades, hammer heads and dagger points face the way you swing.',
+        'Footsteps sound the moment each foot touches the ground, at any pace.',
+        'Your feet no longer cross over each other when you run.',
+        'The <b>Cretan cape</b> now shows when you wear it, and streams out behind you as you run.',
+        'The minimap is bigger.',
+      ] },
+      { t: 'The Woods', icon: 'tree', items: [
+        'Trees stand deeper in the earth: no more roots sticking out like legs.',
+        'Trees shake when your axe bites into them.',
+        'The <b>ancient olives</b>: the carved stone now stands clear of the trunk where you can see it, with a small offering fire and its smoke beside it, so you can spot them from afar.',
+      ] },
+      { t: 'The Temple of Zeus', icon: 'temple', items: [
+        'The temple is half as big again, with doorways a person can walk through. Inside there are rugs, lit braziers, offering tables, jars and banners, and an open way through to the back room.',
+        'Carrying a boss\'s head? A column of golden light rises over its offering stand, and the stand is on your map and compass. Fires now burn beside the altar and the stands.',
+        'The head you offer is the <b>beast\'s own head</b>, set on the stand for all to see.',
+        'Fires everywhere burn with soft, flickering flames.',
+      ] },
+      { t: 'Creatures', icon: 'bull', items: [
+        'Some <b>hogs</b> roam as a sow with her piglets. Anger one and the whole family comes for you.',
+        'Some <b>does</b> walk with a fawn, which runs when she runs.',
+        'Hares are bigger, hop in quick bursts and wear natural coats.',
+        'Animals no longer pile into one spot when they charge you.',
+      ] },
+      { t: 'Things to Find', icon: 'goal', items: [
+        '<b>Feathers</b> are bigger and brighter, and sparkle so you can spot them; lightstone glints faintly too.',
+        'Four old chests wait in the <b>abandoned town</b>: rope and food, a bundle of arrows, leather and fibre, and a simple helmet.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-15', name: 'Patch 15', title: 'Who Wakes on the Shore', date: '12 November 2026',
     intro: 'Make your own hero, walk through sturdier woods, and see the great places of Nisos rebuilt.',
     sections: [

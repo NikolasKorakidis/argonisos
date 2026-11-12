@@ -71,6 +71,8 @@ export function updateWeather(dt, pos, light, onThunder) {
   if (w.y > 0.01) _tint.add(MOOD[1].tint.clone().multiplyScalar(w.y)); if (w.v > 0.01) _tint.add(MOOD[2].tint.clone().multiplyScalar(w.v));
   if (w.y + w.v > 0.01) scene.fog.color.lerp(_tint.multiplyScalar(1 / (w.y + w.v)).multiplyScalar(0.35 + light.day * 0.65), clamp(w.y + w.v, 0, 1) * 0.7);
   scene.fog.color.lerp(_tint.setRGB(0.15, 0.175, 0.2).multiplyScalar(0.3 + light.day * 0.7), WEATHER.k.overcast * 0.85);
+  // by night the air is moonlit blue everywhere, the forest's too (it fell to a near-black green), less so under cloud
+  scene.fog.color.lerp(_tint.setHex(0x14214a), night * (w.y + w.v) * 0.75 * (1 - WEATHER.k.overcast * 0.5));
   // the world gets wet in the rain and dries in the sun
   updateWetness(dt, WEATHER.k.rain, light.day * (1 - WEATHER.k.overcast * 0.6));
   // the wind, by the weather; the rain slants with it, as bright as the air
@@ -85,7 +87,7 @@ export function updateWeather(dt, pos, light, onThunder) {
     onThunder?.(0.6 + rnd() * 2);
   }
   // what the sky and lights need: how overcast, and how much light the biome lets through
-  return { overcast: Math.max(WEATHER.k.overcast, w.v * 0.6), dark: 1 - m.light };
+  return { overcast: Math.max(WEATHER.k.overcast, w.v * 0.6), dark: (1 - m.light) * (1 - night * 0.55) };   // (by night the woods shut out a little less: the moonlight is all there is)
 }
 export function setWeather(type) { WEATHER.forced = type || null; if (type) WEATHER.type = type; }
 // After a teleport (respawn, fast travel): jump straight to the new place's air instead of easing into it

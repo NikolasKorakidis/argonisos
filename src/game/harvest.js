@@ -7,7 +7,7 @@ import { heightAt, biomeWeights, hash2 } from '../world/gen.js';
 import { burst, dust, addShake } from '../render/fx.js';
 import { trunkMat } from '../world/trees.js';
 import { clearGrass } from '../world/grass.js';
-import { clamp } from '../util/math.js';
+import { clamp, smooth } from '../util/math.js';
 import { loadPack, bake } from '../assets.js';
 import { wettable } from '../world/wetness.js';
 
@@ -66,7 +66,8 @@ export class Harvest {
     if (hp > 0) { this.hp.set(id, hp); return true; }
     this.hp.delete(id); this.fell(c, sp, dir); return true;
   }
-  wobble(c) { this.g.veg.shakeAt?.(c.ref.cx, c.ref.cz, c.ref.i); }
+  // the tree shakes with every blow, its crown swaying away from you (vegetation.js shake)
+  wobble(c, dir) { this.g.veg.shake(c.ref.cx, c.ref.cz, c.ref.i, dir.x, dir.z); }
   fell(c, sp, dir) {
     const { veg, colliders, player } = this.g, r = c.ref;
     veg.remove(r.cx, r.cz, r.i); colliders.removeOne(c);
@@ -74,7 +75,10 @@ export class Harvest {
     const obj = veg.single(r.sp, v ? v[o + 1] : 0); obj.position.set(c.x, c.y, c.z); obj.rotation.y = v ? v[o + 5] : 0; obj.scale.setScalar(r.s);
     const pivot = new THREE.Group(); pivot.position.set(c.x, c.y, c.z); obj.position.set(0, 0, 0); pivot.add(obj); this.g.scene.add(pivot);
     const away = Math.atan2(dir.x, dir.z);           // falls away from the player
-    this.falling.push({ pivot, obj, sp, s: r.s, th: 0, w: 0.15, away, t: 0, landed: false, x: c.x, z: c.z, y: c.y, r: c.r });
+    // (a tree stands sunk into the ground to hide its roots, flora-pack.js: falling, it slides out along its length, so the
+    // buried part doesn't swing up out of the stump behind it)
+    const geo = obj.children[0].geometry; if (!geo.boundingBox) geo.computeBoundingBox(); const sink = Math.max(0, -geo.boundingBox.min.y) * r.s;
+    this.falling.push({ pivot, obj, sp, s: r.s, th: 0, w: 0.15, away, t: 0, landed: false, x: c.x, z: c.z, y: c.y, r: c.r, sink });
     this.addStump(c.x, c.y, c.z, c.r);
     player.stats.train('gathering', 12.5); this.g.sound?.('creak');
   }
@@ -94,6 +98,7 @@ export class Harvest {
           dust(tip, 22, 0xa89a78, 0.5); dust(new THREE.Vector3(f.x, f.y + 0.3, f.z), 10); addShake(0.5); this.g.sound?.('thud');
         }
         f.pivot.rotation.set(0, 0, 0); f.pivot.rotateOnWorldAxis(new THREE.Vector3(Math.cos(f.away), 0, -Math.sin(f.away)), f.th);
+        f.obj.position.y = f.sink * smooth(0.7, 1.45, f.th);
       } else if (f.t > 1.2) {
         // the crown breaks up and the trunk is left as a log
         f.pivot.scale.multiplyScalar(1 - dt * 3); f.pivot.position.y -= dt * 1.5;
