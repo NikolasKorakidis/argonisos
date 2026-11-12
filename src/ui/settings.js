@@ -1,4 +1,5 @@
-// Settings: graphics preset, render resolution, fullscreen, volume and mouse sensitivity. Kept in browser storage.
+// Settings: graphics preset, render resolution, fullscreen, volume, mouse sensitivity, and the hero's look last chosen
+// in the character creator (the next new game starts from it). Kept in browser storage.
 // Fullscreen captures the Escape key where the browser allows it (Keyboard Lock), so a tap still opens the pause menu
 // and you hold Esc for two seconds to leave fullscreen. Where it doesn't (Safari, Firefox), Esc leaves fullscreen and
 // the game puts it back on your next click.
@@ -10,7 +11,7 @@ import { setVolume, setMusicVolume } from '../audio/sound.js';
 import { input } from '../input.js';
 
 const KEY = 'argonisos.settings.v1';
-export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, music: 0.5, sens: 1, fullscreen: false };
+export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, music: 0.5, sens: 1, fullscreen: false, look: null };
 try { Object.assign(SETTINGS, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* defaults */ }
 const store = () => { try { localStorage.setItem(KEY, JSON.stringify(SETTINGS)); } catch { /* private mode */ } };
 
@@ -38,6 +39,8 @@ export function setRes(r) { SETTINGS.res = r; store(); applyGraphics(); }
 export function setVol(v) { SETTINGS.volume = v; store(); setVolume(v); }
 export function setMusic(v) { SETTINGS.music = v; store(); setMusicVolume(v); }
 export function setSens(s) { SETTINGS.sens = s; store(); input.sens = s; }
+// the look chosen in the creator (the game keeps its own with the save; this one is where the next creator starts)
+export function rememberLook(look) { SETTINGS.look = { ...look }; delete SETTINGS.hero; store(); }
 
 // ---- fullscreen
 let wantFs = false;

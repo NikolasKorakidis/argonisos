@@ -3,7 +3,7 @@
 import { heightAt, biomeWeights, groundColor, fbm, isRock } from './gen.js';
 import { layoutCell, CELL, shadeAround, bakeShade, solidsAround, SPECIES, STRIDE } from './flora.js';
 // how wide a space to keep round the things that stand about but aren't solid (metres at scale 1)
-const CLEAR_R = { lavender: 0.5, broom: 0.7, myrtle: 0.8, fern: 0.6, redbush: 0.7, colfall: 1.4, colstand: 0.6, herm: 0.4, amphorae: 0.7, wallruin: 1.6 };
+const CLEAR_R = { lavender: 0.5, broom: 0.7, myrtle: 0.8, fern: 0.6, redbush: 0.7, colfall: 1.4, colstand: 0.6, herm: 0.4, amphorae: 0.7, wallruin: 1.6, stump: 0.6, log: 1.6, driftwood: 1.2 };
 import './sites.js';   // registers the flattened ground under the trial's sites
 import { smooth } from '../util/math.js';
 import { layoutPickups } from './pickup-layout.js';

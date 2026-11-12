@@ -216,7 +216,7 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 
 /* title and pause */
 /* title screen: a main menu over the living world, the menu down the left, the HUD hidden behind it */
-body.titling > *:not(canvas):not(#title):not(#notes) { visibility:hidden; }
+body.titling > *:not(canvas):not(#title):not(#notes):not(#creator), body.creating > *:not(canvas):not(#creator) { visibility:hidden; }
 #title { position:fixed; inset:0; z-index:60; color:var(--cream); transition:opacity .9s;
          background:linear-gradient(90deg, rgba(12,8,5,.9) 0%, rgba(12,8,5,.72) 30%, rgba(12,8,5,.15) 58%, rgba(12,8,5,0) 75%),
                     linear-gradient(0deg, rgba(12,8,5,.55), rgba(12,8,5,0) 22%), radial-gradient(ellipse at 70% 45%, rgba(0,0,0,0) 40%, rgba(8,5,3,.5) 100%); }
@@ -243,6 +243,35 @@ body.titling > *:not(canvas):not(#title):not(#notes) { visibility:hidden; }
 #title .titem .new { justify-self:start; margin-left:12px; font:700 10px/1 Cinzel,serif; letter-spacing:.12em; text-transform:uppercase; padding:4px 7px; border-radius:2px; color:#fff6e0; background:var(--red); box-shadow:0 0 12px rgba(154,52,32,.7); }
 #title .tfoot { position:absolute; left:clamp(28px,7vw,120px); right:clamp(20px,3vw,40px); bottom:22px; display:flex; justify-content:space-between; gap:20px; font:14px 'Alegreya Sans',sans-serif; color:rgba(244,230,196,.45); }
 @keyframes tIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+/* the character creator: the choices down the left over the living world, the hero framed on the right */
+#creator { position:fixed; inset:0; z-index:62; color:var(--cream); cursor:grab;
+           background:linear-gradient(90deg, rgba(12,8,5,.88) 0%, rgba(12,8,5,.7) 28%, rgba(12,8,5,.1) 50%, rgba(12,8,5,0) 62%), linear-gradient(0deg, rgba(12,8,5,.45), rgba(12,8,5,0) 20%); }
+#creator:active { cursor:grabbing; }
+#creator .cside { position:absolute; left:clamp(20px,6vw,110px); top:0; bottom:0; width:min(460px,90vw); display:flex; flex-direction:column; justify-content:center; padding:12px 0; box-sizing:border-box; overflow:auto; cursor:default; animation:tIn .7s ease-out both; }
+#creator .csup { font:700 12px Cinzel,serif; letter-spacing:.5em; text-transform:uppercase; color:var(--gold); text-shadow:0 2px 12px rgba(0,0,0,.8); }
+#creator h2 { margin:4px 0 0; font:700 clamp(24px,2.6vw,32px)/1.15 Cinzel,serif; letter-spacing:.05em; color:#f6e8c8; text-shadow:0 3px 16px rgba(0,0,0,.8); }
+#creator .meander { height:10px; margin:8px 0 12px; background:var(--meander) left/20px 10px repeat-x; opacity:.8; }
+#creator .crows { display:flex; flex-direction:column; gap:1px; }
+#creator .crow { display:grid; grid-template-columns:120px 1fr; align-items:center; min-height:42px; padding:3px 10px; border-radius:2px; transition:background .2s; }
+#creator .crow:hover { background:linear-gradient(90deg, rgba(217,169,74,.13), rgba(217,169,74,0)); }
+#creator .clabel { display:flex; flex-direction:column; font:600 14px Cinzel,serif; letter-spacing:.08em; color:rgba(244,230,196,.8); }
+#creator .clabel em { font:italic 13px 'Alegreya Sans',sans-serif; letter-spacing:0; color:rgba(244,230,196,.5); }
+#creator .seg { box-shadow:0 0 0 1px rgba(217,169,74,.35); justify-self:start; }
+#creator .seg button { padding:7px 18px; background:rgba(244,230,196,.06); color:rgba(244,230,196,.7); font-size:13px; }
+#creator .seg button + button { border-left:1px solid rgba(217,169,74,.25); }
+#creator .seg button.on { background:linear-gradient(180deg,#b44a2a,var(--red)); color:#fff6e0; }
+#creator .swatches { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+#creator .swatches button { width:23px; height:23px; padding:0; border-radius:50%; border:0; cursor:pointer; background:var(--c);
+                            box-shadow:inset 0 -3px 5px rgba(0,0,0,.3), 0 0 0 1px rgba(0,0,0,.6); transition:transform .15s, box-shadow .15s; }
+#creator .swatches button:hover { transform:scale(1.15); }
+#creator .swatches button.on { box-shadow:inset 0 -3px 5px rgba(0,0,0,.3), 0 0 0 2px #120c08, 0 0 0 4px var(--gold), 0 0 10px rgba(217,169,74,.6); }
+#creator .step { display:grid; grid-template-columns:30px 1fr 30px; align-items:center; gap:8px; max-width:280px; }
+#creator .step b { font:600 17px 'Alegreya Sans',sans-serif; text-align:center; color:#fff3d6; text-shadow:0 1px 6px rgba(0,0,0,.8); }
+#creator .step small { grid-column:1 / -1; text-align:center; font:11px 'Alegreya Sans',sans-serif; color:rgba(244,230,196,.4); margin-top:-6px; }
+#creator .step button { width:30px; height:30px; border-radius:50%; border:1px solid rgba(217,169,74,.45); background:rgba(31,22,16,.6); color:var(--gold); font:700 20px/1 serif; cursor:pointer; padding:0 0 3px; }
+#creator .step button:hover { background:rgba(217,169,74,.2); color:#fff3d6; }
+#creator .cbtns { display:flex; gap:10px; margin-top:16px; } #creator .cbtns #cDone { margin-left:auto; padding:10px 26px; font-size:16px; }
+#creator .chint { margin:10px 0 0; font:italic 14px 'Alegreya Sans',sans-serif; color:rgba(244,230,196,.45); }
 /* patch notes */
 #notes { position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; background:rgba(8,5,3,.55); }
 #notes .pnl { width:min(980px,94vw); height:min(760px,88vh); display:flex; flex-direction:column; }
@@ -355,8 +384,96 @@ body.titling > *:not(canvas):not(#title):not(#notes) { visibility:hidden; }
 
 /* minimap and biome (bottom right) */
 #minimap { position:absolute; right:16px; bottom:18px; display:flex; flex-direction:column; align-items:center; gap:6px; }
-#minimap canvas { width:176px; height:176px; border-radius:50%; box-shadow:0 0 0 2px var(--glaze), 0 0 0 5px rgba(212,132,74,.55), 0 6px 18px rgba(0,0,0,.4); background:#d4c49a; }
+#minimap canvas { width:240px; height:240px; border-radius:50%; box-shadow:0 0 0 2px var(--glaze), 0 0 0 5px rgba(212,132,74,.55), 0 6px 18px rgba(0,0,0,.4); background:#d4c49a; }
 #biomeLabel { padding:3px 12px; border-radius:12px; font:700 12px Cinzel,serif; letter-spacing:.08em; color:var(--cream); background:rgba(31,22,16,.72); box-shadow:0 0 0 1px rgba(0,0,0,.5); white-space:nowrap; }
 #compassStrip span.poi.spawn { color:#ffb090; }
 
 .plate b i.lvl { font-size:15px; margin-left:3px; vertical-align:-2px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
+
+/* ---------- the pack's look (only where this copy has the pack art: ui/icons.js sets html.packui) ----------
+   Item pictures: each item's own 3D model, rendered by tools/assets/icons.mjs on a clear background and set on an
+   off-white card, the way the tester asked for them. Frames, bars, round badges, buttons and the panel headers are
+   SharpUI's dark brown and copper (the tester's UI pack), which sit well with the black glaze and terracotta; the
+   panels keep their papyrus, and the black-figure drawings (conditions, map, anything without a model) stay. */
+img.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; flex:none; object-fit:contain; -webkit-user-drag:none; }
+img.ic.pk { filter:drop-shadow(0 1px 1.5px rgba(40,25,10,.45)); }
+.slot > img.pk { width:calc(100% - 6px); height:calc(100% - 6px); }
+.food img.pk { width:32px; height:32px; position:relative; } .pick img.pk { font-size:28px; padding:0; }
+#craftDetail .big img.pk { width:62px; height:62px; } #buildMenu .bminfo .big img.pk, #dropAsk .big img.pk { width:54px; height:54px; }
+.rrow i img.pk { width:30px; height:30px; } #craftDetail .rp > i img.pk { width:30px; height:30px; }
+#buildMenu .bmtile img.pk { width:64%; height:64%; }
+html.packui {
+  --sp-slot:url(../../assets/ui/pack/ui/slot.webp); --sp-slot-on:url(../../assets/ui/pack/ui/slotOn.webp); --sp-round:url(../../assets/ui/pack/ui/round.webp); --sp-round-on:url(../../assets/ui/pack/ui/roundOn.webp);
+  --sp-button:url(../../assets/ui/pack/ui/button.webp); --sp-header:url(../../assets/ui/pack/ui/header.webp); --sp-bar:url(../../assets/ui/pack/ui/bar.webp); --sp-bar-fill:url(../../assets/ui/pack/ui/barFill.webp);
+  --sp-box:url(../../assets/ui/pack/ui/box.webp); --sp-line:url(../../assets/ui/pack/ui/line.webp); --sp-fade:url(../../assets/ui/pack/ui/fade.webp);
+  --sp-load:url(../../assets/ui/pack/ui/load.webp); --sp-load-fill:url(../../assets/ui/pack/ui/loadFill.webp); --sp-scroll:url(../../assets/ui/pack/ui/scroll.webp); --sp-thumb:url(../../assets/ui/pack/ui/thumb.webp);
+  --card:radial-gradient(circle at 50% 38%, #fbf6ea, #efe5cf 62%, #ddcfb0);
+}
+/* slots: a copper-rimmed socket, the item on an off-white card inside it; empty ones dark */
+.packui .slot { border:5px solid transparent; border-image:var(--sp-slot) 10 / 5px; background:var(--card) padding-box; border-radius:0; box-shadow:0 1px 3px rgba(0,0,0,.35); }
+.packui .slot.empty, .packui #hotbar .slot.empty { border-image:var(--sp-slot) 10 fill / 5px; background:none; box-shadow:none; }
+.packui .slot b { left:1px; top:1px; }
+.packui .slot em { right:2px; bottom:1px; padding:0 4px; border-radius:7px; font-size:11.5px; line-height:15px; color:var(--cream); background:rgba(31,22,16,.78); text-shadow:none; }
+.packui .slot .dur { left:2px; right:2px; bottom:1px; }
+.packui .slot.sel { border-image:var(--sp-slot-on) 10 / 5px; box-shadow:0 0 0 1px rgba(217,169,74,.6), 0 0 14px rgba(217,169,74,.65); }
+.packui .slot.worn { border-image:var(--sp-slot-on) 10 / 5px; box-shadow:inset 0 0 0 2px var(--gold), 0 1px 3px rgba(0,0,0,.35); }
+.packui .slot.worn::after { right:1px; top:1px; }
+.packui .slot.no { filter:saturate(.5); } .packui .slot.no em { color:#ffb4a4; }
+.packui #hotbar { padding:8px; border-radius:0; border:6px solid transparent; border-image:var(--sp-box) 6.5 fill / 6px; background:none; box-shadow:0 4px 14px rgba(0,0,0,.3); }
+/* round badges: the copper ring round an off-white face (food, conditions, the clock, the health badge, pickups) */
+.packui .cond, .packui #clock .ic, .packui .vbar span, .packui .pick .ic, .packui #craftDetail .big, .packui #buildMenu .bminfo .big, .packui #dropAsk .big {
+  background:radial-gradient(circle, #fbf6ea 0, #efe5cf 52%, #ddcfb0 60%, transparent 62%), var(--sp-round) center/100% 100%; box-shadow:0 2px 6px rgba(0,0,0,.35); }
+.packui .cond.bad { background:radial-gradient(circle, #e2ebf0 0, #b8c8d4 52%, #8fa6b6 60%, transparent 62%), var(--sp-round) center/100% 100%; }
+.packui .cond.great { background:radial-gradient(circle, #fff3cf 0, #f0cf7a 52%, #c99a3a 60%, transparent 62%), var(--sp-round-on) center/100% 100%; }
+.packui .food { box-shadow:0 0 0 2px #6b3d1f, 0 2px 6px rgba(0,0,0,.4); }
+.packui .food::before { inset:4px; background:var(--card); }
+.packui .food.empty { background:var(--sp-round) center/100% 100%; box-shadow:none; } .packui .food.empty::before { display:none; }
+.packui #clock { border-radius:0; padding:4px 14px 4px 6px; border:5px solid transparent; border-image:var(--sp-box) 6.5 fill / 5px; background:none; }
+.packui .pick { border-radius:0; border:4px solid transparent; border-image:var(--sp-box) 6.5 fill / 4px; background:none; padding:2px 12px 2px 2px; }
+.packui .pick .ic { font-size:30px; padding:0; }
+/* bars: SharpUI's chamfered frame, the colour shaded by its fill */
+.packui .vbar { height:20px; border-radius:0; border:5px solid transparent; border-image:var(--sp-bar) 7 fill / 5px; background:none; box-shadow:0 2px 6px rgba(0,0,0,.35); }
+.packui .vbar > i { left:0; top:0; bottom:0; border-radius:1px; box-shadow:none; }
+.packui #hpBar > i.val { background:var(--sp-bar-fill) center/100% 100%, linear-gradient(180deg,#e05a48,#8f2a20); background-blend-mode:multiply; }
+.packui #stam .vbar { height:14px; border-width:4px; border-image-width:4px; }
+.packui #stam .vbar > i.val { background:var(--sp-bar-fill) center/100% 100%, linear-gradient(180deg,#f6dc70,#a1841e); background-blend-mode:multiply; }
+.packui .vbar u { top:-5px; left:20px; line-height:20px; }
+.packui .vbar span { left:-22px; width:34px; height:34px; margin-top:-17px; }
+.packui #bossBar .bb { height:18px; border-radius:0; border:5px solid transparent; border-image:var(--sp-bar) 7 fill / 5px; background:none; box-shadow:0 2px 8px rgba(0,0,0,.45); }
+.packui #bossBar .bb i { background:var(--sp-bar-fill) center/100% 100%, linear-gradient(180deg,#e05a48,#7a1a10); background-blend-mode:multiply; }
+/* panels: papyrus in a copper frame, the header a dark copper-edged band */
+.packui .pnl { border:6px solid transparent; border-image:var(--sp-slot-on) 10 / 6px; border-radius:0; background-clip:padding-box;
+               box-shadow:0 20px 60px rgba(0,0,0,.6), inset 0 0 50px rgba(120,80,30,.28); }
+.packui .pnl > h2 { border-radius:0; background:var(--sp-header) center/100% 100%; text-shadow:0 1px 3px #000; }
+.packui .pnl > h2::after { background:var(--meander) left/20px 10px repeat-x, #1a120c; }
+.packui #buildMenu > .pnl, .packui #buildMenu .bminfo { border-image-width:6px; }
+/* buttons and the chosen tab: SharpUI's dark, copper-lit button */
+.packui .btn { border:4px solid transparent; border-image:var(--sp-button) 4 fill / 4px; background:none; border-radius:0; box-shadow:0 2px 4px rgba(0,0,0,.35); color:#fbe9cc; }
+.packui .btn:not(.ghost) { filter:sepia(.4) saturate(1.7) hue-rotate(-12deg); }   /* (the main ones warmer, nearer the old red) */
+.packui .btn:not(.ghost):hover { background:none; filter:sepia(.4) saturate(1.7) hue-rotate(-12deg) brightness(1.25); color:#fff8ea; }
+.packui .btn.ghost { filter:saturate(.7) brightness(.85); } .packui .btn.ghost:hover { filter:brightness(1.1); }
+.packui .btn:disabled { filter:grayscale(.6) brightness(.9); }
+.packui #craftTabs button.on, .packui #buildMenu .bmtabs nav button.on, .packui .seg button.on, .packui #notes nav button.on, .packui #devPanel .dvtabs button.on {
+  background:var(--sp-header) center/100% 100%; border-color:#120c08; }
+.packui #notes nav .copy { border:3px solid transparent; border-image:var(--sp-button) 4 fill / 3px; background:none; }
+/* build menu tiles: sockets like the slots */
+.packui #buildMenu .bmtile { border:6px solid transparent; border-image:var(--sp-slot) 10 / 6px; background:var(--card) padding-box; border-radius:0; box-shadow:0 1px 3px rgba(0,0,0,.3); }
+.packui #buildMenu .bmtile:hover { border-image:var(--sp-slot-on) 10 / 6px; }
+.packui #buildMenu .bmtile.on { border-image:var(--sp-slot-on) 10 / 6px; box-shadow:0 0 0 2px var(--gold), 0 0 14px rgba(217,169,74,.7); }
+.packui #buildMenu .bmtile.empty { border-image:var(--sp-slot) 10 fill / 6px; background:none; box-shadow:none; opacity:.55; }
+.packui #buildMenu .bmkeys, .packui #prompt { border-radius:0; border:5px solid transparent; border-image:var(--sp-box) 6.5 fill / 5px; background:none; }
+.packui #prompt { padding:4px 14px 4px 6px; }
+/* compass and minimap: a dark band over a copper line; the minimap in a copper ring */
+.packui #compass::after { left:8%; right:8%; height:4px; background:var(--sp-line) center/100% 100%; opacity:1; }
+.packui #minimap canvas { box-shadow:0 0 0 2px #1a120c, 0 0 0 5px #a8622f, 0 0 0 7px #3a2416, 0 6px 18px rgba(0,0,0,.45); }
+.packui #biomeLabel { border-radius:0; border:4px solid transparent; border-image:var(--sp-box) 6.5 fill / 4px; background:none; }
+/* title: a copper rule under the name, SharpUI's loading bar */
+.packui #title .meander { background:var(--meander) left/20px 10px repeat-x; }
+.packui #title .tmenu { padding-top:6px; background:var(--sp-fade) left top/100% 6px no-repeat; }
+.packui #title .titem::before { background:var(--sp-line) center/100% 100%; width:4px; }
+.packui #title .titem:hover { background:linear-gradient(90deg, rgba(184,100,47,.24), rgba(184,100,47,0)); }
+.packui #title .load { width:300px; height:12px; border-radius:0; border:3px solid transparent; border-image:var(--sp-load) 6 fill / 3px; background:none; }
+.packui #title .load i { background:var(--sp-load-fill) left center/300px 100%; }
+/* scrollbars in the panels */
+.packui .pnl ::-webkit-scrollbar { width:10px; } .packui .pnl ::-webkit-scrollbar-track { border:3px solid transparent; border-image:var(--sp-scroll) 5 fill / 3px; }
+.packui .pnl ::-webkit-scrollbar-thumb { border:3px solid transparent; border-image:var(--sp-thumb) 5 fill / 3px; }

@@ -10,6 +10,47 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
 - **`concept/` is private.** The whole folder is git-ignored; its design docs must never be committed, pushed, quoted
   in commits, PRs or patch notes, or served (the dev and test servers refuse `/concept`, the deploy leaves it out).
 - Branch before committing; PRs go to `main` (CI refuses any other base: a stacked PR never reaches the live site). Push with `git -c credential.helper= -c credential.helper='!gh auth git-credential' push`.
+- **Licensed packs stay out of the public repo.** `incoming assets/` (the team's Unity packs, unzipped) and
+  `assets/models/pack/` (what's converted from them) are git-ignored until the repo is private. Convert with
+  `node tools/assets/convert.mjs [name…]` from `tools/assets/manifest.json`: Blender (`convert.py`) by default, three.js
+  in a page (`fbx-page.mjs`, `"via": "three"`) for rigs Blender bends out of shape (the Minotaur). `tools/assets/clips.mjs`
+  lists a .glb's clips and any root motion left in them. Check every new model in the game (`tools/shots.mjs`).
+  How pack models get in: shared atlases are one file each in `pack/tex/` (`loadPack` puts them on materials named
+  `tex:<key>`); plants (trees, rocks, shrubs, the ground cover: manifest `"plant": "<catalogue id>"`) are converted from
+  the catalogue's export below, which has the right texture on each part: their colours baked into the vertices, except
+  faces showing a see-through part of a texture (leaf and needle cards), which keep it and are drawn cut out with the
+  wind (`packCardMat` in `trees.js`); `tint` darkens or lightens, `height` resizes. A model whose cards use several
+  textures gets them in one atlas of its own (`pack/tex/atlas-<hash>`). Trees and shrubs: `lod` picks the pack's level of
+  detail the near version is made from (`everything.py` with `KEEP_LOD`, into `pack/all-lod<n>/`), kept whole (simplified
+  trunks broke into shards); `mid: { tris }` makes `<name>_mid.glb` for the near band's further half (from `SPLIT` 20 m
+  in `vegetation.js`: leaf patches thinned and grown, `solidMin` keeping the trunk) and `far: { lod, tris }`
+  `<name>_far.glb` for the mid band (`FAR` in `flora-pack.js`). Near trees cast their shadows from the far version, on
+  `SHADE_LAYER` (only the sun's shadow camera sees it): the woods stay under the perf budget only so. A pack tree whose
+  crown starts too low grows a little and loses its lowest leaf patches (`floraGeo`); trees are drawn sunk into the
+  ground by their root flare (`rootTop` in `flora-pack.js`, baked into the pivot so every band and the shadow stand-ins
+  agree) and by the slope (`matrixOf`), so roots don't stand clear. A hit tree sways (`veg.shake`, applied in `cull`). They take the carved species' places
+  in `propGeo` (`world/flora-pack.js`, fitted to the carved one's size; look at a new one in the game's light, which
+  makes vertex colours much brighter than the dev page does); site props likewise
+  (`world/site-pack.js`); building pieces get the rustic kit's model fitted into their own box (`build/kit.js`; aiming
+  still meets the carved shape, kept invisible); the hero (Synty Generic, a man or a woman, made in the character creator at a new game: `src/ui/creator.js`; hair, beards and wreaths from `heroLooks.glb`, colours recoloured from the palette in `hero.js`; the look saved with the game), dryads, dryadlings and giants are pack bodies fitted onto the Mixamo rig
+  in three.js (`refit` in `tools/assets/fbx-page.mjs`: the rig's bones keep their rest rotations, so the Mixamo clips play
+  unchanged; Blender's import turns them), with the armour from the pack's Greek characters as parts of their own
+  (`wear_<item>` in `heroArmour.glb`, moved onto the hero's bones by `dress` in `hero.js`, shown by `hero.wear`);
+  animals come young, grown and (deer) stag by level, each in one of the pack's looks (`*Looks.glb`, bound to the body's bones); a `proportions` entry lengthens limbs and scales hands as it fits (the pack's
+  people are stylised: short legs, long arms, big hands). Held things: `GRIP` in `hero.js` (in the fist, hand-bone space;
+  tools come out centred on their handle, `normalizeHandle`, and turned so the head's edge leads, `headAlong` in `held.js`), shields strapped on the left forearm (`STRAP`). `tools/assets/lineup.py` lays every converted model out in one Blender file; `library.py` (with
+  `library-index.mjs` for the textures) does the same for every model in the packs, one file per pack.
+  `node tools/assets/everything.mjs` exports every pack model on its own (`everything.py`) to `pack/all/<pack>/<model>.glb`
+  (textures in `pack/tex/`, so `loadPack('all/…')` takes any of them as it is) and sorts them by kind and group
+  (`kinds.mjs`, first matching rule wins; `--sort` re-sorts only) into `pack/all/catalogue.json`. It feeds the asset
+  browser (`dev/index.html`, `npm run dev` → `/dev/`) and the Blender catalogue (`catalogue.py` →
+  `incoming assets/catalogue/argonisos-by-kind.blend`: a collection per kind and group, every model an asset in the
+  Asset Browser under "Kind/Group"). Manifest entries
+  with `compose` or `house` are put together in Blender from Ancient Empire pieces (`compose.py`: each material slot keeps
+  its prefab's texture as `tex:<key>`; houses from a recipe on the kit's 2.5 m grid); the game places them with
+  `site-pack.js` `piece()`. Sounds: `node tools/assets/sounds.mjs` →
+  `assets/sounds/pack/` (also git-ignored), played by `sound.js` where it has a recording. Without the pack files the
+  world, buildings, tools, hero and sound fall back to the carved look; the animals and the bosses need the pack.
 - Player-facing changes go in the patch notes (`src/ui/patchnotes.js`, the `PATCHES` list) in plain player language.
 
 ## Run and test
@@ -57,9 +98,13 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
 - **The meadows' trees grow only in woods** (`pediasWood` in `flora.js`, about 70% of Pedias, glades round the trial's
   places); no tree may stand alone or in a pair there.
   Tree crowns start above 2.9 m (1.5× the hero) at their smallest size (`tests/suites/woods.mjs` checks it).
+- **Small things drop away before the mist** (`keepTo` in `vegetation.js`: the smallest from 35 to 75 m, each at its
+  own distance; shrubs, logs and the like at the mist): both bands sink each one into the ground over its last
+  `SHRINK` metres, measured from the player, so nothing pops. Screenshot tests that aim the camera far from the player
+  see them gone.
 - **The player's mist** (`atmosphere.js`: clear to `MIST_R0` 60 m, 68% by `MIST_R1` 100 m, ceiling from `tallestNear`)
   lies over the grass's edge (`GRASS_R` 80 m, gone by `GRASS_END` 95 m: a dense near carpet hands over to a sparse far
-  one at ~30 m in `grass.js`); all four live in `world/reach.js`. It hides how much less is drawn behind it (`farKeep`/`keepTo` in `vegetation.js`, `FAR_R`
+  one at ~30 m in `grass.js`); all four live in `world/reach.js`. It hides how much less is drawn behind it (`farKeep`/`keepTo` in `vegetation.js`, `MID_R` 180 where impostors take over, `FAR_R`
   600, minor sites' `VIEW_R`). Change them together. The focus blur is the `focus` uniform.
 - Saves remember felled trees and pickups by their place in the layout: bump `WORLD_LAYOUT` in `save.js` whenever flora
   or pickup layout changes.
@@ -99,13 +144,17 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
 
 ## Code map
 - `src/world`: `gen.js` heights, biomes, the Olympos peak · `sites.js` site placement and pads · `flora.js` species and
-  layout · `reach.js` how far the mist and grass reach · `vegetation.js` near/mid/impostor bands · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
+  layout (the ground cover, `groundCover`, comes last in each cell with dice of its own: flowers, bushes, stumps,
+  logs, moss, pebbles, lilies… whose pack models keep their own size, `natural`; each piece goes by the biome where it
+  stands, and some kinds pick their looks by land: `FLOWER_KINDS` per stretch of meadow, `BUSH`, `MUSHROOM`) · `reach.js` how far the mist and grass reach · `vegetation.js` near/mid/impostor bands · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
   `terrain.js` + `terrain-worker.js` (worker pool, `pool.js`) · `structures.js` + `greek.js` the sites' buildings and
-  props · `sky.js`, `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`), `water.js`, `giantwood.js`, `ambient.js`, `stormwall.js` · `groundcut.js` · `pickups.js`
+  props · `town.js` the abandoned town and the small scenes about the island (`SITES.town`, `SITES.spots`) · `sky.js`, `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`), `water.js`, `giantwood.js`, `ambient.js` (+ `fireflies.js`, GPU), `stormwall.js` · `groundcut.js` · `pickups.js`
   (+ `pickup-layout.js`) · `colliders.js`. `src/util/math.js` shared helpers. `src/assets.js` model and texture loading.
 - `src/render`: `core.js` renderer, composer, shadows, adaptive resolution · `atmosphere.js` mist, haze, sun shafts, cloud
-  shadows, grade · `occlusion.js` fades what blocks the camera · `fx.js`, `lights.js`.
-- `src/player`: `player.js` controller and camera · `hero.js` rig and clips · `footik.js` foot placement · `stats.js` ·
+  shadows, grade, and the woods' light (a half-resolution haze march lit through the crowns, dappled floor from the canopy
+  shelter map; notes in `docs/plans/light-study.md`) · `occlusion.js` fades what blocks the camera · `fx.js`, `lights.js`.
+- `src/player`: `player.js` controller and camera · `hero.js` rig and clips (footsteps from the clips' foot contacts, `footfalls`;
+  the stance widened in motion, `STANCE`) · `cape.js` the worn cape (Synty's, fitted to the body, a short rope sim) · `footik.js` foot placement · `stats.js` ·
   `held.js`.
 - `src/game`: `game.js` wires the systems onto `game` · `items.js` items and recipes · `inventory.js` · `crafting.js` ·
   `harvest.js` · `combat.js` · `trial.js` bosses, clues, offerings · `guide.js` the guided steps · `owl.js` · `save.js`.

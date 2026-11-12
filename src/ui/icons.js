@@ -1,6 +1,8 @@
 // The black-figure icon set (icon-set.js) plus the things the open world adds: new materials, food, tools, weapons,
-// armour and the condition badges.
-import { ICONS, K, R, C, G, O, L, icon, iconImg } from './icon-set.js';
+// armour and the condition badges. Where the item's own 3D model has been pictured (tools/assets/icons.mjs: pack art,
+// in the git-ignored assets/ui/pack/, listed in its index.json) icon() shows that picture instead; glyph() always draws,
+// for symbols that must stay symbols (conditions, the map, patch notes).
+import { ICONS, K, R, C, G, O, L, icon as glyph, iconImg } from './icon-set.js';
 
 const inc = (d, w = 1.6) => `<path d="${d}" fill="none" stroke="${C}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
 const fill = (d, c = K) => `<path d="${d}" fill="${c}"/>`;
@@ -66,5 +68,21 @@ Object.assign(ICONS, {
   gate: ln('M8 10 V58 M56 10 V58', K, 5) + fill('M12 18 H52 V54 H12z') + inc('M18 20 V52 M26 20 V52 M34 20 V52 M42 20 V52 M12 22 L52 50', 1.2),
   repair: ln('M16 54 L40 30', K, 6) + fill('M36 14 a12 12 0 1 0 14 14 l-8 -2 l-4 -4 z') + inc('M20 50 L38 32', 1),
 });
+// items with a model of their own share their kind's drawing
+for (const [k, of] of Object.entries({ axeLight: 'axe', daggerLight: 'dagger', spearLight: 'spear', cretanBow: 'bow', dandelion: 'flower', moonflower: 'flower', oliveScrap: 'scroll', caveCarving: 'scroll',
+  spoiledMeat: 'spoiled', spoiledFish: 'spoiled', throwerHelmet: 'helmet', cretanHelmet: 'helmet', throwerArmor: 'armor', cretanArmor: 'armor', throwerLegs: 'legs', cretanLegs: 'legs',
+  ...Object.fromEntries(['fox', 'deer', 'rabbit', 'boar', 'giant', 'minotaur', 'chimera'].map((a) => [a + 'Hide', 'hide'])) })) ICONS[k] = ICONS[of];
 
-export { ICONS, icon, iconImg, K, R, C, G, O, L };
+// The pictured models and the interface's SharpUI sprites, if this copy of the game has them (the public one doesn't).
+// Read before anything draws, so the first hotbar already shows them; without them the game looks as it always did.
+const PACK = new URL('../../assets/ui/pack/', import.meta.url);
+const pack = await fetch(new URL('index.json', PACK)).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+const pictured = new Set(pack?.icons || []), v = encodeURIComponent(pack?.made || '');
+if (pack?.ui?.length) document.documentElement.classList.add('packui');   // (ui.css styles html.packui with the sprites)
+// An item's picture, or its drawing. key: a more particular picture to prefer (a building piece's own, p_<id>)
+function icon(name, cls = '', key) {
+  const k = key && pictured.has(key) ? key : pictured.has(name) ? name : null;
+  return k ? `<img class="ic pk ${cls}" src="${PACK.href}icons/${k}.webp?v=${v}" alt="" draggable="false">` : glyph(name, cls);
+}
+
+export { ICONS, icon, glyph, iconImg, K, R, C, G, O, L };

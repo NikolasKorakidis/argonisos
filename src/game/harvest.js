@@ -7,7 +7,9 @@ import { heightAt, biomeWeights, hash2 } from '../world/gen.js';
 import { burst, dust, addShake } from '../render/fx.js';
 import { trunkMat } from '../world/trees.js';
 import { clearGrass } from '../world/grass.js';
-import { clamp } from '../util/math.js';
+import { clamp, smooth } from '../util/math.js';
+import { loadPack, bake } from '../assets.js';
+import { wettable } from '../world/wetness.js';
 
 // Tree toughness and what it gives, by species
 const BIG = new Set(['oak', 'plane', 'holm']), SMALL = new Set(['pomegranate', 'fig', 'cypress']);
@@ -20,6 +22,19 @@ const FRUIT = { olive: ['olive', 3, 5], pomegranate: ['pomegranate', 2, 3], oak:
 const treeHP = (name, s) => (name === 'titan' ? 420 : BIG.has(name) ? 110 : SMALL.has(name) ? 40 : 70) * s;   // (a giant of the old forest takes a long while)
 const woodOf = (name, s) => Math.round((BIG.has(name) ? 9 : SMALL.has(name) ? 3 : 6) * s);
 const rockHP = (name, s) => (name === 'boulder' ? 70 : 30) * s;
+// The log a felled tree leaves: one of the packs' fallen trunks (tools/assets, pLog…), turned to lie along x and centred,
+// then stretched to the log's own length and girth, so its colliders and the grass cleared round it stay as they were.
+// Which one from a hash of where the tree stood; the carved cylinder stands in without the pack. (Only the two cut
+// trunks: the others are fallen trees with their root plates, or pale swamp logs, which squashed to a log's girth came
+// out as flat wedges and grey tangles.)
+const LOGS = ['pLog2', 'pLog3'], LOOKS = [];
+const logMat = wettable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { dark: 0.66, gloss: 0.3 });
+LOGS.forEach((f, i) => loadPack(f).then((gl) => {
+  const g = bake(gl.scene, true); g.computeBoundingBox(); let s = g.boundingBox.getSize(new THREE.Vector3()); if (s.z > s.x) g.rotateY(Math.PI / 2);
+  g.computeBoundingBox(); const c = g.boundingBox.getCenter(new THREE.Vector3()); g.translate(-c.x, -c.y, -c.z); g.computeBoundingBox(); s = g.boundingBox.getSize(new THREE.Vector3());
+  const col = g.attributes.color; for (let k = 0; k < col.array.length; k++) col.array[k] *= 0.82;   // (the packs' palettes come out pale in our light)
+  LOOKS[i] = { g, s };
+}).catch(() => {}));
 
 export class Harvest {
   constructor(g) {
@@ -51,7 +66,8 @@ export class Harvest {
     if (hp > 0) { this.hp.set(id, hp); return true; }
     this.hp.delete(id); this.fell(c, sp, dir); return true;
   }
-  wobble(c) { this.g.veg.shakeAt?.(c.ref.cx, c.ref.cz, c.ref.i); }
+  // the tree shakes with every blow, its crown swaying away from you (vegetation.js shake)
+  wobble(c, dir) { this.g.veg.shake(c.ref.cx, c.ref.cz, c.ref.i, dir.x, dir.z); }
   fell(c, sp, dir) {
     const { veg, colliders, player } = this.g, r = c.ref;
     veg.remove(r.cx, r.cz, r.i); colliders.removeOne(c);
@@ -59,7 +75,10 @@ export class Harvest {
     const obj = veg.single(r.sp, v ? v[o + 1] : 0); obj.position.set(c.x, c.y, c.z); obj.rotation.y = v ? v[o + 5] : 0; obj.scale.setScalar(r.s);
     const pivot = new THREE.Group(); pivot.position.set(c.x, c.y, c.z); obj.position.set(0, 0, 0); pivot.add(obj); this.g.scene.add(pivot);
     const away = Math.atan2(dir.x, dir.z);           // falls away from the player
-    this.falling.push({ pivot, obj, sp, s: r.s, th: 0, w: 0.15, away, t: 0, landed: false, x: c.x, z: c.z, y: c.y, r: c.r });
+    // (a tree stands sunk into the ground to hide its roots, flora-pack.js: falling, it slides out along its length, so the
+    // buried part doesn't swing up out of the stump behind it)
+    const geo = obj.children[0].geometry; if (!geo.boundingBox) geo.computeBoundingBox(); const sink = Math.max(0, -geo.boundingBox.min.y) * r.s;
+    this.falling.push({ pivot, obj, sp, s: r.s, th: 0, w: 0.15, away, t: 0, landed: false, x: c.x, z: c.z, y: c.y, r: c.r, sink });
     this.addStump(c.x, c.y, c.z, c.r);
     player.stats.train('gathering', 12.5); this.g.sound?.('creak');
   }
@@ -79,6 +98,7 @@ export class Harvest {
           dust(tip, 22, 0xa89a78, 0.5); dust(new THREE.Vector3(f.x, f.y + 0.3, f.z), 10); addShake(0.5); this.g.sound?.('thud');
         }
         f.pivot.rotation.set(0, 0, 0); f.pivot.rotateOnWorldAxis(new THREE.Vector3(Math.cos(f.away), 0, -Math.sin(f.away)), f.th);
+        f.obj.position.y = f.sink * smooth(0.7, 1.45, f.th);
       } else if (f.t > 1.2) {
         // the crown breaks up and the trunk is left as a log
         f.pivot.scale.multiplyScalar(1 - dt * 3); f.pivot.position.y -= dt * 1.5;
@@ -87,11 +107,15 @@ export class Harvest {
     }
   }
   spawnLog(f) {
-    const len = clamp((f.sp.name === 'cypress' ? 5 : 4) * f.s, 2.5, 6.5), rad = clamp(f.r * 0.55, 0.22, 0.6);
-    const geo = new THREE.CylinderGeometry(rad, rad * 1.08, len, 10).rotateZ(Math.PI / 2);
-    const m = new THREE.Mesh(geo, trunkMat); m.castShadow = m.receiveShadow = true;
-    const ends = new THREE.MeshStandardMaterial({ color: 0xd9b07a, roughness: 0.9 });
-    for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.CircleGeometry(rad * 0.98, 10), ends); e.position.x = (sx * len) / 2 + sx * 0.005; e.rotation.y = (sx * Math.PI) / 2; m.add(e); }
+    const len = clamp((f.sp.name === 'cypress' ? 5 : 4) * f.s, 2.5, 6.5), rad = clamp(f.r * 0.55, 0.22, 0.6), looks = LOOKS.filter(Boolean);
+    let m;
+    if (looks.length) { const L = looks[Math.floor(hash2(f.x * 7.1 + 3.1, f.z * 5.3 - 7.7) * looks.length) % looks.length]; m = new THREE.Mesh(L.g.clone().scale(len / L.s.x, (2 * rad) / L.s.y, (2 * rad) / L.s.z), logMat); }
+    else {
+      m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad * 1.08, len, 10).rotateZ(Math.PI / 2), trunkMat);
+      const ends = new THREE.MeshStandardMaterial({ color: 0xd9b07a, roughness: 0.9 });
+      for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.CircleGeometry(rad * 0.98, 10), ends); e.position.x = (sx * len) / 2 + sx * 0.005; e.rotation.y = (sx * Math.PI) / 2; m.add(e); }
+    }
+    m.castShadow = m.receiveShadow = true;
     const cx = f.x + Math.sin(f.away) * (len / 2 + 0.8), cz = f.z + Math.cos(f.away) * (len / 2 + 0.8), y = Math.max(heightAt(cx, cz), -1) + rad * 0.9;
     m.position.set(cx, y, cz); m.rotation.y = f.away + Math.PI / 2;
     // tilt to follow the slope along the log
@@ -110,7 +134,7 @@ export class Harvest {
     log.hp -= this.dmg(item, 'slash') * player.stats.damageK('axe'); player.stats.train('axe', 12.5);
     burst(at, { color: 0xd9b07a, n: 10, speed: 3, size: 0.06 }); addShake(0.2); this.g.sound?.('chop');
     if (log.hp > 0) return true;
-    this.g.scene.remove(log.mesh); log.mesh.traverse((o) => { o.geometry.dispose(); if (o.material !== trunkMat) o.material.dispose(); }); this.g.colliders.removeGroup(log.id); this.logs.splice(this.logs.indexOf(log), 1); clearGrass(log.id, null);
+    this.g.scene.remove(log.mesh); log.mesh.traverse((o) => { o.geometry.dispose(); if (o.material !== trunkMat && o.material !== logMat) o.material.dispose(); }); this.g.colliders.removeGroup(log.id); this.logs.splice(this.logs.indexOf(log), 1); clearGrass(log.id, null);
     dust(log.mesh.position, 16, 0xc8a878, 0.4);
     const k = player.stats.skillK('gathering');
     this.g.give('wood', Math.round(log.wood * k));

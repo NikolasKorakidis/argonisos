@@ -1,13 +1,15 @@
-// Creature bodies. Deer and foxes are the rigged low-poly pack (Idle / Walk / Gallop / Attack / Death...). Rabbits,
-// hogs and dryadlings are carved here with simple procedural motion. Dryads, giants and skeletons borrow the hero's
-// Mixamo rig (so they share its run and strike clips) dressed in bark, stone-grey hide or bleached bone: stand-ins until
-// their own models arrive. Every body exposes the same small interface: obj, animate(state, speed, dt), flash(k), dispose().
+// Creature bodies. Deer, foxes, rabbits (hares) and hogs (boars) are the rigged low-poly pack (Idle / Walk / Gallop /
+// Attack / Death...), young or grown by level, each in one of the pack's variations; the Minotaur, the skeletons and the
+// Chimera are rigged characters with their own clips (KitBody). Dryads, dryadlings and giants are the packs' characters
+// fitted onto the hero's Mixamo rig (so they share its run and strike clips), or the hero's own body dressed in bark or
+// stone-grey hide without the packs. Every body exposes the same small interface: obj, animate(state, speed, dt),
+// flash(k), dispose().
 import * as THREE from 'three';
 import { FootIK } from '../player/footik.js';
 import { clone as cloneSkinned } from '../../vendor/three/jsm/utils/SkeletonUtils.js';
-import { loadGLB, loadFBX } from '../assets.js';
-import { CLIPS } from '../player/hero.js';
-import { clamp } from '../util/math.js';
+import { loadGLB, loadFBX, loadPack, normalizeHandle } from '../assets.js';
+import { CLIPS, GRIP } from '../player/hero.js';
+import { clamp, hash21 } from '../util/math.js';
 
 const flat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, flatShading: true, ...o });
 // When a creature goes, free what its body put on the GPU: the geometry built for it, its own materials and its
@@ -28,27 +30,54 @@ const TEX = {
   bark: canvasTex((g, n) => { g.fillStyle = '#5a4630'; g.fillRect(0, 0, n, n); for (let i = 0; i < 90; i++) { const x = r() * n; g.strokeStyle = `rgba(${30 + r() * 30},${22 + r() * 20},${12},${0.5 + r() * 0.4})`; g.lineWidth = 2 + r() * 4; g.beginPath(); g.moveTo(x, 0); g.bezierCurveTo(x + r() * 20 - 10, n * 0.3, x + r() * 20 - 10, n * 0.7, x + r() * 10 - 5, n); g.stroke(); }
     for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(${80 + r() * 40},${120 + r() * 40},${50},${0.35})`; g.beginPath(); g.ellipse(r() * n, r() * n, 6 + r() * 14, 4 + r() * 10, r() * 3, 0, 7); g.fill(); } }),
   hide: canvasTex((g, n) => { g.fillStyle = '#7a7266'; g.fillRect(0, 0, n, n); for (let i = 0; i < 400; i++) { const v = 90 + r() * 60; g.fillStyle = `rgba(${v},${v * 0.95},${v * 0.85},.35)`; g.beginPath(); g.arc(r() * n, r() * n, 2 + r() * 9, 0, 7); g.fill(); } for (let i = 0; i < 30; i++) { g.strokeStyle = 'rgba(40,34,28,.35)'; g.beginPath(); g.moveTo(r() * n, r() * n); g.lineTo(r() * n, r() * n); g.stroke(); } }),
-  bone: canvasTex((g, n) => { g.fillStyle = '#d9cdb0'; g.fillRect(0, 0, n, n); for (let i = 0; i < 300; i++) { const v = 170 + r() * 60; g.fillStyle = `rgba(${v},${v * 0.92},${v * 0.75},.4)`; g.beginPath(); g.arc(r() * n, r() * n, 1 + r() * 6, 0, 7); g.fill(); } for (let i = 0; i < 25; i++) { g.strokeStyle = 'rgba(60,45,30,.5)'; g.lineWidth = 1; g.beginPath(); let x = r() * n, y = r() * n; g.moveTo(x, y); for (let k = 0; k < 4; k++) { x += r() * 20 - 10; y += r() * 20 - 10; g.lineTo(x, y); } g.stroke(); } }),
 };
 
-// ---- the rigged animal pack
-const PACK = { deer: { file: 'deer', len: 1.6 }, stag: { file: 'stag', len: 1.9 }, fox: { file: 'fox', len: 0.95 } };
+// ---- the rigged animal pack (PolyArt forest animals, converted by tools/assets: Idle / Walk / Gallop / Attack / Death...)
+// len: nose to tail in metres (the young as much smaller as the pack draws them); walk and run: the speeds (m/s) its walk
+// and gallop are drawn for; looks: the pack's variations of that animal (coats and builds, each a mesh of its own on the
+// same skeleton), one picked for each creature; drop: the numbers of the pack's fantasy looks, painted with bright cyan or
+// red markings, which have no place on a Greek island (and the black-and-white, blue-grey, purple-striped and red-striped
+// coats of the does and the young, now that mothers and young go about together and are seen close). The pack's palette
+// is bright in our light, so its colours are taken down a little (tint).
+const PACK = { calf: { file: 'pack/calf', looks: 'pack/calfLooks', drop: [6, 8, 9, 10, 12], len: 0.94, walk: 0.95, run: 4.5 }, deer: { file: 'pack/doe', looks: 'pack/doeLooks', drop: [6, 8, 12], len: 1.6, walk: 1.6, run: 7.6 },
+  stag: { file: 'pack/stag', looks: 'pack/stagLooks', len: 1.9, walk: 1.7, run: 7.6 },
+  foxCub: { file: 'pack/foxCub', looks: 'pack/foxCubLooks', drop: [8, 9, 10], len: 0.55, walk: 0.7, run: 3.5 }, fox: { file: 'pack/fox', looks: 'pack/foxLooks', drop: [8, 9, 10], len: 0.95, walk: 1.2, run: 6 },
+  // (hares: drawn a size up from life, or the meadow's grass swallows them, and in their brown, grey and sandy coats only,
+  // without the pack's near-black, blue-grey and snow-white ones, and not darkened as much: they're meant to be spotted)
+  rabbitCub: { file: 'pack/hareCub', looks: 'pack/hareCubLooks', drop: [2, 5, 6, 9, 10], len: 0.38, walk: 0.44, run: 3.5, tint: 0.92 }, rabbit: { file: 'pack/hare', looks: 'pack/hareLooks', drop: [2, 5, 6, 9, 10], len: 0.74, walk: 0.89, run: 6.8, tint: 0.92 },
+  hogCub: { file: 'pack/boarCub', looks: 'pack/boarCubLooks', drop: [3, 6], len: 0.67, walk: 0.65, run: 3.8 }, hog: { file: 'pack/boar', looks: 'pack/boarLooks', drop: [9, 10], len: 1.35, walk: 1.3, run: 7.6 } };
+// which body each level wears: the smallest the young, the middling and the big ones grown (a deer's big ones are stags);
+// at level 0 only one in four is young (YOUNG), the rest grown
+const AGES = { deer: ['calf', 'deer', 'stag'], fox: ['foxCub', 'fox', 'fox'], rabbit: ['rabbitCub', 'rabbit', 'rabbit'], hog: ['hogCub', 'hog', 'hog'] };
+const TINT = 0.8;
 const tpl = {};
 function packTemplate(kind) {
   const A = PACK[kind];
-  return (tpl[kind] ||= loadGLB(A.file).then((gl) => {
+  return (tpl[kind] ||= Promise.all([loadGLB(A.file), loadGLB(A.looks).catch(() => null)]).then(([gl, lk]) => {
     const root = gl.scene; root.updateMatrixWorld(true);
     const size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3()); root.scale.multiplyScalar(A.len / Math.max(size.x, size.z));
-    root.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; } }); share(root);
-    const clips = {}; for (const c of gl.animations) clips[c.name.replace('Attack_Headbutt', 'Attack')] = c;
-    return { root, clips };
+    root.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; for (const mt of [].concat(m.material)) mt.color.multiplyScalar(A.tint ?? TINT); } }); share(root);
+    const clips = {}; for (const c of gl.animations) clips[c.name] = c;
+    const looks = []; if (lk) { lk.scene.traverse((o) => { if (o.isSkinnedMesh && !A.drop?.includes(+o.name.match(/(\d+)$/)?.[1])) looks.push(o); }); share(lk.scene); }
+    return { root, clips, looks };
   }));
+}
+// One of the variations put on a body in place of the mesh its clips came with: bound to the body's own bones by name
+// (the same skeleton, at the same rest, so the bind it was exported with still holds), on the body's material
+function wear(m, look) {
+  const own = [], bones = {}; m.traverse((o) => { if (o.isSkinnedMesh) own.push(o); if (o.isBone) bones[o.name] = o; });
+  if (!own.length || look.skeleton.bones.some((b) => !bones[b.name])) return;
+  const v = new THREE.SkinnedMesh(look.geometry, own[0].material); v.name = look.name; v.castShadow = v.receiveShadow = true; v.frustumCulled = false;
+  v.bind(new THREE.Skeleton(look.skeleton.bones.map((b) => bones[b.name]), look.skeleton.boneInverses), look.bindMatrix);
+  own[0].parent.add(v); for (const o of own) o.removeFromParent();
 }
 class PackBody {
   constructor(kind, scale = 1) {
-    this.obj = new THREE.Group(); this.mixer = null; this.acts = {}; this.cur = null; this.mats = []; this.speedRef = kind === 'fox' ? 6 : 7.6;
+    this.obj = new THREE.Group(); this.mixer = null; this.acts = {}; this.cur = null; this.mats = []; this.speedRef = PACK[kind].run; this.walkRef = PACK[kind].walk;
     packTemplate(kind).then((T) => {
       if (this.gone) return; const m = cloneSkinned(T.root); m.scale.multiplyScalar(scale);
+      // (which one goes by where it was born: the spawner has put the body there by the time its model is in)
+      if (T.looks.length) wear(m, T.looks[Math.floor(hash21(Math.round(this.obj.position.x * 10), Math.round(this.obj.position.z * 10)) * T.looks.length)]);
       m.traverse((o) => { if (o.isMesh) { o.material = [].concat(o.material).map((mt) => { const c = mt.clone(); c.userData.shared = false; this.mats.push(c); return c; }); if (o.material.length === 1) o.material = o.material[0]; } });
       this.obj.add(m); this.mixer = new THREE.AnimationMixer(m);
       for (const [k, clip] of Object.entries(T.clips)) this.acts[k] = this.mixer.clipAction(clip);
@@ -60,8 +89,8 @@ class PackBody {
     if (!this.mixer) return;
     let want = 'Idle', rate = 1;
     if (st === 'dead') want = 'Death'; else if (st === 'attack') want = 'Attack'; else if (st === 'hit' && this.acts.Idle_HitReact1) want = 'Idle_HitReact1';
-    else if (speed > this.speedRef * 0.45) { want = 'Gallop'; rate = clamp(speed / (this.speedRef * 0.8), 0.7, 1.5); }
-    else if (speed > 0.15) { want = 'Walk'; rate = clamp(speed / 1.6, 0.6, 1.8); }
+    else if (speed > this.speedRef * 0.45) { want = 'Gallop'; rate = clamp(speed / (this.speedRef * 0.8), 0.7, 1.8); }   // (the young scurry to keep up)
+    else if (speed > 0.15) { want = 'Walk'; rate = clamp(speed / this.walkRef, 0.6, 1.8); }
     else if (st === 'graze') want = 'Eating';
     const a = this.acts[want] || this.acts.Idle; if (!a) return;
     if (this.cur !== want) { const prev = this.acts[this.cur]; a.reset().setEffectiveWeight(1).fadeIn(0.2).play(); prev?.fadeOut(0.2); this.cur = want; }
@@ -71,134 +100,59 @@ class PackBody {
   dispose() { this.gone = true; this.mixer?.stopAllAction(); free(this.obj); }
 }
 
-// ---- carved bodies with procedural motion
-class CarvedBody {
-  constructor(build) { this.obj = new THREE.Group(); this.t = Math.random() * 10; this.parts = build(this.obj); this.mats = []; this.obj.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); this.mats.push(o.material); } }); this.deadT = 0; }
-  flash(k) { for (const m of this.mats) m.emissive?.setRGB(k * 0.6, 0, 0); }
-  dispose() { free(this.obj); }
-}
-class RabbitBody extends CarvedBody {
-  constructor() {
-    super((g) => {
-      const fur = flat(0xa98258), belly = flat(0xd8c8a8), body = new THREE.Group(); g.add(body);
-      const b = mesh(new THREE.IcosahedronGeometry(0.17, 1), fur, 0, 0.17, 0, body); b.scale.set(0.85, 0.85, 1.2);
-      const head = new THREE.Group(); head.position.set(0, 0.3, 0.17); body.add(head);
-      mesh(new THREE.IcosahedronGeometry(0.1, 1), fur, 0, 0, 0, head).scale.set(1, 0.95, 1.1);
-      for (const s of [-1, 1]) { const e = mesh(new THREE.CapsuleGeometry(0.025, 0.14, 2, 5), fur, 0.04 * s, 0.14, -0.02, head); e.rotation.set(-0.3, 0, 0.15 * s); mesh(new THREE.SphereGeometry(0.016, 5, 4), flat(0x111111), 0.055 * s, 0.025, 0.07, head); }
-      mesh(new THREE.SphereGeometry(0.05, 6, 4), belly, 0, 0.2, -0.2, body);
-      return { body, head };
-    });
-  }
-  animate(st, speed, dt) {
-    this.t += dt; const { body, head } = this.parts;
-    if (st === 'dead') { this.deadT += dt; this.obj.rotation.z = Math.min(Math.PI / 2, this.deadT * 6); return; }
-    const hop = speed > 0.2 ? Math.abs(Math.sin(this.t * (6 + speed * 1.6))) : 0;
-    body.position.y = hop * 0.18 * clamp(speed / 3, 0.4, 1); body.rotation.x = speed > 0.2 ? -0.25 + hop * 0.35 : 0;
-    head.rotation.x = st === 'graze' ? 0.5 + Math.sin(this.t * 8) * 0.05 : 0;
-  }
-}
-class HogBody extends CarvedBody {
-  constructor(scale = 1) {
-    super((g) => {
-      const hide = flat(0x4e3a2c), dark = flat(0x2e221a), tusk = flat(0xf0e6d0), root = new THREE.Group(); root.scale.setScalar(scale); g.add(root);
-      // a wild boar's build: heavy shoulders, the back sloping away to the haunches, a crest of bristles down the spine
-      const b = mesh(new THREE.IcosahedronGeometry(0.42, 1), hide, 0, 0.55, -0.12, root); b.scale.set(0.8, 0.78, 1.2);
-      mesh(new THREE.IcosahedronGeometry(0.4, 1), hide, 0, 0.62, 0.28, root).scale.set(0.92, 1.0, 0.95);
-      for (let i = 0; i < 9; i++) { const z = 0.5 - i * 0.12, y = 0.98 - i * 0.03 - (i > 5 ? (i - 5) * 0.03 : 0); const c = mesh(new THREE.ConeGeometry(0.035, 0.2 - i * 0.012, 4), dark, 0, y, z, root); c.rotation.x = -0.55; }
-      const head = new THREE.Group(); head.position.set(0, 0.62, 0.62); root.add(head);
-      mesh(new THREE.IcosahedronGeometry(0.24, 1), hide, 0, 0, 0, head).scale.set(0.9, 0.95, 1.2);
-      const sn = mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.22, 7), hide, 0, -0.06, 0.25, head); sn.rotation.x = Math.PI / 2; mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.02, 7).rotateX(Math.PI / 2), flat(0x8a5a4a), 0, -0.06, 0.36, head);
-      for (const s of [-1, 1]) { mesh(new THREE.ConeGeometry(0.06, 0.14, 4), dark, 0.15 * s, 0.2, -0.02, head).rotation.z = -0.4 * s; const t = mesh(new THREE.ConeGeometry(0.025, 0.14, 4), tusk, 0.09 * s, -0.08, 0.3, head); t.rotation.set(-0.9, 0, 0.3 * s); mesh(new THREE.SphereGeometry(0.025, 5, 4), flat(0x110a06), 0.11 * s, 0.07, 0.15, head); }
-      const legs = [];
-      for (const [x, z] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) { const l = new THREE.Group(); l.position.set(0.2 * x, 0.42, 0.38 * z); root.add(l); mesh(new THREE.CylinderGeometry(0.07, 0.055, 0.42, 6), hide, 0, -0.21, 0, l); mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.06, 6), dark, 0, -0.42, 0.01, l); legs.push(l); }
-      const tail = mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.2, 4), dark, 0, 0.7, -0.62, root); tail.rotation.x = -0.6;
-      return { root, head, legs };
-    });
-  }
-  animate(st, speed, dt) {
-    this.t += dt; const { root, head, legs } = this.parts;
-    if (st === 'dead') { this.deadT += dt; this.obj.rotation.z = Math.min(Math.PI / 2, this.deadT * 4); return; }
-    const k = clamp(speed / 3, 0, 1), f = 4 + speed * 2;
-    legs.forEach((l, i) => (l.rotation.x = Math.sin(this.t * f + (i === 0 || i === 3 ? 0 : Math.PI)) * 0.7 * k));
-    root.position.y = Math.abs(Math.sin(this.t * f)) * 0.05 * k;
-    head.rotation.x = st === 'attack' ? Math.sin(this.t * 14) * 0.4 + 0.2 : st === 'graze' ? 0.45 : Math.sin(this.t * 1.3) * 0.05;
-  }
-}
-class DryadlingBody extends CarvedBody {
-  constructor(scale = 1) {
-    super((g) => {
-      const bark = new THREE.MeshStandardMaterial({ map: TEX.bark, roughness: 0.95 }), leaf = flat(0x4f7a2e), glow = new THREE.MeshStandardMaterial({ color: 0xc8ff8a, emissive: 0x9aff50, emissiveIntensity: 2 });
-      const root = new THREE.Group(); root.scale.setScalar(scale); g.add(root);
-      const body = new THREE.Group(); body.position.y = 0.55; root.add(body);
-      const trunk = mesh(new THREE.CylinderGeometry(0.13, 0.18, 0.55, 7), bark, 0, 0.1, 0, body); trunk.rotation.z = 0.05;
-      const head = new THREE.Group(); head.position.y = 0.48; body.add(head);
-      mesh(new THREE.IcosahedronGeometry(0.17, 0), bark, 0, 0, 0, head).scale.set(1, 1.15, 0.95);
-      for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; const l = mesh(new THREE.IcosahedronGeometry(0.12, 0), leaf, Math.cos(a) * 0.14, 0.17 + (i % 2) * 0.06, Math.sin(a) * 0.12, head); l.scale.set(1, 0.6, 1); }
-      for (const s of [-1, 1]) mesh(new THREE.SphereGeometry(0.03, 6, 4), glow, 0.06 * s, 0.02, 0.15, head);
-      const arms = [], legs = [];
-      for (const s of [-1, 1]) {
-        const a = new THREE.Group(); a.position.set(0.17 * s, 0.25, 0); body.add(a); const ar = mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.42, 5), bark, 0, -0.2, 0, a); ar.rotation.z = 0.1 * s;
-        for (let k = 0; k < 3; k++) { const f = mesh(new THREE.ConeGeometry(0.015, 0.12, 3), bark, (k - 1) * 0.025, -0.45, 0.02, a); f.rotation.x = Math.PI; } arms.push(a);
-        const l = new THREE.Group(); l.position.set(0.08 * s, 0, 0); root.add(l); l.position.y = 0.55; mesh(new THREE.CylinderGeometry(0.05, 0.07, 0.55, 5), bark, 0, -0.27, 0, l); legs.push(l);
-      }
-      return { root, body, head, arms, legs };
-    });
-  }
-  animate(st, speed, dt) {
-    this.t += dt; const { body, head, arms, legs } = this.parts;
-    if (st === 'dead') { this.deadT += dt; this.obj.rotation.x = -Math.min(Math.PI / 2, this.deadT * 4); return; }
-    const k = clamp(speed / 2.5, 0, 1), f = 5 + speed * 2.4, s = Math.sin(this.t * f);
-    legs[0].rotation.x = s * 0.8 * k; legs[1].rotation.x = -s * 0.8 * k;
-    arms[0].rotation.x = -s * 0.6 * k + (st === 'attack' ? -1.8 + Math.sin(this.t * 16) * 0.9 : 0); arms[1].rotation.x = s * 0.6 * k + (st === 'attack' ? -1.8 + Math.cos(this.t * 16) * 0.9 : 0);
-    body.rotation.z = Math.sin(this.t * f * 0.5) * 0.08 * k; body.position.y = 0.55 + Math.abs(s) * 0.05 * k; head.rotation.y = Math.sin(this.t * 0.9) * 0.3;
-  }
+// Feet on the ground (see FootIK), after animate(), with the ground under the creature. The IK bends the legs it's
+// given: put back first to the clip's pose, which the mixer skips re-applying when nothing changed, and to rest for a
+// bone the clip doesn't move at all.
+function plantFeet(body, dt, ground, rootY, active, legs) {
+  if (!body.ik) { body.ik = new FootIK(body.bones, ground, legs); body.legRest = body.ik.legs.flatMap((L) => [L.up, L.knee, L.foot]).map((b) => [b, b.quaternion.clone()]); }
+  for (const [b, q] of body.legRest) b.quaternion.copy(q);
+  const off = body.mixer._accuIndex + 1; for (const b of body.mixer._bindings) b.binding.setValue(b.buffer, off * b.valueSize);
+  const m = body.obj.children[0]; m.position.y = body.ik.plan(dt, rootY, active); body.obj.updateMatrixWorld(true); body.ik.solve(rootY);
 }
 
-// ---- humanoids on the hero's rig
-const RIG = { s: 1, ready: null };
-function rigTemplate() {
-  return (RIG.ready ||= loadFBX('hero_rig').then((obj) => {
-    const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3()); RIG.s = 1.95 / size.y; obj.scale.setScalar(RIG.s);
-    obj.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; } }); obj.animations = []; share(obj);
-    return obj;
+// ---- humanoids on the hero's rig: each kind's own body from the team's packs fitted onto it (tools/assets/fbx-page.mjs
+// refit: the same Mixamo bones, so they share the hero's run and strike clips), or the hero's own body dressed in bark or stone-grey
+// hide when the pack isn't there
+const rigs = {};
+function rigTemplate(kind) {
+  const D = DRESS[kind]();
+  return (rigs[kind] ||= loadGLB(D.file).then((gl) => ({ obj: gl.scene, packed: true })).catch(() => loadFBX('hero_rig').then((obj) => ({ obj, packed: false }))).then(({ obj, packed }) => {
+    obj.updateMatrixWorld(true); const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3()), s = 1.95 / size.y; obj.scale.multiplyScalar(s);
+    obj.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; } });
+    obj.animations = []; share(obj); return { obj, packed, s };
   }));
 }
+// what each carries in its right hand, from the pack: { model, len: its length in the hand's bone units, at, turn: how
+// it sits in the hand } (the giant's club as long as the carved one it falls back to, swung from over the shoulder; the
+// dryad's staff, a thin dark crook taller than she is, held like a walking staff: its knob over her head, its foot on
+// the ground, a little in front of her hand so her arm doesn't hide it; the dryadling's blade held as the hero holds a
+// tool)
+const held = {}, CLUB = { at: [0, 8, 3], turn: [0, 0, -1.9] };
+const packHeld = ({ model, len }) => (held[model] ||= loadPack(model).then((gl) => { const h = normalizeHandle(gl.scene, len); h.position.y = -8; share(h); return h; }).catch(() => null));
 const DRESS = {
-  dryad: () => ({ mat: new THREE.MeshStandardMaterial({ map: TEX.bark, roughness: 0.95, color: 0xb8c49a }), scale: 1.05, crown: 0x5d8a34, eyes: 0xc8ff8a }),
-  giant: () => ({ mat: new THREE.MeshStandardMaterial({ map: TEX.hide, roughness: 0.9, color: 0x8a8f9a }), scale: 3.1, crown: null, eyes: 0xffd27a, club: true }),
-  skeleton: () => ({ mat: new THREE.MeshStandardMaterial({ map: TEX.bone, roughness: 0.8, emissive: 0x302618, emissiveIntensity: 0.4 }), scale: 0.98, crown: null, eyes: 0x8af0ff, sword: true }),
-  minotaur: () => ({ mat: new THREE.MeshStandardMaterial({ map: TEX.hide, roughness: 0.85, color: 0x7a4a30 }), scale: 1.75, crown: null, eyes: 0xff5a30, bull: true, labrys: true }),
+  dryad: () => ({ file: 'pack/dryad', mat: new THREE.MeshStandardMaterial({ map: TEX.bark, roughness: 0.95, color: 0xb8c49a }), scale: 1.05, crown: 0x5d8a34, eyes: 0xc8ff8a, hold: { model: 'witchStaff', len: 230, at: [0, -140, 6], turn: [0, 0, 0] } }),
+  // a dryadling: a little one, the dryad's height brought down to its own (creatures.js h)
+  dryadling: () => ({ file: 'pack/dryadling', mat: new THREE.MeshStandardMaterial({ map: TEX.bark, roughness: 0.95, color: 0x9aa878 }), scale: 1.1 / 1.95, crown: 0x4d7a2c, eyes: 0xc8ff8a, hold: { model: 'evilGodWeapon', len: 80, at: GRIP.at, turn: [0, Math.PI * 1.5, GRIP.tilt, 'ZYX'] } }),
+  giant: () => ({ file: 'pack/giant', mat: new THREE.MeshStandardMaterial({ map: TEX.hide, roughness: 0.9, color: 0x8a8f9a }), scale: 3.1, crown: null, eyes: 0xffd27a, club: true, hold: { model: 'mutantClub', len: 95, ...CLUB }, tint: 0.5 }),
 };
 class RigBody {
-  constructor(kind) {
+  constructor(kind, size = 1) {
     this.obj = new THREE.Group(); this.kind = kind; this.mats = []; this.mixer = null; this.acts = {}; this.t = 0; this.deadT = 0; this.atkT = 0;
-    const D = DRESS[kind](); this.dress = D; this.mats.push(D.mat);
-    rigTemplate().then((T) => {
+    const D = DRESS[kind](); D.scale *= size; this.dress = D;
+    rigTemplate(kind).then((T) => {
       if (this.gone) return;
-      const m = cloneSkinned(T); m.scale.setScalar(RIG.s * D.scale);
-      const bones = {}; m.traverse((o) => { if (o.isBone) bones[o.name] = o; if (o.isMesh) o.material = D.mat; });
+      const m = cloneSkinned(T.obj); m.scale.multiplyScalar(D.scale);
+      const bones = {}; m.traverse((o) => { if (o.isBone) bones[o.name] = o; if (o.isMesh) { o.material = T.packed ? o.material.clone() : D.mat; this.mats.push(o.material); } });
+      if (T.packed) for (const mt of this.mats) mt.color.setScalar(D.tint ?? 0.78);   // (the pack's palette is pale in our light)
       this.obj.add(m); this.bones = bones; this.mixer = new THREE.AnimationMixer(m);
-      const head = bones.mixamorigHead, inv = 1 / (RIG.s * D.scale) * D.scale;
+      const head = bones.mixamorigHead;
       const eyeM = new THREE.MeshStandardMaterial({ color: D.eyes, emissive: D.eyes, emissiveIntensity: 2.5 });
-      for (const s of [-1, 1]) { const e = mesh(new THREE.SphereGeometry(1.4, 6, 4), eyeM, 3.2 * s, 9, 9.5); e.castShadow = false; head?.add(e); }
-      if (D.crown && head) { const lm = flat(D.crown); for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; const l = mesh(new THREE.IcosahedronGeometry(6, 0), lm, Math.cos(a) * 9, 18 + (i % 3) * 3, Math.sin(a) * 8); l.scale.set(1, 0.6, 1); head.add(l); } }
+      if (!T.packed) for (const s of [-1, 1]) { const e = mesh(new THREE.SphereGeometry(1.4, 6, 4), eyeM, 3.2 * s, 9, 9.5); e.castShadow = false; head?.add(e); }
+      if (D.crown && head && !T.packed) { const lm = flat(D.crown); for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; const l = mesh(new THREE.IcosahedronGeometry(6, 0), lm, Math.cos(a) * 9, 18 + (i % 3) * 3, Math.sin(a) * 8); l.scale.set(1, 0.6, 1); head.add(l); } }
       const hand = bones.mixamorigRightHand;
-      if (D.club && hand) { const club = new THREE.Group(); mesh(new THREE.CylinderGeometry(4, 7, 95, 8).translate(0, 40, 0), new THREE.MeshStandardMaterial({ color: 0x6e5238, roughness: 0.9 }), 0, 0, 0, club); club.position.set(0, 8, 3); club.rotation.set(0, 0, -1.9); hand.add(club); }
-      if (D.sword && hand) { const sw = new THREE.Group(); mesh(new THREE.BoxGeometry(3, 70, 7).translate(0, 45, 0), new THREE.MeshStandardMaterial({ color: 0x8a8070, roughness: 0.4, metalness: 0.6 }), 0, 0, 0, sw); mesh(new THREE.BoxGeometry(16, 3, 4).translate(0, 10, 0), flat(0x5a4632), 0, 0, 0, sw); sw.position.set(0, 8, 3); sw.rotation.set(0, Math.PI * 1.5, -2.1, 'ZYX'); hand.add(sw); }
-      if (D.bull && head) {   // a bull's head over the hero's: broad skull, muzzle, great horns
-        const hide = new THREE.MeshStandardMaterial({ map: TEX.hide, color: 0x4a2c1c, roughness: 0.9 }), horn = new THREE.MeshStandardMaterial({ color: 0xe8dcc0, roughness: 0.5 });
-        const bh = new THREE.Group(); bh.position.set(0, 10, 2); head.add(bh);
-        mesh(new THREE.IcosahedronGeometry(14, 1), hide, 0, 0, 0, bh).scale.set(1.15, 1, 1.25);
-        mesh(new THREE.CylinderGeometry(8, 10, 14, 8).rotateX(Math.PI / 2), hide, 0, -5, 14, bh); mesh(new THREE.CylinderGeometry(8.2, 8.2, 1, 8).rotateX(Math.PI / 2), flat(0x2a1a12), 0, -5, 21.2, bh);
-        for (const sx of [-1, 1]) { const h = mesh(new THREE.TorusGeometry(14, 2.6, 6, 12, Math.PI * 0.62), horn, sx * 10, 8, 0, bh); h.rotation.set(0, sx > 0 ? 0 : Math.PI, sx > 0 ? -0.35 : 0.35); mesh(new THREE.SphereGeometry(2.2, 6, 4), eyeM, sx * 7, 3, 12, bh); mesh(new THREE.ConeGeometry(3, 8, 5).rotateZ(sx * 1.2), hide, sx * 14, 2, 0, bh); }
-        mesh(new THREE.TorusGeometry(3, 0.7, 5, 10), SMATgold(), 0, -9, 21, bh);
-      }
-      if (D.labrys && hand) { const ax = new THREE.Group(); mesh(new THREE.CylinderGeometry(2.4, 2.8, 150, 7).translate(0, 55, 0), new THREE.MeshStandardMaterial({ color: 0x5e4128, roughness: 0.9 }), 0, 0, 0, ax);
-        const blade = new THREE.Shape(); blade.moveTo(0, -18); blade.quadraticCurveTo(34, -30, 40, 0); blade.quadraticCurveTo(34, 30, 0, 18); blade.closePath();
-        const bg = new THREE.ExtrudeGeometry(blade, { depth: 3, bevelEnabled: false }).translate(0, 0, -1.5), bm = new THREE.MeshStandardMaterial({ color: 0x9a8a70, roughness: 0.35, metalness: 0.7 });
-        for (const sx of [-1, 1]) { const b = mesh(bg.clone().scale(sx, 1, 1), bm, sx * 2, 118, 0, ax); b.castShadow = true; }
-        ax.position.set(0, 8, 3); ax.rotation.set(0, Math.PI * 1.5, -2.1, 'ZYX'); hand.add(ax); }
-      void inv;
+      if (D.hold && hand) packHeld(D.hold).then((pc) => { if (this.gone) return; const H = pc ? D.hold : CLUB, w = pc ? pc.clone() : D.club ? new THREE.Group() : null; if (!w) return;
+        if (!pc) mesh(new THREE.CylinderGeometry(4, 7, 95, 8).translate(0, 40, 0), new THREE.MeshStandardMaterial({ color: 0x6e5238, roughness: 0.9 }), 0, 0, 0, w);   // (the carved club, without the pack)
+        w.position.fromArray(H.at); w.rotation.set(...H.turn); hand.add(w); });
       const act = (C, key, once) => { if (!C.ready) return; const a = this.mixer.clipAction(C.clip.clone()); if (once) { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; } a.setEffectiveWeight(0); a.play(); this.acts[key] = a; };
       const go = () => { act(CLIPS.run, 'run'); act(CLIPS.attack, 'attack', true); act(CLIPS.punch, 'punch', true); if (CLIPS.disarm.ready) { const a = this.mixer.clipAction(CLIPS.disarm.clip.clone()); a.time = CLIPS.disarm.dur * 0.97; a.paused = true; a.play(); this.acts.idle = a; } this.ready = true; };
       const wait = () => (CLIPS.run.ready && CLIPS.attack.ready && CLIPS.disarm.ready ? go() : setTimeout(wait, 300)); wait();
@@ -214,66 +168,89 @@ class RigBody {
     if (this.atkT > 0) { this.atkT -= dt; if (this.atkT <= 0 && A.attack) A.attack.setEffectiveWeight(0); }
     this.mixer.update(dt);
   }
-  // feet on the ground (see FootIK): after animate(), with the ground under the creature
-  feet(dt, ground, rootY, active) {
-    if (!this.ready || !this.bones) return;
-    const off = this.mixer._accuIndex + 1; for (const b of this.mixer._bindings) b.binding.setValue(b.buffer, off * b.valueSize);   // (the mixer skips unchanged bones: start from the clip's pose)
-    this.ik ||= new FootIK(this.bones, ground); const m = this.obj.children[0];
-    m.position.y = this.ik.plan(dt, rootY, active); this.obj.updateMatrixWorld(true); this.ik.solve(rootY);
-  }
-  flash(k) { for (const m of this.mats) m.emissive?.setRGB(k * 0.6 + (this.kind === 'skeleton' ? 0.19 : 0), this.kind === 'skeleton' ? 0.15 : 0, this.kind === 'skeleton' ? 0.09 : 0); }
+  feet(dt, ground, rootY, active) { if (this.ready && this.bones) plantFeet(this, dt, ground, rootY, active); }
+  flash(k) { for (const m of this.mats) m.emissive?.setRGB(k * 0.6, 0, 0); }
   dispose() { this.gone = true; this.mixer?.stopAllAction(); free(this.obj); }
 }
 
-const SMATgold = () => new THREE.MeshStandardMaterial({ color: 0xc9973a, roughness: 0.35, metalness: 0.8 });
-// ---- the Chimera: a lion's body the size of a cart, a goat's head rising from its back, a serpent for a tail
-class ChimeraBody extends CarvedBody {
-  constructor() {
-    super((g) => {
-      const fur = new THREE.MeshStandardMaterial({ map: TEX.hide, color: 0xb88a4a, roughness: 0.9 }), mane = flat(0x6a3a1a), goat = flat(0x8a8070), scale = new THREE.MeshStandardMaterial({ color: 0x3e5a2a, roughness: 0.6, flatShading: true }), claw = flat(0xe8dcc0), eye = new THREE.MeshStandardMaterial({ color: 0xffd040, emissive: 0xffa000, emissiveIntensity: 2.5 });
-      const root = new THREE.Group(); root.scale.setScalar(1.25); g.add(root);
-      const body = new THREE.Group(); body.position.y = 1.55; root.add(body);
-      mesh(new THREE.IcosahedronGeometry(1, 2), fur, 0, 0, 0, body).scale.set(0.95, 0.85, 1.9);
-      mesh(new THREE.IcosahedronGeometry(1.05, 1), mane, 0, 0.25, 1.35, body).scale.set(1.05, 1.15, 0.9);
-      const head = new THREE.Group(); head.position.set(0, 0.45, 2.15); body.add(head);
-      mesh(new THREE.IcosahedronGeometry(0.62, 1), fur, 0, 0, 0, head).scale.set(1, 0.9, 1.1);
-      mesh(new THREE.BoxGeometry(0.62, 0.45, 0.6), fur, 0, -0.2, 0.55, head); const jaw = mesh(new THREE.BoxGeometry(0.56, 0.16, 0.55), fur, 0, -0.45, 0.45, head);
-      for (const sx of [-1, 1]) { mesh(new THREE.SphereGeometry(0.08, 6, 4), eye, sx * 0.28, 0.12, 0.5, head); mesh(new THREE.ConeGeometry(0.05, 0.18, 4).rotateX(Math.PI), claw, sx * 0.18, -0.38, 0.78, head); }
-      // the goat
-      const gn = new THREE.Group(); gn.position.set(0, 0.8, -0.3); body.add(gn);
-      mesh(new THREE.CylinderGeometry(0.22, 0.32, 1.1, 7), goat, 0, 0.5, 0, gn).rotation.x = -0.3;
-      const gh = new THREE.Group(); gh.position.set(0, 1.1, 0.2); gn.add(gh); mesh(new THREE.IcosahedronGeometry(0.3, 1), goat, 0, 0, 0, gh).scale.set(0.8, 0.9, 1.3); mesh(new THREE.ConeGeometry(0.06, 0.3, 4), goat, 0, -0.25, 0.25, gh);
-      for (const sx of [-1, 1]) { const h = mesh(new THREE.TorusGeometry(0.28, 0.06, 5, 10, Math.PI * 1.1), flat(0x3a3028), sx * 0.15, 0.25, -0.1, gh); h.rotation.y = Math.PI / 2; mesh(new THREE.SphereGeometry(0.05, 5, 4), eye, sx * 0.14, 0.05, 0.25, gh); }
-      // the serpent tail
-      const tail = []; let prev = body;
-      for (let i = 0; i < 7; i++) { const t = new THREE.Group(); t.position.set(0, i === 0 ? 0.2 : 0, i === 0 ? -1.8 : -0.42); prev.add(t); mesh(new THREE.SphereGeometry(0.24 - i * 0.022, 7, 5), scale, 0, 0, 0, t).scale.set(1, 1, 1.6); tail.push(t); prev = t; }
-      const sh = new THREE.Group(); sh.position.z = -0.35; prev.add(sh); mesh(new THREE.ConeGeometry(0.16, 0.5, 6).rotateX(-Math.PI / 2), scale, 0, 0, -0.2, sh); for (const sx of [-1, 1]) mesh(new THREE.SphereGeometry(0.04, 5, 4), eye, sx * 0.08, 0.06, -0.15, sh);
-      const legs = [];
-      for (const [x, z] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) { const l = new THREE.Group(); l.position.set(0.55 * x, 1.4, 1.1 * z); root.add(l); mesh(new THREE.CylinderGeometry(0.24, 0.18, 1.4, 7), fur, 0, -0.7, 0, l); mesh(new THREE.IcosahedronGeometry(0.24, 0), fur, 0, -1.4, 0.08, l).scale.set(1, 0.6, 1.3);
-        for (let k = -1; k <= 1; k++) mesh(new THREE.ConeGeometry(0.04, 0.16, 4).rotateX(Math.PI / 2), claw, k * 0.09, -1.45, 0.32, l); legs.push(l); }
-      return { root, body, head, jaw, gn, tail, legs };
-    });
+// ---- characters with their own clips (converted by tools/assets from the team's packs)
+// h: height in metres; walk and run: how fast (m/s, at that height) its walk and run clips are drawn, so the feet
+// don't slide; blow: how long after an attack starts the game lands it. A one-shot clip is [name, the
+// moment in it that matters (the blow lands, the roar peaks)]: it's started early or played quicker to put that moment
+// where the game wants it.
+const KIT = {
+  minotaur: { file: 'pack/minotaur', legs: (s) => [`${s}UpLeg`, `${s}Leg`, `${s}Foot`], h: 3.2, walk: 1.85, run: 5.75, blow: 0.65, clips: { idle: 'Idle', walk: 'Walk', run: 'RamRun', dead: 'Death',
+    attack: [['Attack2', 1.53], ['Attack3', 0.53]], slam: [['Attack1', 1.17]], roar: [['Taunt', 0.93]], paw: [['RamStart', 1.3]], hit: [['GotHit', 0.2]], dazed: [['RamWall', 0.17]] } },
+  skeleton: { file: 'pack/skeleton', legs: (s) => [`Base Human${s[0]}Thigh1`, `Base Human${s[0]}Calf`, `Base Human${s[0]}Foot`], h: 1.9, walk: 1.1, run: 1.1, blow: 0.3, clips: { idle: 'Idle', walk: 'Walk', run: 'Walk', dead: 'Death',
+    attack: [['Attack1', 0.8], ['Attack2', 0.8], ['Attack3', 0.67]], roar: [['Taunt', 0.87]], hit: [['GotHit', 0.2]] } },
+  // the Chimera: a great spined beast six metres long; its fire, claws and sting are the boss's moves (trial.js)
+  chimera: { file: 'pack/chimera', len: 6, walk: 2.4, run: 2.4, blow: 0.35, clips: { idle: 'Idle', walk: 'Walk', run: 'Walk', dead: 'Death',
+    attack: [['Attack1', 1.1]], claw: [['Attack1', 1.1]], sting: [['Attack2', 1.3]], breath: [['Roar', 0.9]], roar: [['Roar', 0.9]], crouch: [['Block', 0.4]], leap: [['Attack1', 0.6]], hit: [['GotHit', 0.2]] } },
+};
+// when in the clip the game's moment falls (s after the state starts) for each one-shot state
+const WHEN = { slam: 0.95, paw: 0.75, roar: 0.1, hit: 0.1, dazed: 0.1, claw: 0.35, sting: 0.45, breath: 0.6, crouch: 0.3, leap: 0.3 };
+const kits = {};
+function kitTemplate(kind) {
+  const K = KIT[kind];
+  return (kits[kind] ||= loadGLB(K.file).then((gl) => {
+    const root = gl.scene; root.updateMatrixWorld(true);
+    const size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3()); root.scale.multiplyScalar(K.len ? K.len / Math.max(size.x, size.z) : K.h / size.y);
+    root.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; } }); share(root);
+    return { root, clips: Object.fromEntries(gl.animations.map((c) => [c.name, c])) };
+  }));
+}
+class KitBody {
+  constructor(kind, scale = 1) {
+    this.K = KIT[kind]; this.obj = new THREE.Group(); this.mixer = null; this.acts = {}; this.mats = []; this.cur = null; this.once = null; this.onceT = 0;
+    kitTemplate(kind).then((T) => {
+      if (this.gone) return; const m = cloneSkinned(T.root); m.scale.multiplyScalar(scale);
+      this.bones = {}; m.traverse((o) => { if (o.isBone) this.bones[o.name] = o; if (o.isMesh) { o.material = o.material.clone(); o.material.userData.shared = false; this.mats.push(o.material); } });
+      this.obj.add(m); this.mixer = new THREE.AnimationMixer(m);
+      for (const [k, c] of Object.entries(T.clips)) this.acts[k] = this.mixer.clipAction(c);
+      for (const k of [this.K.clips.dead, ...Object.values(this.K.clips).filter(Array.isArray).flatMap((l) => l.map((x) => x[0]))]) { this.acts[k].setLoop(THREE.LoopOnce); this.acts[k].clampWhenFinished = true; }
+      this.mixer.update(Math.random() * 2);
+    }).catch((e) => console.warn(kind, 'model failed', e));
+  }
+  play(name, fade = 0.2) {
+    const a = this.acts[name]; if (this.cur === name) return a;
+    a.reset().setEffectiveWeight(1).fadeIn(fade).play(); this.acts[this.cur]?.fadeOut(fade); this.cur = name; return a;
   }
   animate(st, speed, dt) {
-    this.t += dt; const { body, head, jaw, gn, tail, legs } = this.parts;
-    if (st === 'dead') { this.deadT += dt; this.obj.rotation.z = Math.min(Math.PI / 2, this.deadT * 1.6); return; }
-    const k = Math.min(1, speed / 4), f = 3 + speed * 0.9;
-    legs.forEach((l, i) => (l.rotation.x = st === 'leap' ? (i < 2 ? -0.9 : 0.9) : Math.sin(this.t * f + (i === 0 || i === 3 ? 0 : Math.PI)) * 0.6 * k + (st === 'claw' && i < 2 ? -1.1 * Math.max(0, Math.sin(this.t * 10)) : 0)));
-    body.position.y = (st === 'crouch' ? 1.2 : 1.55) + Math.abs(Math.sin(this.t * f)) * 0.08 * k; body.rotation.x = st === 'bite' ? -0.15 : st === 'breath' ? -0.12 : st === 'crouch' ? 0.12 : 0;
-    head.rotation.x = st === 'bite' ? 0.3 : st === 'breath' ? -0.25 : Math.sin(this.t * 1.1) * 0.05; jaw.rotation.x = st === 'breath' ? 0.75 : st === 'bite' || st === 'attack' ? 0.4 + Math.sin(this.t * 18) * 0.2 : 0.05;
-    gn.rotation.z = Math.sin(this.t * 0.9) * 0.15; gn.rotation.x = st === 'roar' ? -0.4 : 0;
-    tail.forEach((s, i) => { s.rotation.y = Math.sin(this.t * 2.5 - i * 0.6) * 0.25; s.rotation.x = (st === 'sting' ? -0.55 : -0.12) + Math.sin(this.t * 1.8 - i) * 0.05; });
+    if (!this.mixer) return; const C = this.K.clips;
+    if (st === 'dead') { if (this.cur !== C.dead) { this.play(C.dead, 0.15).timeScale = 1; this.once = null; } this.mixer.update(dt); return; }
+    // a one-shot move (a blow, the roar, a stagger) starts as the creature takes it up and plays through, unless another
+    // cuts in (the game passes through chase between blows, so each blow starts its own)
+    const moves = C[st], fresh = st !== this.prevSt; this.prevSt = st;
+    if (Array.isArray(moves) && fresh) {
+      const [name, at] = moves[Math.floor(Math.random() * moves.length)], want = st === 'attack' ? this.K.blow : WHEN[st];
+      const rate = clamp(at / Math.max(want ?? 0.3, 0.05), 0.8, 1.4), a = this.play(name, 0.12); a.reset(); a.time = Math.max(0, at - want * rate); a.timeScale = rate;
+      this.once = st; this.onceT = (a.getClip().duration - a.time) / rate - 0.15;
+    }
+    if (this.once && (this.onceT -= dt) > 0) { this.mixer.update(dt); return; }
+    this.once = null;
+    // walking and running, drawn at the speed it's going
+    const v = speed;
+    if (v > this.K.walk * 1.6 && C.run !== C.walk) this.play(C.run).timeScale = clamp(v / this.K.run, 0.6, 1.5);
+    else if (v > 0.12) this.play(C.walk).timeScale = clamp(v / this.K.walk, 0.5, C.run === C.walk ? 2.4 : 1.6);
+    else this.play(C.idle).timeScale = 1;
+    this.mixer.update(dt);
   }
+  feet(dt, ground, rootY, active) { if (this.mixer) plantFeet(this, dt, ground, rootY, active, this.K.legs); }
+  flash(k) { for (const m of this.mats) m.emissive?.setRGB(k * 0.6, 0, 0); }
+  dispose() { this.gone = true; this.mixer?.stopAllAction(); free(this.obj); }
 }
-export function makeBody(kind, level = 0) {
-  if (kind === 'chimera') return new ChimeraBody();
-  if (kind === 'minotaur') return new RigBody('minotaur');
-  if (kind === 'deer') return new PackBody(level >= 2 ? 'stag' : 'deer');
-  if (kind === 'fox') return new PackBody('fox');
-  if (kind === 'rabbit') return new RabbitBody();
-  if (kind === 'hog') return new HogBody(1 + level * 0.12);
-  if (kind === 'dryadling') return new DryadlingBody(1 + level * 0.1);
-  if (kind === 'dryad' || kind === 'giant' || kind === 'skeleton') return new RigBody(kind);
-  return new RabbitBody();
+
+// A level-0 animal is young one time in four: picked by where it was born, as its looks are (with dice of its own),
+// unless the spawner says (young: a sow's piglets and a doe's fawn are young, the mothers and lone hogs and deer grown).
+// The body says which it is (body.young).
+const YOUNG = 0.25;
+export function makeBody(kind, level = 0, x = 0, z = 0, young) {
+  if (kind === 'chimera') return new KitBody('chimera');
+  if (kind === 'minotaur' || kind === 'skeleton') return new KitBody(kind);
+  if (kind === 'dryadling') return new RigBody('dryadling', 1 + level * 0.1);
+  if (kind === 'dryad' || kind === 'giant') return new RigBody(kind);
+  const ages = AGES[kind] || AGES.rabbit, lv = clamp(level, 0, 2), small = young ?? (lv === 0 && hash21(Math.round(x * 10) + 0.5, Math.round(z * 10) - 0.5) < YOUNG);
+  const b = new PackBody(ages[small ? 0 : Math.max(lv, 1)], lv === 2 && kind !== 'deer' && !small ? 1.12 : 1);   // (the biggest of the grown ones a little bigger still, but a stag is big enough)
+  b.young = small; return b;
 }
-export function preloadBodies() { packTemplate('deer'); packTemplate('fox'); rigTemplate(); }
+export function preloadBodies() { for (const k of ['calf', 'rabbitCub']) packTemplate(k); rigTemplate('dryad'); rigTemplate('dryadling'); }

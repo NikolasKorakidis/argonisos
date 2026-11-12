@@ -40,6 +40,24 @@ export const SPECIES = [
   { name: 'titan', s: [0.9, 1.15], res: 'tree', col: 1.25 },
   { name: 'fern', s: [0.7, 1.05], noShadow: true },
   { name: 'redbush', s: [0.8, 1.2], noShadow: true },
+  // (Patch 12, at the end again) what lies and grows between the trees: drifts of wildflowers and tall grass in the
+  // meadows, leafy bushes along the woods' edges, the forest floor's stumps, fallen logs, branches, roots and mushrooms,
+  // pebbles everywhere (on bare rock too), lily pads and sedge in the marsh, driftwood along the shore. n: how many
+  // looks each has; natural: the pack's model keeps its own size (flora-pack.js)
+  { name: 'flowers', s: [1.0, 1.5], noShadow: true, natural: true, n: 8 },
+  { name: 'tallgrass', s: [0.8, 1.25], noShadow: true, natural: true, n: 3 },
+  { name: 'bush', s: [0.65, 1.0], natural: true, n: 4 },
+  { name: 'mushrooms', s: [0.8, 1.4], noShadow: true, natural: true, n: 5 },
+  { name: 'pebbles', s: [0.8, 1.7], noShadow: true, natural: true, n: 2 },
+  { name: 'stump', s: [0.8, 1.2], col: 0.4, h: 0.7, natural: true, n: 5 },
+  { name: 'log', s: [0.7, 1.0], col: 0.5, h: 0.9, natural: true, n: 4 },
+  { name: 'branch', s: [0.8, 1.3], noShadow: true, natural: true, n: 3 },
+  { name: 'roots', s: [0.7, 1.1], noShadow: true, natural: true, n: 3 },
+  { name: 'lilypads', s: [0.7, 1.2], noShadow: true, natural: true, n: 3 },
+  { name: 'swampgrass', s: [0.6, 1.0], noShadow: true, natural: true, n: 3 },
+  { name: 'driftwood', s: [0.8, 1.2], natural: true, n: 3 },
+  // (Patch 13) moss mounds in the forest's shade and on the marsh's banks
+  { name: 'moss', s: [0.7, 1.2], noShadow: true, natural: true, n: 3 },
 ];
 export const SP = Object.fromEntries(SPECIES.map((s, i) => [s.name, i]));
 const MIX = {
@@ -217,7 +235,68 @@ function layoutRaw(cx, cz) {
     const bc = titanBand(x0 + 32, z0 + 32), nf = Math.round(bc * 26 + cw.y * (1 - bc) * 6);
     for (let k = 0; k < nf; k++) { const q = place(400 + k * 2); if (!q || q.h > 160) continue; const S = SPECIES[SP.fern].s; out.push(SP.fern, 0, q.x, q.h - 0.05, q.z, h2(401 + k * 2) * 6.283, S[0] + (S[1] - S[0]) * h2(402 + k * 2)); }
     if (cw.y > 0.3 && cw.v < 0.3) for (let k = 0; k < 3; k++) { if (h2(500 + k) > cw.y * 0.5) continue; const q = place(510 + k * 2); if (!q || q.h > 160) continue; const S = SPECIES[SP.redbush].s; out.push(SP.redbush, 0, q.x, q.h - 0.05, q.z, h2(511 + k) * 6.283, S[0] + (S[1] - S[0]) * h2(512 + k)); }
+    groundCover(out, x0, z0, cw, bc, h2);
   }
   return new Float32Array(out);
+}
+// The ground between (Patch 12, made to fit each place in Patch 13), laid out after everything else in the cell with dice
+// of its own (k from 1000), so nothing laid out before it moves. Each thing goes by the land where it stands (its own
+// biome, how deep in a wood), not its cell's, and each land has its own: the meadows' wildflowers in drifts of one kind,
+// a stretch of a few hundred metres having its own (poppies here, lavender or anemones there), with tussocks of tall grass
+// and round bushes along the woods' edges; the forest's leafy undergrowth, stumps, fallen logs, branches, roots, moss
+// and mushrooms at the feet of the trees (fly agarics in the giant forest); the marsh's water lilies on the pools, moss
+// on the banks and drowned logs; driftwood on the shore; pebbles everywhere, and scree on bare rock (only stones lie on
+// rock). Big pieces keep clear of the rocks and trunks laid out before them.
+const FLOWER_KINDS = [[0, 1], [2, 3], [4, 5], [6], [7]];   // (flowers' looks by kind: red and gold, anemones, lavender, crown daisies, poppies)
+const BUSH = { meadow: [0, 1, 0, 1, 2, 3], forest: [2, 3] }, MUSHROOM = { forest: [0, 1, 2, 4], giant: [3, 3, 2, 0] };
+function groundCover(out, x0, z0, cw, bc, h2) {
+  const lay = (sp, k, x, y, z, v) => { const S = SPECIES[sp].s; out.push(sp, v ?? Math.floor(h2(k + 0.11) * SPECIES[sp].n), x, y, z, h2(k + 0.37) * 6.283, S[0] + (S[1] - S[0]) * h2(k + 0.53)); };
+  const at = (k, R, cx, cz) => { const a = h2(k) * 6.283, d = R * Math.sqrt(h2(k + 0.5)); return [cx + Math.cos(a) * d, cz + Math.sin(a) * d]; };   // (somewhere within R of a point)
+  const spot = (k) => [x0 + h2(k) * CELL, z0 + h2(k + 0.5) * CELL];
+  const dry = (x, z, rockOK) => { if (x < x0 || x >= x0 + CELL || z < z0 || z >= z0 + CELL) return null; const h = heightAt(x, z); return h < 1.6 || h > 175 || siteClear(x, z) || (!rockOK && isRock(x, z)) ? null : h; };
+  const clear = (x, z, r) => { for (let o = 0; o < out.length; o += STRIDE) { const sp = SPECIES[out[o]]; if ((sp.res === 'rock' || sp.res === 'tree') && Math.hypot(out[o + 2] - x, out[o + 4] - z) < sp.col * out[o + 6] + r) return false; } return true; };
+  const bw = { p: 0, y: 0, v: 0, r: 0 }, land = (x, z) => biomeWeights(x, z, bw), wood = (x, z) => pediasWood(x, z).wood;
+  const meadow = (x, z, h) => h < 120 && land(x, z).p > 0.6 && bw.v < 0.2, forest = (x, z) => land(x, z).y > 0.45 && bw.v < 0.3;
+  const one = (list, r) => list[Math.min(list.length - 1, Math.floor(r * list.length))];
+  if (cw.p > 0.2 && cw.v < 0.4) {
+    // which flower a stretch of meadow is full of: one die per ragged patch of ~150 m
+    const kindAt = (x, z) => FLOWER_KINDS[Math.floor(hash2(Math.floor((x + (fbm(x * 0.006, z * 0.006 + 9, 2) - 0.5) * 120) / 150) + 811, Math.floor((z + (fbm(x * 0.006 - 4, z * 0.006, 2) - 0.5) * 120) / 150) - 307) * FLOWER_KINDS.length)];
+    for (let d = 0; d < Math.round(cw.p * 5); d++) {   // flower drifts: out in the open, or in a clearing
+      const k = 1000 + d * 40, [cx, cz] = spot(k), kind = kindAt(cx, cz), h0 = dry(cx, cz);
+      if (h0 === null || !meadow(cx, cz, h0) || wood(cx, cz) > 0.5) continue;
+      for (let f = 0; f < 10 + Math.floor(h2(k + 2) * 14); f++) { const [x, z] = at(k + 3 + f * 0.7, 8, cx, cz), h = dry(x, z); if (h !== null && meadow(x, z, h)) lay(SP.flowers, k + 3 + f * 0.7 + 0.2, x, h - 0.04, z, h2(k + 3.45 + f * 0.7) < 0.8 ? one(kind, h2(k + 3.9 + f * 0.7)) : undefined); }
+    }
+    for (let f = 0; f < Math.round(cw.p * 14); f++) { const k = 1260 + f, [x, z] = spot(k), h = dry(x, z); if (h !== null && meadow(x, z, h) && wood(x, z) < 0.6) lay(SP.flowers, k, x, h - 0.04, z, h2(k + 0.7) < 0.7 ? one(kindAt(x, z), h2(k + 0.8)) : undefined); }   // and here and there one on its own
+    for (let g = 0; g < Math.round(cw.p * 5); g++) {   // tussocks of tall grass, thicker towards the woods
+      const k = 1200 + g * 10, [cx, cz] = spot(k), h0 = dry(cx, cz); if (h0 === null || !meadow(cx, cz, h0) || wood(cx, cz) > 0.85) continue;
+      for (let t = 0; t < 3 + Math.floor(h2(k + 1) * 5 + wood(cx, cz) * 3); t++) { const [x, z] = at(k + 2 + t * 0.9, 2.6, cx, cz), h = dry(x, z); if (h !== null) lay(SP.tallgrass, k + 2.3 + t * 0.9, x, h - 0.04, z); }
+    }
+    for (let b = 0; b < Math.round(cw.p * 9); b++) { const k = 1300 + b, [x, z] = spot(k), h = dry(x, z); if (h === null || !meadow(x, z, h)) continue; const w = wood(x, z);   // (the woods' edges)
+      if (w > 0.2 && w < 0.7 && clear(x, z, 1.6)) lay(SP.bush, k, x, h - 0.08, z, one(BUSH.meadow, h2(k + 0.2))); }
+  }
+  if (cw.y > 0.25 && cw.v < 0.4) {
+    const giant = bc > 0.3, n = (a, b2) => Math.round(cw.y * a + bc * b2);
+    const trees = []; for (let o = 0; o < out.length; o += STRIDE) if (SPECIES[out[o]].res === 'tree') trees.push(out[o + 2], out[o + 4]);
+    const byTree = (k, R) => { if (!trees.length) return [NaN, NaN]; const t = Math.floor(h2(k + 0.9) * trees.length / 2) * 2; return at(k, R, trees[t], trees[t + 1]); };
+    for (let b = 0; b < n(7, 3); b++) { const k = 1400 + b, [x, z] = h2(k + 0.3) < 0.6 ? byTree(k, 4) : spot(k), h = dry(x, z); if (h !== null && h < 150 && forest(x, z) && clear(x, z, 0.8)) lay(SP.bush, k + 0.1, x, h - 0.06, z, one(BUSH.forest, h2(k + 0.2))); }   // the undergrowth
+    for (let i = 0; i < n(4, 2); i++) { const k = 1500 + i, [x, z] = spot(k), h = dry(x, z); if (h !== null && forest(x, z) && clear(x, z, 0.6)) lay(SP.stump, k, x, h - 0.06, z); }
+    for (let i = 0; i < n(2.2, 2); i++) { const k = 1550 + i, [x, z] = spot(k), h = dry(x, z); if (h !== null && h < 150 && forest(x, z) && clear(x, z, 3)) lay(SP.log, k, x, h - 0.12, z); }
+    for (let i = 0; i < n(9, 4); i++) { const k = 1600 + i, [x, z] = spot(k), h = dry(x, z); if (h !== null && forest(x, z)) lay(SP.branch, k, x, h - 0.03, z); }
+    for (let i = 0; i < n(3, 6); i++) { const k = 1650 + i, [x, z] = byTree(k, 2.5), h = dry(x, z); if (h !== null && forest(x, z)) lay(SP.roots, k, x, h - 0.05, z); }
+    for (let i = 0; i < n(4, 3); i++) { const k = 1680 + i, [x, z] = byTree(k, 3.5), h = dry(x, z); if (h !== null && h < 150 && forest(x, z)) lay(SP.moss, k, x, h - 0.12, z); }   // (moss in the trees' shade)
+    for (let i = 0; i < n(3, 4); i++) {   // mushrooms in little clusters at the trees' feet, all of one kind
+      const k = 1700 + i * 10, [cx, cz] = byTree(k, 2.5), kind = one(giant ? MUSHROOM.giant : MUSHROOM.forest, h2(k + 0.97));
+      for (let m = 0; m < 2 + Math.floor(h2(k + 0.95) * 5); m++) { const [x, z] = at(k + 1 + m, 0.9, cx, cz), h = dry(x, z); if (h !== null && forest(x, z)) lay(SP.mushrooms, k + 1.3 + m, x, h - 0.03, z, kind); }
+    }
+  }
+  if (cw.p > 0.2 && cw.y < 0.25) { const k = 1560, [x, z] = spot(k), h = dry(x, z); if (h !== null && wood(x, z) > 0.5 && clear(x, z, 0.6)) lay(SP.stump, k, x, h - 0.06, z); }   // (now and then a stump in the meadows' woods)
+  for (let i = 0; i < 3 + (cw.y > 0.3 ? 2 : 0); i++) { const k = 1800 + i, [x, z] = spot(k), h = dry(x, z, true); if (h !== null) lay(SP.pebbles, k, x, h - 0.03, z); }
+  for (let i = 0; i < 6; i++) { const k = 1820 + i, [x, z] = spot(k); if (!isRock(x, z)) continue; const h = dry(x, z, true); if (h !== null) lay(SP.pebbles, k, x, h - 0.03, z); }   // (scree on the rocky slopes)
+  if (cw.v > 0.3) {
+    for (let i = 0; i < Math.round(cw.v * 10); i++) { const k = 1900 + i, [x, z] = spot(k), h = heightAt(x, z); if (h > -1.4 && h < -0.25 && land(x, z).v > 0.4 && !siteClear(x, z)) lay(SP.lilypads, k, x, 0.03, z); }   // (afloat on the pools)
+    for (let i = 0; i < Math.round(cw.v * 16); i++) { const k = 1950 + i, [x, z] = spot(k), h = heightAt(x, z); if (h > -0.4 && h < 1.5 && land(x, z).v > 0.3 && !siteClear(x, z)) lay(SP.swampgrass, k, x, h - 0.1, z); }
+    for (let i = 0; i < Math.round(cw.v * 6); i++) { const k = 1970 + i, [x, z] = spot(k), h = heightAt(x, z); if (h > 0.1 && h < 2.5 && land(x, z).v > 0.4 && !siteClear(x, z) && !isRock(x, z)) lay(SP.moss, k, x, h - 0.12, z); }   // (moss on the banks)
+    for (let i = 0; i < 2; i++) { const k = 1990 + i, [x, z] = spot(k), h = heightAt(x, z); if (h > -0.6 && h < 1.2 && !siteClear(x, z) && clear(x, z, 3)) lay(SP.log, k, x, Math.max(h, -0.35) - 0.15, z); }   // (half drowned)
+  } else for (let i = 0; i < 3; i++) { const k = 2000 + i, [x, z] = spot(k), h = heightAt(x, z); if (h > 0.1 && h < 1.2 && !siteClear(x, z) && !isRock(x, z)) lay(SP.driftwood, k, x, h - 0.05, z); }   // (the shore)
 }
 export const STRIDE = 7;

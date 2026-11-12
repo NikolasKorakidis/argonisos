@@ -101,7 +101,7 @@ export const clouds = [], stormClouds = [];
 
 // ---- Time of day. t in [0,1): daylight for the first 3/4 of the cycle, night for the last quarter.
 export const sunDir = new THREE.Vector3(0, 1, 0), moonDir = new THREE.Vector3(0, 1, 0);
-const skyDay = new THREE.Color(0xa9cfe8), skyDusk = new THREE.Color(0xf0a070), skyNight = new THREE.Color(0x0b1630);
+const skyDay = new THREE.Color(0xa9cfe8), skyDusk = new THREE.Color(0xf0a070), skyNight = new THREE.Color(0x0e1c3e);   // (night: a moonlit navy, so trees and hills stand dark against it)
 const _c1 = new THREE.Color(), _c2 = new THREE.Color();
 export const LIGHT = { day: 1, dusk: 0, night: 0, elev: 1 };   // shared with water, weather, fog
 export function isNight(t) { return t >= DAY_FRACTION; }
@@ -121,20 +121,21 @@ export function updateSky(t, dt, time, overcast = 0, dark = 0) {
   const skyCol = _c1.copy(skyNight).lerp(skyDay, day).lerp(skyDusk, dusk * 0.55);
   scene.fog.color.copy(skyCol); scene.background = skyCol;
   // the light fades right down while the shadows hand over from the sun to the moon, so they never swing across the ground
-  sun.intensity = lerp(0.15 + day * 2.9, 0.42, night) * (1 - overcast * 0.8) * (1 - dark * 0.75) * (1 - 0.92 * 4 * swap * (1 - swap));
+  sun.intensity = lerp(0.15 + day * 2.9, 0.55, night) * (1 - overcast * 0.8) * (1 - dark * 0.75) * (1 - 0.92 * 4 * swap * (1 - swap));
   sun.color.setHex(0xffe2b0).lerp(_c2.setHex(0xffa060), dusk * 0.85).lerp(_c2.setHex(0xff6a38), sstep(0.16, 0.0, e) * (t < DAY_FRACTION ? 0.7 : 0)).lerp(_c2.setHex(0x9fb8ff), night);
   // morning mist: thick at first light, burning off through the morning; a little at dusk and through the night
   LIGHT.mist = (t < DAY_FRACTION ? sstep(0.17, 0.0, t) + sstep(0.62, 0.75, t) * 0.25 : 0.35 + sstep(0.85, 1, t) * 0.5) * (1 - overcast * 0.4);
-  hemi.intensity = (0.22 + day * 0.45 + night * 0.15) * (1 - overcast * 0.5) * (1 - dark * 0.45);
-  hemi.color.setHex(0xbfdcff).lerp(_c2.setHex(0x5a74b8), night); hemi.groundColor.setHex(0x3f6a5a).lerp(_c2.setHex(0x1a2030), night);
+  // the night (the light study): a cool blue moonlight and sky light, dark but readable, so a fire is the only warm light
+  hemi.intensity = (0.22 + day * 0.45 + night * 0.28) * (1 - overcast * 0.5) * (1 - dark * 0.45);
+  hemi.color.setHex(0xbfdcff).lerp(_c2.setHex(0x4c6cc4), night); hemi.groundColor.setHex(0x3f6a5a).lerp(_c2.setHex(0x182440), night);
   const U = skyDome.material.uniforms;
   U.top.value.copy(skyNight).lerp(_c2.setHex(0x3a78c8), day).lerp(_c2.setHex(0x6a6fae), dusk * 0.4);
-  U.hor.value.setHex(0x1a2a48).lerp(_c2.setHex(0xb8dcf0), day).lerp(_c2.setHex(0xf2b27a), dusk * 0.7);
+  U.hor.value.setHex(0x203560).lerp(_c2.setHex(0xb8dcf0), day).lerp(_c2.setHex(0xf2b27a), dusk * 0.7);
   U.sunDir.value.copy(sunDir); U.night.value = night; U.uT.value = time; U.moonDir.value.copy(moonDir); U.dusk.value = dusk * (1 - overcast * 0.8);
   U.sunCol.value.copy(sun.color).lerp(_c2.setHex(0xfff0c8), 0.4); U.glowCol.value.setHex(0xff8a40).lerp(_c2.setHex(0xff5a50), sstep(0.1, -0.05, e));
   skyDome.position.copy(camera.position);
   sky.material.uniforms.sunPosition.value.copy(sunDir);
-  renderer.toneMappingExposure = lerp(0.5, 0.84, day) * (1 - overcast * 0.3) * (1 - dark * 0.25);
+  renderer.toneMappingExposure = lerp(0.56, 0.84, day) * (1 - overcast * 0.3) * (1 - dark * 0.25);
   // the sky's light for reflections and ambient, re-baked in small steps whenever the sun has moved (at most four times a
   // second), rather than a jump every two seconds that showed at dawn and dusk and when time runs fast
   envTimer -= dt; if (envTimer <= 0 && (Math.abs(e - envE) > 0.004 || Math.abs(overcast - envOv) > 0.03 || envTimer < -6)) { envTimer = 0.25; envE = e; envOv = overcast; refreshEnvironment(); }

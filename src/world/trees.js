@@ -6,6 +6,7 @@ import QTREES from '../../assets/models/qtrees.js';
 import QBUSH from '../../assets/models/qbushes.js';
 import { clamp, lerp } from '../util/math.js';
 import { patchWet } from './wetness.js';
+import { FLORA, floraGeo } from './flora-pack.js';
 
 let seed = 1337;
 const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -368,6 +369,7 @@ function qBuild(species, v) {
   return { geo, lo: geo, cards, cardMat: cards && Q_LEAF_MATS[species], leafFar: true };
 }
 const PROPS = {};  // key -> { geo, variants:[geo], chunks: Map }
+const TREE_TYPES = new Set(['olive', 'oak', 'cypress', 'pomegranate', 'fig', 'plane', 'qtree', 'qpine', 'fir', 'holm', 'qdead', 'dead']);   // (fitted by height; the rest by bulk)
 function propGeo(species, v) {
   const k = species + v;
   if (!PROPS[k] && QB_SRC[species]) PROPS[k] = { species, v, ...qbBuild(species), items: [] };
@@ -378,7 +380,20 @@ function propGeo(species, v) {
     seed = s0; PROP_LO = true; const lo = TREE_BUILDERS[species](v); PROP_LO = false; seed = s1;
     PROPS[k] = { species, geo: r.isBufferGeometry ? r : mergeParts(r), lo: lo.isBufferGeometry ? lo : mergeParts(lo), cards, items: [] };
   }
-  return PROPS[k];
+  // the pack's model in the carved one's place (flora-pack.js; the carved one was still built, so the shared dice roll on as before)
+  const P = PROPS[k];
+  if (!P.packed && FLORA[species]) {
+    const box = new THREE.Box3(); for (const g of [P.geo, P.cards]) if (g) { g.computeBoundingBox(); box.union(g.boundingBox); }
+    const g = floraGeo(species, v, box, TREE_TYPES.has(species)); if (g) Object.assign(P, { geo: g.geo, lo: g.lo || g.geo, cards: g.cards, loCards: g.lo ? g.loCards : g.cards, geo2: g.mid, cards2: g.mid ? g.midCards : null, cardMat: g.cards && packCardMat(g.map), leafFar: !!g.cards, packed: true });   // (geo2: the near band's further half, vegetation.js)
+  }
+  return P;
+}
+// the see-through parts of the packs' plants (flora-pack.js): one material per pack texture, cut out like the leaves and
+// darkened a little towards green (the pale leaf textures come out washed in our light)
+const PACK_CARDS = new Map();
+function packCardMat(map) {
+  if (!PACK_CARDS.has(map)) { const m = new THREE.MeshStandardMaterial({ map, color: 0xa3ad92, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85, alphaToCoverage: true }); m.onBeforeCompile = leafMat.onBeforeCompile; PACK_CARDS.set(map, m); }
+  return PACK_CARDS.get(map);
 }
 const propMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
 propMat.onBeforeCompile = (sh) => {

@@ -11,6 +11,8 @@ import { heightAt } from './gen.js';
 import { propGeo, propMat, leafMat } from './trees.js';
 import { GMAT, amphora, pithos, bowl, jug, tripod, acroterion, antefixes, cartWheel, firewood, leaves, mist, dice } from './greek.js';
 import { wettable } from './wetness.js';
+import { siteProp, sitePropAt, piece, pieceAt, hasPiece, chestParts } from './site-pack.js';
+import { buildTown, buildSpot } from './town.js';
 
 const rnd = (() => { let s = 77; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; })(), rr = (a, b) => a + rnd() * (b - a);
 function canvasTex(draw, n = 512, rep = 1) { const c = document.createElement('canvas'); c.width = c.height = n; draw(c.getContext('2d'), n); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; }
@@ -42,6 +44,20 @@ const friezeTex = canvasTex((g, n) => {   // triglyphs and painted metopes
     g.fillStyle = '#a8401f'; g.beginPath(); g.arc(x + n / 10 + (n / 4 - n / 10) / 2, n / 4, n / 14, 0, 7); g.fill(); g.strokeStyle = '#211610'; g.lineWidth = 3; g.stroke(); }
 }, 512);
 friezeTex.repeat.set(1, 2);
+// A flame: a teardrop, white-hot at its heart, orange at its edges, fading out at the tip and the sides, drawn on three
+// crossed cards (fire() turns and stretches them as it flickers): reads as fire from any side, at six triangles a fire
+function flameTex() {
+  const W = 64, H = 128, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'), im = g.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const u = Math.abs(x / (W - 1) - 0.5) * 2, v = 1 - y / (H - 1), w = 0.92 * Math.pow(v < 0.28 ? Math.sqrt(v / 0.28) : (1 - v) / 0.72, 0.85), d = w > 0 ? u / w : 9;
+    const a = Math.pow(Math.max(0, 1 - d), 1.4) * Math.min(1, (1 - v) * 3), h = Math.min(1, d * 1.1 + v * 0.7), i = (y * W + x) * 4;
+    im.data.set([255, Math.round(245 - 125 * h), Math.round(205 - 180 * h), Math.round(a * 255)], i);
+  }
+  g.putImageData(im, 0, 0); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const FLAME_GEO = (() => { const parts = [0, 1, 2].map((k) => new THREE.PlaneGeometry(0.62, 0.95).translate(0, 0.42, 0).rotateY((k * Math.PI) / 3)), out = new THREE.BufferGeometry();
+  for (const a of ['position', 'normal', 'uv']) { const n = parts[0].attributes[a].itemSize, arr = new Float32Array(parts.length * parts[0].attributes[a].count * n); parts.forEach((q, j) => arr.set(q.attributes[a].array, j * q.attributes[a].array.length)); out.setAttribute(a, new THREE.BufferAttribute(arr, n)); }
+  const idx = []; parts.forEach((q, j) => q.index.array.forEach((i) => idx.push(i + j * q.attributes.position.count))); out.setIndex(idx); return out; })();
 export const SMAT = {
   marble: new THREE.MeshStandardMaterial({ map: marbleTex, roughness: 0.72, color: 0xc8c0b1, envMapIntensity: 0.45 }),   // (no brighter or shinier: it burned out white and mirrored the sky)
   ivory: new THREE.MeshStandardMaterial({ color: 0xe6d3ad, roughness: 0.42, emissive: 0x1c140a }),
@@ -54,20 +70,28 @@ export const SMAT = {
   rock: new THREE.MeshStandardMaterial({ color: 0x7a7164, roughness: 0.95, flatShading: true, envMapIntensity: 0.5 }),
   wood: new THREE.MeshStandardMaterial({ color: 0x6e5238, roughness: 0.9 }),
   plaster: new THREE.MeshStandardMaterial({ color: 0xd8cbb0, roughness: 0.95, map: mossTex }),
-  flame: new THREE.MeshBasicMaterial({ color: 0xffb050, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
+  flame: new THREE.MeshBasicMaterial({ map: flameTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),   // (on fire()'s crossed cards)
   glyph: new THREE.MeshStandardMaterial({ color: 0xffe7a0, emissive: 0xffc860, emissiveIntensity: 1.6, transparent: true, opacity: 0.9 }),
   flags: new THREE.MeshStandardMaterial({ map: flagTex, roughness: 0.95, color: 0xb9ab96 }),
   bone: new THREE.MeshStandardMaterial({ color: 0xd9cfb4, roughness: 0.75 }),
 };
 for (const [k, o] of Object.entries({ marble: [0.72, 0.28], stone: [0.66, 0.28], moss: [0.7, 0.45], tile: [0.68, 0.3], frieze: [0.72, 0.3], dark: [0.68, 0.3], rock: [0.66, 0.26], wood: [0.62, 0.32], plaster: [0.72, 0.35], flags: [0.66, 0.26], bone: [0.75, 0.35] })) wettable(SMAT[k], { dark: o[0], gloss: o[1] });   // (wetness.js)
 const _nav = new THREE.Vector3();
+// the bones of the beasts' meals (other packs' models, site-pack.js), and the pack's pieces grown over with moss (the shrine's)
+const BONES = ['all/pnb-swamp-marshland/sm-prop-bone-pile-01', 'all/pnb-swamp-marshland/sm-prop-bone-ribcage-01', 'all/pnb-swamp-marshland/sm-prop-bone-pile-02', 'all/pnb-swamp-marshland/sm-prop-bone-skull-01'];
+const MOSSY = new Map(), mossy = (m) => { if (!MOSSY.has(m)) MOSSY.set(m, wettable(new THREE.MeshStandardMaterial({ map: m.map, color: 0x7d8a6a, roughness: 0.95 }), { dark: 0.7, gloss: 0.4 })); return MOSSY.get(m); };
 // how far off each kind of site is drawn: the landmarks you find your way by far out under the mist, the minor sites
 // (the farmhouse, the olive markers, the caves) only a little way beyond it
-const VIEW_R = { temple: 1700, labyrinth: 1400, chimera: 1200, house: 220, peak: 600, olive: 220, cave: 220 };
+const VIEW_R = { temple: 1700, labyrinth: 1400, chimera: 1200, house: 220, peak: 600, olive: 220, cave: 220, town: 650, spot: 260 };
+// The pack's temple is converted at half the demo scene's size (tools/assets/manifest.json plTemple) and stood here half as
+// big again: at half size its doors and columns were made for a hero not much taller than a child. Its plan (templeHall)
+// is written at the converted size and grown by this.
+const TK = 1.5;
 
 // ---- kit: every helper pushes [geometry, material] onto a list in site-local coordinates
 const uvBox = (w, h, d, s = 1 / 3) => { const g = new THREE.BoxGeometry(w, h, d), uv = g.attributes.uv, nn = g.attributes.normal; for (let i = 0; i < uv.count; i++) { const ax = Math.abs(nn.getX(i)), ay = Math.abs(nn.getY(i)); uv.setXY(i, uv.getX(i) * (ax > 0.5 ? d : w) * s, uv.getY(i) * (ay > 0.5 ? d : h) * s); } return g; };
 function column(P, x, y, z, h, r, mat = SMAT.marble, broken = 0) {
+  if (!broken && mat === SMAT.marble) { const pk = siteProp('column', h, r * 2.5); if (pk) { P.push([pk[0].translate(x, y, z), pk[1]]); return; } }   // (the pack's marble column: site-pack.js)
   const ch = broken ? h * broken : h - r * 1.1, g = new THREE.CylinderGeometry(r * 0.82, r, ch, 20, 6, false), p = g.attributes.position;
   for (let i = 0; i < p.count; i++) { const a = Math.atan2(p.getZ(i), p.getX(i)), f = 1 - 0.06 * Math.pow(Math.abs(Math.cos(a * 10)), 0.6), yy = p.getY(i) / ch + 0.5, ent = 1 + Math.sin(yy * Math.PI) * 0.04; p.setX(i, p.getX(i) * f * ent); p.setZ(i, p.getZ(i) * f * ent); if (broken && yy > 0.95) p.setY(i, p.getY(i) - rnd() * r * 0.8); }
   g.computeVertexNormals(); g.translate(x, y + ch / 2, z); P.push([g, mat]);
@@ -121,6 +145,32 @@ async function statue(group, x, y, z, s, rot, o = {}) {
   if (hand && o.bolt !== false) { const bolt = new THREE.Mesh(new THREE.CylinderGeometry(3, 1, 60, 5).translate(0, 30, 0), new THREE.MeshStandardMaterial({ color: 0xffd060, emissive: 0xffa020, emissiveIntensity: 1.2, metalness: 0.6, roughness: 0.3 })); bolt.rotation.z = -1.2; bolt.position.set(0, 8, 3); hand.add(bolt); }
 }
 
+// ---- the light over an offering stand while its boss's head is carried (trial.js shows it, update() moves it): a soft
+// column of gold rising from the tray, high enough to stand over the temple's roof from across the meadow (a strip turned
+// to face the camera), a ring pulsing out over the ground round the stand, and sparks drifting up. Kept out of the site's
+// group (it would count in the mist's ceiling, tallestNear), at p, the stand's foot in the world, turned rot.
+const beamTex = (() => { const W = 32, H = 256, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'), im = g.createImageData(W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const up = 1 - y / H, a = Math.exp(-((x / (W - 1) - 0.5) ** 2) / 0.045) * (up < 0.14 ? 0.35 + 0.65 * (up / 0.14) : Math.pow((1 - up) / 0.86, 1.3)) * Math.min(1, up / 0.02), i = (y * W + x) * 4; im.data.set([255, 236, 170, Math.round(a * 255)], i); }   // (gentler at its foot, brightest a few metres up)
+  g.putImageData(im, 0, 0); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+const glow = (o) => ({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, ...o });
+const sparkMat = new THREE.PointsMaterial(glow({ color: 0xffe9a0, size: 0.16, side: THREE.FrontSide }));
+const SPARKS = 40;
+function beacon(scene, p, rot) {
+  const b = new THREE.Group(); b.position.copy(p); b.rotation.y = rot; b.visible = false; scene.add(b);
+  const col = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 34).translate(0, 17 + 1.6, 0), new THREE.MeshBasicMaterial(glow({ map: beamTex, color: 0xfff0b8 })));
+  col.add(new THREE.Mesh(new THREE.PlaneGeometry(10, 34).translate(0, 17 + 1.6, -0.05), new THREE.MeshBasicMaterial(glow({ map: beamTex, color: 0xffd860, opacity: 0.22 }))));   // (and a wide, faint halo)
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.88, 1.0, 48).rotateX(-Math.PI / 2).translate(0, 0.06, 0), new THREE.MeshBasicMaterial(glow({ color: 0xffc860 })));
+  const sp = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(SPARKS * 3), 3)), sparkMat);
+  for (const o of [col, ring, sp]) { o.frustumCulled = false; o.renderOrder = 5; b.add(o); }
+  b.userData = { col, ring, sp }; return b;
+}
+function moveBeacon(b, t, cam) {
+  const { col, ring, sp } = b.userData, k = (t * 0.55) % 1; ring.scale.setScalar(1 + k * 1.8); ring.material.opacity = (1 - k) * 0.85;
+  if (cam) col.rotation.y = Math.atan2(cam.x - b.position.x, cam.z - b.position.z) - b.rotation.y; col.material.opacity = 0.75 + 0.2 * Math.sin(t * 2.4);
+  const p = sp.geometry.attributes.position; for (let i = 0; i < SPARKS; i++) { const f = (t * 0.22 + i / SPARKS) % 1, a = i * 2.4 + t * (0.6 + (i % 3) * 0.2), r = 0.25 + 0.45 * Math.sin(i * 1.7 + f * 3); p.setXYZ(i, Math.cos(a) * r, 1.8 + f * 6, Math.sin(a) * r); }
+  p.needsUpdate = true;
+}
+
 export class Structures {
   constructor(g) {
     this.g = g; this.groups = []; this.solids = []; this.tops = []; this.roofs = []; this.uses = []; this.lights = []; this.flames = [];
@@ -129,7 +179,7 @@ export class Structures {
   // register helpers (site-local → world, sites only rotate about y)
   site(s, rot = 0) { const grp = new THREE.Group(); grp.position.set(s.x, s.y, s.z); grp.rotation.y = rot; grp.userData.viewR = VIEW_R[s.kind] ?? 800; this.g.scene.add(grp); this.groups.push(grp); return { grp, s, rot, P: [] }; }
   // sites far off are not drawn at all (the haze has them long before): checked twice a second
-  cull(cam, dt) { this.cullT = (this.cullT || 0) - dt; if (this.cullT > 0) return; this.cullT = 0.5; for (const g of this.groups) g.visible = g.position.distanceTo(cam) < g.userData.viewR * (1 + Math.max(0, cam.y - 60) / 200); }
+  cull(cam, dt) { this.cam = cam; this.cullT = (this.cullT || 0) - dt; if (this.cullT > 0) return; this.cullT = 0.5; for (const g of this.groups) g.visible = g.position.distanceTo(cam) < g.userData.viewR * (1 + Math.max(0, cam.y - 60) / 200); }
   // the top of the tallest site building within r of pos (for the mist's ceiling), or -Infinity
   tallestNear(pos, r) {
     let top = -Infinity;
@@ -148,7 +198,7 @@ export class Structures {
     if (foot.r) clearGrass(key, { x: ctx.s.x, z: ctx.s.z, r: foot.r });
     else { const c = this.w(ctx, foot.x || 0, foot.z || 0); clearGrass(key, { x: c.x, z: c.z, hw: foot.w / 2, hd: foot.d / 2, rot: ctx.rot }); }
   }
-  fire(ctx, x, y, z, big = 1) { const f = new THREE.Group(); f.position.set(x, y, z); const c1 = new THREE.Mesh(new THREE.ConeGeometry(0.25 * big, 0.8 * big, 8, 1, true).translate(0, 0.4 * big, 0), SMAT.flame); f.add(c1); ctx.grp.add(f); this.flames.push(f); this.lights.push(this.w(ctx, x, z, y + 0.6)); }
+  fire(ctx, x, y, z, big = 1) { const f = new THREE.Group(); f.position.set(x, y, z); const c1 = new THREE.Mesh(FLAME_GEO, SMAT.flame); c1.scale.setScalar(big); f.add(c1); ctx.grp.add(f); this.flames.push(f); this.lights.push(this.w(ctx, x, z, y + 0.6)); }
   build() {
     const S = SITES;
     if (S.temple) this.temple(S.temple);
@@ -158,15 +208,125 @@ export class Structures {
     S.olives.forEach((o, i) => this.olive(o, i));
     S.caves.forEach((c, i) => this.cave(c, i));
     if (S.peak) this.summit(S.peak);
+    if (S.town) buildTown(this, S.town);   // (last: they throw dice of their own, so the places above keep theirs)
+    for (const sp of S.spots) buildSpot(this, sp);
     const col = this.solids.map((c) => ({ ...c, ref: { site: true } })); this.g.colliders.addGroup('sites', col);
   }
-  // ---- the Ancient Temple of Zeus: a Doric peripteros on its stepped platform. Outside: painted pediments with the gods
-  // on a blue field, gilded acroteria, antefixes along the eaves, and a paved sacred way between cypresses and votive
-  // statues down to the altar. Inside the cella: painted walls under a ceiling of gold stars on blue, two rows of columns,
-  // a dark pool before the ivory-and-gold Zeus (as at Olympia), and bronze tripods whose fires light him.
+  // ---- the Ancient Temple of Zeus: a peripteros on its stepped platform (the pack's own, templeHall, or a carved one),
+  // and a paved sacred way between cypresses and votive statues down to the altar, the offering stands either side of the
+  // steps. Fire bowls burn by the altar and beside each stand, so from across the meadow they read as the places to bring
+  // something; while a boss's head is carried, a column of light stands over its stand (beacon, lit by trial.js).
   temple(s) {
     const ctx = this.site(s, Math.atan2(-s.x, -s.z)), P = ctx.P, gy = (x, z) => this.groundY(ctx, x, z);     // the front faces the way you came from (the spawn)
-    const W = 13, D = 21, top = steps(P, W, D, 3, 0.42);
+    const W = 13, D = 21, pack = hasPiece('plTemple');   // (the carved hall's size: what stands before it is laid out by it)
+    if (pack) this.templeHall(ctx); else this.templeCarved(ctx, W, D);
+    // where the platform's lowest step ends at the front, and how far out the offering stands flank the way up
+    const F = pack ? 12.5 * TK : D / 2 + 0.6, SX = pack ? 7.4 : W / 2 + 0.5, az = pack ? F + 6.5 : D / 2 + 6.5;
+    // a fire bowl on a slender marble stand (the pack's), or a bronze tripod, burning
+    const fireBowl = (x, z) => { const y = gy(x, z);
+      if (hasPiece('plFireBowl')) { P.push(...piece('twPlinth', x, y - 0.1, z, 0, 1.35), ...piece('plFireBowl', x, y + 1.24, z, 0, 0.8)); this.fire(ctx, x, y + 1.5, z, 0.85); }
+      else { tripod(P, x, y, z, 1.1); this.fire(ctx, x, y + 1.25, z, 0.8); }
+      this.solid(ctx, x, z, 0.45, 1.8, y); };
+    // the altar before the steps, with an undying fire: pray here (on the paving where the land falls away a little)
+    const ay = Math.max(-0.6, Math.min(0, ...[[-1.45, -0.95], [1.45, -0.95], [-1.45, 0.95], [1.45, 0.95]].map(([x, z]) => gy(x, az + z)))), A = (g) => g.translate(0, ay, 0);
+    P.push([A(uvBox(2.6, 1.1 + 0.6, 1.6).translate(0, 0.55 - 0.3, az)), SMAT.marble], [A(uvBox(2.9, 0.18, 1.9).translate(0, 1.19, az)), SMAT.marble]);
+    P.push([A(new THREE.CylinderGeometry(0.55, 0.4, 0.35, 12).translate(0, 1.45, az)), SMAT.bronze]); this.fire(ctx, 0, ay + 1.6, az, 1.3);
+    P.push([A(uvBox(2.62, 0.16, 1.62).translate(0, 0.86, az)), GMAT.tymp]); for (const sx of [-1, 1]) P.push([A(new THREE.CylinderGeometry(0.16, 0.16, 1.64, 10).rotateX(Math.PI / 2).translate(sx * 1.3, 1.02, az)), SMAT.marble]);   // painted band, volutes
+    this.solid(ctx, 0, az, 1.3, 1.3, ay); this.top(ctx, -1.45, 1.45, az - 0.95, az + 0.95, ay + 1.28);
+    this.uses.push({ kind: 'altar', at: this.w(ctx, 0, az, ay), r: 2.6 });
+    for (const sx of [-1, 1]) fireBowl(sx * 2.45, az + 0.2);
+    // the sacred way: paving from the steps past the altar, cypresses and two statues guarding it, a hoplite and a soldier
+    const PW = pack ? 4.2 : 3.2; for (let z = pack ? F + 0.1 : D / 2 + 1.9; z < az + 4; z += 2) P.push([uvBox(PW, 0.16, 2.02, 1 / 2.4).translate(0, gy(0, z + 1) + 0.04, z + 1), SMAT.flags]);
+    for (const sx of [-1, 1]) {
+      for (const [cx, z, v] of pack ? [[6.2, az + 3.4, 1]] : [[4.4, D / 2 + 3.6, 0], [4.4, az + 3.4, 1]]) { this.plant(ctx, 'cypress', v, sx * cx, gy(sx * cx, z), z, 1.05); this.solid(ctx, sx * cx, z, 0.45); }   // (by the big temple only the outer pair, out of the stands' way and the front's)
+      const x = sx * 4.4, z = az, y = gy(x, z);
+      P.push([uvBox(1.1, 1.4, 1.1).translate(x, y + 0.7, z), SMAT.marble], [uvBox(1.3, 0.2, 1.3).translate(x, y + 1.5, z), SMAT.marble], [uvBox(1.3, 0.2, 1.3).translate(x, y + 0.1, z), GMAT.ashlar]);
+      const pk = siteProp(sx > 0 ? 'hoplite' : 'soldier', 2.15); if (pk) P.push([pk[0].rotateY(-sx * Math.PI / 2).translate(x, y + 1.6, z), pk[1]]); else statue(ctx.grp, x, y + 1.6, z, 1.1, -sx * Math.PI / 2, { pose: sx > 0 ? 0.55 : 0.75, bolt: false }); this.solid(ctx, x, z, 0.75);
+    }
+    // a pair of marble lions where the way comes in, looking out
+    for (const sx of [-1, 1]) { const x = sx * 2.6, z = az + 4.9, y = gy(x, z), pk = siteProp('lion', 1.9); if (!pk) break;
+      P.push([uvBox(1.2, 0.8, 1.95).translate(x, y - 0.05, z), SMAT.marble], [pk[0].translate(x, y + 0.35, z), pk[1]]); this.solid(ctx, x, z, 0.95, 2.3); }
+    // two offering stands for the heads, flanking the steps: a marble pier on a footing, the beast's emblem in gold on its
+    // face, a bronze tray on top for the head, and a fire bowl burning either side
+    for (const [k, sx] of [['minotaur', -1], ['chimera', 1]]) {
+      const x = sx * SX, z = F + 2.6, y = Math.min(0, gy(x - 0.8, z - 0.8), gy(x + 0.8, z - 0.8), gy(x - 0.8, z + 0.8), gy(x + 0.8, z + 0.8)), S = (g) => g.translate(x, y, z);
+      P.push([S(uvBox(1.6, 0.75, 1.6).translate(0, -0.075, 0)), GMAT.ashlar], [S(uvBox(1.0, 1.15, 1.0).translate(0, 0.875, 0)), SMAT.marble], [S(uvBox(1.4, 0.18, 1.4).translate(0, 1.54, 0)), SMAT.marble]);
+      P.push([S(new THREE.CylinderGeometry(0.6, 0.52, 0.08, 20).translate(0, 1.67, 0)), GMAT.bronze]);
+      const sym = piece(k === 'minotaur' ? 'plSymMinotaur' : 'plSymChimera', 0, 0, 0, 0, 0.82); if (sym.length) P.push(...sym.map(([g]) => [S(g.translate(0, 0.42, 0.505)), GMAT.gold]));
+      this.solid(ctx, x, z, 0.8, 1.75, y); const mount = new THREE.Group(); mount.position.set(x, y + 1.71, z); ctx.grp.add(mount);
+      for (const dx of [-1.45, 1.45]) fireBowl(x + dx, z);
+      this.uses.push({ kind: 'offering', boss: k, at: this.w(ctx, x, z, y), r: 2.4, mount, beacon: beacon(this.g.scene, this.w(ctx, x, z, y), ctx.rot) });
+    }
+    this.templeCtx = ctx; this.finish(ctx, pack ? { w: 19.5 * TK, d: az + 6 + F + 1, z: (az + 6 - F - 1) / 2 } : { w: W + 5, d: D + 18, z: 3.5 });
+  }
+  // The temple from the pack's demo scene (its "Parthenon", tools/assets/manifest.json plTemple: put together from the scene
+  // at half its size, stood here TK times bigger): eight columns by eleven round a stepped platform, the cella raised on a
+  // plinth inside with stairs at both ends, painted walls, an inner colonnade and a back room, the roof's tiles, pediments
+  // and gilded acroteria. Walking and blocking follow its plan, written below at the converted size: the platform 18.75 ×
+  // 25 in three steps of a quarter, the peristyle floor at 0.75, the plinth at 1.5 (|x| 5.6, |z| 7.5) with its stairs, the
+  // cella's walls (its door 2.5 wide in the middle of the front wall), and the inner wall to the back room, whose door the
+  // pack made too low for anyone: cut out (with its stretch of wall) for a doorway as big as the front one, framed in marble;
+  // the back room's door from the back porch is walked through as the pack made it.
+  // Inside: Zeus on the dais, tripods burning by him, a runner down the hall between braziers, offering tables and heaped
+  // jars in the aisles, banners on the inner colonnade; the back room a treasury of jars, a table of offerings and a fire.
+  templeHall(ctx) {
+    const P = ctx.P, K = TK;
+    const top = (x0, x1, z0, z1, y, roof) => this.top(ctx, x0 * K, x1 * K, z0 * K, z1 * K, y * K, roof), solid = (x, z, r, h = 99, y = 0) => this.solid(ctx, x * K, z * K, r * K, h * K, y * K);
+    const wall = (x0, z0, x1, z1, h, t) => this.wall(ctx, x0 * K, z0 * K, x1 * K, z1 * K, h * K, t * K), put = (k, x, y, z, rot = 0, s = 1) => P.push(...piece(k, x * K, y * K, z * K, rot, s * K));
+    P.push(...pieceAt('plTemple', 0, 0, 0, 0, K, [[-1.875, 1.875, 1.52, 6.0, -2.95, -2.05]]));
+    // its footing, where the land falls away from the platform's corners
+    P.push([uvBox(18.7 * K, 3, 24.94 * K).translate(0, -1.5, 0), GMAT.ashlar]);
+    for (let i = 0; i < 3; i++) { const k = i * 0.417; top(-9.38 + k, 9.38 - k, -12.5 + k, 12.5 - k, 0.25 * (i + 1)); }   // the krepis
+    top(-5.63, 5.63, -7.5, 7.5, 1.5);                                                                                     // the plinth
+    for (const sz of [-1, 1]) for (let i = 0; i < 2; i++) { const a = 7.5, b = 8.75 - i * 0.417; top(-5.55, 5.55, sz > 0 ? a : -b, sz > 0 ? b : -a, 1.0 + i * 0.25); }   // its stairs
+    top(-8.13, 8.13, -11.25, 11.25, 6.75, true);                                                                          // under the roof
+    // the columns: eight by eleven round the peristyle, six in each porch, the cella's two rows
+    const ring = [[1.1, 10.65], [3.25, 10.65], [5.4, 10.65], [7.5, 10.65], ...[0, 2.15, 4.3, 6.45, 8.6].map((z) => [7.5, z])];
+    for (const [x, z] of ring) for (const sx of [-1, 1]) for (const sz of z ? [-1, 1] : [1]) solid(sx * x, sz * z, 0.42);
+    for (const x of [1.1, 3.25, 5.4]) for (const sx of [-1, 1]) for (const sz of [-1, 1]) solid(sx * x, sz * 8.65, 0.42);
+    for (const z of [-1.25, 0, 1.25, 2.5, 3.75, 5.0]) for (const sx of [-1, 1]) solid(sx * 3.15, z, 0.24);
+    // the cella's walls (from the ground: the porch-ends of the plinth and its stairs' parapets are too high to step up)
+    for (const sx of [-1, 1]) { wall(sx * 5.63, -7.5, sx * 5.63, -6.25, 1.5, 0.2); wall(sx * 5.63, -6.25, sx * 5.63, 6.25, 99, 0.25); wall(sx * 5.63, 6.25, sx * 5.63, 7.5, 1.5, 0.2); wall(sx * 5.63, 7.5, sx * 5.63, 8.75, 1.65, 0.15); wall(sx * 5.63, -8.75, sx * 5.63, -7.5, 1.65, 0.15);
+      wall(sx * 1.35, 6.25, sx * 5.63, 6.25, 99, 0.25); wall(sx * 1.35, -2.5, sx * 5.63, -2.5, 99, 0.25); wall(sx * 0.75, -6.25, sx * 5.63, -6.25, 99, 0.25); }   // (the back room's own door, from the back porch, open too)
+    // the doorway to the back room: marble jambs and a lintel over the cut, a gilded band along it
+    for (const sx of [-1, 1]) P.push([uvBox(0.7 * K, 4.5 * K, 0.62 * K).translate(sx * 1.6 * K, 3.75 * K, -2.5 * K), SMAT.marble], [uvBox(0.8 * K, 0.2 * K, 0.72 * K).translate(sx * 1.6 * K, 1.6 * K, -2.5 * K), GMAT.ashlar]);
+    P.push([uvBox(4.0 * K, 0.5 * K, 0.7 * K).translate(0, 5.75 * K, -2.5 * K), SMAT.marble], [uvBox(4.05 * K, 0.08 * K, 0.74 * K).translate(0, 5.5 * K, -2.5 * K), GMAT.gold]);
+    // Zeus on the dais in the middle of the hall, on a low stepped base, tripods burning either side of him
+    const y = 1.63; P.push([uvBox(2.6 * K, 0.16 * K, 2.6 * K).translate(0, (y + 0.08) * K, 0), GMAT.ashlar], [uvBox(2.2 * K, 0.34 * K, 2.2 * K).translate(0, (y + 0.33) * K, 0), SMAT.marble], [uvBox(2.25 * K, 0.06 * K, 2.25 * K).translate(0, (y + 0.53) * K, 0), GMAT.gold], [uvBox(2.35 * K, 0.12 * K, 2.35 * K).translate(0, (y + 0.62) * K, 0), SMAT.marble]);
+    solid(0, 0, 1.3, 2.5, 1.5);
+    this.zeus(ctx, 0, (y + 0.68) * K, 0, 4.1 * K);
+    for (const sx of [-1, 1]) { tripod(P, sx * 2.0 * K, 1.5 * K, 1.6 * K, 1.15 * K); this.fire(ctx, sx * 2.0 * K, 1.5 * K + 1.3 * K, 1.6 * K, 0.8 * K); solid(sx * 2.0, 1.6, 0.4, 2.5, 1.5); }
+    if (!hasPiece('all/polygonancientempire/sm-prop-rug-01')) return;
+    const AE = (k) => 'all/polygonancientempire/sm-prop-' + k, fl = 1.5;   // (the hall's floor, on the plinth)
+    // the hall: a runner from the door to the dais, braziers either side of it
+    put(AE('rug-01'), 0, fl + 0.005, 3.85, 0, 1.0);
+    for (const z of [2.8, 5.0]) for (const sx of [-1, 1]) { put(AE('brazier-03'), sx * 2.3, fl, z, 0, 1.0); this.fire(ctx, sx * 2.3 * K, (fl + 0.9) * K, z * K, 0.55); solid(sx * 2.3, z, 0.22, 1.2, fl); }
+    // the aisles: offering tables laid with bowls and jars, heaps of jars by the door, banners hung on the inner colonnade
+    for (const sx of [-1, 1]) {
+      for (const z of [-0.6, 2.4]) { put(AE('table-02'), sx * 4.45, fl, z, 0, 0.8); solid(sx * 4.45, z, 0.5, 1.2, fl);
+        bowl(P, sx * 4.3 * K, (fl + 0.62) * K, (z - 0.15) * K, 1.4); jug(P, sx * 4.6 * K, (fl + 0.62) * K, (z + 0.2) * K, 1.5); amphora(P, sx * 4.45 * K + sx * 0.9, fl * K, (z + 0.9) * K, 1.1); }
+      put(AE('vase-pile-02'), sx * 4.6, fl, 5.2, sx > 0 ? Math.PI : 0, 0.75); solid(sx * 4.6, 5.2, 0.6, 1, fl);
+      for (const z of [0.625, 3.125]) put(AE('banner-01-a'), sx * 3.0, 4.25, z, -sx * Math.PI / 2, 1.5);
+    }
+    // the back room: a treasury, a long table of offerings down one wall and heaped jars down the other, braziers inside the
+    // doorway and a rug between (the way through from the back porch's door kept clear)
+    put(AE('rug-03'), 0, fl + 0.005, -4.4, 0, 1.0); put(AE('table-08'), -4.55, fl, -4.4, Math.PI / 2, 0.85); solid(-4.55, -5.3, 0.45, 1.2, fl); solid(-4.55, -3.5, 0.45, 1.2, fl);
+    bowl(P, -4.5 * K, (fl + 0.66) * K, -5.1 * K, 1.5); jug(P, -4.6 * K, (fl + 0.66) * K, -4.3 * K, 1.6); bowl(P, -4.5 * K, (fl + 0.66) * K, -3.6 * K, 1.2);
+    put(AE('vase-pile-01'), 4.6, fl, -4.4, Math.PI / 2, 0.55); for (const z of [-5.4, -4.4, -3.4]) solid(4.6, z, 0.5, 1, fl);
+    for (const sx of [-1, 1]) { put(AE('brazier-03'), sx * 2.4, fl, -3.3, 0, 1.0); this.fire(ctx, sx * 2.4 * K, (fl + 0.9) * K, -3.3 * K, 0.55); solid(sx * 2.4, -3.3, 0.22, 1.2, fl); }
+    put(AE('banner-large-01'), 0, 5.35, -6.05, 0, 0.62);
+  }
+  // the pack's robed and wreathed elder, h metres tall, its marble tinted ivory (the hero's figure without the pack)
+  zeus(ctx, x, y, z, h) {
+    const pk = siteProp('zeus', h);
+    if (pk) ctx.P.push([pk[0].translate(x, y, z), new THREE.MeshStandardMaterial({ map: pk[1].map, color: 0xd9c49a, roughness: 0.45 })]); else statue(ctx.grp, x, y, z, 2.3 * h / 4.4, 0, { mat: SMAT.ivory });
+  }
+  // the carved hall (without the pack): a Doric peripteros on its stepped platform. Outside: painted pediments with the gods
+  // on a blue field, gilded acroteria, antefixes along the eaves. Inside the cella: painted walls under a ceiling of gold
+  // stars on blue, two rows of columns, a dark pool before the ivory-and-gold Zeus (as at Olympia), and bronze tripods
+  // whose fires light him.
+  templeCarved(ctx, W, D) {
+    const P = ctx.P, top = steps(P, W, D, 3, 0.42);
     const cols = [];
     for (let i = 0; i < 4; i++) for (const zz of [-D / 2 + 1.1, D / 2 - 1.1]) cols.push([-W / 2 + 1.1 + i * (W - 2.2) / 3, zz]);
     for (let j = 1; j < 6; j++) for (const xx of [-W / 2 + 1.1, W / 2 - 1.1]) cols.push([xx, -D / 2 + 1.1 + j * (D - 2.2) / 6]);
@@ -208,7 +368,7 @@ export class Structures {
     // Zeus on his stepped base, the pool before him, tripods burning either side, shields hung on the walls
     const sz = cz - cd / 2 + 2.6;
     P.push([uvBox(3.5, 0.3, 3.5).translate(0, top + 0.15, sz), GMAT.ashlar], [uvBox(3.0, 0.8, 3.0).translate(0, top + 0.7, sz), SMAT.marble], [uvBox(3.05, 0.1, 3.05).translate(0, top + 0.98, sz), GMAT.gold], [uvBox(3.2, 0.3, 3.2).translate(0, top + 1.25, sz), SMAT.marble]);
-    statue(ctx.grp, 0, top + 1.4, sz, 2.3, 0, { mat: SMAT.ivory });
+    this.zeus(ctx, 0, top + 1.4, sz, 4.4);
     const pz = sz + 3.5; P.push([plane(2.5, 3.0, 3).rotateX(-Math.PI / 2).translate(0, top + 0.04, pz), GMAT.water]);
     for (const [w, d, x, z] of [[2.86, 0.18, 0, pz - 1.59], [2.86, 0.18, 0, pz + 1.59], [0.18, 3.0, -1.34, pz], [0.18, 3.0, 1.34, pz]]) P.push([uvBox(w, 0.12, d).translate(x, top + 0.06, z), SMAT.marble]);
     for (const sx of [-1, 1]) { tripod(P, sx * 2.45, top, sz - 0.6, 1.25); this.fire(ctx, sx * 2.45, top + 1.4, sz - 0.6, 0.9); this.solid(ctx, sx * 2.45, sz - 0.6, 0.45);
@@ -218,32 +378,12 @@ export class Structures {
       P.push([leaf(uvBox(1.25, 3.5, 0.08).translate(-sx * 0.625, 1.75, 0)), GMAT.wood]); for (const y of [0.5, 1.75, 3.0]) P.push([leaf(uvBox(1.2, 0.08, 0.1).translate(-sx * 0.625, y, 0)), GMAT.bronze]); }
     this.stepTops(ctx, W, D, 3, 0.42);                                            // the steps and the platform you walk on
     this.top(ctx, -W / 2, W / 2, -D / 2, D / 2, eb, true);                       // under the roof
-    // the altar before the steps, with an undying fire: pray here
-    const az = D / 2 + 6.5; P.push([uvBox(2.6, 1.1, 1.6).translate(0, 0.55, az), SMAT.marble]); P.push([uvBox(2.9, 0.18, 1.9).translate(0, 1.19, az), SMAT.marble]);
-    P.push([new THREE.CylinderGeometry(0.55, 0.4, 0.35, 12).translate(0, 1.45, az), SMAT.bronze]); this.fire(ctx, 0, 1.6, az, 1.3);
-    P.push([uvBox(2.62, 0.16, 1.62).translate(0, 0.86, az), GMAT.tymp]); for (const sx of [-1, 1]) P.push([new THREE.CylinderGeometry(0.16, 0.16, 1.64, 10).rotateX(Math.PI / 2).translate(sx * 1.3, 1.02, az), SMAT.marble]);   // painted band, volutes
-    this.solid(ctx, 0, az, 1.3, 1.3); this.top(ctx, -1.45, 1.45, az - 0.95, az + 0.95, 1.28);
-    this.uses.push({ kind: 'altar', at: this.w(ctx, 0, az), r: 2.6 });
-    // the sacred way: paving from the steps past the altar, cypresses and two votive statues along it
-    for (let z = D / 2 + 1.9; z < az + 4; z += 2) P.push([uvBox(3.2, 0.16, 2.02, 1 / 2.4).translate(0, gy(0, z + 1) + 0.04, z + 1), SMAT.flags]);
-    for (const sx of [-1, 1]) {
-      for (const [z, v] of [[D / 2 + 3.6, 0], [az + 3.4, 1]]) { this.plant(ctx, 'cypress', v, sx * 4.4, gy(sx * 4.4, z), z, 1.05); this.solid(ctx, sx * 4.4, z, 0.45); }
-      const x = sx * 4.4, z = az, y = gy(x, z);
-      P.push([uvBox(1.1, 1.4, 1.1).translate(x, y + 0.7, z), SMAT.marble], [uvBox(1.3, 0.2, 1.3).translate(x, y + 1.5, z), SMAT.marble], [uvBox(1.3, 0.2, 1.3).translate(x, y + 0.1, z), GMAT.ashlar]);
-      statue(ctx.grp, x, y + 1.6, z, 1.1, -sx * Math.PI / 2, { pose: sx > 0 ? 0.55 : 0.75, bolt: false }); this.solid(ctx, x, z, 0.75);
-    }
-    // two offering stands for the heads, flanking the steps
-    for (const [k, sx] of [['minotaur', -1], ['chimera', 1]]) {
-      const x = sx * (W / 2 + 0.5), z = D / 2 + 3.2; P.push([new THREE.CylinderGeometry(0.55, 0.65, 1.3, 10).translate(x, 0.65, z), SMAT.marble]); P.push([uvBox(1.4, 0.16, 1.4).translate(x, 1.38, z), SMAT.marble]);
-      this.solid(ctx, x, z, 0.7, 1.4); const mount = new THREE.Group(); mount.position.set(x, 1.46, z); ctx.grp.add(mount);
-      this.uses.push({ kind: 'offering', boss: k, at: this.w(ctx, x, z), r: 2.2, mount });
-    }
-    this.templeCtx = ctx; this.finish(ctx, { w: W + 5, d: D + 18, z: 3.5 });
   }
   // ---- an abandoned farmhouse: whitewashed walls on a rubble footing, half its tiled roof fallen in, a walled yard with a
   // well, a clay oven, storage jars and an olive, a vine over the door. Inside: the hearth, a loom, shelves, a bed and the
   // chest someone left behind.
   house(s) {
+    if (hasPiece('plFarmhouse')) { this.farmhouse(s); return; }
     const ctx = this.site(s, 0.4), P = ctx.P, W = 8, D = 6, H = 2.8, t = 0.31;
     plasterWall(P, -W / 2, -D / 2, W / 2, -D / 2, H, 0, 1); plasterWall(P, -W / 2, -D / 2 + t, -W / 2, D / 2 - t, H, 0, 2); plasterWall(P, W / 2, -D / 2 + t, W / 2, D / 2 - t, H, 0.55, 3);
     plasterWall(P, -W / 2, D / 2, -0.8, D / 2, H, 0, 4); plasterWall(P, 0.8, D / 2, W / 2, D / 2, H, 0.25, 5);
@@ -282,13 +422,7 @@ export class Structures {
     for (let k = 0; k < 12; k++) P.push([uvBox(0.32, 0.03, 0.4).rotateX(rr(-0.4, 0.4)).rotateY(rr(0, 3)).translate(rr(1.8, 3.5), 0.03 + rr(0, 0.1), rr(-1.8, 1.8)), SMAT.tile]);
     P.push([uvBox(0.14, 0.14, 2.6).rotateX(0.35).rotateY(0.6).translate(2.6, 0.5, 0.6), GMAT.oldWood]);
     pithos(P, -2.6, -0.25, 2.1, 0.7); P.push([new THREE.CylinderGeometry(0.5, 0.6, 0.03, 12).translate(-2.0, 0.015, 2.3), new THREE.MeshStandardMaterial({ color: 0xc9a85a, roughness: 1 })]);   // a cracked jar, its grain spilt
-    // the old chest
-    const chest = new THREE.Group(); chest.position.set(-1.8, 0, -D / 2 + 0.8); ctx.grp.add(chest);
-    const cm = new THREE.Mesh(uvBox(1, 0.55, 0.6, 1), GMAT.wood); cm.position.y = 0.28; cm.castShadow = true; chest.add(cm);
-    for (const x of [-0.35, 0.35]) { const band = new THREE.Mesh(uvBox(0.08, 0.57, 0.62), GMAT.bronze); band.position.set(x, 0.28, 0); chest.add(band); }
-    const lid = new THREE.Mesh(uvBox(1.04, 0.12, 0.64, 1), SMAT.bronze); lid.position.y = 0.6; chest.add(lid);
-    this.solid(ctx, -1.8, -D / 2 + 0.8, 0.55, 0.7);
-    this.uses.push({ kind: 'loot', at: this.w(ctx, -1.8, -D / 2 + 0.8), r: 1.8, id: 'houseChest', lid, items: [['rope', 6], ['leather', 2], ['olive', 5], ['crudeDagger', 1], ['resin', 2], ['torch', 1]] });
+    this.oldChest(ctx, -1.8, -D / 2 + 0.8, 0);
     // the yard: a low dry-stone wall with a gate, a vine on a pergola over the door, the well, the oven, jars, firewood
     const yz = D / 2 + 6;
     for (const [x0, z0, x1, z1] of [[-W / 2, D / 2 + 0.4, -W / 2, yz], [-W / 2, yz, -1.2, yz], [1.2, yz, W / 2, yz], [W / 2, yz, W / 2, D / 2 + 0.4]]) { rubble(P, x0, z0, x1, z1, 1.0, SMAT.stone, 0.25); this.wall(ctx, x0, z0, x1, z1, 1.0, 0.4); }
@@ -307,26 +441,99 @@ export class Structures {
     this.plant(ctx, 'olive', 1, 2.6, 0, D / 2 + 5.4, 1.15); this.solid(ctx, 2.6, D / 2 + 5.4, 0.6);
     this.finish(ctx, { w: W + 1.5, d: D + 1.5 });
   }
-  // ---- the Labyrinth: the Minotaur's ruined arena
+  // the chest someone left behind (starter loot: trial.js opens its lid), turned rot
+  oldChest(ctx, x, z, rot) { this.chest(ctx, x, z, rot, { id: 'houseChest', items: [['rope', 6], ['leather', 2], ['olive', 5], ['crudeDagger', 1], ['resin', 2], ['torch', 1]] }); }
+  // An old chest to search, at x, y, z turned rot (trial.js opens it and keeps its id in what's been looted): the packs'
+  // wooden one, its lid on a hinge along the back, or carved boxes without the pack. use: { id, items, sub (where it is) }
+  chest(ctx, x, z, rot, use, y = 0) {
+    const chest = new THREE.Group(); chest.position.set(x, y, z); chest.rotation.y = rot; ctx.grp.add(chest);
+    const C = chestParts(), mk = ([g, m], o = chest) => { const q = new THREE.Mesh(g, m); q.castShadow = q.receiveShadow = true; o.add(q); return q; };
+    let lid;
+    if (C) { for (const p of C.body) mk(p); lid = new THREE.Group(); lid.position.set(0, C.hinge[0], C.hinge[1]); chest.add(lid); for (const p of C.lid) mk(p, lid); }
+    else {
+      mk([uvBox(1, 0.55, 0.6, 1).translate(0, 0.28, 0), GMAT.wood]); for (const bx of [-0.35, 0.35]) mk([uvBox(0.08, 0.57, 0.62).translate(bx, 0.28, 0), GMAT.bronze]);
+      lid = mk([uvBox(1.04, 0.12, 0.64, 1), SMAT.bronze]); lid.position.y = 0.6;
+    }
+    this.solid(ctx, x, z, 0.55, 0.75, y);
+    this.uses.push({ kind: 'loot', at: this.w(ctx, x, z, y), r: 1.8, lid, ...use });
+  }
+  // The farmhouse from the pack (tools/assets/manifest.json plFarmhouse: the kit's whitewashed walls, three bays by two,
+  // 7.5 × 5 m), the roof still on over the western two bays and bare rafters over the third, its back corner fallen to
+  // a stump. Inside: the hearth, the loom, a couch for a bed, shelves, the chest; a table and the fallen tiles under the
+  // open sky. The yard: dry-stone walls with a gate, a vine over the door, the well, the bread oven, jars and firewood.
+  farmhouse(s) {
+    const ctx = this.site(s, 0.4), P = ctx.P, W = 7.5, D = 5, H = 3, put = (k, x, z, rot = 0, sc = 1, y = 0) => P.push(...piece(k, x, y, z, rot, sc));
+    P.push(...pieceAt('plFarmhouse', -W / 2, 0, D / 2));
+    // its walls (the doorway a metre and a half in the middle of the front; the fallen back corner a stump too high to climb)
+    this.wall(ctx, -W / 2, -D / 2, W / 2, -D / 2, H, 0.25); this.wall(ctx, -W / 2, -D / 2, -W / 2, D / 2, H, 0.25); this.wall(ctx, W / 2, D / 2, W / 2, 0, H, 0.25); this.wall(ctx, W / 2, 0, W / 2, -D / 2, 1.5, 0.25);
+    this.wall(ctx, -W / 2, D / 2, -0.75, D / 2, H, 0.25); this.wall(ctx, 0.75, D / 2, W / 2, D / 2, H, 0.25);
+    this.top(ctx, -W / 2, 1.25, -D / 2, D / 2, H, true);   // (under the roof)
+    { const g = new THREE.PlaneGeometry(W - 0.3, D - 0.3), uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (W - 0.3) / 2.4, uv.getY(i) * (D - 0.3) / 2.4); P.push([g.rotateX(-Math.PI / 2).translate(0, 0.03, 0), SMAT.flags]); }   // its floor of worn flags
+    // the rafters left over the third bay, a broken one hanging, the ridge beam
+    const a = Math.atan2(0.75, D / 2), L = (D / 2 + 0.3) / Math.cos(a), slope = (g, sd, x) => g.translate(0, 0, sd * L / 2).rotateX(sd * a).translate(x, H + 0.06, 0);
+    for (const sd of [-1, 1]) for (let x = 1.6, k = 0; x < W / 2; x += 0.75, k++) { const broken = (k % 2 === 1) === (sd > 0); P.push([slope(uvBox(0.12, 0.14, broken ? L * 0.5 : L).translate(0, 0, broken ? -sd * L * 0.25 : 0), sd, x), GMAT.oldWood]); }
+    P.push([new THREE.CylinderGeometry(0.1, 0.1, W / 2 - 1.1, 8).rotateZ(Math.PI / 2).translate((W / 2 + 1.25) / 2, H + 0.72, 0), GMAT.oldWood]);
+    // inside: the hearth, the loom by the west wall, the couch, the shelves, the chest; the table, fallen tiles and a beam in the open
+    put('twFirepit', -1.0, 0.1, 0, 0.42); this.solid(ctx, -1.0, 0.1, 0.55, 0.4);
+    P.push([new THREE.CylinderGeometry(0.42, 0.45, 0.04, 14).translate(-1.0, 0.03, 0.1), GMAT.ash]); for (let k = 0; k < 3; k++) P.push([new THREE.CylinderGeometry(0.05, 0.06, 0.6, 6).rotateZ(Math.PI / 2).rotateY(k * 1.1).translate(-1.0, 0.08, 0.1), GMAT.ash]); for (let k = 0; k < 5; k++) P.push([new THREE.IcosahedronGeometry(0.05, 0).translate(-1.0 + Math.cos(k * 2.3) * 0.18, 0.06, 0.1 + Math.sin(k * 2.3) * 0.18), GMAT.ember]);
+    put('plLoom', -W / 2 + 0.55, -0.4, Math.PI / 2); this.solid(ctx, -W / 2 + 0.55, -0.9, 0.4, 2); this.solid(ctx, -W / 2 + 0.55, 0.1, 0.4, 2);
+    put('plBed', -2.3, D / 2 - 0.6, Math.PI); this.solid(ctx, -2.9, D / 2 - 0.6, 0.5, 0.9); this.solid(ctx, -1.8, D / 2 - 0.6, 0.5, 0.9);
+    P.push([uvBox(0.6, 0.1, 0.32).translate(-3.1, 0.62, D / 2 - 0.6), GMAT.linen]);
+    for (const y of [1.15, 1.7]) { P.push([uvBox(1.7, 0.05, 0.3).translate(-0.4, y, -D / 2 + 0.3), GMAT.wood]); for (let k = 0; k < 4; k++) (k % 2 ? jug : bowl)(P, -1.0 + k * 0.4, y + 0.025, -D / 2 + 0.3, 0.9); }   // shelves
+    this.oldChest(ctx, -2.7, -D / 2 + 0.6, 0);
+    put('plTable', 2.2, -1.3, 0.1); this.solid(ctx, 1.8, -1.3, 0.45, 0.8); this.solid(ctx, 2.6, -1.3, 0.45, 0.8);
+    put('plStool', 2.0, -0.55, 0.4); put('plStool', 3.0, -1.9, 2.2, 1, 0); jug(P, 2.0, 0.78, -1.25, 1.1); bowl(P, 2.5, 0.78, -1.4); bowl(P, 2.7, 0.78, -1.15, 0.8);
+    for (let k = 0; k < 12; k++) P.push([uvBox(0.32, 0.03, 0.4).rotateX(rr(-0.4, 0.4)).rotateY(rr(0, 3)).translate(rr(1.6, 3.4), 0.03 + rr(0, 0.1), rr(-0.4, 1.9)), SMAT.tile]);
+    P.push([uvBox(0.14, 0.14, 2.6).rotateX(0.35).rotateY(0.6).translate(2.7, 0.5, 0.9), GMAT.oldWood]);
+    pithos(P, 3.0, -0.25, 1.8, 0.7); P.push([new THREE.CylinderGeometry(0.5, 0.6, 0.03, 12).translate(2.5, 0.015, 1.9), new THREE.MeshStandardMaterial({ color: 0xc9a85a, roughness: 1 })]);   // a cracked jar, its grain spilt
+    // the yard: a low dry-stone wall with a gate, the vine on its pergola over the door, the well, the oven, jars, firewood
+    const yz = D / 2 + 6;
+    for (const [x0, z0, x1, z1] of [[-W / 2, D / 2 + 0.2, -W / 2, yz], [-W / 2, yz, -1.2, yz], [1.2, yz, W / 2, yz], [W / 2, yz, W / 2, D / 2 + 0.2]]) { rubble(P, x0, z0, x1, z1, 1.0, SMAT.stone, 0.25); this.wall(ctx, x0, z0, x1, z1, 1.0, 0.4); }
+    for (const sx of [-1, 1]) { P.push([uvBox(0.55, 1.5, 0.55).translate(sx * 1.45, 0.75, yz), GMAT.ashlar], [uvBox(0.68, 0.14, 0.68).translate(sx * 1.45, 1.55, yz), GMAT.ashlar]); this.solid(ctx, sx * 1.45, yz, 0.4); }
+    put('twPergola', 0, D / 2 + 1.35, 0, 0.95); for (const sx of [-1, 1]) for (const dz of [0.25, 2.35]) this.solid(ctx, sx * 1.05, D / 2 + dz, 0.15);
+    leaves(P, 0, 2.95, D / 2 + 1.35, 2.8, 2.6, 0.35, 16, 5); for (let k = 0; k < 6; k++) P.push([new THREE.SphereGeometry(0.07, 6, 4).translate(rr(-1.1, 1.1), 2.86, D / 2 + rr(0.4, 2.3)), new THREE.MeshStandardMaterial({ color: 0x4a2a52, roughness: 0.6 })]);   // grapes
+    put('twWell', 2.3, D / 2 + 3.7, 0.3, 0.75); this.solid(ctx, 2.3, D / 2 + 3.7, 1.25);
+    put('twKiln', -2.4, D / 2 + 2.3, 1.2, 0.72); this.solid(ctx, -2.4, D / 2 + 2.3, 0.85, 1.3);
+    for (const [k, x, z, r, sc] of [['twJars', -2.7, yz - 1.2, 0.6, 0.9], ['twVase', 3.1, D / 2 + 0.7, 0.3, 0.9], ['twJar', 3.25, D / 2 + 1.4, 0.3, 1], ['twLogs', -1.4, D / 2 + 0.5, 0.3, 0.9], ['twBasket', 1.5, D / 2 + 0.5, 0.25, 0.9], ['twStrawBundle', 3.0, yz - 1.0, 0.35, 1]]) { put(k, x, z, (x * 7 + z) % 6.3, sc); this.solid(ctx, x, z, r, 1.2); }
+    cartWheel(P, W / 2 - 0.25, 0, D / 2 + 5.0, Math.PI / 2, 0.18);
+    this.plant(ctx, 'olive', 1, 2.7, 0, yz + 1.6, 1.15); this.solid(ctx, 2.7, yz + 1.6, 0.6);
+    this.finish(ctx, { w: W + 1.5, d: D + 1.5 });
+  }
+  // ---- the Labyrinth: the Minotaur's ruined arena. Three broken rings of wall with offset gaps, a ring of columns, a
+  // raised altar in the middle; braziers, bones and fallen statues about the corridors. With the pack: ashlar walls between
+  // square posts (each length sunk to its own broken height), the gate's two great columns under a beam and the bull's horns,
+  // Doric columns (the broken ones stumps among their drums), the altar a pack plinth on a stepped dais.
   labyrinth(s) {
-    const ctx = this.site(s, 0), P = ctx.P;
+    const ctx = this.site(s, 0), P = ctx.P, pack = hasPiece('plWall'), Q = {};   // (Q: the pack walls by ring and quarter, drawn apart so a length in the camera's way fades alone)
     // its own dice for the decoration, so the other sites (and their clues) come out as they always have
-    let ls = 1234; const lr = (a, b) => a + (((ls = (ls * 16807) % 2147483647) - 1) / 2147483646) * (b - a);
-    // three broken rings of wall with offset gaps, a ring of columns, a raised altar in the middle. The gaps are
-    // remembered, so the Minotaur and the dead can find their way through the rings (navTarget)
+    let ls = 1234; const lr = (a, b) => a + (((ls = (ls * 16807) % 2147483647) - 1) / 2147483646) * (b - a), dr = dice(9090);
+    // the gaps are remembered, so the Minotaur and the dead can find their way through the rings (navTarget)
     const gaps = { 22: [], 15: [], 9: [] };
     for (const [R, gap, ruin] of [[22, 0.3, 0.45], [15, 2.1, 0.35], [9, 4.2, 0.25]]) {
-      const n = Math.ceil(R * 0.9);
-      for (let i = 0; i < n; i++) { const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2; if (Math.abs(Math.sin((a0 - gap) / 2)) < 0.12) { gaps[R].push([a0, a1]); continue; }
-        const x0 = Math.cos(a0) * R, z0 = Math.sin(a0) * R, x1 = Math.cos(a1) * R, z1 = Math.sin(a1) * R, h = 3.2 * (1 - ruin * Math.abs(Math.sin(i * 1.7 + R))); rubble(P, x0, z0, x1, z1, h, SMAT.stone, 0.15); this.wall(ctx, x0, z0, x1, z1, h, 0.42); }
+      const n = Math.ceil(R * 0.9), hs = [], q = (a) => (Q[R + ':' + Math.floor(a / (Math.PI / 2)) % 4] ||= []);
+      for (let i = 0; i < n; i++) { const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2; if (Math.abs(Math.sin((a0 - gap) / 2)) < 0.12) { gaps[R].push([a0, a1]); hs.push(0); continue; }
+        const x0 = Math.cos(a0) * R, z0 = Math.sin(a0) * R, x1 = Math.cos(a1) * R, z1 = Math.sin(a1) * R, h = 3.2 * (1 - ruin * Math.abs(Math.sin(i * 1.7 + R))); hs.push(h);
+        if (pack) {   // (a 5 m length of ashlar stretched along the chord, sunk into the ground to its height: the courses stay true)
+          const len = Math.hypot(x1 - x0, z1 - z0); q(a0).push(...piece('plWall', (x0 + x1) / 2, h - 4.51, (z0 + z1) / 2, -Math.atan2(z1 - z0, x1 - x0), [len / 5 + 0.02, 1, 1.1]));
+          if (h < 2.6 && dr() < 0.7) { const t = dr(), out = dr() < 0.5 ? 0.95 : -0.95, rx = (x0 + (x1 - x0) * t) * (1 + out / R), rz = (z0 + (z1 - z0) * t) * (1 + out / R), block = dr() < 0.5;   // fallen blocks at its foot
+            P.push(...piece(block ? 'plBlock' : 'twRubbleA', rx, 0.04, rz, dr() * 6.3, 0.6 + dr() * 0.3)); if (block) this.solid(ctx, rx, rz, 0.4, 0.9); }
+        } else rubble(P, x0, z0, x1, z1, h, SMAT.stone, 0.15);
+        this.wall(ctx, x0, z0, x1, z1, h, 0.42); }
+      if (pack) for (let i = 0; i < n; i++) { const h = Math.max(hs[i], hs[(i + n - 1) % n]), a = (i / n) * Math.PI * 2; if (h) q(a).push(...piece('plWallPost', Math.cos(a) * R, h + 0.2 - 4.55, Math.sin(a) * R, -a, [1, 1, 1.2])); }   // a post where two lengths meet
     }
-    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2 + 0.3, x = Math.cos(a) * 18.5, z = Math.sin(a) * 18.5, br = i % 3 === 1 ? rr(0.25, 0.6) : 0; column(P, x, 0, z, 5.5, 0.5, SMAT.marble, br); this.solid(ctx, x, z, 0.55); }
-    const top = steps(P, 5, 5, 3, 0.35, 0, SMAT.stone);
-    P.push([uvBox(2.2, 1.0, 1.4).translate(0, top + 0.5, 0), SMAT.marble]);
-    for (const sx of [-1, 1]) { const horn = new THREE.TorusGeometry(0.9, 0.12, 6, 14, Math.PI * 0.8).rotateZ(sx > 0 ? -0.2 : Math.PI + 0.2).translate(sx * 0.45, top + 1.4, 0); P.push([horn, SMAT.bronze]); }
-    for (const sx of [-1, 1]) { P.push([new THREE.CylinderGeometry(0.35, 0.2, 1.1, 10).translate(sx * 3.4, top + 0.55, 2), SMAT.bronze]); this.fire(ctx, sx * 3.4, top + 1.1, 2); }
+    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2 + 0.3, x = Math.cos(a) * 18.5, z = Math.sin(a) * 18.5;
+      if (!pack) column(P, x, 0, z, 5.5, 0.5, SMAT.marble, i % 3 === 1 ? rr(0.25, 0.6) : 0);
+      else if (i % 3 !== 1) P.push(...piece('plColumn', x, 0, z, a, 0.92));
+      else { const px = Math.cos(a + 0.07) * 20.5, pz = Math.sin(a + 0.07) * 20.5; P.push(...piece('plColumnHalf', x, 0, z, a + i, 0.42), ...piece('plPile', px, 0, pz, a + Math.PI / 2, 0.7)); this.solid(ctx, px, pz, 0.75, 0.7); }   // a stump, its drums fallen outward (clear of the way round the inside)
+      this.solid(ctx, x, z, 0.55); }
+    let top;
+    if (pack) { P.push(...pieceAt('plDais', 0, 0, 0)); top = 1.05; for (let i = 0; i < 3; i++) { const k = 2.625 - i * 0.583; this.top(ctx, -k, k, -k, k, 0.35 * (i + 1)); } }
+    else { top = steps(P, 5, 5, 3, 0.35, 0, SMAT.stone); P.push([uvBox(2.2, 1.0, 1.4).translate(0, top + 0.5, 0), SMAT.marble]); this.stepTops(ctx, 5, 5, 3, 0.35); }
+    const hy = pack ? top + 2.3 : top + 1.95;   // (the bronze horns of the bull on the altar: a crescent, its tips raised)
+    P.push([new THREE.TorusGeometry(0.9, 0.12, 6, 18, Math.PI).rotateZ(Math.PI).translate(0, hy, 0), SMAT.bronze]);
+    for (const sx of [-1, 1]) { if (pack) P.push(...piece('plBrazier', sx * 3.4, 0, 2, 0, 0.7)); else P.push([new THREE.CylinderGeometry(0.35, 0.2, 1.1, 10).translate(sx * 3.4, top + 0.55, 2), SMAT.bronze]);
+      this.fire(ctx, sx * 3.4, pack ? 1.45 : top + 1.1, 2); if (pack) this.solid(ctx, sx * 3.4, 2, 0.6, 1.4); }
     this.solid(ctx, 0, 0, 1.3, top + 1);
-    this.stepTops(ctx, 5, 5, 3, 0.35);
     this.uses.push({ kind: 'summon', boss: 'minotaur', at: this.w(ctx, 0, 1.4), r: 3.2, center: this.w(ctx, 0, 0) });
     // the arena floor: worn flagstones from the outer wall in
     const floor = new THREE.CylinderGeometry(23.4, 23.4, 0.08, 72, 1).translate(0, 0.04, 0), fu = floor.attributes.uv, fp = floor.attributes.position;
@@ -334,19 +541,29 @@ export class Structures {
     P.push([floor, SMAT.flags]);
     // the gate: two great pillars at the outer gap, a lintel, and the bull's horns over the way in
     const [g0, g1] = gaps[22][0], gp = [g0, g1].map((a) => [Math.cos(a) * 22, Math.sin(a) * 22]);
-    for (const [x, z] of gp) { column(P, x, 0, z, 6.2, 0.7, SMAT.stone); this.solid(ctx, x, z, 0.75); }
+    for (const [x, z] of gp) { if (pack) P.push(...piece('plGatePost', x, 0, z, 0, 0.55)); else column(P, x, 0, z, 6.2, 0.7, SMAT.stone); this.solid(ctx, x, z, 0.75); }
     const gl = Math.hypot(gp[1][0] - gp[0][0], gp[1][1] - gp[0][1]) + 1.6, gx = (gp[0][0] + gp[1][0]) / 2, gz = (gp[0][1] + gp[1][1]) / 2, ga = Math.atan2(gp[1][1] - gp[0][1], gp[1][0] - gp[0][0]);
-    P.push([uvBox(gl, 0.9, 1.3).rotateY(-ga).translate(gx, 6.6, gz), SMAT.stone]);
-    for (const sx of [-1, 1]) P.push([new THREE.TorusGeometry(1.5, 0.2, 6, 14, Math.PI * 0.8).rotateZ(sx > 0 ? -0.2 : Math.PI + 0.2).rotateY(-ga).translate(gx + Math.cos(ga) * sx * 0.7, 7.6, gz + Math.sin(ga) * sx * 0.7), SMAT.bronze]);
+    if (pack) { P.push(...piece('plBeam', gx, 6.6, gz, -ga, [gl / 10, 1.6, 1.2])); for (const sd of [1, -1]) P.push(...piece('plSymMinotaur', gx - Math.sin(ga) * sd * 0.67, 6.62, gz + Math.cos(ga) * sd * 0.67, -ga + (sd < 0 ? Math.PI : 0), 1.2).map(([g]) => [g, SMAT.bronze])); }   // (the bull-man in bronze on both faces of the beam)
+    else P.push([uvBox(gl, 0.9, 1.3).rotateY(-ga).translate(gx, 6.6, gz), SMAT.stone]);
+    P.push([new THREE.TorusGeometry(1.6, 0.2, 6, 18, Math.PI).rotateZ(Math.PI).rotateY(-ga).translate(gx, 9.3, gz), SMAT.bronze]);   // (the bull's horns over the way in)
     // braziers either side of the inner gaps, lighting the way to the altar
     for (const R of [15, 9]) { const [a0, a1] = gaps[R][0]; for (const a of [a0 - 0.12, a1 + 0.12]) { const x = Math.cos(a) * (R - 1.1), z = Math.sin(a) * (R - 1.1);
-      P.push([new THREE.CylinderGeometry(0.22, 0.3, 1.1, 8).translate(x, 0.55, z), SMAT.stone], [new THREE.CylinderGeometry(0.42, 0.24, 0.3, 10).translate(x, 1.25, z), SMAT.bronze]); this.fire(ctx, x, 1.35, z, 0.8); this.solid(ctx, x, z, 0.45); } }
+      if (pack) P.push(...piece('plBrazier', x, 0, z, a, 0.6)); else P.push([new THREE.CylinderGeometry(0.22, 0.3, 1.1, 8).translate(x, 0.55, z), SMAT.stone], [new THREE.CylinderGeometry(0.42, 0.24, 0.3, 10).translate(x, 1.25, z), SMAT.bronze]);
+      this.fire(ctx, x, pack ? 1.25 : 1.35, z, 0.8); this.solid(ctx, x, z, 0.45); } }
     // bones of those who came before, along the corridors
     for (let i = 0; i < 22; i++) {
       const R = i % 2 ? lr(10.5, 13.5) : lr(16.5, 20.5), a = lr(0, Math.PI * 2), x = Math.cos(a) * R, z = Math.sin(a) * R;
+      if (hasPiece(BONES[i % 4])) { P.push(...piece(BONES[i % 4], x, 0.06, z, lr(0, 6.3), 1.2)); if (i % 3 === 0) P.push(...piece(BONES[3], x + 0.6, 0.06, z - 0.3, a, 1.1)); continue; }
       for (let k = 0; k < 4; k++) P.push([new THREE.CylinderGeometry(0.035, 0.03, lr(0.35, 0.6), 5).rotateZ(Math.PI / 2).rotateY(lr(0, 6.3)).translate(x + lr(-0.4, 0.4), 0.11, z + lr(-0.4, 0.4)), SMAT.bone]);
       if (i % 3 === 0) { P.push([new THREE.IcosahedronGeometry(0.15, 1).scale(1, 0.9, 1.2).translate(x, 0.2, z), SMAT.bone], [new THREE.BoxGeometry(0.16, 0.06, 0.12).translate(x, 0.09, z + 0.12), SMAT.bone]); }
     }
+    // and their statues, broken: a headless warrior and a pair of legs still standing, the rest fallen where the way isn't
+    // (fixed places, clear of the paths between the gaps, so the dice above come out as they always have)
+    for (const [k, R, a, rot, r] of [['broken1', 20.3, 3.75, 2.2, 0.45], ['broken4', 12.2, 0.7, 3.6, 0.4], ['broken3', 20.0, 5.0, 1.2], ['broken5', 11.8, 5.6, 2.2], ['broken2', 12.6, 1.35, 0.4], ['broken8', 19.6, 4.35, 2.8], ['broken6', 11.6, 0.95, 1.7], ['broken7', 20.6, 3.95, 0.9]]) {
+      const x = Math.cos(a) * R, z = Math.sin(a) * R, pk = sitePropAt(k, 1.15); if (!pk) break;
+      P.push([pk[0].rotateY(rot).translate(x, 0.08, z), pk[1]]); if (r) this.solid(ctx, x, z, r, 2);
+    }
+    for (const list of Object.values(Q)) for (const m of mergeByMat(list)) ctx.grp.add(m);
     this.lab = { c: this.w(ctx, 0, 0), gaps };
     this.labyrinthCtx = ctx; this.finish(ctx, { r: 23.5 });
   }
@@ -357,6 +574,10 @@ export class Structures {
     const band = (p) => { const r = Math.hypot(p.x - L.c.x, p.z - L.c.z); return r < 9 ? 0 : r < 15 ? 1 : r < 22 ? 2 : r < 30 ? 3 : -1; };
     const bf = band(from), bt = band(to); if (bf < 0 || bt < 0 || bf === bt || (bf === 3 && bt === 3)) return null;
     const R = [9, 15, 22][bt > bf ? bf : bf - 1], [a0, a1] = L.gaps[R][0], a = (a0 + a1) / 2, gx = L.c.x + Math.cos(a) * R, gz = L.c.z + Math.sin(a) * R;
+    // far round the ring from its gap: along the corridor, a short arc at a time, clear of the wall (a straight line to the
+    // gap runs along the wall's foot, where the fallen blocks lie and pin a big body)
+    const fa = Math.atan2(from.z - L.c.z, from.x - L.c.x), da = Math.atan2(Math.sin(a - fa), Math.cos(a - fa));
+    if (Math.abs(da) > 0.25) { const Rm = R + (bt > bf ? -1.8 : 1.8), s = fa + Math.max(-0.35, Math.min(0.35, da)); return _nav.set(L.c.x + Math.cos(s) * Rm, from.y, L.c.z + Math.sin(s) * Rm); }
     if (Math.hypot(from.x - gx, from.z - gz) > 2.2) return _nav.set(gx, from.y, gz);
     const R2 = R + (bt > bf ? 3 : -3); return _nav.set(L.c.x + Math.cos(a) * R2, from.y, L.c.z + Math.sin(a) * R2);   // through it
   }
@@ -364,19 +585,22 @@ export class Structures {
   // some fallen. On the altar the beast itself in black stone (the lion crouched to spring, the goat rising from its back,
   // the serpent coiled over) with ember eyes. Tripods burn round the court and a low mist lies over the stones.
   shrine(s) {
-    const ctx = this.site(s, 0.8), P = ctx.P, lr = dice(4242);
+    const ctx = this.site(s, 0.8), P = ctx.P, lr = dice(4242), pack = hasPiece('plSteps'), moss = (list) => list.map(([g, m]) => [g, mossy(m)]);   // (with the pack: its columns, beams, drums and steps, grown over)
     const floor = new THREE.CylinderGeometry(19, 19, 0.08, 64, 1).translate(0, 0.04, 0), fu = floor.attributes.uv, fp = floor.attributes.position;
     for (let i = 0; i < fu.count; i++) fu.setXY(i, fp.getX(i) / 2.6, fp.getZ(i) / 2.6); P.push([floor, GMAT.darkFlags]);
     for (const [r0, r1] of [[9.4, 10], [12.6, 12.9]]) P.push([new THREE.RingGeometry(r0, r1, 64).rotateX(-Math.PI / 2).translate(0, 0.085, 0), GMAT.basalt]);
     for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2, x = Math.cos(a) * 17, z = Math.sin(a) * 17, br = i % 4 === 2 ? rr(0.3, 0.6) : 0; column(P, x, 0, z, 6, 0.55, SMAT.moss, br); this.solid(ctx, x, z, 0.6);
-      if (!br && i % 2 === 0) { const a2 = ((i + 2) / 12) * Math.PI * 2; P.push([uvBox(Math.hypot(Math.cos(a2) * 17 - x, Math.sin(a2) * 17 - z) + 1.2, 0.7, 1.1).rotateY(-Math.atan2(Math.sin(a2) * 17 - z, Math.cos(a2) * 17 - x)).translate((x + Math.cos(a2) * 17) / 2, 6.0, (z + Math.sin(a2) * 17) / 2), SMAT.moss]); }
+      const a = (i / 12) * Math.PI * 2, x = Math.cos(a) * 17, z = Math.sin(a) * 17, br = i % 4 === 2 ? rr(0.3, 0.6) : 0; this.solid(ctx, x, z, 0.6);
+      if (!pack) column(P, x, 0, z, 6, 0.55, SMAT.moss, br); else P.push(...moss(br ? piece('plColumnHalf', x, 0, z, a, [0.5, br * 1.3, 0.5]) : piece('plColumn', x, 0, z, a, [1.15, 1, 1.15])));
+      if (!br && i % 2 === 0) { const a2 = ((i + 2) / 12) * Math.PI * 2, len = Math.hypot(Math.cos(a2) * 17 - x, Math.sin(a2) * 17 - z) + 1.2, ang = -Math.atan2(Math.sin(a2) * 17 - z, Math.cos(a2) * 17 - x), mx = (x + Math.cos(a2) * 17) / 2, mz = (z + Math.sin(a2) * 17) / 2;
+        if (pack) P.push(...moss(piece('plBeam', mx, 5.95, mz, ang, [len / 10, 1, 1.1]))); else P.push([uvBox(len, 0.7, 1.1).rotateY(ang).translate(mx, 6.0, mz), SMAT.moss]); }
       if (br) for (let k = 0; k < 3; k++) { const t = a + Math.PI / 2 + (lr() - 0.5) * 0.5, d = 1.5 + k * 1.1, dx = x + Math.cos(a + 0.5) * d, dz = z + Math.sin(a + 0.5) * d;   // its drums, fallen in a line
-        P.push([new THREE.CylinderGeometry(0.5, 0.53, 0.95, 18).rotateZ(Math.PI / 2).rotateY(-t).translate(dx, 0.5, dz), SMAT.moss]); this.solid(ctx, dx, dz, 0.55, 1); }
+        if (pack) P.push(...moss(piece('twDrum', dx, 0, dz, -t, [1.3, 1.3, 0.4]))); else P.push([new THREE.CylinderGeometry(0.5, 0.53, 0.95, 18).rotateZ(Math.PI / 2).rotateY(-t).translate(dx, 0.5, dz), SMAT.moss]); this.solid(ctx, dx, dz, 0.55, 1); }
       if (i % 3 === 0) for (let k = 0; k < 9; k++) { const q = k * 0.85 + i; P.push([new THREE.IcosahedronGeometry(1, 0).scale(0.32, 0.45, 0.3).translate(x + Math.cos(q) * 0.55, 0.3 + k * 0.55, z + Math.sin(q) * 0.55), GMAT.ivy]); }   // ivy climbing
     }
-    const top = steps(P, 7, 7, 4, 0.4, 0, SMAT.moss);
+    const top = pack ? 1.4 : steps(P, 7, 7, 4, 0.4, 0, SMAT.moss); if (pack) P.push(...moss(pieceAt('plSteps', 0, 0, 0, 0, 4 / 3)));
     P.push([uvBox(3.2, 1.2, 2.4).translate(0, top + 0.6, 0), GMAT.basalt], [uvBox(3.4, 0.16, 2.6).translate(0, top + 1.28, 0), GMAT.basalt]);
+    if (pack) P.push(...piece('plSymChimera', 0, top + 0.12, 1.21, 0, 1.25).map(([g]) => [g, GMAT.oldBronze]));   // the beast in bronze relief on the altar's face
     // the Chimera in black stone, larger than life and turned three-quarters to whoever comes to the altar
     const y0 = top + 1.36, B = GMAT.basalt, Q = [];
     Q.push([new THREE.SphereGeometry(1, 16, 12).scale(0.62, 0.55, 1.05).translate(0, y0 + 0.75, -0.1), B]);
@@ -394,25 +618,52 @@ export class Structures {
     // tripods round the court, roots through the stones, the bones of the beast's meals, broken offerings
     for (const [x, z] of [[-7.2, 7.2], [7.2, 7.2], [-7.2, -7.2], [7.2, -7.2]]) { tripod(P, x, 0, z, 1.3, GMAT.oldBronze); this.fire(ctx, x, 1.45, z, 1.0); this.solid(ctx, x, z, 0.45); }
     for (let i = 0; i < 9; i++) { const a = rr(0, 6.28), r0 = rr(4, 12); P.push([new THREE.TorusGeometry(rr(1, 2.2), rr(0.12, 0.22), 5, 9, Math.PI * rr(0.5, 0.9)).rotateX(Math.PI / 2 + rr(-0.3, 0.3)).rotateY(a).translate(Math.cos(a) * r0, 0, Math.sin(a) * r0), SMAT.wood]); }
-    for (let k = 0; k < 16; k++) { const a = lr() * 6.28, r0 = 6.4 + lr() * 2.5; P.push([new THREE.CylinderGeometry(0.04, 0.035, 0.4 + lr() * 0.5, 5).rotateZ(Math.PI / 2).rotateY(lr() * 3).translate(Math.cos(a) * r0, 0.12, Math.sin(a) * r0), SMAT.bone]); if (k % 5 === 0) P.push([new THREE.IcosahedronGeometry(0.15, 1).scale(1, 0.9, 1.2).translate(Math.cos(a) * r0 + 0.3, 0.2, Math.sin(a) * r0), SMAT.bone]); }
+    for (let k = 0; k < 16; k++) { const a = lr() * 6.28, r0 = 6.4 + lr() * 2.5, len = 0.4 + lr() * 0.5, rot = lr() * 3, bone = BONES[k % 4];
+      if (hasPiece(bone)) { if (k % 2 === 0) P.push(...piece(bone, Math.cos(a) * r0, 0.08, Math.sin(a) * r0, rot * 2, 1.1)); continue; }
+      P.push([new THREE.CylinderGeometry(0.04, 0.035, len, 5).rotateZ(Math.PI / 2).rotateY(rot).translate(Math.cos(a) * r0, 0.12, Math.sin(a) * r0), SMAT.bone]); if (k % 5 === 0) P.push([new THREE.IcosahedronGeometry(0.15, 1).scale(1, 0.9, 1.2).translate(Math.cos(a) * r0 + 0.3, 0.2, Math.sin(a) * r0), SMAT.bone]); }
     for (let k = 0; k < 4; k++) { const a = 0.6 + k * 1.6, x = Math.cos(a) * 5.4, z = Math.sin(a) * 5.4; amphora(P, x, 0.25, z, 0.8, 1.4 + lr() * 0.3, a); bowl(P, x + 0.5, 0.09, z + 0.3, 1.1); }
+    // a statue of some hero who came for the beast, broken and fallen among the drums (fixed places: the dice above keep theirs)
+    for (const [k, R, a, rot, r] of [['broken1', 15.0, 4.25, 1.0, 0.45], ['broken3', 14.2, 1.45, 2.4], ['broken5', 13.4, 3.45, 0.6], ['broken8', 14.6, 5.65, 1.9], ['broken7', 13.0, 1.75, 0.3]]) {
+      const x = Math.cos(a) * R, z = Math.sin(a) * R, pk = sitePropAt(k, 1.15); if (!pk) break;
+      P.push([pk[0].rotateY(rot).translate(x, 0.08, z), pk[1]]); if (r) this.solid(ctx, x, z, r, 2);
+    }
     mist(ctx.grp, 14, 15, 0x9fb0a6, 5);
     this.solid(ctx, 0, 0, 1.7, top + 1.2);
-    this.stepTops(ctx, 7, 7, 4, 0.4);
+    if (pack) for (let i = 0; i < 3; i++) { const k = 3.5 - i * 0.778; this.top(ctx, -k, k, -k, k, (i + 1) * 0.467); } else this.stepTops(ctx, 7, 7, 4, 0.4);
     this.uses.push({ kind: 'summon', boss: 'chimera', at: this.w(ctx, 0, 1.6), r: 3.4, center: this.w(ctx, 0, 0) });
     this.finish(ctx, { r: 18.5 });
   }
-  // ---- an ancient olive with marks cut into a little stele before it, and offerings left at its foot
+  // ---- an ancient olive with marks cut into a little stele before it, offerings left at its foot and a small fire kept
+  // burning beside them, its smoke rising over the meadow so you see from afar that something waits there
   olive(s, i) {
-    const ctx = this.site(s, i * 1.3), P = ctx.P;
-    this.plant(ctx, 'olive', i % 3, 0, 0, 0, 1.9); this.solid(ctx, 0, 0, 0.95);
-    for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; boulder(P, Math.cos(a) * 3.6, 0.15, Math.sin(a) * 3.6, 0.35, SMAT.rock, 1.2, 0.6, 1); }
-    P.push([uvBox(0.6, 1.25, 0.24).translate(0, 0.62, 1.55), SMAT.marble], [uvBox(0.74, 0.12, 0.36).translate(0, 1.3, 1.55), SMAT.marble], [uvBox(0.84, 0.14, 0.46).translate(0, 0.07, 1.55), GMAT.ashlar]);
-    amphora(P, 0.6, 0, 1.75, 0.55, 0.12); bowl(P, -0.5, 0.02, 1.85, 1.1); for (let k = 0; k < 6; k++) P.push([new THREE.SphereGeometry(0.035, 6, 4).translate(-0.5 + Math.cos(k) * 0.08, 0.1, 1.85 + Math.sin(k) * 0.08), GMAT.basalt]);
-    this.solid(ctx, 0, 1.55, 0.45, 1.4);
-    const glyphs = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.6), SMAT.glyph.clone()); glyphs.material.map = glyphTex(i); glyphs.position.set(0, 0.78, 1.55 + 0.125); ctx.grp.add(glyphs);
-    this.uses.push({ kind: 'scrap', id: 'olive' + i, at: this.w(ctx, 0, 1.2), r: 2.2, glyphs });
-    this.finish(ctx, { r: 2.2 });
+    const ctx = this.site(s, i * 1.3), P = ctx.P, sc = 1.9, gy = (x, z) => Math.max(0, this.groundY(ctx, x, z));
+    // the old tree's roots go into the ground like every tree's (flora-pack.js), and what stands before it stands a metre
+    // clear of its trunk (tester, 12 Nov: the stele was hidden inside it): R, the trunk's reach at the ground, measured
+    const tree = this.plant(ctx, 'olive', i % 3, 0, 0, 0, sc), tp = tree.children[0].geometry.attributes.position; let R = 0.8;
+    for (let k = 0; k < tp.count; k++) { const y = tp.getY(k) * sc; if (y > -0.3 && y < 2.4) R = Math.max(R, Math.hypot(tp.getX(k), tp.getZ(k)) * sc); }
+    this.solid(ctx, 0, 0, Math.max(0.95, R * 0.75));
+    const zs = R + 1.15, ring = zs + 1.6;   // (the stele's middle, its back a metre off the trunk; the ring of stones round it all)
+    for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2, x = Math.cos(a) * ring, z = Math.sin(a) * ring; boulder(P, x, gy(x, z) + 0.15, z, 0.35, SMAT.rock, 1.2, 0.6, 1); }   // (none straight in front of the stele)
+    const y0 = gy(0, zs);
+    P.push([uvBox(0.6, 1.25, 0.24).translate(0, y0 + 0.62, zs), SMAT.marble], [uvBox(0.74, 0.12, 0.36).translate(0, y0 + 1.3, zs), SMAT.marble], [uvBox(0.84, 0.14, 0.46).translate(0, y0 + 0.07, zs), GMAT.ashlar]);
+    amphora(P, -0.85, gy(-0.85, zs + 0.05), zs + 0.05, 0.55, 0.12); bowl(P, -0.42, gy(-0.42, zs + 0.5) + 0.02, zs + 0.5, 1.1);
+    for (let k = 0; k < 6; k++) P.push([new THREE.SphereGeometry(0.035, 6, 4).translate(-0.42 + Math.cos(k) * 0.08, gy(-0.42, zs + 0.5) + 0.1, zs + 0.5 + Math.sin(k) * 0.08), GMAT.basalt]);
+    this.solid(ctx, 0, zs, 0.45, 1.4); this.solid(ctx, -0.85, zs + 0.05, 0.25, 0.7);
+    // the offering fire: a bronze bowl on a low stone, small flames, a thread of smoke and a warm light (lit near you only:
+    // the fire light pool, lights.js)
+    const fx = 0.95, fz = zs + 0.3, fy = gy(fx, fz), bowlY = fy + 0.36;
+    P.push([new THREE.CylinderGeometry(0.3, 0.36, 0.36, 10).translate(fx, fy + 0.18, fz), GMAT.ashlar]);
+    if (hasPiece('plFireBowl')) P.push(...piece('plFireBowl', fx, bowlY, fz, 0, 0.6));
+    else P.push([new THREE.CylinderGeometry(0.34, 0.2, 0.2, 12).translate(fx, bowlY + 0.1, fz), SMAT.bronze]);
+    for (let k = 0; k < 3; k++) P.push([new THREE.CylinderGeometry(0.035, 0.045, 0.42, 5).rotateZ(Math.PI / 2).rotateY(k * 1.05).translate(fx, bowlY + 0.2, fz), GMAT.ember]);
+    this.fire(ctx, fx, bowlY + 0.18, fz, 0.55); this.flames.push(offeringFire(ctx.grp, fx, bowlY + 0.18, fz, i));
+    this.solid(ctx, fx, fz, 0.42, 0.9);
+    // at every other one a water-bearer in marble, left by those who tended it (on the stele's other side, clear of the trunk)
+    const kore = i % 2 ? null : siteProp('bearer', 1.75), ka = -0.75, kx = Math.sin(ka) * (R + 1.0), kz = Math.cos(ka) * (R + 1.0), ky = gy(kx, kz);
+    if (kore) { P.push([uvBox(0.62, 0.5, 0.62).translate(kx, ky + 0.1, kz), GMAT.ashlar], [kore[0].rotateY(0.45).translate(kx, ky + 0.35, kz), kore[1]]); this.solid(ctx, kx, kz, 0.42, 2.2); }
+    const glyphs = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.6), SMAT.glyph.clone()); glyphs.material.map = glyphTex(i); glyphs.position.set(0, y0 + 0.78, zs + 0.125); ctx.grp.add(glyphs);
+    this.uses.push({ kind: 'scrap', id: 'olive' + i, at: this.w(ctx, 0, zs + 0.6, y0), r: 2.2, glyphs });
+    this.finish(ctx, { r: ring });
   }
   // ---- a Giant cave: an outcrop of great rocks on a hillside, the hollow under it dark and smoky. The giant's fire burns
   // inside with his supper on a spit; bones, his club and his bed of hides lie about. At the back stands the carved stele.
@@ -456,8 +707,8 @@ export class Structures {
   summit(s) {
     const ctx = this.site(s, 0.3), P = ctx.P, lr = dice(77);
     for (let k = 0; k < 14; k++) { const a = lr() * 6.28, r = lr() * 1.1, y = 0.2 + Math.floor(k / 5) * 0.5; boulder(P, -3 + Math.cos(a) * r * (1 - y / 2), y, 1.5 + Math.sin(a) * r * (1 - y / 2), 0.35 + lr() * 0.2, SMAT.rock); }
-    P.push([uvBox(1.6, 0.9, 1.0).translate(1.5, 0.45, -0.5), SMAT.marble], [uvBox(1.8, 0.14, 1.2).translate(1.5, 0.97, -0.5), SMAT.marble]);
-    tripod(P, 1.5, 1.04, -0.5, 0.6); this.fire(ctx, 1.5, 1.7, -0.5, 0.8);
+    if (hasPiece('plBomos')) { P.push(...piece('plBomos', 1.5, 0, -0.5, Math.PI, [2.05, 1.4, 1.3]), ...piece('plFireBowl', 1.5, 0.95, -0.5, 0, 0.85)); this.fire(ctx, 1.5, 1.35, -0.5, 0.8); }   // (the pack's carved altar block and a bronze fire bowl)
+    else { P.push([uvBox(1.6, 0.9, 1.0).translate(1.5, 0.45, -0.5), SMAT.marble], [uvBox(1.8, 0.14, 1.2).translate(1.5, 0.97, -0.5), SMAT.marble]); tripod(P, 1.5, 1.04, -0.5, 0.6); this.fire(ctx, 1.5, 1.7, -0.5, 0.8); }
     column(P, -0.5, 0, -2.6, 3.2, 0.32, SMAT.marble);
     const ey = 3.3, E = GMAT.bronze;   // the eagle, wings half spread
     P.push([new THREE.SphereGeometry(0.32, 10, 8).scale(0.8, 0.9, 1.4).translate(-0.5, ey + 0.35, -2.6), E], [new THREE.SphereGeometry(0.16, 8, 6).translate(-0.5, ey + 0.72, -2.25), E], [new THREE.ConeGeometry(0.07, 0.2, 5).rotateX(Math.PI / 2).translate(-0.5, ey + 0.68, -2.06), GMAT.gold]);
@@ -483,8 +734,33 @@ export class Structures {
     this.flames.forEach((f, i) => { f.scale.set(1, 1 + Math.sin(t * 11 + i) * 0.12 + Math.sin(t * 5.3 + i * 2) * 0.08, 1); f.rotation.y = t * 0.6; });
     this.lights.forEach((p, i) => { if (p.distanceToSquared(P) < 80 * 80) askLight(p, 18 * (1 + Math.sin(t * 13 + i) * 0.08), 18); });
     for (const u of this.uses) if (u.glyphs) u.glyphs.material.emissiveIntensity = u.taken ? 0.15 : 1.2 + Math.sin(t * 2 + u.at.x) * 0.4;
+    for (const u of this.uses) if (u.beacon?.visible) { moveBeacon(u.beacon, t, this.cam); askLight(u.at.clone().setY(u.at.y + 2.4), 14, 12, 0xffc860); }   // (the stand lit gold too)
     void dt;
   }
+}
+// An olive's offering fire, beyond the flame fire() makes: a hotter core inside it (returned, to flicker with the flames)
+// and a thin column of smoke, soft puffs each rising and widening as it fades, drifting a little to one side. Each puff
+// moves itself when it's drawn (onBeforeRender), from the clock alone, so it costs nothing while the site is out of sight.
+let SMOKE = null;
+function offeringFire(grp, x, y, z, seed) {
+  SMOKE ||= {
+    tex: (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');   // (a few soft blobs together: a puff, not a ball)
+      for (const [bx, by, br] of [[32, 34, 26], [22, 28, 16], [42, 26, 15], [30, 20, 14]]) { const gr = g.createRadialGradient(bx, by, 0, bx, by, br); gr.addColorStop(0, 'rgba(255,255,255,.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); }
+      return new THREE.CanvasTexture(c); })(),
+    core: new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }),
+  };
+  const core = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.26, 7, 1, true).translate(0, 0.13, 0), SMOKE.core); core.position.set(x, y, z); grp.add(core);
+  const N = 18, RISE = 9, H = 6, drift = seed * 2.4;   // (a puff takes RISE seconds to climb H metres)
+  for (let k = 0; k < N; k++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: SMOKE.tex, color: 0xd6d1c8, transparent: true, opacity: 0, depthWrite: false, rotation: k * 2.3 }));
+    sp.frustumCulled = false; sp.renderOrder = 3; grp.add(sp);
+    sp.onBeforeRender = () => {
+      const t = performance.now() / 1000, u = (t / RISE + k / N) % 1, lean = u * u * 1.1;
+      sp.position.set(x + Math.cos(drift) * lean + Math.sin(t * 0.9 + k * 1.7) * 0.07 * u, y + 0.35 + u * H, z + Math.sin(drift) * lean + Math.cos(t * 0.7 + k) * 0.07 * u);
+      sp.scale.setScalar(0.35 + u * 1.9); sp.material.rotation = k * 2.3 + u * 1.5; sp.material.opacity = Math.min(1, u * 5) * Math.pow(1 - u, 1.6); sp.updateMatrixWorld();
+    };
+  }
+  return core;
 }
 // A panel of carved marks (different for each tree or cave)
 function glyphTex(seed) {

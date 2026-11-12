@@ -6,21 +6,38 @@ import * as THREE from 'three';
 import { propGeo, propMat, leafMat, TREE_BUILDERS, mergeParts, rr, isLow as PROP_LOW, A2C_FRAG } from './trees.js';
 import { SPECIES, STRIDE, CELL } from './flora.js';
 import { MIST_R0, MIST_R1 } from './reach.js';
+import { heightAt } from './gen.js';
 import { renderer, sun, hemi } from '../render/core.js';
 import { PRIORITY } from './pool.js';
 
 export const NEAR_R = 75;                     // full-detail radius
-export const MID_R = 260;                     // light meshes out to here, impostors beyond
+export const MID_R = 180;                     // light meshes out to here, impostors beyond
+const SHADE_LAYER = 6; sun.shadow.camera.layers.enable(SHADE_LAYER);   // (the trees' shadow stand-ins: the sun's shadow camera sees them, no other camera does)
+const SPLIT = 20;                             // (a pack tree's own detail out to here; its thinned version beyond, to NEAR_R)
 const NEAR_KEEP = NEAR_R + CELL * 1.5, FAR = 256, FAR_R = 600;
 // Behind the player's mist (tester feedback, 15 and 16 Oct; see atmosphere.js and reach.js) the distant land is drawn
 // with much less: from MIST_R0 out to MIST_R1 things drop away one by one (each at its own distance, so there's no ring
 // where they vanish), until only a share of each kind is left: half the trees and ruins, a tenth of the big rocks, none
 // of the small stuff. Coming closer, they come back the same way.
-const SMALL = new Set(['lavender', 'broom', 'myrtle', 'fern', 'redbush', 'amphorae', 'herm', 'reeds']);
-const farKeep = (sp) => { const n = SPECIES[sp].name; return SMALL.has(n) ? 0 : n === 'rock' || n === 'boulder' ? 0.1 : 0.5; };
+const SMALL = new Set(['lavender', 'broom', 'myrtle', 'fern', 'redbush', 'amphorae', 'herm', 'reeds', 'bush', 'stump', 'log', 'lilypads', 'swampgrass', 'driftwood', 'moss']);
+// the smallest things on the ground (Patch 12) go well inside the mist, from 35 m to 75 m: there are a great many of them
+const TINY = new Set(['flowers', 'tallgrass', 'mushrooms', 'pebbles', 'branch', 'roots']);
+const farKeep = (sp) => { const n = SPECIES[sp].name; return SMALL.has(n) || TINY.has(n) ? 0 : n === 'rock' || n === 'boulder' ? 0.1 : 0.5; };
 const dice = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
-// how far off this one is still drawn (Infinity: always, as one of the share that stays)
-const keepTo = (sp, x, z) => { const k = farKeep(sp), h = dice(x, z); return h < k ? Infinity : MIST_R0 + (MIST_R1 - MIST_R0) * ((h - k) / (1 - k)); };
+// how far off this one is still drawn (Infinity: always, as one of the share that stays); over its last few metres it
+// sinks into the ground (shrinks about its foot), so nothing pops out of sight as you walk away
+const SHRINK = 6;
+const sinks = (sp) => SMALL.has(SPECIES[sp].name) || TINY.has(SPECIES[sp].name);   // (trees and rocks don't: they drop away behind the mist as before)
+function shrink(m, i, left) { if (left >= SHRINK) return; const f = Math.max(left, 0) / SHRINK; for (const e of [0, 1, 2, 4, 5, 6, 8, 9, 10]) m[i * 16 + e] *= f; }
+const keepTo = (sp, x, z) => { const k = farKeep(sp), h = dice(x, z); if (TINY.has(SPECIES[sp].name)) return 35 + 40 * h; return h < k ? Infinity : MIST_R0 + (MIST_R1 - MIST_R0) * ((h - k) / (1 - k)); };
+// A tree struck by an axe shakes (tester, 12 Nov): its crown sways away from the blow and back, dying out within
+// SHAKE_T seconds, while its foot stays put. Drawn as a shear about the instance's foot (each point moved along the blow
+// by its height above it), so trunk, leaves and shadow move as one and the bent tree keeps its height.
+const SHAKE_T = 0.75, SHAKE_A = 0.07;
+function sway(m, i, s, t) {
+  const a = SHAKE_A * s.k * Math.exp(-t * 6) * Math.sin(t * 15);   // (the first swing, away from the blow, the biggest)
+  for (const c of [0, 4, 8]) { const up = m[i * 16 + c + 1] * a; m[i * 16 + c] += s.dx * up; m[i * 16 + c + 2] += s.dz * up; }
+}
 
 // ---- extra species the new world needs
 TREE_BUILDERS.pomegranate = (v) => {            // a small, bushy tree with glossy leaves and red fruit
@@ -80,12 +97,41 @@ TREE_BUILDERS.wallruin = () => {
   return P;
 };
 TREE_BUILDERS.lavender = () => {
-  const P = [[new THREE.IcosahedronGeometry(0.36, 1).scale(1.3, 0.55, 1.3).translate(0, 0.16, 0), 0x6d7f4a]], n = PROP_LOW() ? 6 : 22;
+  const P = [], n = PROP_LOW() ? 6 : 22;
+  for (let k = 0; k < 3; k++) { const a = k * 2.1 + rr(-0.4, 0.4); P.push([new THREE.IcosahedronGeometry(rr(0.2, 0.27), PROP_LOW() ? 0 : 1).scale(1.2, 0.75, 1.2).translate(Math.cos(a) * 0.18, 0.13, Math.sin(a) * 0.18), k % 2 ? 0x46552f : 0x4f5d36]); }   // (a mound of grey-green leaves, dark: vertex colours come out bright)
   for (let k = 0; k < n; k++) { const a = rr(0, 6.28), d = rr(0, 0.42), h = rr(0.45, 0.75), lean = rr(-0.2, 0.2);
     if (!PROP_LOW()) P.push([new THREE.CylinderGeometry(0.008, 0.01, h, 3).translate(0, h / 2, 0).rotateZ(lean).rotateY(a).translate(Math.cos(a) * d, 0.1, Math.sin(a) * d), 0x6f8a4a]);
     P.push([new THREE.ConeGeometry(0.035, 0.2, 4).rotateX(Math.PI).translate(0, h + 0.02, 0).rotateZ(lean).rotateY(a).translate(Math.cos(a) * d, 0.1, Math.sin(a) * d), k % 3 ? 0x8a6ccf : 0x7457c0]); }
   return P;
 };
+
+// ---- the ground between (Patch 12): carved stand-ins for the pack's models (flora-pack.js), at about their sizes
+const BARK = 0x5a4130, BARK2 = 0x6b5038, PALE = 0x7d7466, LEAF = 0x46672b, LEAF2 = 0x557a33, GREY = 0x5e5a54;
+const blades = (P, n, R, h0, h1, cols) => { for (let i = 0; i < n; i++) { const a = rr(0, 6.283), d = rr(0, R), h = rr(h0, h1), lean = rr(-0.25, 0.25);
+  P.push([new THREE.ConeGeometry(rr(0.02, 0.04), h, 3, 1).translate(0, h / 2, 0).rotateZ(lean).rotateY(a).translate(Math.cos(a) * d, 0, Math.sin(a) * d), cols[i % cols.length]]); } return P; };
+const lying = (r0, r1, len) => new THREE.CylinderGeometry(r1, r0, len, PROP_LOW() ? 5 : 8).rotateZ(Math.PI / 2).translate(0, r0, 0);
+TREE_BUILDERS.flowers = (v) => {
+  const P = [[new THREE.IcosahedronGeometry(0.22, 0).scale(1.2, 0.5, 1.2).translate(0, 0.08, 0), LEAF]], head = [0xb3291f, 0xd59b1c, 0x7656c0, 0xd8d2c0, 0xc8572a, 0xb53a6a, 0xe0c840][v % 7];
+  for (let k = 0; k < (PROP_LOW() ? 4 : 10); k++) { const a = rr(0, 6.283), d = rr(0, 0.25), h = rr(0.25, 0.5);
+    if (!PROP_LOW()) P.push([new THREE.CylinderGeometry(0.006, 0.008, h, 3).translate(Math.cos(a) * d, h / 2, Math.sin(a) * d), 0x5c7a3a]);
+    P.push([new THREE.IcosahedronGeometry(0.04, 0).scale(1, 0.6, 1).translate(Math.cos(a) * d, h, Math.sin(a) * d), head]); }
+  return P;
+};
+TREE_BUILDERS.tallgrass = () => blades([], PROP_LOW() ? 8 : 26, 0.5, 0.5, 1.1, [0x6f7f3a, 0x7d8a45, 0x5f7333]);
+TREE_BUILDERS.bush = (v) => { const P = []; for (let k = 0; k < 4 + (v % 3); k++) P.push([new THREE.IcosahedronGeometry(rr(0.55, 0.85), PROP_LOW() ? 0 : 1).translate(rr(-0.8, 0.8), rr(0.45, 0.85), rr(-0.7, 0.7)), k % 2 ? LEAF : LEAF2]); return P; };
+TREE_BUILDERS.mushrooms = () => { const P = []; for (let k = 0; k < 4; k++) { const x = rr(-0.2, 0.2), z = rr(-0.2, 0.2), h = rr(0.08, 0.2);
+  P.push([new THREE.CylinderGeometry(0.02, 0.025, h, 5).translate(x, h / 2, z), 0xd8d0b8], [new THREE.SphereGeometry(rr(0.05, 0.09), 7, 4, 0, 6.283, 0, 1.6).translate(x, h, z), k % 2 ? 0x9a2a1c : 0x7a4a2a]); } return P; };
+TREE_BUILDERS.pebbles = () => { const P = []; for (let k = 0; k < 7; k++) P.push([new THREE.IcosahedronGeometry(rr(0.06, 0.16), 0).scale(1, 0.6, 1).translate(rr(-0.4, 0.4), 0.03, rr(-0.35, 0.35)), k % 2 ? GREY : STONE2]); return P; };
+TREE_BUILDERS.stump = (v) => { const h = 0.35 + (v % 3) * 0.15, P = [[new THREE.CylinderGeometry(0.32, 0.42, h, PROP_LOW() ? 6 : 9).translate(0, h / 2, 0), BARK], [new THREE.CylinderGeometry(0.3, 0.3, 0.02, PROP_LOW() ? 6 : 9).translate(0, h, 0), 0x9a7a52]];
+  for (let k = 0; k < 4; k++) P.push([new THREE.ConeGeometry(0.1, 0.6, 4).rotateZ(1.2).rotateY(k * 1.57 + rr(-0.3, 0.3)).translate(Math.cos(k * 1.57) * 0.35, 0.05, -Math.sin(k * 1.57) * 0.35), BARK]); return P; };
+TREE_BUILDERS.log = (v) => { const len = 3.6 + (v % 4) * 0.8, r = 0.32 + (v % 2) * 0.1; return [[lying(r, r * 0.85, len), BARK2], [new THREE.CylinderGeometry(r * 0.95, r * 0.95, 0.03, 8).rotateZ(Math.PI / 2).translate(len / 2, r, 0), 0x9a7a52], [new THREE.ConeGeometry(0.06, 0.8, 4).rotateZ(-0.9).translate(-0.4, r + 0.4, 0.15), BARK2]]; };
+TREE_BUILDERS.branch = () => [[lying(0.04, 0.025, 1.4), BARK], [new THREE.CylinderGeometry(0.015, 0.025, 0.5, 4).rotateZ(Math.PI / 2).rotateY(0.7).translate(0.2, 0.05, 0.18), BARK]];
+TREE_BUILDERS.roots = () => { const P = []; for (let k = 0; k < 4; k++) P.push([lying(0.08, 0.03, rr(0.9, 1.6)).translate(0.6, -0.04, 0).rotateY(rr(0, 6.283)), BARK]); return P; };
+TREE_BUILDERS.lilypads = () => { const P = []; for (let k = 0; k < 6; k++) P.push([new THREE.CircleGeometry(rr(0.14, 0.3), PROP_LOW() ? 6 : 10, 0.3, 5.9).rotateX(-Math.PI / 2).translate(rr(-0.8, 0.8), 0.01, rr(-0.8, 0.8)), k % 3 ? 0x3f6a2a : 0x4c7a30]);
+  P.push([new THREE.IcosahedronGeometry(0.06, 0).translate(rr(-0.3, 0.3), 0.04, rr(-0.3, 0.3)), 0xd8d2c8]); return P; };
+TREE_BUILDERS.swampgrass = () => blades([], PROP_LOW() ? 8 : 22, 0.7, 0.8, 1.8, [0x4f6a2e, 0x5b7533, 0x667c38]);
+TREE_BUILDERS.moss = () => { const P = []; for (let k = 0; k < 3; k++) P.push([new THREE.IcosahedronGeometry(rr(0.4, 0.7), PROP_LOW() ? 0 : 1).scale(1, 0.35, 1).translate(rr(-0.5, 0.5), 0.05, rr(-0.5, 0.5)), k % 2 ? 0x3f5a24 : 0x4a6628]); return P; };
+TREE_BUILDERS.driftwood = (v) => [[lying(0.12, 0.07, 2.2 + (v % 3) * 0.6), PALE], [new THREE.CylinderGeometry(0.03, 0.05, 0.7, 5).rotateZ(Math.PI / 2).rotateY(0.6).translate(0.5, 0.12, 0.25), PALE]];
 
 // ---- materials with the near/far cut-off (wind sway stays as in the base material)
 const VEG_U = { uVegC: { value: new THREE.Vector2() }, uNearR: { value: NEAR_R }, uMidR: { value: MID_R }, uFarR: { value: FAR_R } };
@@ -152,8 +198,14 @@ impMat.customProgramCacheKey = () => 'vegImpostor';
 const quad = new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0);
 const _pm = new THREE.Matrix4(), _fr = new THREE.Frustum(), _sp = new THREE.Sphere();
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
+// A tree stands a little into the ground, deeper on a slope, so its spreading roots don't stand clear of the land on the
+// downhill side (the layout's height is the ground at the trunk; drawing only). This is on top of the sink each pack
+// model already has in its geometry, down to where its roots close into the trunk (rootTop in flora-pack.js).
+const ROOTED = SPECIES.map((s) => s.res === 'tree' && s.name !== 'titan');
 function matrixOf(items, i, hidden) {
-  const o = i * STRIDE; _e.set(0, items[o + 5], 0); _q.setFromEuler(_e); _p.set(items[o + 2], items[o + 3], items[o + 4]); _s.setScalar(hidden ? 0 : items[o + 6]);
+  const o = i * STRIDE, x = items[o + 2], z = items[o + 4], sc = items[o + 6]; let y = items[o + 3];
+  if (ROOTED[items[o]]) { const h = heightAt(x, z), g = Math.hypot(heightAt(x + 1, z) - h, heightAt(x, z + 1) - h); y -= sc * Math.min(1.3, 0.12 + g * 1.2); }
+  _e.set(0, items[o + 5], 0); _q.setFromEuler(_e); _p.set(x, y, z); _s.setScalar(hidden ? 0 : sc);
   return _m.compose(_p, _q, _s);
 }
 
@@ -167,6 +219,7 @@ export class Vegetation {
     this.scene = scene; this.pool = pool; this.group = new THREE.Group(); this.group.name = 'vegetation'; scene.add(this.group);
     this.near = new Map(); this.far = new Map(); this.timer = 0; this.removed = new Set();   // removed: "cx,cz,i" of felled trees
     this.batches = new Map(); this.nearDirty = false;   // the near band, batched (see rebuildNear)
+    this.shaken = new Set();                             // near cells with a tree shaking (shake)
     this.mids = new Map(); this.midDirty = false;        // and the mid band, batched the same way (rebuildMid)
     this.onCell = null;            // callback(cellKey, items, cx, cz, added) so gameplay can index harvestable things
   }
@@ -257,17 +310,24 @@ export class Vegetation {
       if (!b || b.cap < n) {
         if (b) for (const m of b.meshes) { this.group.remove(m); m.dispose(); }
         const P = this.geoFor(sp, v), cap = Math.ceil(n * 1.4) + 16, sh = !SPECIES[sp].noShadow;
-        const trunk = new THREE.InstancedMesh(P.geo, cut(propMat, false), cap), meshes = [trunk];
-        if (P.cards) { const lm = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, false), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
+        const pair = (geo, cards) => { const t = new THREE.InstancedMesh(geo, cut(propMat, false), cap), ms = [t];
+          if (cards) { const lm = new THREE.InstancedMesh(cards, cut(P.cardMat || leafMat, false), cap); lm.instanceMatrix = t.instanceMatrix; ms.push(lm); } return ms; };
+        // (a pack tree has a lighter version for the band's further half, from SPLIT out: its leaves thinned)
+        const near = pair(P.geo, P.cards), far = P.geo2 ? pair(P.geo2, P.cards2) : [];
+        // (and its shadow cast by its light far version, seen only by the sun's shadow camera: a pack tree's leaves are
+        // most of its triangles, and drawing them all twice, for the shadows too, cost more than the woods could spare)
+        const proxy = (ms) => { if (!sh || !P.geo2 || !P.lo) return []; const ps = pair(P.lo, P.loCards); for (const q of ps) { q.instanceMatrix = ms[0].instanceMatrix; q.layers.set(SHADE_LAYER); q.userData.shade = true; } return ps; };
+        const nearShade = proxy(near), farShade = proxy(far), meshes = [...near, ...far, ...nearShade, ...farShade];
         P.geo.computeBoundingSphere(); const bs = P.geo.boundingSphere.clone(); if (P.cards) { P.cards.computeBoundingSphere(); bs.union(P.cards.boundingSphere); }
-        b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), refs: [], slot: new Int32Array(cap), n: 0 };
-        for (const m of meshes) { m.castShadow = sh; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; m.userData.batch = b; this.group.add(m); }
+        b = { meshes, near, far, nearShade, farShade, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), refs: [], slot: new Int32Array(cap), slot2: new Int32Array(cap), n: 0 };
+        for (const m of meshes) { m.castShadow = sh && (m.userData.shade || !nearShade.length); m.receiveShadow = true; m.frustumCulled = false; m.count = 0; m.userData.batch = b; m.userData.far = far.includes(m); this.group.add(m); }
         this.batches.set(key, b);
       }
       b.n = n; b.refs = refs;
       for (let k = 0; k < n; k++) { const it = refs[k * 2].items, o = refs[k * 2 + 1] * STRIDE, sc = it[o + 6];
         matrixOf(it, refs[k * 2 + 1], false); b.mats.set(_m.elements, k * 16);
-        b.cen[k * 4] = it[o + 2] + b.sphere.center.x * sc; b.cen[k * 4 + 1] = it[o + 3] + b.sphere.center.y * sc; b.cen[k * 4 + 2] = it[o + 4] + b.sphere.center.z * sc; b.cen[k * 4 + 3] = b.sphere.radius * sc; }
+        b.cen[k * 4] = it[o + 2] + b.sphere.center.x * sc; b.cen[k * 4 + 1] = it[o + 3] + b.sphere.center.y * sc; b.cen[k * 4 + 2] = it[o + 4] + b.sphere.center.z * sc; b.cen[k * 4 + 3] = b.sphere.radius * sc;
+        b.keep[k] = sinks(sp) ? keepTo(sp, it[o + 2], it[o + 4]) : Infinity; }
     }
   }
   // The mid band (light versions, out to MID_R): every block in reach together, one batch per species (the variants share
@@ -281,7 +341,7 @@ export class Vegetation {
       // rebuild, which comes with every block that streams in, then only copies them)
       if (!blk.mats) { const n = it.length / STRIDE; blk.mats = new Float32Array(n * 16); blk.keep = new Float32Array(n); blk.gkey = [];
         for (let i = 0; i < n; i++) { const o = i * STRIDE, sp = it[o], v = it[o + 1]; matrixOf(it, i, false); blk.mats.set(_m.elements, i * 16);
-          const kt = keepTo(sp, it[o + 2], it[o + 4]); blk.keep[i] = kt * kt; blk.gkey[i] = this.geoFor(sp, v).leafFar ? sp + ':' + v : 'sp' + sp; } }
+          blk.keep[i] = keepTo(sp, it[o + 2], it[o + 4]); blk.gkey[i] = this.geoFor(sp, v).leafFar ? sp + ':' + v : 'sp' + sp; } }
       for (let i = 0; i < it.length / STRIDE; i++) { if (it[i * STRIDE + 6] <= 0 || this.removed.has(blk.idOf[i])) continue;
         const key = blk.gkey[i]; (groups.get(key) || groups.set(key, []).get(key)).push(blk, i); }
     }
@@ -292,9 +352,10 @@ export class Vegetation {
         if (b) for (const m of b.meshes) { this.group.remove(m); m.dispose(); }
         const it0 = refs[0].items, o0 = refs[1] * STRIDE, P = this.geoFor(it0[o0], it0[o0 + 1]), cap = Math.ceil(n * 1.3) + 32;
         const trunk = new THREE.InstancedMesh(P.lo, cut(propMat, true), cap), meshes = [trunk];
-        if (P.cards && P.leafFar) { const lm = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, true), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
-        P.lo.computeBoundingSphere(); const bs = P.lo.boundingSphere.clone(); if (meshes[1]) { P.cards.computeBoundingSphere(); bs.union(P.cards.boundingSphere); }
-        b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), refs: [], n: 0 };
+        const lc = P.loCards === undefined ? P.cards : P.loCards;   // (a pack plant's far version has cards of its own, thinned)
+        if (lc && P.leafFar) { const lm = new THREE.InstancedMesh(lc, cut(P.cardMat || leafMat, true), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
+        P.lo.computeBoundingSphere(); const bs = P.lo.boundingSphere.clone(); if (meshes[1]) { lc.computeBoundingSphere(); bs.union(lc.boundingSphere); }
+        b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), sinks: sinks(it0[o0]), refs: [], n: 0 };
         for (const m of meshes) { m.castShadow = false; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; this.group.add(m); }
         this.mids.set(key, b);
       }
@@ -309,19 +370,26 @@ export class Vegetation {
   cull(camera, pos) {
     if (this.nearDirty) this.rebuildNear();
     _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _fr.setFromProjectionMatrix(_pm);
-    const nr = NEAR_R + NF, keep2 = 48 * 48;
+    const nr = NEAR_R + NF, keep2 = 48 * 48, now = performance.now() / 1000;
+    for (const cell of this.shaken) { for (const [i, s] of cell.shake) if (now - s.t0 > SHAKE_T) cell.shake.delete(i); if (!cell.shake.size) { cell.shake = null; this.shaken.delete(cell); } }
     for (const b of this.batches.values()) {
-      const dst = b.meshes[0].instanceMatrix.array; let m = 0;
+      const dst = b.near[0].instanceMatrix.array, dst2 = b.far[0]?.instanceMatrix.array, split2 = dst2 ? SPLIT * SPLIT : Infinity; let m = 0, m2 = 0;
       for (let k = 0; k < b.n; k++) {
         const x = b.cen[k * 4], y = b.cen[k * 4 + 1], z = b.cen[k * 4 + 2], r = b.cen[k * 4 + 3], dx = x - pos.x, dz = z - pos.z, d2 = dx * dx + dz * dz;
         if (d2 > (nr + r) * (nr + r)) continue;                                            // beyond the near band: the mid band draws it
         const cell = b.refs[k * 2]; if (cell.hidden && cell.hidden.has(b.refs[k * 2 + 1])) continue;   // faded out of the way of the camera
         if (d2 > keep2) { _sp.center.set(x, y, z); _sp.radius = r; if (!_fr.intersectsSphere(_sp)) continue; }
+        if (d2 > b.keep[k] * b.keep[k]) continue;                                           // (the small things drop away well before the mist)
+        const sh = cell.shake?.get(b.refs[k * 2 + 1]);                                     // (struck by an axe just now: shaking)
+        if (d2 > split2) { for (let e = 0; e < 16; e++) dst2[m2 * 16 + e] = b.mats[k * 16 + e]; if (b.keep[k] < Infinity) shrink(dst2, m2, b.keep[k] - Math.sqrt(d2)); if (sh) sway(dst2, m2, sh, now - sh.t0); b.slot2[m2++] = k; continue; }
         for (let e = 0; e < 16; e++) dst[m * 16 + e] = b.mats[k * 16 + e];
+        if (b.keep[k] < Infinity) shrink(dst, m, b.keep[k] - Math.sqrt(d2));
+        if (sh) sway(dst, m, sh, now - sh.t0);
         b.slot[m++] = k;
       }
-      for (const mesh of b.meshes) { mesh.count = m; mesh.boundingSphere = null; }
-      b.meshes[0].instanceMatrix.needsUpdate = true;
+      for (const mesh of [...b.near, ...b.nearShade]) { mesh.count = m; mesh.boundingSphere = null; }
+      for (const mesh of [...b.far, ...b.farShade]) { mesh.count = m2; mesh.boundingSphere = null; }
+      b.near[0].instanceMatrix.needsUpdate = true; if (dst2) b.far[0].instanceMatrix.needsUpdate = true;
     }
     if (this.midDirty) this.rebuildMid();
     const lo = NEAR_R - NF, hi = MID_R + MF;
@@ -329,9 +397,10 @@ export class Vegetation {
       const dst = b.meshes[0].instanceMatrix.array; let m = 0;
       for (let k = 0; k < b.n; k++) {
         const x = b.cen[k * 4], y = b.cen[k * 4 + 1], z = b.cen[k * 4 + 2], r = b.cen[k * 4 + 3], dx = x - pos.x, dz = z - pos.z, d2 = dx * dx + dz * dz;
-        const inner = Math.max(0, lo - r); if (d2 < inner * inner || d2 > (hi + r) * (hi + r) || d2 > b.keep[k]) continue;   // (and dropped away behind the mist)
+        const inner = Math.max(0, lo - r); if (d2 < inner * inner || d2 > (hi + r) * (hi + r) || d2 > b.keep[k] * b.keep[k]) continue;   // (and dropped away behind the mist)
         _sp.center.set(x, y, z); _sp.radius = r; if (!_fr.intersectsSphere(_sp)) continue;
         for (let e = 0; e < 16; e++) dst[m * 16 + e] = b.mats[k * 16 + e];
+        if (b.sinks) shrink(dst, m, b.keep[k] - Math.sqrt(d2));
         m++;
       }
       for (const mesh of b.meshes) mesh.count = m;
@@ -347,8 +416,13 @@ export class Vegetation {
     return top;
   }
   // which tree an instance hit by a ray belongs to: { cell, i }
-  treeAt(mesh, instanceId) { const b = mesh.userData.batch; if (!b) return null; const k = b.slot[instanceId]; return { cell: b.refs[k * 2], i: b.refs[k * 2 + 1] }; }
+  treeAt(mesh, instanceId) { const b = mesh.userData.batch; if (!b) return null; const k = (mesh.userData.far ? b.slot2 : b.slot)[instanceId]; return { cell: b.refs[k * 2], i: b.refs[k * 2 + 1] }; }
   hideTree(cell, i, on) { if (on) (cell.hidden ||= new Set()).add(i); else cell.hidden?.delete(i); }
+  // Shake tree i of near cell cx,cz, struck from the side (dx, dz: the way the blow went, across the ground). k: how hard
+  shake(cx, cz, i, dx, dz, k = 1) {
+    const cell = this.near.get(cx + ',' + cz), l = Math.hypot(dx, dz); if (!cell?.items || !l) return;
+    (cell.shake ||= new Map()).set(i, { t0: performance.now() / 1000, dx: dx / l, dz: dz / l, k }); this.shaken.add(cell);
+  }
   // One tree or rock as its own little object (for felling animations): instanced meshes of count 1 in a group
   single(sp, v) {
     const P = this.geoFor(sp, v), g = new THREE.Group(), I = new THREE.Matrix4();

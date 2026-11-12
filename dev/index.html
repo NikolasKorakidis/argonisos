@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Argonisos asset browser</title>
+<!-- The asset browser and sandbox (src/dev/): every model in the team's packs as it looks in the game, and a field to try
+     little scenes on. Local only: the models it shows are the git-ignored pack exports. -->
+<style>
+  :root { --panel: rgba(18, 16, 14, .82); --line: rgba(244, 230, 196, .14); --ink: #f2ead8; --dim: #b6ab95; --gold: #ffc861; --bad: #ff8a70; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #a9cfe8; color: var(--ink); font: 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  canvas { display: block; position: fixed; inset: 0; }
+  button, select, input { font: inherit; color: inherit; }
+  button { background: rgba(255, 255, 255, .08); border: 1px solid var(--line); border-radius: 5px; padding: 4px 9px; cursor: pointer; }
+  button:hover { background: rgba(255, 255, 255, .16); } button.on { background: rgba(255, 200, 97, .22); border-color: rgba(255, 200, 97, .55); color: #fff3d6; }
+  button:disabled { opacity: .4; cursor: default; }
+  input[type=search], select { width: 100%; background: rgba(0, 0, 0, .35); border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; outline: none; }
+  input[type=search]:focus, select:focus { border-color: rgba(255, 200, 97, .6); } select option { background: #222; }
+  .panel { position: fixed; background: var(--panel); backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 18px rgba(0, 0, 0, .25); }
+
+  #side { left: 10px; top: 10px; bottom: 10px; width: 292px; display: flex; flex-direction: column; gap: 8px; padding: 10px; z-index: 5; }
+  #side h1 { margin: 0; font-size: 14px; font-weight: 650; letter-spacing: .02em; display: flex; justify-content: space-between; align-items: baseline; } #side h1 small { color: var(--dim); font-weight: 400; font-size: 11px; }
+  .tabs { display: flex; gap: 4px; } .tabs button { flex: 1; padding: 6px; font-weight: 600; }
+  .checks { display: flex; flex-direction: column; gap: 3px; color: var(--dim); } .checks label { display: flex; gap: 6px; align-items: center; cursor: pointer; } .checks label:hover { color: var(--ink); }
+  #tree { flex: 0 1 auto; max-height: 38%; overflow-y: auto; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 4px 0; }
+  .node { display: flex; justify-content: space-between; padding: 2px 6px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+  .node:hover { background: rgba(255, 255, 255, .08); } .node.sel { background: rgba(255, 200, 97, .2); color: #fff3d6; } .node.none { opacity: .38; }
+  .node .n { color: var(--dim); font-variant-numeric: tabular-nums; } .node.kind { font-weight: 600; } .node.sub { padding-left: 20px; }
+  .node .tw { display: inline-block; width: 12px; color: var(--dim); }
+  #pager { display: flex; align-items: center; gap: 6px; } #pager span { flex: 1; text-align: center; color: var(--dim); font-variant-numeric: tabular-nums; }
+  #list { flex: 1; overflow-y: auto; position: relative; min-height: 80px; border-radius: 4px; background: rgba(0, 0, 0, .18); }
+  #list .row { position: absolute; left: 0; right: 0; height: 22px; display: flex; gap: 6px; align-items: center; padding: 0 7px; cursor: pointer; white-space: nowrap; overflow: hidden; }
+  #list .row:hover { background: rgba(255, 255, 255, .08); } #list .row.sel { background: rgba(255, 200, 97, .2); } #list .row.here .nm::before { content: '• '; color: var(--gold); }
+  #list .nm { flex: 1; overflow: hidden; text-overflow: ellipsis; } #list .sz { color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+  #listHead { color: var(--dim); font-size: 11px; display: flex; justify-content: space-between; }
+
+  #info { right: 10px; top: 10px; width: 320px; padding: 12px; z-index: 5; display: none; max-height: calc(100% - 70px); overflow-y: auto; }
+  #info.open { display: block; } body.build #info { top: 60px; max-height: calc(100% - 120px); }
+  #info h2 { margin: 0 24px 2px 0; font-size: 15px; word-break: break-word; } #info .x { position: absolute; right: 8px; top: 8px; padding: 0 7px; }
+  #info .where { color: var(--dim); margin-bottom: 8px; } #info dl { display: grid; grid-template-columns: 78px 1fr; gap: 3px 8px; margin: 8px 0; } #info dt { color: var(--dim); } #info dd { margin: 0; word-break: break-all; }
+  #info .id { display: flex; gap: 6px; align-items: center; background: rgba(0, 0, 0, .35); border-radius: 5px; padding: 5px 7px; font: 12px ui-monospace, Menlo, monospace; }
+  #info .id code { flex: 1; word-break: break-all; } #info .acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 11px; font-weight: 600; margin-right: 4px; background: rgba(255, 255, 255, .12); }
+  .badge.game { background: rgba(120, 200, 110, .3); color: #d8f5cf; } .badge.rig { background: rgba(110, 160, 230, .3); color: #d6e6ff; } .badge.bad { background: rgba(255, 110, 80, .3); color: #ffd9cf; }
+
+  #bar { left: 314px; top: 10px; padding: 6px 8px; display: none; gap: 6px; align-items: center; z-index: 4; }
+  #bar.open { display: flex; } #bar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 2px; } #bar .lab { color: var(--dim); }
+  #hints { left: 314px; bottom: 10px; padding: 6px 10px; color: var(--dim); font-size: 12px; z-index: 4; max-width: calc(100% - 330px); }
+  #hints b { color: var(--ink); font-weight: 600; }
+  #tip { position: fixed; z-index: 6; pointer-events: none; background: rgba(12, 10, 8, .9); border: 1px solid var(--line); border-radius: 5px; padding: 5px 8px; display: none; max-width: 300px; }
+  #tip .t { font-weight: 600; } #tip .s { color: var(--dim); font-size: 12px; }
+  #toast { position: fixed; left: 50%; top: 14px; transform: translateX(-50%); z-index: 8; background: rgba(12, 10, 8, .92); border: 1px solid rgba(255, 200, 97, .5); border-radius: 6px; padding: 6px 12px; display: none; }
+
+  .labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+  .lbl { position: absolute; left: 0; top: 0; visibility: hidden; white-space: nowrap; font-size: 11px; color: #fff; background: rgba(14, 12, 10, .62); padding: 1px 5px; border-radius: 3px; will-change: transform; }
+  .lbl.head { font-size: 12.5px; font-weight: 650; background: rgba(14, 12, 10, .8); color: var(--gold); padding: 2px 7px; }
+
+  #missing { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 9; background: rgba(10, 10, 12, .55); }
+  #missing .box { max-width: 520px; padding: 22px 26px; } #missing h2 { margin: 0 0 8px; font-size: 18px; } #missing code { background: rgba(0, 0, 0, .4); padding: 2px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="side" class="panel">
+  <h1>Argonisos assets <small id="total"></small></h1>
+  <div class="tabs"><button data-tab="browse">Browse</button><button data-tab="build">Build</button></div>
+  <input id="q" type="search" placeholder="Search names, ids, packs…  ( / )" autocomplete="off" spellcheck="false">
+  <select id="pack"></select>
+  <div class="checks">
+    <label><input type="checkbox" id="inGame"> Already in the game</label>
+    <label><input type="checkbox" id="noSnow"> Hide snowy variants (_Snow)</label>
+  </div>
+  <div id="tree"></div>
+  <div id="pager"><button id="prev" title="Previous page (PageUp)">‹ Prev</button><span id="pageText"></span><button id="next" title="Next page (PageDown)">Next ›</button></div>
+  <div id="listHead"><span id="listCount"></span><span id="listHint"></span></div>
+  <div id="list"><div id="listIn"></div></div>
+</div>
+<div id="bar" class="panel">
+  <span class="lab">Snap</span><button data-snap="0">Off</button><button data-snap="0.5">0.5 m</button><button data-snap="2.5" title="the Ancient Empire kit's bay">2.5 m</button>
+  <span class="sep"></span><button id="undo" title="Ctrl+Z">Undo</button><button id="redo" title="Ctrl+Shift+Z">Redo</button>
+  <span class="sep"></span><button id="download">Export</button><button id="copy">Copy JSON</button><button id="import">Import</button><input id="file" type="file" accept=".json,application/json" hidden>
+  <button id="clear">Clear</button><span class="lab" id="count"></span>
+</div>
+<div id="info" class="panel"></div>
+<div id="hints" class="panel"></div>
+<div id="tip"></div>
+<div id="toast"></div>
+<div id="missing"><div class="box panel" style="position: static"><h2>No catalogue</h2>
+  <p>The pack files aren't on this machine: run <code>node tools/assets/everything.mjs</code></p>
+  <p style="color: var(--dim)">It exports every model in the team's packs (from <code>incoming assets/</code>) to <code>assets/models/pack/all/</code> and writes <code>catalogue.json</code> there. Those files are licensed and stay out of the public repo.</p></div></div>
+<script type="importmap">{ "imports": { "three": "/vendor/three/three.module.js" } }</script>
+<script type="module" src="/src/dev/browser.js"></script>
+</body>
+</html>

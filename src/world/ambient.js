@@ -1,13 +1,15 @@
 // Life in the air round the camera: pollen drifting over the meadows by day, fireflies blinking at dusk and through the
 // night, leaves spinning down in the forests, snow blowing off the summit of Olympos. Each is a few hundred soft points,
 // moved on the CPU (cheap at this count) and drawn in one call; how many show follows the place, the hour and the weather.
+// (The fireflies live on the GPU, in fireflies.js; they take their amount from here like the rest.)
 import * as THREE from 'three';
 import { scene, renderer } from '../render/core.js';
 import { groundAt } from './groundcut.js';
+import { updateFireflies } from './fireflies.js';
+import { WEATHER } from './weather.js';
 
 const KINDS = {
   pollen: { n: 260, R: 18, H: 5, size: 0.07, color: [1.0, 0.95, 0.75], add: false },
-  firefly: { n: 110, R: 22, H: 2.6, size: 0.16, color: [2.6, 3.2, 1.0], add: true },
   leaf: { n: 160, R: 18, H: 14, size: 0.16, color: [0.42, 0.36, 0.12], add: false },
   snow: { n: 420, R: 20, H: 12, size: 0.1, color: [1.1, 1.12, 1.18], add: false },
 };
@@ -30,11 +32,15 @@ const respawn = (S, i, c, top) => {
   S.pos[i * 3] = x; S.pos[i * 3 + 2] = z; S.pos[i * 3 + 1] = top ? Math.max(g, c.y) + K.H * (0.6 + rnd() * 0.4) : g + 0.3 + rnd() * K.H;
 };
 
-// amounts 0..1 per kind; c: the camera position; t: seconds
+// amounts 0..1 per kind; c: the camera position; t: seconds. With dt 0 (screenshot tests hold everything still) each
+// amount is taken at once rather than eased, so a still picture never keeps what an earlier place had.
+let fireflies = 0;
 export function updateAmbient(dt, c, amounts, t) {
-  const scale = renderer.domElement.height / 2;
+  const scale = renderer.domElement.height / 2, ease = dt === 0 ? 1 : Math.min(1, dt * 0.8);
+  // fireflies want a clear night: fewer under cloud, none in the rain (the amount brings that)
+  fireflies += (Math.max(0, Math.min(1, amounts.firefly || 0)) * (1 - WEATHER.k.overcast * 0.7) - fireflies) * ease; updateFireflies(fireflies, c, t);
   for (const [name, S] of Object.entries(systems)) {
-    const amt = Math.max(0, Math.min(1, amounts[name] || 0)), m = S.pts.material; m.uniforms.uOp.value += (amt - m.uniforms.uOp.value) * Math.min(1, dt * 0.8);
+    const amt = Math.max(0, Math.min(1, amounts[name] || 0)), m = S.pts.material; m.uniforms.uOp.value += (amt - m.uniforms.uOp.value) * ease;
     const op = m.uniforms.uOp.value; S.pts.visible = op > 0.01; if (!S.pts.visible) { S.init = false; continue; }
     m.uniforms.uScale.value = scale;
     const K = S.K, n = K.n, p = S.pos;
@@ -42,7 +48,6 @@ export function updateAmbient(dt, c, amounts, t) {
     for (let i = 0; i < n; i++) {
       let x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2]; const ph = S.ph[i];
       if (name === 'pollen') { x += (0.35 + Math.sin(t * 0.3 + ph) * 0.2) * dt; y += Math.sin(t * 0.9 + ph * 3) * 0.12 * dt; z += Math.cos(t * 0.4 + ph) * 0.15 * dt; S.a[i] = 0.5 + 0.5 * Math.sin(t * 0.5 + ph); }
-      else if (name === 'firefly') { x += Math.sin(t * 0.7 + ph * 5) * 0.5 * dt; y += Math.sin(t * 1.1 + ph * 2) * 0.25 * dt; z += Math.cos(t * 0.6 + ph * 3) * 0.5 * dt; S.a[i] = Math.max(0, Math.sin(t * (1.2 + (ph % 1)) + ph * 9)) ** 3; }
       else if (name === 'leaf') { y -= (0.55 + (ph % 1) * 0.4) * dt; x += (Math.sin(t * 1.7 + ph * 4) * 0.6 + 0.25) * dt; z += Math.cos(t * 1.3 + ph * 2) * 0.4 * dt; S.a[i] = 0.9; }
       else { x += (3.5 + Math.sin(t + ph) * 1.5) * dt; y -= (0.6 + (ph % 1) * 0.6) * dt; z += Math.sin(t * 2 + ph * 7) * 0.8 * dt; S.a[i] = 0.85; }
       p[i * 3] = x; p[i * 3 + 1] = y; p[i * 3 + 2] = z;

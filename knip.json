@@ -3,9 +3,11 @@
   "entry": [
     "src/main.js",
     "src/world/terrain-worker.js",
+    "src/dev/browser.js",
     "tests/suites/*.mjs",
     "tests/bot/*.{js,mjs}",
     "tools/*.mjs",
+    "tools/assets/*.mjs",
     "legacy/game.js"
   ],
   "project": [
@@ -13,8 +15,5 @@
     "tests/**/*.{js,mjs}",
     "tools/**/*.mjs",
     "legacy/*.js"
-  ],
-  "ignoreDependencies": [
-    "three"
   ]
 }

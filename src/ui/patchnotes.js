@@ -1,8 +1,192 @@
 // Patch notes, newest first, shown from the title screen and the pause menu. A new patch goes at the top of the list;
 // players see a "New" mark on the button until they've opened the notes for the newest one.
-import { icon } from './icons.js';
+import { glyph } from './icons.js';
 
 export const PATCHES = [
+  {
+    id: 'patch-16', name: 'Patch 16', title: 'Light Between the Trees', date: '12 November 2026',
+    intro: 'Sunbeams in the woods, moonlit nights and fireflies, a grander temple, families of animals, and a hero who holds his tools properly.',
+    sections: [
+      { t: 'Light', icon: 'blessing', items: [
+        '<b>Light in the woods:</b> sunbeams slant down between the trees through a soft haze, golden and thickest at morning and evening, and the forest floor is dappled with sun and shade.',
+        '<b>Moonlit nights:</b> nights are blue and dark but readable, in the woods too, and your torches and fires glow warm against them.',
+        '<b>Fireflies</b> drift over the meadows on clear nights.',
+      ] },
+      { t: 'Your Hero', icon: 'you', items: [
+        'Tools and weapons sit properly in the hand: axe blades, hammer heads and dagger points face the way you swing.',
+        'Footsteps sound the moment each foot touches the ground, at any pace.',
+        'Your feet no longer cross over each other when you run.',
+        'The <b>Cretan cape</b> now shows when you wear it, and streams out behind you as you run.',
+        'The minimap is bigger.',
+      ] },
+      { t: 'The Woods', icon: 'tree', items: [
+        'Trees stand deeper in the earth: no more roots sticking out like legs.',
+        'Trees shake when your axe bites into them.',
+        'The <b>ancient olives</b>: the carved stone now stands clear of the trunk where you can see it, with a small offering fire and its smoke beside it, so you can spot them from afar.',
+      ] },
+      { t: 'The Temple of Zeus', icon: 'temple', items: [
+        'The temple is half as big again, with doorways a person can walk through. Inside there are rugs, lit braziers, offering tables, jars and banners, and an open way through to the back room.',
+        'Carrying a boss\'s head? A column of golden light rises over its offering stand, and the stand is on your map and compass. Fires now burn beside the altar and the stands.',
+        'The head you offer is the <b>beast\'s own head</b>, set on the stand for all to see.',
+        'Fires everywhere burn with soft, flickering flames.',
+      ] },
+      { t: 'Creatures', icon: 'bull', items: [
+        'Some <b>hogs</b> roam as a sow with her piglets. Anger one and the whole family comes for you.',
+        'Some <b>does</b> walk with a fawn, which runs when she runs.',
+        'Hares are bigger, hop in quick bursts and wear natural coats.',
+        'Animals no longer pile into one spot when they charge you.',
+      ] },
+      { t: 'Things to Find', icon: 'goal', items: [
+        '<b>Feathers</b> are bigger and brighter, and sparkle so you can spot them; lightstone glints faintly too.',
+        'Four old chests wait in the <b>abandoned town</b>: rope and food, a bundle of arrows, leather and fibre, and a simple helmet.',
+      ] },
+    ],
+  },
+  {
+    id: 'patch-15', name: 'Patch 15', title: 'Who Wakes on the Shore', date: '12 November 2026',
+    intro: 'Make your own hero, walk through sturdier woods, and see the great places of Nisos rebuilt.',
+    sections: [
+      { t: 'Your Hero', icon: 'you', items: [
+        'A new trial begins by choosing <b>who wakes on the shore</b>: man or woman, skin, hair and its colour, beard, eyes, clothes, and a laurel or golden wreath. Change your look any time from the pause menu (Appearance); your saved game remembers it.',
+        'No more heavy "sunglasses" brows on the man\'s face.',
+      ] },
+      { t: 'The Woods', icon: 'tree', items: [
+        'Fixed: trees no longer look crooked or broken up close, their crowns are full again (no more seeing through the olives), and their roots sit in the ground instead of standing clear of it on slopes.',
+        'Silver birches no longer glare white in the sun.',
+      ] },
+      { t: 'The Great Places', icon: 'temple', items: [
+        'The <b>Temple of Zeus</b>, the Labyrinth, the abandoned farmhouse, the Chimera\'s shrine and the summit of Olympos are rebuilt: a great painted temple with gold reliefs on its pediment, ashlar walls and a horned gate for the Minotaur\'s arena, a farmhouse with its loom and bread oven, and a mossy shrine with the Chimera in bronze on its altar.',
+      ] },
+      { t: 'Creatures', icon: 'bull', items: [
+        'Most animals you meet are now grown, and their coats look like they belong in Greece (no more glowing markings). The dryad carries her staff where you can see it.',
+      ] },
+      { t: 'Things and Places', icon: 'build', items: [
+        'Every tool, weapon, piece of armour, food, material and building piece has an icon showing its own model, and the pack, crafting and build menus have new copper-rimmed frames, bars and buttons.',
+        'Fallen branches lie on the ground, felled trees leave proper logs, the bed is a real low bed, and log walls no longer let daylight through their corners.',
+        'Your footsteps now sound different on rock, sand, leaves, boards and water, and land the same way.',
+      ] },
+    ],
+  },
+  {
+    id: 'patch-14', name: 'Patch 14', title: 'New Leaves', date: '12 November 2026',
+    intro: 'A new look for much of Nisos, chosen by our playtesters: the trees, the creatures, the hero and what you build.',
+    sections: [
+      { t: 'The Woods', icon: 'tree', items: [
+        'All-new trees: broad <b>meadow trees</b> with great spreading trunks, orchard trees, silver birches, and tall pines in the hills and the forest of Yleos. Every crown is made of real leaves that move in the wind.',
+        'New bushes, flowering lavender, new rocks and boulders, and the marble ruins in the grass: fallen column drums, scattered blocks and broken statues.',
+        'Bare pines in the marsh and dead trees in the woods.',
+      ] },
+      { t: 'You', icon: 'you', items: [
+        'You begin as a plain islander, and the armour you make now shows on you piece by piece.',
+        'Play as a <b>man or a woman</b>: choose under Hero in the settings.',
+      ] },
+      { t: 'Creatures', icon: 'bull', items: [
+        'Animals come young and grown: <b>fawns, does and stags</b>, fox cubs, leverets and piglets, each with its own coat, so no two herds look alike.',
+        'New bodies for the giants (now swinging a spiked mace), the dryads (forest witches with a staff) and the dryadlings.',
+      ] },
+      { t: 'Around the Island', icon: 'temple', items: [
+        'A new <b>statue of Zeus</b> in the temple, hoplite guardians along the sacred way and a pair of stone lions where it comes in. Broken statues lie in the labyrinth and at the Chimera\'s shrine, and a water-bearer stands by the ancient olives.',
+        'New looks for what you gather: stones, branches, lightstone, dandelions, moonflowers, feathers, bones and fiber bushes, each in several shapes. Fallen trees leave proper logs, what you drop lies in a basket, and graves are marked with a marble stele.',
+      ] },
+      { t: 'Building', icon: 'build', items: [
+        'Buildings have a new look: plank floors, a heavy timber door frame and plank door, thatched gable ends, a stick fence, a stone campfire, a smaller rack for the cooking stand, a new bed and a tall standing torch.',
+      ] },
+      { t: 'Sound', icon: 'jump', items: [
+        'New footsteps on grass, earth, rock and wooden floors.',
+      ] },
+    ],
+  },
+  {
+    id: 'patch-13', name: 'Patch 13', title: 'Each in Its Place', date: '11 November 2026',
+    intro: 'The plants of Nisos now grow where they belong, and look as they should up close.',
+    sections: [
+      { t: 'Fixed', icon: 'goal', items: [
+        'No more <b>strange patches of colour</b> on plants: the coloured squares in the marsh, the red-and-white zigzags on some pines, the grey lumps where bushes should be, and flowers growing out of grey stones are all gone.',
+        'Pines and the forest\'s bushes have proper needles and leaves now, swaying in the wind.',
+        'Flowers, grass and the small things on the ground no longer vanish all at once in a ring around you. Each one sinks gently into the ground at its own distance as you walk away.',
+        'Pebbles and rocks are stone-coloured again, not glaring white in the sun.',
+      ] },
+      { t: 'The Meadows', icon: 'tree', items: [
+        'Each stretch of meadow has its own flowers: <b>fields of poppies</b> in one place, lavender, purple anemones or yellow crown daisies in another, with a few others mixed in.',
+        'Tall grass grows in tussocks, and real shrubs line the edges of the woods. Lavender grows from a mound of grey-green leaves.',
+      ] },
+      { t: 'The Forests and the Marsh', icon: 'wet', items: [
+        'Leafy undergrowth and <b>moss</b> beneath the forest trees. Brown mushrooms at their feet, and red-capped fly agarics in the giant forest.',
+        'Meadow flowers no longer stray into the forest or the marsh. The marsh has water lilies in flower, cattails, sedge and mossy banks.',
+      ] },
+    ],
+  },
+  {
+    id: 'patch-12', name: 'Patch 12', title: 'Undergrowth', date: '11 November 2026',
+    intro: 'The ground of Nisos has filled in: flowers, bushes and the litter of the woods, everywhere you walk.',
+    sections: [
+      { t: 'The Meadows', icon: 'tree', items: [
+        'Drifts of <b>wildflowers</b> in the open meadows and the clearings: poppies, marigolds, irises, daisies and more, each drift mostly of one kind.',
+        'Tufts of tall grass, and leafy bushes along the edges of the woods.',
+      ] },
+      { t: 'The Forests', icon: 'log', items: [
+        'Stumps, fallen logs, branches and roots on the forest floor, and little clusters of mushrooms at the feet of the trees. The giant forest has the most.',
+        'More kinds of trees: new pines and firs in the hills, rounder holm oaks, bare dead trees, and a second pomegranate.',
+      ] },
+      { t: 'Water and Stone', icon: 'wet', items: [
+        'Lily pads on the marsh pools, sedge along their banks, half-drowned logs. Driftwood washed up on the shore.',
+        'Pebbles everywhere, and scree on the rocky slopes.',
+        'Nothing you had cut or gathered comes back: everything new grows in between.',
+      ] },
+    ],
+  },
+  {
+    id: 'patch-11', name: 'Patch 11', title: 'Lost Places', date: '11 November 2026',
+    intro: 'People lived on Nisos once. Out in the meadows you can now find what they left behind.',
+    sections: [
+      { t: 'The Abandoned Town', icon: 'roof', items: [
+        'Far out in the meadows lies <b>a little town</b>, long empty: two paved streets crossing at a square with a fountain, a well and a statue, market stalls under the vines, a colonnaded stoa and the ruins of a temple.',
+        'A dozen houses face the streets, some still roofed, some fallen in. Walk in through their doorways or the gaps where walls came down; a roof still keeps the rain off.',
+        'Behind the houses: a smithy\'s yard with its forge and kiln, and a walled garden of figs and pomegranates. It goes on your map once you have found it.',
+      ] },
+      { t: 'About the Island', icon: 'temple', items: [
+        'Small places all over Nisos: a roadside shrine, a cart lost on the way to market, a fallen colonnade, a shepherd\'s camp, a farmer\'s hut, an old well under an olive, the last of a lookout, a vineyard\'s rest.',
+        'Trees and pickups near these new places have moved, so any you had cut or gathered there grow back.',
+      ] },
+      { t: 'You', icon: 'goal', items: [
+        '<b>Better proportions:</b> longer legs, shorter arms and smaller hands, so you no longer look squat beside the doorways and your armour.',
+        'Axes, hammers, daggers and the rest are gripped in your fist now, not beside it, and your bow hand closes round the bow\'s grip.',
+        'Shields are strapped to your forearm, face out, so your arm no longer pokes through them.',
+      ] },
+    ],
+  },
+  {
+    id: 'patch-10', name: 'Patch 10', title: 'New Faces', date: '11 November 2026',
+    intro: 'Nisos has a new look: a new hero, new creatures and bosses, new trees, new buildings to build, new tools and new sounds.',
+    sections: [
+      { t: 'You', icon: 'goal', items: [
+        'You are a young Cretan in a white chiton now, with the same moves as before.',
+        'New tools in your hands: axes, club, daggers, a building mallet, a pickaxe, a spade for the garden, a wooden spear and a torch.',
+        'The Cretan Bow and its arrows, the two shields and the Lightstone Spear are new too: a labrys on the small shield, Athena\'s owl on the great one.',
+        '<b>You wear your armour now.</b> The Thrower set is a felt cap, a patterned linen corslet and greaves; the Cretan set a bronze helmet, a scaled corslet and gilded greaves. Each piece shows on its own, so you can mix them.',
+        'A torch\'s flame burns straight up and flickers, however you hold it.',
+      ] },
+      { t: 'Creatures', icon: 'bull', items: [
+        'Deer, stags, foxes, hares and boars are new, fully animated animals: they walk, run, graze, attack, flinch and fall with their own movements.',
+        '<b>The Minotaur</b> is new: horned and armoured, his great axe in hand. He paws the ground before he charges, roars, staggers when he runs into a wall, and his blows land when his axe does.',
+        'The skeletons that rise to help him, the dryads, the giants and the dryadlings all have new bodies. <b>The Chimera</b> is now a great spined beast.',
+        'The Owl is a real barn owl now, gliding, flapping and hovering beside you.',
+      ] },
+      { t: 'The World', icon: 'temple', items: [
+        'New trees everywhere: olives and cypresses, oaks, figs, pines and firs, with new rocks, bushes, reeds and ferns, and new ruins in the countryside.',
+        'The sites have new pottery, tripods, firewood, marble columns and painted statues.',
+        'What you find on the ground is new: stones, branches, fiber bushes, bones, and a sack for whatever you drop.',
+      ] },
+      { t: 'Building', icon: 'hammerBuild', items: [
+        'Every building piece has a new look: log walls, plank floors and doors, thatch roofs and gables, stairs, fences, a palisade and gates. They snap and hold up exactly as before.',
+        'The workbench, campfire, cooking stand, bed, chest and standing torch are new too.',
+      ] },
+      { t: 'Sound', icon: 'wet', items: [
+        'Real footsteps on grass, earth, stone, wood and water; landings, doors, chests and the ring of a pick on stone.',
+        'Birdsong by day, crickets at night, and recorded rain, storms and thunder.',
+      ] },
+    ],
+  },
   {
     id: 'patch-9', name: 'Patch 9', title: 'Firm Ground', date: '20 October 2026',
     intro: 'Building on hills: walls and floors now stand on the ground, however long the row.',
@@ -237,7 +421,7 @@ export const PATCHES = [
 export function patchHTML(p) {
   return `<div class="pnhead"><span class="pnname">${p.name}</span><h3>${p.title}</h3><span class="pndate">${p.date}</span></div>
     <p class="pnintro">${p.intro}</p>
-    ${p.sections.map((s) => `<p class="psub">${icon(s.icon)} ${s.t}</p><ul>${s.items.map((i) => `<li>${i}</li>`).join('')}</ul>`).join('')}`;
+    ${p.sections.map((s) => `<p class="psub">${glyph(s.icon)} ${s.t}</p><ul>${s.items.map((i) => `<li>${i}</li>`).join('')}</ul>`).join('')}`;
 }
 // The same notes as plain text, for pasting into a post or a message (headings, then "- " bullets)
 export function patchText(p) {

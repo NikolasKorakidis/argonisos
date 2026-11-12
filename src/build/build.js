@@ -6,6 +6,7 @@
 // collapse. Pieces have hit points: creatures and storms wear them down, the Repair tool mends them.
 import * as THREE from 'three';
 import { PIECES, PIECE } from './pieces.js';
+import { loadKit } from './kit.js';
 import { heightAt } from '../world/gen.js';
 import { clearGrass } from '../world/grass.js';
 import { setCut, SHAPE } from '../world/groundcut.js';
@@ -20,6 +21,7 @@ import { wetLike } from '../world/wetness.js';
 
 const V_LOSS = 0.125, H_LOSS = 0.2, MIN_SUPPORT = 0.1, REACH = 12, G = 8;
 const _v = new THREE.Vector3(), _ray = new THREE.Raycaster();
+const proxyMat = new THREE.MeshBasicMaterial();   // (the invisible aiming shape's: never drawn)
 const ghostOk = new THREE.MeshStandardMaterial({ color: 0x7fe08a, transparent: true, opacity: 0.45, depthWrite: false, emissive: 0x2a8a3a, emissiveIntensity: 0.6 });
 const ghostBad = new THREE.MeshStandardMaterial({ color: 0xff6a5a, transparent: true, opacity: 0.45, depthWrite: false, emissive: 0x8a2a1a, emissiveIntensity: 0.6 });
 const supportColor = (s, grounded) => (grounded ? 0x3a6cff : s > 0.7 ? 0x3fd060 : s > 0.4 ? 0xe8d040 : 0xff4a2a);
@@ -82,6 +84,7 @@ export class Build {
     this.g = g; this.placed = []; this.grid = new Map(); this.seq = 0; this.sel = null; this.rot = 0; this.ghost = null; this.ghostDef = null;
     this.pieces = [{ id: 'repair', name: 'Repair', cat: 'Tools', icon: 'repair', mats: {}, desc: 'Hit a damaged piece with the hammer to mend it.' }, ...PIECES];
     this.meshes = []; this.lights = [];
+    loadKit(PIECES).then(() => { for (const p of this.placed) this.dress(p); if (this.ghost) { const keep = this.ghost.visible; this.g.scene.remove(this.ghost); this.makeGhost(this.ghostDef); this.ghost.visible = keep; } });   // (the kit's models replace the carved look)
     this.flameMat = new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
     this.flameMat2 = new THREE.MeshBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
     this.tint = false; this.chest = null;
@@ -355,13 +358,22 @@ export class Build {
     const alt = ((Math.round(rot / (Math.PI / 2)) % 2) + 2) % 2, k = rank * 2 + alt;
     return { polygonOffset: k > 0, polygonOffsetFactor: -0.12 * k, polygonOffsetUnits: -k };
   }
+  // a piece's meshes, from its look (the kit's model once loaded, the carved one until then); again when the look changes.
+  // Aiming always meets the carved shape, so building works the same whatever the look: with the kit's model shown, the
+  // carved shape stays as an invisible target.
+  dress(p) {
+    const depth = this.depthRank(p.def, p.rot);
+    for (const m of [...p.inner.children]) if (m.userData.piece === p) { p.inner.remove(m); const i = this.meshes.indexOf(m); if (i >= 0) this.meshes.splice(i, 1); }
+    p.mats.length = 0; const kit = p.def.build() !== p.def.carved();
+    for (const { geo, mat } of p.def.build()) { const m2 = wetLike(mat.clone(), mat); Object.assign(m2, depth); p.mats.push(m2); const m = new THREE.Mesh(geo, m2); m.castShadow = m.receiveShadow = true; m.userData.piece = p; p.inner.add(m); if (!kit) this.meshes.push(m); }
+    if (kit) for (const { geo } of p.def.carved()) { const m = new THREE.Mesh(geo, proxyMat); m.visible = false; m.userData.piece = p; p.inner.add(m); this.meshes.push(m); }
+  }
   place(id, pos, rot, opts = {}) {
     this.preview(null);
     const def = PIECE[id], obj = new THREE.Group(); obj.position.copy(pos); obj.rotation.y = rot;
     const inner = new THREE.Group(); obj.add(inner);
     const p = { uid: opts.uid ?? 'pc' + this.seq++, id, def, obj, inner, pos: pos.clone(), rot, hp: opts.hp ?? def.hp, state: opts.state || {}, support: 1, grounded: false, mats: [] };
-    const depth = this.depthRank(def, rot);
-    for (const { geo, mat } of def.build()) { const m2 = wetLike(mat.clone(), mat); Object.assign(m2, depth); p.mats.push(m2); const m = new THREE.Mesh(geo, m2); m.castShadow = m.receiveShadow = true; m.userData.piece = p; inner.add(m); this.meshes.push(m); }
+    this.dress(p);
     this.g.scene.add(obj);
     p.snaps = this.snapsOf(def, pos, rot); p.boxes = this.boxes(def, pos, rot);
     this.index(p, true); this.placed.push(p);

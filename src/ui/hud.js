@@ -1,5 +1,5 @@
 // HUD and the inventory screen. The HUD redraws its bars every frame and everything else when it changes.
-import { icon } from './icons.js';
+import { icon, glyph } from './icons.js';
 import { ITEMS } from '../game/items.js';
 import { COLS, ROWS, MAX_WEIGHT } from '../game/inventory.js';
 import { CONDITIONS, SKILLS, xpForLevel, Stats } from '../player/stats.js';
@@ -93,7 +93,7 @@ export class HUD {
     if (ck !== this.last.cond) {
       this.last.cond = ck;
       $('conds').innerHTML = Object.entries(S.cond).filter(([c]) => CONDITIONS[c]).map(([c, t]) => {
-        const C = CONDITIONS[c]; return `<div class="cond ${BAD.has(c) ? 'bad' : GREAT.has(c) ? 'great' : ''}">${icon(C.icon)}${t !== Infinity ? `<small>${fmtT(t)}</small>` : ''}<div class="tip"><b>${C.name}</b>${C.desc}</div></div>`;
+        const C = CONDITIONS[c]; return `<div class="cond ${BAD.has(c) ? 'bad' : GREAT.has(c) ? 'great' : ''}">${glyph(C.icon)}${t !== Infinity ? `<small>${fmtT(t)}</small>` : ''}<div class="tip"><b>${C.name}</b>${C.desc}</div></div>`;
       }).join('');
     }
     if (clockText !== this.last.clock) { this.last.clock = clockText; $('clock').innerHTML = `${icon(night ? 'moon' : 'sun')}<span>${clockText}</span>`; }
