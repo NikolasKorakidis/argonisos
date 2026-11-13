@@ -1,6 +1,7 @@
 // Terrain worker: builds terrain patches (positions, normals, colours, uvs, bare rock) off the main thread so streaming
 // the world never stutters. Also bakes the world height texture used by the water shader.
-import { heightAt, biomeWeights, groundColor, fbm, isRock } from './gen.js';
+import { heightAt, biomeWeights, groundColor, fbm, isRock, CAVE, CAVES } from './gen.js';
+import { caveRock } from './cave.js';
 import { layoutCell, CELL, shadeAround, bakeShade, solidsAround, SPECIES, STRIDE, treeDensity } from './flora.js';
 // how wide a space to keep round the things that stand about but aren't solid (metres at scale 1)
 const CLEAR_R = { lavender: 0.5, broom: 0.7, myrtle: 0.8, fern: 0.6, redbush: 0.7, colfall: 1.4, colstand: 0.6, herm: 0.4, amphorae: 0.7, wallruin: 1.6, stump: 0.6, log: 1.6, driftwood: 1.2 };
@@ -72,6 +73,9 @@ self.onmessage = (e) => {
   else if (msg.type === 'heightTex') { const r = heightTexture(msg); self.postMessage({ type: 'heightTex', ...r }, [r.data.buffer]); }
   else if (msg.type === 'woodsTex') { const r = woodsTexture(msg); self.postMessage({ type: 'woodsTex', ...r }, [r.data.buffer]); }
   else if (msg.type === 'grassTex') {      // local ground texture for the grass carpet: R height, G grass amount (+ 2 × tallness 0-7), B tint variation, A flowers
+    // (on the hill over a Giant's cave, not on its floor: where the ground is cut down for the cave, the grass grows on the
+    // rock's top, which is the hill as it would be without the cave: gen.js CAVE)
+    CAVE.cut = false;
     const { N, x0, z0, size } = msg, data = new Float32Array(N * N * 4), w = { p: 0, y: 0, v: 0, r: 0 };
     const occ = new Float32Array(N * N), kk = size / N; bakeShade(shadeAround(x0, z0, x0 + size, z0 + size), x0 + kk / 2, z0 + kk / 2, kk, N, N, occ);   // the grass shaded under trees too
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
@@ -107,6 +111,7 @@ self.onmessage = (e) => {
         }
       }
     }
+    CAVE.cut = true;
     self.postMessage({ type: 'grassTex', id: msg.id, data, N, x0, z0, size }, [data.buffer]);
   }
   else if (msg.type === 'mapImage') {     // the world map: painted like an old chart, hill-shaded
@@ -126,6 +131,10 @@ self.onmessage = (e) => {
       if (h > 0 && h < 30 && Math.abs((h % 10) - 5) < 0.18) { data[o] *= 0.8; data[o + 1] *= 0.8; data[o + 2] *= 0.8; }   // contour lines
     }
     self.postMessage({ type: 'mapImage', id: msg.id, data, N, extent }, [data.buffer]);
+  }
+  else if (msg.type === 'caveRock') {     // the rock of a Giant's cave and its hollow (cave.js)
+    const r = caveRock(CAVES[msg.i], msg.o), R = r.R; delete R.c;
+    self.postMessage({ type: 'caveRock', id: msg.id, ...r }, [r.pos, r.nor, r.col, r.rock, r.index, R.f, R.TOP, R.HS, R.FL, R.CD, R.RHO, R.CL].map((a) => a.buffer));
   }
   else if (msg.type === 'pickups') self.postMessage({ type: 'pickups', id: msg.id, items: layoutPickups(msg.cx, msg.cz) });   // what lies about in a cell
   else if (msg.type === 'flora') {         // lay out an n×n block of flora cells

@@ -45,9 +45,13 @@ export const PIECE_NAMES = ['twHouseA', 'twHouseB', 'twHouseC', 'twHouseD', 'twH
   // packs' own models)
   'plTemple', 'plWall', 'plWallPost', 'plGatePost', 'plBeam', 'plBrazier', 'plColumn', 'plColumnHalf', 'plPile', 'plBlock', 'plDais',
   'plFarmhouse', 'plLoom', 'plBed', 'plTable', 'plStool', 'plSteps', 'plSymChimera', 'plSymMinotaur', 'plBomos', 'plFireBowl',
+  // (and the offerings at the summit's altar, the broken column its bronze eagle stands on, the eagle itself)
+  ...['sm-prop-goblet-01', 'sm-prop-goblet-02', 'sm-prop-plate-01', 'sm-chr-attach-crown-leaf-01', 'sm-bld-pillar-monument-01-damaged-01'].map((k) => 'all/polygonancientempire/' + k), 'all/polygongeneric/sm-gen-prop-coin-pile-01', 'all/pnb-alpine-mountain/fx-hawk-01',
   'all/pnb-swamp-marshland/sm-prop-bone-pile-01', 'all/pnb-swamp-marshland/sm-prop-bone-pile-02', 'all/pnb-swamp-marshland/sm-prop-bone-ribcage-01', 'all/pnb-swamp-marshland/sm-prop-bone-skull-01',
   // the temple's furnishings: its rugs, offering tables, banners, braziers and heaped jars
-  ...['rug-01', 'rug-03', 'table-02', 'table-08', 'banner-01-a', 'banner-large-01', 'brazier-03', 'vase-pile-01', 'vase-pile-02'].map((k) => 'all/polygonancientempire/sm-prop-' + k)];
+  ...['rug-01', 'rug-03', 'table-02', 'table-08', 'banner-01-a', 'banner-large-01', 'brazier-03', 'vase-pile-01', 'vase-pile-02'].map((k) => 'all/polygonancientempire/sm-prop-' + k),
+  // the Giants' caves: the giant's fire, the bones of the big beasts he ate and the skulls of the men
+  'all/polygonnature/sm-prop-campfire-01', 'all/pnb-arid-desert/sm-prop-bones-01', 'all/pnb-arid-desert/sm-prop-bones-04', 'all/polygonnature/sm-prop-skull-01', 'all/polygongeneric/sm-gen-prop-skull-01'];
 export function loadPieces() {
   const mats = new Map();   // (one material per texture or colour, wet in the rain; pale palettes taken down as above)
   const matFor = (src) => { const key = src.map ? src.map.uuid : src.color.getHexString(); if (!mats.has(key)) mats.set(key, wettable(new THREE.MeshStandardMaterial({ map: src.map, color: src.map ? 0xb4b4b4 : src.color.clone().multiplyScalar(0.8), roughness: 0.85 }), { dark: 0.68, gloss: 0.3 })); return mats.get(key); };

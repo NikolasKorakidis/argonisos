@@ -48,9 +48,9 @@ export function installGame(g) {
   g.ITEMS = ITEMS; g.graves = new Graves(g); { const od = g.onDeath; g.onDeath = () => { g.graves.fall(); od?.(); }; }
   g.combat = new Combat(g);
   g.acts = new Acts(g);
-  g.pickups.landAt = (x, z, fy) => { const gy = Math.max(groundAt(x, z), -1.2); return fy === undefined ? gy : Math.max(gy, g.build.floorAt(x, z, fy + 0.3)); };
+  g.pickups.landAt = (x, z, fy) => { const gy = Math.max(groundAt(x, z), -1.2); return fy === undefined ? gy : Math.max(gy, g.build.floorAt(x, z, fy + 0.3), g.structures.floorAt(x, z, fy + 0.3)); };   // (on what you built, or on the rock over a cave, before the ground below)
   player.floorAt = (p) => Math.max(g.build.floorAt(p.x, p.z, p.y), g.structures.floorAt(p.x, p.z, p.y));
-  player.camBlock = (a, b) => g.build.rayBlock(a, b);
+  player.camBlock = (a, b) => { const p = g.build.rayBlock(a, b), q = g.structures.rayBlock(a, b); return p === null ? q : q === null ? p : Math.min(p, q); };   // (walls you built, and the rock of a cave you're in)
   g.underRoof = (p) => g.build.underRoof(p) || g.structures.underRoof(p);
   g.nearFire = (p) => !!g.build.nearFire(p) || g.structures.nearSacredFire(p);
   g.weatherRain = () => WEATHER.k.rain;
@@ -62,7 +62,8 @@ export function installGame(g) {
   // meadows' grass and earth
   const surface = () => { const p = player.pos; if (player.swimming || groundAt(p.x, p.z) < 0) return 'water'; if (g.build.floorAt(p.x, p.z, p.y) > p.y - 0.1) return 'wood';
     if (g.structures.floorAt(p.x, p.z, p.y) > p.y - 0.1 || isRock(p.x, p.z)) return 'stone'; const w = biomeWeights(p.x, p.z); return heightAt(p.x, p.z) < 1.6 && w.v < 0.5 ? 'sand' : w.y > 0.5 ? 'leaves' : 'ground'; };
-  player.onStep = (k) => sound(k, k === 'step' || k === 'land' ? surface() : undefined);
+  // footsteps and landings by how near the camera is: as loud as ever zoomed right in (1.8 m), a quarter fully out (11 m)
+  player.onStep = (k) => sound(k, k === 'step' || k === 'land' ? surface() : undefined, 1 - 0.75 * Math.min(1, Math.max(0, (player.camDist - 1.8) / 9.2)));
 
   // ---- giving items: into the pack, the rest at your feet
   g.give = (id, n = 1, extra) => {

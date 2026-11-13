@@ -96,8 +96,9 @@ export class Terrain {
 
 // ---- Bare rock (tester feedback, 15 and 16 Oct): where the slope rule makes the ground rock (the 'rock' attribute the
 // worker fills from groundColor), the terrain shader lays a rock surface over the colour: slabs split by dark cracks,
-// each slab its own grey, fine grain, a few lichen specks, and layers that follow the contours (bands of equal height,
-// like bedded stone). It is projected from three sides, so steep faces don't smear, and its relief catches the light.
+// each slab its own grey, fine grain, a few lichen specks, and here and there faint bedding (layers dipping a little
+// across the land, wandering, fading with distance). It is projected from three sides, so steep faces don't smear,
+// and its relief catches the light.
 // One tileable texture made here at start-up: R tone, G relief, B lichen, A broad variation.
 const ROCK_TEX = (() => {
   const N = 256, C = 4, d = new Uint8Array(N * N * 4);
@@ -138,12 +139,16 @@ export function rockGround(mat) {
       vec3 rp = vRockP / 7.0;   // (a tile 7 m across: slabs of about 1.7 m)
       vec4 rk = texture2D(uRockTex, rp.zy) * rbw.x + texture2D(uRockTex, rp.xz) * rbw.y + texture2D(uRockTex, rp.xy + 0.37) * rbw.z;
       float rbroad = texture2D(uRockTex, vRockP.xz / 41.0 + 0.5).a;
-      float rlayer = vRockP.y / 1.7 + (rbroad - 0.5) * 2.5, rbed = abs(fract(rlayer) - 0.5) * 2.0;   // bedding: thin dark seams along the contours
-      float rtone = (0.4 + rk.r * 0.85) * mix(0.82, 1.1, step(0.5, fract(rlayer * 0.5))) * mix(0.62, 1.0, smoothstep(0.0, 0.12, rbed)) * (0.85 + rbroad * 0.3);
+      // bedding: thin dark seams in beds that dip a little across the land and wander with the noise, faint, only here and
+      // there, and gone with distance (seen from afar, beds a couple of metres apart drew regular stripes over whole faces)
+      float rmacro = texture2D(uRockTex, vRockP.xz / 197.0 + 0.13).a, rpatch = texture2D(uRockTex, vRockP.zx / 113.0 + 0.71).a;
+      float rlayer = (vRockP.y + dot(vRockP.xz, vec2(0.21, -0.13))) / (1.7 + rmacro * 1.6) + (rbroad - 0.5) * 6.0 + (rmacro - 0.5) * 9.0, rbed = abs(fract(rlayer) - 0.5) * 2.0;
+      float rbk = smoothstep(0.42, 0.72, rpatch) * (1.0 - smoothstep(30.0, 110.0, length(vViewPosition)));
+      float rtone = (0.4 + rk.r * 0.85) * mix(1.0, mix(0.9, 1.06, step(0.5, fract(rlayer * 0.5))) * mix(0.75, 1.0, smoothstep(0.0, 0.12, rbed)), rbk) * (0.8 + rbroad * 0.25 + rmacro * 0.15);
       vec3 rcol = diffuseColor.rgb * rtone;
       rcol = mix(rcol, rcol * vec3(0.85, 1.0, 0.62), smoothstep(0.72, 0.85, rk.b) * 0.6);   // lichen
       diffuseColor.rgb = mix(diffuseColor.rgb, rcol, vRock);
-      float rockRelief = (rk.g + smoothstep(0.0, 0.12, rbed) * 0.35) * vRock * (1.0 - smoothstep(25.0, 70.0, length(vViewPosition)));`)
+      float rockRelief = (rk.g + smoothstep(0.0, 0.12, rbed) * 0.35 * rbk) * vRock * (1.0 - smoothstep(25.0, 70.0, length(vViewPosition)));`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       {   // the relief tilts the normal (bump mapping from screen-space derivatives)
         vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition), r1 = cross(sy, normal), r2 = cross(normal, sx);

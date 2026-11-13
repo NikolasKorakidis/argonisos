@@ -22,6 +22,10 @@ for (const f of fs.readdirSync(path.join(ROOT, 'src'), { recursive: true }).filt
   for (const m of src.matchAll(/'(all\/[\w-]+\/[\w-]+[a-z0-9])'/g)) used.add(m[1]);
   for (const m of src.matchAll(/\[([^[\]]*)\]\.map\(\(k\) => '(all\/[\w-]+\/[\w-]+)' \+ k\)/g)) for (const k of m[1].matchAll(/'([\w-]+)'/g)) used.add(m[2] + k[1]);
 }
+// (and any quoted '<pack>/<model>' that names a file there, for lists spelled without the 'all/' they're loaded with)
+for (const f of fs.readdirSync(path.join(ROOT, 'src'), { recursive: true }).filter((f) => f.endsWith('.js') && !f.startsWith('dev'))) {
+  for (const m of fs.readFileSync(path.join(ROOT, 'src', f), 'utf8').matchAll(/'([a-z0-9-]+\/[a-zA-Z0-9_-]+)'/g)) if (fs.existsSync(path.join(ROOT, 'assets/models/pack/all', m[1] + '.glb'))) used.add('all/' + m[1]);
+}
 const files = [...used].map((u) => `assets/models/pack/${u}.glb`), gone = files.filter((f) => !fs.existsSync(path.join(ROOT, f)));
 if (gone.length) { console.error('the game loads these, but they are missing (node tools/assets/everything.mjs):\n  ' + gone.join('\n  ')); process.exit(1); }
 git('add', '-f', '--', ...files);

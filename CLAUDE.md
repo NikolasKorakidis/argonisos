@@ -25,7 +25,8 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
   trunks broke into shards); `mid: { tris }` makes `<name>_mid.glb` for the near band's further half (from `SPLIT` 20 m
   in `vegetation.js`: leaf patches thinned and grown, `solidMin` keeping the trunk) and `far: { lod, tris }`
   `<name>_far.glb` for the mid band (`FAR` in `flora-pack.js`). Near trees cast their shadows from the far version, on
-  `SHADE_LAYER` (only the sun's shadow camera sees it): the woods stay under the perf budget only so. A pack tree whose
+  `SHADE_LAYER` (only the sun's shadow cameras see it; three r160 picks shadow casters by the *viewing* camera's layers,
+  so `core.js` draws each map with its own camera's): the woods stay under the perf budget only so. A pack tree whose
   crown starts too low grows a little and loses its lowest leaf patches (`floraGeo`); trees are drawn sunk into the
   ground by their root flare (`rootTop` in `flora-pack.js`, baked into the pivot so every band and the shadow stand-ins
   agree) and by the slope (`matrixOf`), so roots don't stand clear. A hit tree sways (`veg.shake`, applied in `cull`). They take the carved species' places
@@ -148,12 +149,18 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   logs, moss, pebbles, lilies… whose pack models keep their own size, `natural`; each piece goes by the biome where it
   stands, and some kinds pick their looks by land: `FLOWER_KINDS` per stretch of meadow, `BUSH`, `MUSHROOM`) · `reach.js` how far the mist and grass reach · `vegetation.js` near/mid/impostor bands · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
   `terrain.js` + `terrain-worker.js` (worker pool, `pool.js`) · `structures.js` + `greek.js` the sites' buildings and
-  props · `town.js` the abandoned town and the small scenes about the island (`SITES.town`, `SITES.spots`) · `sky.js`, `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`), `water.js`, `giantwood.js`, `ambient.js` (+ `fireflies.js`, GPU), `stormwall.js` · `groundcut.js` · `pickups.js`
+  props · `town.js` the abandoned town and the small scenes about the island (`SITES.town`, `SITES.spots`) · `sky.js` (the sun crosses square to the Olympos–storm line, `SUN_RISE`), `clouds.js` (low-poly cumulus from the packs, the storm deck, Olympos's cap, banks and valley mist; `cloudAt` folds into the fog), `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`; a full fog closes to `FOG_FAR` 32 m), `lightning.js` (strikes, flashes, thunder delayed by distance; shared by the weather's storms and the wall), `water.js`, `giantwood.js`, `ambient.js` (+ `fireflies.js`, GPU), `stormwall.js` (+ `storm-shader.js`: Zeus's wall, a quarter-resolution ray-marched cloud volume composited in the atmosphere pass, skipped when out of view; its sound fades out by ~1.4 km) · `cave.js` the Giants' caves' rock (a worker-built field in the terrain's material; the hill and the cut in gen.js `CAVE_FORM`) · `groundcut.js` · `pickups.js`
   (+ `pickup-layout.js`) · `colliders.js`. `src/util/math.js` shared helpers. `src/assets.js` model and texture loading.
-- `src/render`: `core.js` renderer, composer, shadows, adaptive resolution · `atmosphere.js` mist, haze, cloud shadows,
-  grade, and the light in the air: screen-space sun shafts (quarter resolution, blurred out from the sun), the woods'
+- `src/render`: `core.js` renderer, composer, adaptive resolution, and the sun's shadows (`docs/plans/shadows-plan.md`):
+  two cascades, a sharp near map (64 m, a little ahead of you, every frame) and a coarse far one (220 m: a second light
+  that gives no light), blended in the `sunShadow` shader patch, which also cuts part of the sky's light in shade. The
+  far map holds only what stands still, so it is drawn again only after `SHADOW.farStep` metres or `farTurn` degrees of
+  sun: mark anything that moves `userData.nearShadow` (hero, creatures, pickups: near map only); trees cast into it by
+  their leaves, trunks only into the near map (`SHADOW.onPass` lets `veg` choose what each map draws). By moonlight the
+  far map is empty and trees cast only within `SHADOW.nightR`, fading out by `nightFade` from the camera. Grass takes the shadow from low on each blade · `atmosphere.js` mist, haze, cloud shadows, ambient
+  occlusion (half resolution from the depth, navy, Medium and High), grade, and the light in the air: screen-space sun shafts (quarter resolution, blurred out from the sun), the woods'
   haze (a half-resolution march blended over frames, its thickness from a world texture of how wooded each place is, lit
-  through the shadow map) and the flecks of sun on the forest floor. None of it may depend on where the player stands
+  through the far shadow map) and the flecks of sun on the forest floor. None of it may depend on where the player stands
   (`tests/suites/light.mjs` walks out of a wood and back and fails on any jump; notes in `docs/plans/light-study.md`) ·
   `occlusion.js` fades what blocks the camera · `fx.js`, `lights.js`.
 - `src/player`: `player.js` controller and camera (`speeds.js` its speeds) · `hero.js` rig and clips: the old FBX clips plus the

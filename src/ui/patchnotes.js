@@ -4,6 +4,62 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-19', name: 'Patch 19', title: 'Storm and Shade', date: '13 November 2026',
+    intro: 'Zeus\'s storm towers over the marsh, the temple stands on its own hill, Olympos has become a true mountain and the Giants live in caves. Real shadows fall across the land, and the fog and the storms finally look the part.',
+    sections: [
+      { t: 'The Temple of Zeus', icon: 'temple', items: [
+        'The temple stands on its own hill now, bigger and grander: columns seven times your height, doors fit for a god, and a great hall round a towering Zeus.',
+        'A broad marble plaza surrounds it, and a paved sacred way climbs the hill between tall cypresses, through a marble gateway and past the lions. Olives, plane trees, myrtle and lavender grow round the hill.',
+        'The back door is as grand as the front, and the slim posts inside are now great columns that reach the roof.',
+      ] },
+      { t: 'The Giants\' Caves', icon: 'stone', items: [
+        'Each Giant now lives in a cave inside a wooded hill: a cliff with roots hanging over the mouth, fallen boulders and a worn path. You can climb the hill and walk over it.',
+        'Inside, a smoky lair lit by his fire: his supper on the spit, a bed of straw and hides, heaps of bones, his club, hunts painted on the walls, stalactites, glowing mushrooms in the damp, and the carving lit at the back.',
+      ] },
+      { t: 'Olympos', icon: 'goal', items: [
+        'Olympos has grown into a true mountain of ridges, gullies and crags, with snow lying high up. Its upper faces are too steep to climb: a single mule track winds up it, past cairns, to the old altar at the top.',
+      ] },
+      { t: 'Zeus\'s Storm', icon: 'wet', items: [
+        'The storm that seals the marsh is now a towering wall of churning black cloud, five times taller than before, with a ragged shelf, rain sheets and lightning flickering inside it. You can see it looming from across the island.',
+        'Its thunder carries only so far: a faint rumble now and then from the temple, growing as you come nearer, and the full roar of wind and storm right at its foot. On Olympos you won\'t hear it at all.',
+        '<b>Thunderstorms:</b> forked bolts strike the land, the whole world flashes blue-white, and wet stone and leaves glint in it. The thunder follows a moment later, sooner the closer the strike. At night a close strike lights up the land for an instant.',
+        'A new setting, <b>Reduce flashing</b>, softens lightning and other bright flashes.',
+      ] },
+      { t: 'Weather and Sky', icon: 'wet', items: [
+        '<b>Fog</b> is thick now: you see only some thirty metres, the sky disappears, and the light goes soft and grey.',
+        'The sun now crosses the sky from the side, so it no longer sets behind Olympos or rises out of the storm.',
+        '<b>New clouds:</b> puffy low-poly clouds drift across the sky with the wind, a few on a fine day and crowds of them when it clouds over, golden at dawn and dusk and dark blue by moonlight, with a ring of cloud banks low on the horizon.',
+        '<b>Storms are heavy now:</b> a thick, low, lumpy ceiling of dark cloud covers the whole sky in heavy rain and thunderstorms, with ragged cloud racing beneath it. No more stars, moon or sun through a storm, and lightning lights the clouds up from inside.',
+        '<b>Olympos makes its own weather:</b> a cap of cloud sits on the summit at times with a banner streaming off it downwind, banks of cloud lie in its gullies, and mist pools in the valleys at its foot in the morning. More of it in bad weather and early in the day; some days it clears. Climb into one and you walk through the fog of the cloud itself.',
+      ] },
+      { t: 'Small Things', icon: 'build', items: [
+        'A felled tree leaves a log and a stump as thick as its trunk was.',
+        'The lightstone dagger is held the right way round, blade forward.',
+        'Footsteps are a little softer, and quieter still the further you pull the camera back.',
+        'Things dropped on top of a cave\'s hill stay there instead of falling through to the cave floor.',
+        'The owl speaks about the temple as you reach its plaza, not only once you are on its steps.',
+      ] },
+      { t: 'Shadows', icon: 'blessing', items: [
+        'The trees cast their shadows again. The forest floor is a patchwork of shade and dappled sun, and the trunks throw long stripes when the sun is low.',
+        'Shadows are deeper and a little blue, not a faint grey, so you can see the shade of a rock, a wall or your hero in bright daylight.',
+        'Shadows now reach well into the distance, not just the area right around you: woods and buildings far ahead throw shade too.',
+        'Shadows are soft where they fall from high up, like the shade of a treetop, and sharp where something touches the ground, like your feet or a stone.',
+        'The meadow grass and wildflowers take the shade of the trees, rocks and your hero.',
+        'Far-off forests look darker beneath their treetops, as near ones do.',
+      ] },
+      { t: 'Light', icon: 'goal', items: [
+        'Corners, steps, the foot of a column, the base of a tree and the ground under a boulder are softly shaded, so everything sits in the world instead of floating on it (Medium and High settings).',
+        'Rays of light in the woods reach further, and still don\'t change as you walk.',
+        'By moonlight the trees cast faint shadows close by.',
+      ] },
+      { t: 'Your hero', icon: 'you', items: [
+        'Your hero walks and runs on straight legs: the feet land side by side under the hips instead of crossing in a line, and the ankles no longer bend inwards.',
+        'The woman stands and moves with her feet flat on the ground, not rolled onto their inner edges.',
+        'A foot set down stands flat on the ground, across a slope too.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-18', name: 'Patch 18', title: 'Steady Light', date: '13 November 2026',
     intro: 'The light in the woods no longer flickers on and off as you walk, and the nights have their crickets back.',
     sections: [

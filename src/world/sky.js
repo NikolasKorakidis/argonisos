@@ -1,20 +1,20 @@
 // Sky and time of day. One in-game day lasts 32 real minutes: 24 of daylight and 8 of night (the GDD's cycle).
 // The dome shader paints the day gradient and sun, and at night a starfield with the Milky Way, a cratered moon
-// and, on some nights, aurora curtains. A physical-sky copy lights reflections; clouds drift with the wind.
+// and, on some nights, aurora curtains, all hidden as the sky clouds over. A physical-sky copy lights reflections. The
+// clouds themselves are in clouds.js.
 import * as THREE from 'three';
 import { Sky } from '../../vendor/three/jsm/objects/Sky.js';
 import { scene, camera, renderer, sun, hemi } from '../render/core.js';
 import { clamp, lerp } from '../util/math.js';
-import { WIND_U } from './trees.js';
 
 export const DAY_SECONDS = 32 * 60, DAY_FRACTION = 24 / 32;
 
 export const skyDome = new THREE.Mesh(new THREE.SphereGeometry(5000, 48, 24), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
   uniforms: { top: { value: new THREE.Color(0x3a78c8) }, hor: { value: new THREE.Color(0xb8dcf0) }, sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color(0xfff0c8) },
-    night: { value: 0 }, uT: { value: 0 }, moonDir: { value: new THREE.Vector3(0, 1, 0) }, aurora: { value: 0 }, dusk: { value: 0 }, glowCol: { value: new THREE.Color(0xff8a40) } },
+    night: { value: 0 }, uT: { value: 0 }, moonDir: { value: new THREE.Vector3(0, 1, 0) }, aurora: { value: 0 }, dusk: { value: 0 }, glowCol: { value: new THREE.Color(0xff8a40) }, cover: { value: 0 } },
   vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-  fragmentShader: `uniform vec3 top, hor, sunDir, sunCol, moonDir, glowCol; uniform float night, uT, aurora, dusk; varying vec3 vDir;
+  fragmentShader: `uniform vec3 top, hor, sunDir, sunCol, moonDir, glowCol; uniform float night, uT, aurora, dusk, cover; varying vec3 vDir;
     float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
     float stars(vec3 d, float scale, float thr){ vec2 uv = vec2(atan(d.z, d.x) * scale, asin(clamp(d.y, -1.0, 1.0)) * scale); vec2 id = floor(uv), f = fract(uv) - 0.5;
@@ -24,7 +24,8 @@ export const skyDome = new THREE.Mesh(new THREE.SphereGeometry(5000, 48, 24), ne
       vec3 d = normalize(vDir); float h = clamp(d.y, 0.0, 1.0);
       vec3 c = mix(hor, top, pow(h, 0.55));
       float s = max(dot(d, normalize(sunDir)), 0.0);
-      c += sunCol * (pow(s, 600.0) * 3.0 + pow(s, 12.0) * 0.25) * (1.0 - night);
+      // (under a heavy sky (cover) no disc, only a faint brightening where the sun is; the stars and the moon go too)
+      c += sunCol * (pow(s, 600.0) * 3.0 * (1.0 - cover) + pow(s, 12.0) * 0.25 * (1.0 - cover * 0.7)) * (1.0 - night);
       // dawn and dusk: a glow gathered about the sun low on the horizon; opposite, the pink Belt of Venus over the
       // blue of the earth's shadow
       if (dusk > 0.01) {
@@ -34,22 +35,22 @@ export const skyDome = new THREE.Mesh(new THREE.SphereGeometry(5000, 48, 24), ne
         c += vec3(0.6, 0.34, 0.44) * dusk * away * smoothstep(0.02, 0.12, d.y) * smoothstep(0.34, 0.1, d.y) * 0.4;
         c = mix(c, c * vec3(0.55, 0.62, 0.86), dusk * away * smoothstep(0.09, 0.0, d.y) * 0.5);
       }
-      if (night > 0.01 && d.y > -0.05) {
+      float sn = night * (1.0 - cover); if (sn > 0.01 && d.y > -0.05) {   // (sn: how much of the night sky shows through the cloud)
         float up = smoothstep(-0.02, 0.25, d.y);
         // Milky Way: a soft, mottled band across the sky with extra dense stars inside it
         vec3 N = normalize(vec3(0.35, 0.55, 0.76)); float band = exp(-pow(dot(d, N) / 0.2, 2.0));
         float neb = vn(d.xz * 9.0 + d.y * 4.0) * 0.6 + vn(d.xz * 23.0) * 0.4;
-        c += vec3(0.55, 0.6, 0.85) * band * (0.08 + neb * 0.16) * night * up;
-        c -= vec3(0.03) * band * smoothstep(0.55, 0.8, vn(d.xz * 14.0)) * night;                      // dust lanes
+        c += vec3(0.55, 0.6, 0.85) * band * (0.08 + neb * 0.16) * sn * up;
+        c -= vec3(0.03) * band * smoothstep(0.55, 0.8, vn(d.xz * 14.0)) * sn;                      // dust lanes
         float st = stars(d, 160.0, 0.93) * 1.2 + stars(d, 320.0, 0.955) * 0.8 + stars(d, 320.0, 0.9) * band * 1.2;
-        c += vec3(0.95, 0.97, 1.0) * st * night * up;
+        c += vec3(0.95, 0.97, 1.0) * st * sn * up;
         // moon: disc with maria, a tight glow and a wide halo
         float m = dot(d, normalize(moonDir));
         vec3 md = normalize(moonDir), mt = normalize(cross(md, vec3(0.0, 1.0, 0.0))), mb = cross(mt, md); vec2 mp = vec2(dot(d, mt), dot(d, mb)) / 0.028;
         float disc = smoothstep(1.0, 0.96, length(mp)) * step(0.0, m);
         float maria = vn(mp * 2.2 + 4.0) * 0.6 + vn(mp * 5.0) * 0.4;
-        c = mix(c, vec3(0.92, 0.93, 0.88) * (0.78 + maria * 0.3), disc * night);
-        c += vec3(0.55, 0.62, 0.8) * (pow(max(m, 0.0), 900.0) * 0.8 + pow(max(m, 0.0), 40.0) * 0.12) * night;
+        c = mix(c, vec3(0.92, 0.93, 0.88) * (0.78 + maria * 0.3), disc * sn);
+        c += vec3(0.55, 0.62, 0.8) * (pow(max(m, 0.0), 900.0) * 0.8 + pow(max(m, 0.0), 40.0) * 0.12) * sn;
         // aurora: layered curtains over the northern horizon (-z), green at the foot, violet at the top
         if (aurora > 0.01 && d.z < 0.2) {
           float az = atan(d.x, -d.z), alt = d.y;
@@ -60,7 +61,7 @@ export const skyDome = new THREE.Mesh(new THREE.SphereGeometry(5000, 48, 24), ne
             curtain += smoothstep(base, base + 0.02, alt) * smoothstep(base + 0.32, base + 0.05, alt) * rays * (1.0 - fi * 0.25); }
           float fade = smoothstep(0.2, -0.4, d.z) * smoothstep(1.3, 0.3, abs(az));
           vec3 ac = mix(vec3(0.15, 1.0, 0.55), vec3(0.6, 0.3, 1.0), smoothstep(0.1, 0.4, alt));
-          c += ac * curtain * fade * aurora * night * 0.55;
+          c += ac * curtain * fade * aurora * sn * 0.55;
         }
       }
       if (vDir.y < 0.0) c = hor;
@@ -76,31 +77,15 @@ const pmrem = new THREE.PMREMGenerator(renderer), envScene = new THREE.Scene(), 
 let envRT = null, envTimer = 0, envE = 9, envOv = 9;
 function refreshEnvironment() { if (envRT) envRT.dispose(); envRT = pmrem.fromScene(envScene, 0.04); scene.environment = envRT.texture; }
 
-// ---- Clouds: soft billboard puffs, high and drifting
-const cloudTex = (() => {   // puffs with sunlit tops over grey-blue undersides, so a cloud has a shape rather than a white blot
-  const c = document.createElement('canvas'); c.width = 512; c.height = 256; const g = c.getContext('2d'); let s = 11; const r = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
-  const puffs = []; for (let i = 0; i < 34; i++) { const x = 100 + r() * 312, y = 120 + r() * 70 - Math.sin((x - 100) / 312 * Math.PI) * 60, rad = 34 + r() * 38; puffs.push([x, y, rad]); }
-  const blob = (x, y, rad, a, b) => { const gr = g.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, a); gr.addColorStop(0.62, a); gr.addColorStop(1, b); g.fillStyle = gr; g.beginPath(); g.arc(x, y, rad, 0, 6.28); g.fill(); };
-  for (const [x, y, rad] of puffs) blob(x, y + rad * 0.12, rad, 'rgba(196,206,222,0.95)', 'rgba(196,206,222,0)');
-  for (const [x, y, rad] of puffs) blob(x - rad * 0.08, y - rad * 0.3, rad * 0.72, 'rgba(255,255,255,0.95)', 'rgba(255,255,255,0)');
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
-})();
+// (the clouds are in clouds.js, which reads the lightning's flashes itself; these two stay empty, for lightning.js)
 export const clouds = [], stormClouds = [];
-{ let s = 3; const r = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
-  for (let i = 0; i < 70; i++) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, fog: false, transparent: true, depthWrite: false, opacity: 0.8 + r() * 0.2, color: new THREE.Color(1.3, 1.3, 1.34) }));
-    const a = r() * 6.28, d = 300 + r() * 2600, w = 160 + r() * 260;
-    sp.scale.set(w, w * 0.5, 1); sp.position.set(Math.cos(a) * d, 480 + r() * 160, Math.sin(a) * d);   // (above the summit of Olympos, which once stood in them) sp.renderOrder = -1; scene.add(sp); clouds.push(sp);
-  }
-  for (let i = 0; i < 90; i++) {           // low, heavy rain clouds, shown by the weather
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: cloudTex, fog: false, transparent: true, depthWrite: false, opacity: 0, color: new THREE.Color(0.42, 0.45, 0.5) }));
-    const a = r() * 6.28, d = Math.sqrt(r()) * 1600, w = 300 + r() * 320;
-    sp.scale.set(w, w * (0.38 + r() * 0.17), 1); sp.userData = { a, d, o: 0.75 + r() * 0.25, y: 150 + r() * 70 }; sp.visible = false; scene.add(sp); stormClouds.push(sp);
-  }
-}
 
 // ---- Time of day. t in [0,1): daylight for the first 3/4 of the cycle, night for the last quarter.
 export const sunDir = new THREE.Vector3(0, 1, 0), moonDir = new THREE.Vector3(0, 1, 0);
+// (the island is the same every game: Olympos stands at about (350, -1020) and the storm-sealed marsh's middle at about
+// (-830, 865), so the mountain-to-storm line points (-0.53, 0.85) in x, z. The sun rises square to it, on the left of
+// someone facing the storm, and leans at noon towards the mountain)
+const SUN_RISE = new THREE.Vector2(0.848, 0.53), SUN_LEAN = new THREE.Vector2(0.53, -0.848);
 const skyDay = new THREE.Color(0xa9cfe8), skyDusk = new THREE.Color(0xf0a070), skyNight = new THREE.Color(0x0e1c3e);   // (night: a moonlit navy, so trees and hills stand dark against it)
 const _c1 = new THREE.Color(), _c2 = new THREE.Color();
 export const LIGHT = { day: 1, dusk: 0, night: 0, elev: 1 };   // shared with water, weather, fog
@@ -114,10 +99,13 @@ export function updateSky(t, dt, time, overcast = 0, dark = 0) {
   const e = sunElevation(t), dayArc = t < DAY_FRACTION ? t / DAY_FRACTION : 1 + (t - DAY_FRACTION) / (1 - DAY_FRACTION);   // 0..1 across the day, 1..2 across the night
   const day = sstep(-0.14, 0.4, e), dusk = sstep(0.42, 0.04, Math.abs(e - 0.04)) * (t < DAY_FRACTION ? 1 : 0.75), night = sstep(0.02, -0.34, e);
   LIGHT.day = day; LIGHT.dusk = dusk; LIGHT.night = night; LIGHT.elev = e;
-  const az = dayArc * Math.PI;                                            // the sun crosses from east to west
-  sunDir.set(Math.cos(az), Math.max(e, -0.3), -0.35).normalize();
-  moonDir.set(-Math.cos((dayArc - 1) * Math.PI), Math.max(0.3, night * 0.75 + 0.15), 0.4).normalize();
-  const swap = sstep(0.06, -0.12, e); lightDir.copy(sunDir).lerp(moonDir, swap).normalize(); if (lightDir.y < 0.08) { lightDir.y = 0.08; lightDir.normalize(); }
+  // The sun crosses square to the line from Olympos to Zeus's storm (SUN_RISE), so it never sinks behind either: facing the
+  // storm with the mountain at your back it rises on your left and sets on your right, leaning a little towards Olympos at
+  // noon (SUN_LEAN); the moon goes the same way round, leaning towards the storm
+  const az = dayArc * Math.PI, mz = Math.cos((dayArc - 1) * Math.PI), y = Math.max(e, -0.3);
+  sunDir.set(SUN_RISE.x * Math.cos(az) + SUN_LEAN.x * 0.2, y, SUN_RISE.y * Math.cos(az) + SUN_LEAN.y * 0.2).normalize();
+  moonDir.set(-SUN_RISE.x * mz - SUN_LEAN.x * 0.4, Math.max(0.3, night * 0.75 + 0.15), -SUN_RISE.y * mz - SUN_LEAN.y * 0.4).normalize();
+  const swap = sstep(0.06, -0.12, e); LIGHT.moon = swap > 0.5; lightDir.copy(sunDir).lerp(moonDir, swap).normalize(); if (lightDir.y < 0.08) { lightDir.y = 0.08; lightDir.normalize(); }
   const skyCol = _c1.copy(skyNight).lerp(skyDay, day).lerp(skyDusk, dusk * 0.55);
   scene.fog.color.copy(skyCol); scene.background = skyCol;
   // the light fades right down while the shadows hand over from the sun to the moon, so they never swing across the ground
@@ -131,7 +119,7 @@ export function updateSky(t, dt, time, overcast = 0, dark = 0) {
   const U = skyDome.material.uniforms;
   U.top.value.copy(skyNight).lerp(_c2.setHex(0x3a78c8), day).lerp(_c2.setHex(0x6a6fae), dusk * 0.4);
   U.hor.value.setHex(0x203560).lerp(_c2.setHex(0xb8dcf0), day).lerp(_c2.setHex(0xf2b27a), dusk * 0.7);
-  U.sunDir.value.copy(sunDir); U.night.value = night; U.uT.value = time; U.moonDir.value.copy(moonDir); U.dusk.value = dusk * (1 - overcast * 0.8);
+  U.sunDir.value.copy(sunDir); U.night.value = night; U.uT.value = time; U.moonDir.value.copy(moonDir); U.dusk.value = dusk * (1 - overcast * 0.8); U.cover.value = sstep(0.4, 0.9, overcast);
   U.sunCol.value.copy(sun.color).lerp(_c2.setHex(0xfff0c8), 0.4); U.glowCol.value.setHex(0xff8a40).lerp(_c2.setHex(0xff5a50), sstep(0.1, -0.05, e));
   skyDome.position.copy(camera.position);
   sky.material.uniforms.sunPosition.value.copy(sunDir);
@@ -140,21 +128,15 @@ export function updateSky(t, dt, time, overcast = 0, dark = 0) {
   // second), rather than a jump every two seconds that showed at dawn and dusk and when time runs fast
   envTimer -= dt; if (envTimer <= 0 && (Math.abs(e - envE) > 0.004 || Math.abs(overcast - envOv) > 0.03 || envTimer < -6)) { envTimer = 0.25; envE = e; envOv = overcast; refreshEnvironment(); }
   scene.environmentIntensity = lerp(0.15, 1, day) * (1 - overcast * 0.65) * (1 - dark * 0.4);
-  // clouds drift with the wind, warm at dusk, dark at night
-  const cc = _c1.setRGB(1.3, 1.3, 1.34).lerp(_c2.setRGB(1.6, 0.95, 0.75), dusk * 0.6).lerp(_c2.setRGB(0.1, 0.12, 0.2), night);
-  const wind = 2 + overcast * 20;
-  const wd = WIND_U.uWindDir.value;
-  for (const c of clouds) { c.position.x += dt * wind * wd.x; c.position.z += dt * wind * wd.y; for (const k of ['x', 'z']) { if (c.position[k] > 3000) c.position[k] -= 6000; else if (c.position[k] < -3000) c.position[k] += 6000; } c.material.color.copy(cc).lerp(_c2.setRGB(0.55, 0.58, 0.64).multiplyScalar(0.4 + day * 0.6), overcast * 0.85); }
-  for (const c of stormClouds) {
-    c.visible = overcast > 0.02; if (!c.visible) continue;
-    c.userData.a += dt * wind * 0.00006;
-    c.position.set(camera.position.x + Math.cos(c.userData.a) * c.userData.d, c.userData.y, camera.position.z + Math.sin(c.userData.a) * c.userData.d);
-    c.material.opacity = overcast * c.userData.o; c.material.color.setRGB(0.42, 0.45, 0.5).multiplyScalar(0.35 + day * 0.65);
-  }
   return { day, dusk, night };
 }
+// How thick the fog is for hiding the sky: 0 for any rainy sky's mist, 1 once you see only a few tens of metres
+export function fogThick() { const f = Math.min(1, Math.max(0, (1 - scene.fog.far / 1400 - 0.86) / 0.11)); return f * f * (3 - 2 * f); }
 // In mist the sky melts into the fog: pull the dome's colours towards the fog colour by k (0..1)
 export function fogSky(k) {
+  // a thick fog (you see a few tens of metres) hides the sky altogether: the dome all fog, no clouds above it (they're
+  // drawn without fog); a rainy sky's mist, much thinner, keeps them
+  const thick = fogThick();
   if (k <= 0) return; const U = skyDome.material.uniforms;
-  U.hor.value.lerp(scene.fog.color, k); U.top.value.lerp(scene.fog.color, k * 0.92);
+  U.hor.value.lerp(scene.fog.color, k); U.top.value.lerp(scene.fog.color, k * (0.92 + 0.08 * thick));
 }

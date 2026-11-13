@@ -27,7 +27,7 @@ export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { va
     const bp = g.attributes.position; for (let i = 0; i < bp.count; i++) bp.setX(i, bp.getX(i) * (1 - Math.pow(bp.getY(i) / H, 1.5))); return g; };
   const carpet = (far) => {
     const COUNT = far ? FAR_COUNT : 160000, T = far ? FAR_TILE : NEAR_TILE, U = { ...grassU, uTile: { value: T } };
-    const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 });
+    const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 }); mat.defines = { SUN_SHADOW_CHEAP: '' };   // (one bilinear look into the sun's shadow: the blades are most of the pixels on screen)
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, U);
       sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.vertexShader
@@ -67,6 +67,11 @@ export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { va
           vec3 transformed = p + vec3(wp.x, hm.r - 0.03, wp.y) - ip;
           vGH = gh; float fk = floor(hm.b * 0.5); vVar = hm.b - fk * 2.0; vShade = fk / 15.0;
           vVar = clamp(vVar + (fract(sin(dot(floor(wp / 2.7), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.3, 0.0, 1.0);   // colour in clumps vGust = wave; vWorld = p + vec3(wp.x, hm.r, wp.y);`);
+      // each blade takes the sun's shadow from low on its stem (a quarter of its height up), so the shade of a tree, a rock
+      // or the hero lies across the meadow as it would on bare ground, not only on the few blades it happens to cross
+      sh.vertexShader = sh.vertexShader.replace('#include <shadowmap_vertex>', `{ vec4 wSaved = worldPosition; worldPosition.y = hm.r + (worldPosition.y - hm.r) * 0.25;
+          #include <shadowmap_vertex>
+          worldPosition = wSaved; }`);
       sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.fragmentShader
         .replace('#include <tonemapping_fragment>', `gl_FragColor.rgb *= 1.0 + vGust * 0.2 * vGH;   // the gust's lighter band
           float shine = pow(max(dot(normalize(vWorld - cameraPosition), uSunDir), 0.0), 4.0) * vGH * vGH;   // sun through the blade tips
@@ -87,7 +92,7 @@ export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { va
   const T = NEAR_TILE;
   // Flowers use the same wrap-around carpet, placed by the flower-density channel of the heightmap
   const flowerCarpet = (geo, count, colors, size) => {
-    const fm = new THREE.MeshStandardMaterial({ roughness: 0.7 });
+    const fm = new THREE.MeshStandardMaterial({ roughness: 0.7 }); fm.defines = { SUN_SHADOW_CHEAP: '' };
     fm.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, grassU);
       sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight;\n` + sh.vertexShader.replace('#include <begin_vertex>', `
@@ -105,7 +110,7 @@ export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { va
     };
     const im = new THREE.InstancedMesh(geo, fm, count), mm = new THREE.Matrix4(), cc = new THREE.Color();
     for (let i = 0; i < count; i++) { im.setMatrixAt(i, mm.makeTranslation(rr(0, T), 0, rr(0, T))); im.setColorAt(i, cc.setHex(colors[Math.floor(rand() * colors.length)])); }
-    im.frustumCulled = false; im.userData.max = count; GRASS.flowers.push(im); scene.add(im); return im;
+    im.frustumCulled = false; im.receiveShadow = true; im.userData.max = count; GRASS.flowers.push(im); scene.add(im); return im;
   };
   const merge = (parts) => {           // tiny manual merge of non-indexed geometries with vertex colours
     const pos = [], nor = [], col = [];

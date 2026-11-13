@@ -9,9 +9,10 @@ export function clearSave() { try { localStorage.removeItem(KEY); } catch { /* p
 
 // The layout of the land (which trees and pickups stand where). Saves remember felled trees and gathered pickups by their
 // place in that layout, so when it changes (2: the woods of Pedias and bare rock on steep ground, Patch 4; 3: woods over
-// most of Pedias, Patch 5; 4: the abandoned town and the small scenes about the island, Patch 11) an older save keeps
-// everything else but lets the trees and pickups come back.
-const WORLD_LAYOUT = 4;
+// most of Pedias, Patch 5; 4: the abandoned town and the small scenes about the island, Patch 11; 5: the temple's hill,
+// its marble precinct and the meadow cleared round it) an older save keeps everything else but lets the trees and
+// pickups come back.
+const WORLD_LAYOUT = 5;
 export function save(g) {
   const P = g.player, S = g.S;
   const data = {

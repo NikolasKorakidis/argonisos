@@ -10,6 +10,7 @@ import { clamp, lerp } from '../util/math.js';
 import { updateWetness } from './wetness.js';
 import { updateRain } from './rain.js';
 import { WIND, updateWind } from './wind.js';
+import { skyStrike, LIGHTNING } from './lightning.js';
 
 const TYPES = {
   clear: { overcast: 0, rain: 0, fog: 0 },
@@ -17,14 +18,14 @@ const TYPES = {
   lightRain: { overcast: 0.75, rain: 0.45, fog: 0.25 },
   heavyRain: { overcast: 0.92, rain: 1, fog: 0.4 },
   thunder: { overcast: 1, rain: 1, fog: 0.35, storm: true },
-  fog: { overcast: 0.35, rain: 0, fog: 1 },
+  fog: { overcast: 0.45, rain: 0, fog: 1 },   // (the sun only a pale disc through it: the light is dimmed below, the fog itself pale)
 };
 const ODDS = [   // per biome: [type, chance %] (fog is rolled alongside, as the GDD lists it separately)
   [['clear', 70], ['cloudy', 10], ['lightRain', 10], ['heavyRain', 5], ['thunder', 5]],
   [['clear', 20], ['cloudy', 50], ['lightRain', 10], ['heavyRain', 10], ['thunder', 10]],
   [['lightRain', 90], ['heavyRain', 5], ['thunder', 5]],
 ];
-const FOG_CHANCE = [0.1, 0.3, 0.5];
+const FOG_CHANCE = [0.1, 0.3, 0.5], FOG_FAR = 32;   // (how far you see in a full fog, metres)
 const MAX_MIN = { heavyRain: 10, lightRain: 10, thunder: 4 };
 // biome mood: light multiplier, fog near/far (m) and fog tint
 const MOOD = [
@@ -33,7 +34,7 @@ const MOOD = [
   { light: 0.32, near: 18, far: 260, tint: new THREE.Color(0x4c5236) },
 ];
 
-export const WEATHER = { type: 'clear', biome: BIOME.PEDIAS, timer: 0, k: { overcast: 0, rain: 0, fog: 0 }, mood: { light: 1, near: 300, far: 2400 }, storm: 0, boltT: 8, flash: 0, forced: null };
+export const WEATHER = { type: 'clear', biome: BIOME.PEDIAS, timer: 0, k: { overcast: 0, rain: 0, fog: 0 }, mood: { light: 1, near: 300, far: 2400 }, storm: 0, boltT: 8, flash: 0, forced: null, stormRain: 0 };
 let rnd = Math.random, first = true;
 function roll(biome) {
   const list = ODDS[biome]; let t = 0; for (const [, w] of list) t += w; let a = rnd() * t, type = list[0][0];
@@ -43,13 +44,13 @@ function roll(biome) {
   WEATHER.timer = Math.min((3 + rnd() * 7) * 60, (MAX_MIN[type] || 12) * 60);
 }
 
-// lightning: a full-screen flash
+// a full-screen flash (a creature vanishing, an offering taken)
 const flashEl = document.createElement('div');
 Object.assign(flashEl.style, { position: 'fixed', inset: '0', background: '#eef4ff', opacity: '0', pointerEvents: 'none', transition: 'opacity .08s', zIndex: 5 });
 document.body.appendChild(flashEl);
 
 const _w = { p: 1, y: 0, v: 0, r: 0 }, _tint = new THREE.Color(), _wind = new THREE.Vector2();
-export function updateWeather(dt, pos, light, onThunder) {
+export function updateWeather(dt, pos, light, { still = false } = {}) {
   const w = biomeWeights(pos.x, pos.z, _w), here = w.v > 0.5 ? BIOME.VALTOS : w.p >= w.y ? BIOME.PEDIAS : BIOME.YLEOS;
   WEATHER.timer -= dt;
   if (WEATHER.forced) { WEATHER.type = WEATHER.forced; }
@@ -63,34 +64,38 @@ export function updateWeather(dt, pos, light, onThunder) {
   const tl = MOOD[0].light * w.p + MOOD[1].light * w.y + MOOD[2].light * w.v, tn = MOOD[0].near * w.p + MOOD[1].near * w.y + MOOD[2].near * w.v, tf = MOOD[0].far * w.p + MOOD[1].far * w.y + MOOD[2].far * w.v;
   const me = first ? 1 : Math.min(1, dt * 0.6); m.light = lerp(m.light, tl, me); m.near = lerp(m.near, tn, me); m.far = lerp(m.far, tf, me);
   first = false;
-  // fog: biome mist, thicker at night, pulled in by weather
+  // fog: biome mist, thicker at night, pulled in by weather. A real fog (fogK 1) closes to some 30 m, its near edge almost
+  // at your feet; the far edge comes in geometrically, so a fog rolling in thickens all the way rather than at the end
   const fogK = WEATHER.k.fog, night = light.night;
-  scene.fog.near = lerp(m.near, 10, fogK * 0.85) * lerp(1, 0.6, night * (1 - w.p * 0.6));
-  scene.fog.far = lerp(m.far, 140, fogK) * lerp(1, 0.55, WEATHER.k.rain * 0.6) * lerp(1, 0.7, night);
+  scene.fog.near = lerp(m.near, 1, fogK * 0.95) * lerp(1, 0.6, night * (1 - w.p * 0.6));
+  scene.fog.far = m.far * Math.pow(Math.min(1, FOG_FAR / m.far), fogK) * lerp(1, 0.55, WEATHER.k.rain * 0.6) * lerp(1, 0.7, night);
   _tint.setRGB(0, 0, 0);
   if (w.y > 0.01) _tint.add(MOOD[1].tint.clone().multiplyScalar(w.y)); if (w.v > 0.01) _tint.add(MOOD[2].tint.clone().multiplyScalar(w.v));
   if (w.y + w.v > 0.01) scene.fog.color.lerp(_tint.multiplyScalar(1 / (w.y + w.v)).multiplyScalar(0.35 + light.day * 0.65), clamp(w.y + w.v, 0, 1) * 0.7);
   scene.fog.color.lerp(_tint.setRGB(0.15, 0.175, 0.2).multiplyScalar(0.3 + light.day * 0.7), WEATHER.k.overcast * 0.85);
+  scene.fog.color.lerp(_tint.setRGB(0.7, 0.73, 0.76).multiplyScalar(0.25 + light.day * 0.75), WEATHER.k.fog * 0.55 * (1 - night * 0.8));   // (a fog by day is pale and bright, not slate)
   // by night the air is moonlit blue everywhere, the forest's too (it fell to a near-black green), less so under cloud
   scene.fog.color.lerp(_tint.setHex(0x14214a), night * (w.y + w.v) * 0.75 * (1 - WEATHER.k.overcast * 0.5));
-  // the world gets wet in the rain and dries in the sun
-  updateWetness(dt, WEATHER.k.rain, light.day * (1 - WEATHER.k.overcast * 0.6));
+  // the world gets wet in the rain and dries in the sun (and it always rains at the foot of the storm wall: stormwall.js)
+  const rainK = Math.max(WEATHER.k.rain, WEATHER.stormRain || 0);
+  updateWetness(dt, rainK, light.day * (1 - WEATHER.k.overcast * 0.6));
   // the wind, by the weather; the rain slants with it, as bright as the air
-  updateWind(dt, { rain: WEATHER.k.rain, storm: WEATHER.storm, overcast: WEATHER.k.overcast });
+  updateWind(dt, { rain: rainK, storm: Math.max(WEATHER.storm, WEATHER.stormRain || 0), overcast: WEATHER.k.overcast });
   _wind.copy(WIND.dir).multiplyScalar(WIND.speed * (0.7 + WIND.gust * 0.3));
-  updateRain(dt, WEATHER.k.rain, _wind, 0.22 + light.day * 0.78);
-  // lightning in storms
+  updateRain(dt, rainK, _wind, 0.22 + light.day * 0.78);
+  // lightning (lightning.js): in a thunderstorm a strike every few seconds, more often in a big one and by night, a
+  // gust after each; in a downpour now and then a far one, more heard than seen. (still: the screenshot tests, none.)
   WEATHER.boltT -= dt;
-  if (WEATHER.storm > 0.6 && WEATHER.boltT <= 0) {
-    WEATHER.boltT = 8 + rnd() * 18; flashEl.style.opacity = '0.45'; setTimeout(() => (flashEl.style.opacity = '0'), 90);
-    setTimeout(() => { flashEl.style.opacity = '0.3'; setTimeout(() => (flashEl.style.opacity = '0'), 70); }, 180);
-    onThunder?.(0.6 + rnd() * 2);
+  if (!still && WEATHER.boltT <= 0 && (WEATHER.storm > 0.3 || WEATHER.k.rain > 0.85)) {
+    const big = WEATHER.storm > 0.3; WEATHER.boltT = big ? (1.2 + rnd() * 6) / (WEATHER.storm * (1 + light.night * 0.6)) : 20 + rnd() * 40;
+    if (big) { skyStrike(light.night); WIND.gust = Math.min(1, WIND.gust + 0.3); } else skyStrike(light.night, true);
   }
-  // what the sky and lights need: how overcast, and how much light the biome lets through
-  return { overcast: Math.max(WEATHER.k.overcast, w.v * 0.6), dark: (1 - m.light) * (1 - night * 0.55) };   // (by night the woods shut out a little less: the moonlight is all there is)
+  // what the sky and lights need: how overcast (a thick fog scatters the sun as a heavy sky does: soft light, faint
+  // shadows), and how much light the biome lets through
+  return { overcast: Math.max(WEATHER.k.overcast, w.v * 0.6, WEATHER.k.fog * 0.85), dark: (1 - m.light) * (1 - night * 0.55) };   // (by night the woods shut out a little less: the moonlight is all there is)
 }
 export function setWeather(type) { WEATHER.forced = type || null; if (type) WEATHER.type = type; }
 // After a teleport (respawn, fast travel): jump straight to the new place's air instead of easing into it
 export function snapWeather() { first = true; WEATHER.timer = 0; }
 // A brief white flash of the sky (thunder when a creature vanishes, lightning)
-export function flashSky(k = 0.3) { flashEl.style.opacity = String(k); setTimeout(() => (flashEl.style.opacity = '0'), 90); }
+export function flashSky(k = 0.3) { flashEl.style.opacity = String(LIGHTNING.soft ? k * 0.3 : k); setTimeout(() => (flashEl.style.opacity = '0'), 90); }

@@ -4,7 +4,8 @@
 //   Tribute: lay it on the boss's altar to call it: 5 deer hides and 10 olives for the Minotaur, 3 dryad hearts and
 //   10 pomegranates for the Chimera. Mid-fight, the dead (or the forest) come to the boss's aid every 30 seconds.
 //   Offering: bring the head to the Ancient Temple. Zeus grants its power (F) and the next tier of crafting.
-//   Prayer: once a day at the temple altar, Zeus's Blessing.
+//   Prayer: once a day at the temple altar, Zeus's Blessing. (And once ever at the old altar on the top of Olympos,
+//   which nothing points the way to: the whole island opens on your map.)
 import * as THREE from 'three';
 import { TYPES } from '../creatures/creatures.js';
 import { SITES } from '../world/sites.js';
@@ -28,9 +29,20 @@ export const POWERS = {
   claw: { name: "Chimera's Claws", icon: 'blessing', cd: 600, time: 300, desc: 'Press F: for five minutes your bare hands strike like the Chimera\'s claws.' },
 };
 
+// A shaft of light out of the sky onto at (a Vector3): two soft cylinders of gold, wide at the top, that flare up and fade
+// over a few seconds, then go
+function skyBeam(scene, at) {
+  const grp = new THREE.Group(), t0 = performance.now(); grp.position.copy(at);
+  for (const [r0, r1, k] of [[0.5, 6, 0.35], [0.18, 2.2, 0.7]]) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, 320, 24, 1, true).translate(0, 160, 0), new THREE.MeshBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    m.frustumCulled = false; m.onBeforeRender = () => { const t = (performance.now() - t0) / 1000; m.material.opacity = k * Math.min(1, t * 4) * (1 - Math.min(1, Math.max(0, (t - 1.8) / 2.6))); }; grp.add(m);
+  }
+  scene.add(grp); setTimeout(() => { scene.remove(grp); grp.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); }); }, 4800);
+}
+
 export class Trial {
   constructor(g) {
-    this.g = g; const st = (g.S.trial ||= { scraps: [], carvings: [], revealed: {}, down: {}, offered: {}, prayDay: -1, looted: [], power: null, powerCd: 0, guards: {} });
+    this.g = g; const st = (g.S.trial ||= { scraps: [], carvings: [], revealed: {}, down: {}, offered: {}, prayDay: -1, looted: [], power: null, powerCd: 0, guards: {}, olympos: false });
     this.st = st; this.boss = null; this.helperT = 0;
     const bar = document.createElement('div'); bar.id = 'bossBar'; bar.className = 'hidden'; bar.innerHTML = '<div class="bn"></div><div class="bb"><i></i></div>'; document.getElementById('hud').appendChild(bar); this.bar = bar;
     const pw = document.createElement('div'); pw.id = 'power'; pw.className = 'hidden'; document.getElementById('hud').appendChild(pw); this.pw = pw;
@@ -42,6 +54,8 @@ export class Trial {
     let best = null, bd = 99; for (const u of S.uses) { const d = Math.hypot(u.at.x - pos.x, u.at.z - pos.z); if (d < u.r && d < bd && Math.abs(u.at.y - pos.y) < 4) { bd = d; best = u; } }
     if (!best) return null; const u = best, st = this.st, inv = this.g.inv;
     if (u.kind === 'altar') return { label: st.prayDay === this.g.S.day ? 'Zeus has heard you today' : 'Pray to Zeus', sub: 'Altar of Zeus', use: () => this.pray(u) };
+    if (u.kind === 'olympos') return st.olympos ? { label: 'The island already lies open before you', sub: 'Altar of Zeus on Olympos', use: () => this.g.hud.toast('Zeus has already opened your eyes: the whole island is on your map (<span class="kbd">M</span>).') }
+      : { label: 'Pray to Zeus', sub: 'Altar of Zeus on Olympos', use: () => this.prayOlympos(u) };
     if (u.kind === 'offering') { const head = u.boss + 'Head'; if (st.offered[u.boss]) return { label: `${ITEMS[head].name} offered`, sub: POWERS[u.boss === 'minotaur' ? 'roar' : 'claw'].name, use: () => this.choosePower(u.boss) };
       return { label: inv.count(head) ? `Offer the ${ITEMS[head].name.toLowerCase()}` : `A place for the head of ${BOSS_NAME[u.boss]}`, sub: 'Offering stand', use: () => this.offer(u) }; }
     if (u.kind === 'loot') return st.looted.includes(u.id) ? { label: 'Empty', sub: 'Old chest', use: () => {} } : { label: 'Search the old chest', sub: u.sub || 'Abandoned house', use: () => this.loot(u) };
@@ -66,6 +80,22 @@ export class Trial {
     this.st.prayDay = g.S.day; g.player.stats.add('zeusBlessing'); g.player.stats.heal(99);
     burst(u.at.clone().setY(u.at.y + 1.8), { color: 0xffe08a, n: 40, speed: 3, size: 0.07, grav: -3, life: 1.6 }); g.flashSky(0.35); addShake(0.3); g.sound?.('thunder');
     g.hud.region("Zeus's Blessing", 'Your strength grows for a while');
+  }
+  // The old altar on the top of Olympos, an Easter egg (no step of the guide and nothing the owl says leads there): praying
+  // at it once opens the whole island, the map uncovered everywhere and every place of the trial marked on it (the
+  // abandoned town isn't one: map.sites leaves it to be come upon, uncovered but unmarked). Zeus answers with a shaft of
+  // light on the altar and a crack of thunder, and the map opens to show it. Kept in the save (st.olympos).
+  prayOlympos(u) {
+    const g = this.g; if (this.st.olympos || g.acts?.pose?.kind === 'pray') return;
+    if (!g.acts?.pray(u.at, { onDone: () => this.reveal(u), onCancel: () => g.hud.toast('You rose before Zeus answered. Kneel again (<span class="kbd">E</span>) and stay still to pray.') })) this.reveal(u);
+  }
+  reveal(u) {
+    const g = this.g, m = g.map; if (this.st.olympos) return; this.st.olympos = true;
+    m.fctx.clearRect(0, 0, m.fog.width, m.fog.height); for (const s of m.sites()) m.know(s);
+    skyBeam(g.scene, u.at); burst(u.at.clone().setY(u.at.y + 1.8), { color: 0xffe08a, n: 90, speed: 5, size: 0.09, grav: -2, life: 2.4 });
+    g.flashSky(0.7); addShake(0.6); g.sound?.('thunder', 1.5); setTimeout(() => g.sound?.('reveal'), 1200);
+    g.hud.region('Zeus opens your eyes', 'The whole island lies before you');
+    setTimeout(() => { g.hud.toast('Zeus opens your eyes: the whole island lies before you. Every place is on your map now.'); if (!m.open && !g.hud.open && !g.player.dead) m.toggle(true); }, 3200);
   }
   loot(u) { const g = this.g; g.acts?.reach(); this.st.looted.push(u.id); for (const [id, n] of u.items) g.give(id, n); if (u.lid) u.lid.rotation.x = -1.2; g.sound?.('chest'); }
   clue(u, key, item) {
@@ -270,7 +300,7 @@ export class Trial {
     // a giant guards each cave whose carving hasn't been taken
     SITES.caves.forEach((cv, i) => {
       if (st.carvings.includes('cave' + i)) return; const d = Math.hypot(cv.x - g.player.pos.x, cv.z - g.player.pos.z), day = g.S.day;
-      if (d < 70 && st.guards[i] !== day) { st.guards[i] = day; const gi = g.creatures.spawn('giant', cv.x + 4, cv.z + 6, { level: 0 }); gi.home.set(cv.x, cv.y, cv.z); gi.guard = true; }
+      if (d < 70 && st.guards[i] !== day) { st.guards[i] = day; const gi = g.creatures.spawn('giant', cv.den.x, cv.den.z, { level: 0 }); gi.home.set(cv.x, cv.y, cv.z); gi.guard = true; }   // (waiting in his cave, by his fire: sites.js)
     });
   }
 }

@@ -19,6 +19,16 @@ const TREE_DROPS = {
   qtree: [['feather', 0.3, 1, 2]], plane: [['feather', 0.4, 1, 2]], holm: [['acornSeed', 0.3, 1, 1]],
 };
 const FRUIT = { olive: ['olive', 3, 5], pomegranate: ['pomegranate', 2, 3], oak: ['acorn', 2, 4] };
+// How thick a felled tree's trunk really is: the solid model's points between 0.6 and 1.6 m above the ground (in its own
+// units at this scale), their middle distance from the trunk's axis; the log it leaves and its stump take that girth
+// (before, both came from the collider, about the same for every tree)
+function trunkRadius(geo, s) {
+  const p = geo.attributes.position, lo = 0.6 / s, hi = 1.6 / s, xs = [], zs = []; let cx = 0, cz = 0;
+  for (let i = 0; i < p.count; i++) { const y = p.getY(i); if (y > lo && y < hi) { xs.push(p.getX(i)); zs.push(p.getZ(i)); cx += p.getX(i); cz += p.getZ(i); } }
+  if (xs.length < 6) return null;
+  cx /= xs.length; cz /= xs.length; const d = xs.map((x, i) => Math.hypot(x - cx, zs[i] - cz)).sort((a, b) => a - b);
+  return d[Math.floor(d.length / 2)] * s;
+}
 const treeHP = (name, s) => (name === 'titan' ? 420 : BIG.has(name) ? 110 : SMALL.has(name) ? 40 : 70) * s;   // (a giant of the old forest takes a long while)
 const woodOf = (name, s) => Math.round((BIG.has(name) ? 9 : SMALL.has(name) ? 3 : 6) * s);
 const rockHP = (name, s) => (name === 'boulder' ? 70 : 30) * s;
@@ -78,14 +88,15 @@ export class Harvest {
     // (a tree stands sunk into the ground to hide its roots, flora-pack.js: falling, it slides out along its length, so the
     // buried part doesn't swing up out of the stump behind it)
     const geo = obj.children[0].geometry; if (!geo.boundingBox) geo.computeBoundingBox(); const sink = Math.max(0, -geo.boundingBox.min.y) * r.s;
-    this.falling.push({ pivot, obj, sp, s: r.s, th: 0, w: 0.15, away, t: 0, landed: false, x: c.x, z: c.z, y: c.y, r: c.r, sink });
-    this.addStump(c.x, c.y, c.z, c.r);
+    const girth = clamp(trunkRadius(geo, r.s) ?? c.r * 0.55, 0.12, 1.5), tall = geo.boundingBox.max.y * r.s;
+    this.falling.push({ pivot, obj, sp, s: r.s, th: 0, w: 0.15, away, t: 0, landed: false, x: c.x, z: c.z, y: c.y, r: c.r, sink, girth, tall });
+    this.addStump(c.x, c.y, c.z, girth);
     player.stats.train('gathering', 12.5); this.g.sound?.('creak');
   }
   addStump(x, y, z, r) { this.stumps.push({ x, y, z, r }); this.drawStumps(); clearGrass('stump' + x.toFixed(1) + z.toFixed(1), { x, z, r: r + 0.4 }); }
   drawStumps() {
     const m = new THREE.Matrix4(), near = this.stumps.slice(-512);
-    near.forEach((s, i) => this.stumpMesh.setMatrixAt(i, m.compose(new THREE.Vector3(s.x, s.y - 0.05, s.z), new THREE.Quaternion(), new THREE.Vector3(s.r * 0.9, 1, s.r * 0.9))));
+    near.forEach((s, i) => this.stumpMesh.setMatrixAt(i, m.compose(new THREE.Vector3(s.x, s.y - 0.05, s.z), new THREE.Quaternion(), new THREE.Vector3(s.r * 1.1, 1, s.r * 1.1))));
     this.stumpMesh.count = near.length; this.stumpMesh.instanceMatrix.needsUpdate = true;
   }
   update(dt) {
@@ -107,7 +118,8 @@ export class Harvest {
     }
   }
   spawnLog(f) {
-    const len = clamp((f.sp.name === 'cypress' ? 5 : 4) * f.s, 2.5, 6.5), rad = clamp(f.r * 0.55, 0.22, 0.6), looks = LOOKS.filter(Boolean);
+    // (as thick as the trunk it was, and as long as the bare trunk of a tree that tall: about two fifths of it)
+    const len = f.tall ? clamp(f.tall * 0.4, 2.2, 9) : clamp((f.sp.name === 'cypress' ? 5 : 4) * f.s, 2.5, 6.5), rad = f.girth ?? clamp(f.r * 0.55, 0.22, 0.6), looks = LOOKS.filter(Boolean);
     let m;
     if (looks.length) { const L = looks[Math.floor(hash2(f.x * 7.1 + 3.1, f.z * 5.3 - 7.7) * looks.length) % looks.length]; m = new THREE.Mesh(L.g.clone().scale(len / L.s.x, (2 * rad) / L.s.y, (2 * rad) / L.s.z), logMat); }
     else {

@@ -50,6 +50,7 @@ function init() {
     amb.roof = bed(noiseBuf, [['bandpass', 600, 0.9], ['lowpass', 1400, 0.6]]);
     amb.sea = bed(brownBuf, [['lowpass', 500, 0.5]]);
     amb.fire = bed(brownBuf, [['lowpass', 280, 0.7]]);
+    amb.roar = bed(brownBuf, [['lowpass', 120, 0.7]]);   // (the storm wall's deep, endless roar, near it)
     loadBank();
     return true;
   } catch { return false; }
@@ -81,6 +82,15 @@ function sample(k, { vol = 0.5, pan = 0, wet = 0.05, rate = [0.94, 1.06], bus } 
   s.connect(g).connect(p).connect(bus || sfxBus); if (wet) { const w = ctx.createGain(); w.gain.value = wet; p.connect(w).connect(verb); }
   s.start(); return true;
 }
+// one of a sound's recordings, as heard from far off: later (delay, seconds), through a low-pass (the air takes the
+// highs out of a far sound) and slower or faster, from a point into it (from, seconds); false if it has none
+function sampleFar(k, { vol = 0.5, pan = 0, wet = 0.3, rate = 1, delay = 0, lp = 20000, bus, from = 0 } = {}) {
+  const list = BANK[k]; if (!list?.length) return false; const t = now() + delay;
+  const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), p = ctx.createStereoPanner(); s.buffer = list[Math.floor(Math.random() * list.length)]; s.playbackRate.value = rate;
+  f.type = 'lowpass'; f.frequency.value = lp; f.Q.value = 0.5; g.gain.value = vol; p.pan.value = pan;
+  s.connect(f).connect(g).connect(p).connect(bus || sfxBus); if (wet) { const w = ctx.createGain(); w.gain.value = wet; p.connect(w).connect(verb); }
+  s.start(t, from); return true;
+}
 // One shot of filtered noise. wet: how much goes to the reverb; pan: -1 left … 1 right
 function noise(dur, { type = 'bandpass', freq = 1000, q = 1, vol = 0.3, attack = 0.005, slide = 0, delay = 0, wet = 0.1, pan = 0, bus, brown } = {}) {
   if (!init()) return; const t = now() + delay, s = ctx.createBufferSource(); s.buffer = brown ? brownBuf : noiseBuf; s.playbackRate.value = 0.85 + Math.random() * 0.3;
@@ -108,15 +118,15 @@ function pluck(freq, { vol = 0.12, delay = 0, dur = 2.6, pan = 0 } = {}) {
 // shore's sand, the forest's leaf litter; anything else is the meadows' grass and earth)
 const STEPS = { wood: 'stepWood', water: 'stepWater', stone: 'stepRock', sand: 'stepSand', leaves: 'stepLeaves' }, LANDS = { wood: 'landWood', water: 'landWater', stone: 'landRock' };
 const SFX = {
-  step: (surface) => {
-    if (sample(STEPS[surface] || (Math.random() < 0.6 ? 'stepGrass' : 'stepDirt'), { vol: 0.32, wet: 0 })) return;
-    if (surface === 'wood') { noise(0.1, { freq: 420, q: 3, vol: 0.13 }); tone(140, 0.08, { type: 'triangle', vol: 0.05, wet: 0.2 }); }
-    else if (surface === 'water') { noise(0.28, { type: 'lowpass', freq: 1200, vol: 0.14, slide: -800 }); noise(0.12, { freq: 2500, q: 2, vol: 0.05, delay: 0.05 }); }
-    else if (surface === 'stone') noise(0.07, { freq: 1800, q: 1.5, vol: 0.09 });
-    else { noise(0.12, { type: 'lowpass', freq: 380, vol: 0.12, brown: true }); noise(0.16, { freq: 3200, q: 0.7, vol: 0.035 }); }   // a soft thud and the swish of grass
+  step: (surface, k = 1) => {   // (k: how near the camera is, game.js: a close camera hears them at full, a far one at a quarter)
+    if (sample(STEPS[surface] || (Math.random() < 0.6 ? 'stepGrass' : 'stepDirt'), { vol: 0.32 * k, wet: 0 })) return;
+    if (surface === 'wood') { noise(0.1, { freq: 420, q: 3, vol: 0.13 * k }); tone(140, 0.08, { type: 'triangle', vol: 0.05 * k, wet: 0.2 }); }
+    else if (surface === 'water') { noise(0.28, { type: 'lowpass', freq: 1200, vol: 0.14 * k, slide: -800 }); noise(0.12, { freq: 2500, q: 2, vol: 0.05 * k, delay: 0.05 }); }
+    else if (surface === 'stone') noise(0.07, { freq: 1800, q: 1.5, vol: 0.09 * k });
+    else { noise(0.12, { type: 'lowpass', freq: 380, vol: 0.12 * k, brown: true }); noise(0.16, { freq: 3200, q: 0.7, vol: 0.035 * k }); }   // a soft thud and the swish of grass
   },
   jump: () => noise(0.14, { freq: 500, vol: 0.06 }),
-  land: (surface) => { if (sample(LANDS[surface] || 'landGrass', { vol: 0.45, wet: 0 })) return; noise(0.22, { type: 'lowpass', freq: 260, vol: 0.28, brown: true }); noise(0.1, { freq: 2800, q: 0.8, vol: 0.05 }); },
+  land: (surface, k = 1) => { if (sample(LANDS[surface] || 'landGrass', { vol: 0.45 * k, wet: 0 })) return; noise(0.22, { type: 'lowpass', freq: 260, vol: 0.28 * k, brown: true }); noise(0.1, { freq: 2800, q: 0.8, vol: 0.05 * k }); },
   chop: () => { noise(0.09, { freq: 1500, q: 3, vol: 0.32, wet: 0.25 }); tone(170, 0.14, { type: 'triangle', vol: 0.22, slide: -60, wet: 0.3 }); noise(0.25, { type: 'lowpass', freq: 400, vol: 0.12, brown: true }); },
   creak: () => { tone(95, 1.6, { type: 'sawtooth', vol: 0.045, slide: -30, attack: 0.4, wet: 0.4 }); tone(140, 1.2, { type: 'sawtooth', vol: 0.025, slide: 40, attack: 0.3, delay: 0.5, wet: 0.4 }); },
   thud: () => { noise(0.9, { type: 'lowpass', freq: 200, vol: 0.7, slide: -120, brown: true, wet: 0.4 }); tone(48, 0.7, { vol: 0.4, slide: -18 }); for (let i = 0; i < 6; i++) noise(0.2, { freq: 2500 + Math.random() * 2000, q: 1, vol: 0.05, delay: 0.1 + Math.random() * 0.5 }); },
@@ -151,6 +161,19 @@ const SFX = {
     const n = 4 + Math.floor(Math.random() * 4);
     for (let i = 0; i < n; i++) noise(rnd(1.2, 2.6), { type: 'lowpass', freq: rnd(120, 260), vol: rnd(0.25, 0.5) * k * (1 - i / (n + 2)), slide: -80, attack: rnd(0.05, 0.3), delay: (near ? 0.2 : 0.6) + i * rnd(0.25, 0.55), brown: true, wet: 0.7, pan: rnd(-0.6, 0.6), bus: ambBus });
   },
+  // thunder from the storm wall, heard from where it struck: it arrives at the speed of sound; the further off, the
+  // quieter, the deeper (the air takes the highs out) and the longer it rolls (it comes from the whole length of the
+  // bolt, kilometres of it); close by, a crack first
+  stormThunder: ({ dist = 500, pan = 0, big = 1 } = {}) => {
+    // (under a roof it comes muffled through the walls; the start is noted for the tests: THUNDER)
+    const delay = dist / 343, k = big / (1 + dist / 380) * (1 - shut * 0.4), lp = (180 + 4200 * Math.exp(-dist / 450)) * (1 - shut * 0.7), o = { pan: pan * 0.8, bus: ambBus };
+    THUNDER.at = now() + delay; THUNDER.n++; THUNDER.k = k;
+    // (the recording's crack comes 1.4 s in, after rain: it starts from just before it, so it lands when the delay says)
+    if (dist < 450) { if (!sampleFar('thunder', { ...o, vol: 0.9 * k, wet: 0.35, rate: rnd(0.92, 1.05), delay, lp: Math.max(lp, 2500), from: 1.36 })) { noise(0.25, { ...o, freq: 2200, q: 0.5, vol: 0.4 * k, wet: 0.6, delay }); noise(0.6, { ...o, type: 'lowpass', freq: 1400, vol: 0.45 * k, wet: 0.6, delay: delay + 0.04 }); } }
+    else { const rate = rnd(0.62, 0.8); sampleFar('thunder', { ...o, vol: Math.min(0.8, 1.1 * k), wet: 0.6, rate, delay: delay + 0.1, lp, from: 1.36 }); }
+    const n = 4 + Math.floor(Math.random() * 4) + Math.floor(Math.min(4, dist / 400)), spread = 0.3 + Math.min(1.1, dist / 1400);
+    for (let i = 0; i < n; i++) noise(rnd(1.4, 3.2) * (1 + spread * 0.5), { ...o, type: 'lowpass', freq: rnd(70, 110) + lp * 0.05, vol: rnd(0.35, 0.6) * k * (1 - i / (n + 3)), slide: -30, attack: rnd(0.1, 0.5), delay: delay + 0.15 + i * rnd(0.3, 0.6) * spread * 1.6, brown: true, wet: 0.75, pan: pan * 0.6 + rnd(-0.3, 0.3) });
+  },
   roar: () => { sample('growl', { vol: 0.7, wet: 0.4, rate: [0.7, 0.8] });   // (the growl over the synthesised rumble, which gives it its size)
     tone(66, 1.5, { type: 'sawtooth', vol: 0.2, slide: -24, attack: 0.15, wet: 0.5 }); tone(99, 1.3, { type: 'square', vol: 0.06, slide: -38, attack: 0.15, wet: 0.5 }); noise(1.4, { type: 'lowpass', freq: 420, vol: 0.32, attack: 0.15, slide: -220, brown: true, wet: 0.5 }); },
   summon: () => { tone(55, 3.2, { type: 'sawtooth', vol: 0.12, slide: 30, attack: 1, wet: 0.6 }); SFX.thunder(1.2); },
@@ -164,9 +187,16 @@ export function sound(name, ...a) { if (!ctx) return; try { SFX[name]?.(...a); }
 //   (trees just where you stand), marsh 0..1, sea 0..1 }
 let gust = 0, gustTo = 0.3, gustT = 0, birdT = 2, crickT = 1, owlT = 20, foxT = 60, frogT = 3, dropT = 0, musicT = 25, droneOn = false, drone = null;
 const MODE = [146.83, 164.81, 174.61, 196.0, 220.0, 246.94, 261.63, 293.66, 329.63, 349.23, 392.0, 440.0];   // D Dorian over two octaves
+// how near the storm wall you are (0..1, stormwall.js): its roar and the gale blowing into it
+let stormK = 0, shut = 0;
+export function stormAmbience(k) { stormK = k; }
+// when the last thunder was set to start, on the audio clock (the tests weigh it against the flash), and the clock itself
+export const THUNDER = { at: 0, n: 0, k: 0, now: () => (ctx ? ctx.currentTime : 0), ctx: () => ctx, out: () => out };
 export function updateAmbience(dt, w = {}) {
   if (!ctx) return; const t = now(), A = amb, sh = (node, v, tc = 0.6) => node.g.gain.setTargetAtTime(v, t, tc);
-  const { wind = 0.3, rain = 0, night = 0, dusk = 0, fire = 0, inside = 0, roof = 0, forest = 0, deep = 0, marsh = 0, sea = 0 } = w, open = 1 - inside * 0.7;
+  const sk = stormK * stormK, wind = Math.max(w.wind ?? 0.3, sk);
+  const { rain = 0, night = 0, dusk = 0, fire = 0, inside = 0, roof = 0, forest = 0, deep = 0, marsh = 0, sea = 0 } = w, open = 1 - inside * 0.7;
+  shut = Math.max(inside, roof * 0.6);
   // wind: a slow random walk of gusts
   gustT -= dt; if (gustT <= 0) { gustT = rnd(2, 7); gustTo = Math.min(1, Math.max(0, wind + rnd(-0.25, 0.4))); }
   gust += (gustTo - gust) * Math.min(1, dt * 0.6);
@@ -179,7 +209,8 @@ export function updateAmbience(dt, w = {}) {
   A.leavesLo.f[0].frequency.setTargetAtTime(900 + gust * 500, t, 1.5);
   // rain: hiss, body and droplets outside; drumming and a muffled hush under a roof
   const rec = !!LOOPS.loopRain, L = (k, v) => LOOPS[k]?.gain.setTargetAtTime(v, t, 0.8);   // (recorded rain, birds and crickets when there are some)
-  L('loopRain', rain * 0.45 * (1 - inside * 0.8) * (roof ? 0.6 : 1)); L('loopStorm', Math.max(0, rain - 0.6) * 1.2 * (1 - inside * 0.7));
+  L('loopRain', rain * 0.45 * (1 - inside * 0.8) * (roof ? 0.6 : 1)); L('loopStorm', Math.max(rain - 0.6, sk * 0.7) * 1.2 * (1 - inside * 0.7));
+  sh(A.roar, (stormK * 0.12 + sk * 0.3) * (1 - inside * 0.5), 1.5); A.roar.f[0].frequency.setTargetAtTime(90 + gust * 60, t, 1);
   sh(A.rainHiss, rain * 0.2 * (1 - inside * 0.8) * (roof ? 0.6 : 1) * (rec ? 0.3 : 1)); sh(A.rainBody, rain * rain * 0.3 * (1 - inside * 0.6));
   sh(A.roof, roof ? rain * 0.22 : 0, 0.4);
   dropT -= dt; if (rain > 0.15 && dropT <= 0) { dropT = rnd(0.01, 0.06) / rain;
