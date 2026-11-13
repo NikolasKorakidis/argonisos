@@ -9,11 +9,11 @@ import { MIST_R0, MIST_R1 } from './reach.js';
 import { heightAt } from './gen.js';
 import { renderer, sun, hemi } from '../render/core.js';
 import { PRIORITY } from './pool.js';
-import { LIGHT } from './sky.js';
 
 export const NEAR_R = 75;                     // full-detail radius
 export const MID_R = 180;                     // light meshes out to here, impostors beyond
 const SHADE_LAYER = 6; sun.shadow.camera.layers.enable(SHADE_LAYER);   // (the trees' shadow stand-ins: the sun's shadow camera sees them, no other camera does)
+const SHADE_R = 120;                          // (past the near band trees still cast to here: a low sun's shadow from further off lands beyond the mist)
 const SPLIT = 20;                             // (a pack tree's own detail out to here; its thinned version beyond, to NEAR_R)
 const NEAR_KEEP = NEAR_R + CELL * 1.5, FAR = 256, FAR_R = 600;
 // Behind the player's mist (tester feedback, 15 and 16 Oct; see atmosphere.js and reach.js) the distant land is drawn
@@ -197,7 +197,7 @@ impMat.onBeforeCompile = (sh) => {
 };
 impMat.customProgramCacheKey = () => 'vegImpostor';
 const quad = new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0);
-const _pm = new THREE.Matrix4(), _fr = new THREE.Frustum(), _sp = new THREE.Sphere();
+const _pm = new THREE.Matrix4(), _fr = new THREE.Frustum(), _sfr = new THREE.Frustum(), _sp = new THREE.Sphere();
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
 // A tree stands a little into the ground, deeper on a slope, so its spreading roots don't stand clear of the land on the
 // downhill side (the layout's height is the ground at the trunk; drawing only). This is on top of the sink each pack
@@ -315,16 +315,18 @@ export class Vegetation {
           if (cards) { const lm = new THREE.InstancedMesh(cards, cut(P.cardMat || leafMat, false), cap); lm.instanceMatrix = t.instanceMatrix; ms.push(lm); } return ms; };
         // (a pack tree has a lighter version for the band's further half, from SPLIT out: its leaves thinned)
         const near = pair(P.geo, P.cards), far = P.geo2 ? pair(P.geo2, P.cards2) : [];
-        // (and its shadow: by day, out to SPLIT the tree itself casts, every leaf card, so the light under the crowns is
-        // dappled by the real leaves, and the shade, the shafts in the haze and the light on the hero all come from one
-        // shadow; further out, and by night under the moon (whose shadows need no leaf detail), its light far version casts,
-        // seen only by the sun's shadow camera: a pack tree's leaves are most of its triangles, and drawing them all twice
-        // across the whole band cost more than the woods could spare. cull() swaps them.)
-        const proxy = (ms) => { if (!sh || !P.geo2 || !P.lo) return []; const ps = pair(P.lo, P.loCards); for (const q of ps) { q.instanceMatrix = ms[0].instanceMatrix; q.layers.set(SHADE_LAYER); q.userData.shade = true; } return ps; };
-        const nearShade = proxy(near), farShade = proxy(far), meshes = [...near, ...far, ...nearShade, ...farShade];
+        // (and its shadow: its light far version casts, with that version's leaf cards, seen only by the sun's shadow
+        // camera, at every distance, by day and by night. One caster for each tree whatever its distance, so the shade
+        // on the floor, the flecks of sun and the beams in the woods' air (all from that one shadow map) don't change
+        // shape as you walk up to a tree or away from it (tester, 13 Nov: beams that popped on and off). A pack tree's
+        // leaves are most of its triangles: drawing them all into the shadow map cost the woods several milliseconds.
+        // The casters have instances of their own, packed by what the shadow camera sees, so a tree out of view still
+        // casts without its full version being drawn, and one faded out of the camera's way keeps its shadow.)
+        const shade = sh && P.geo2 && P.lo ? pair(P.lo, P.loCards) : []; for (const q of shade) { q.layers.set(SHADE_LAYER); q.userData.shade = true; }
+        const meshes = [...near, ...far, ...shade];
         P.geo.computeBoundingSphere(); const bs = P.geo.boundingSphere.clone(); if (P.cards) { P.cards.computeBoundingSphere(); bs.union(P.cards.boundingSphere); }
-        b = { meshes, near, far, nearShade, farShade, sh, leaves: null, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), refs: [], slot: new Int32Array(cap), slot2: new Int32Array(cap), n: 0 };
-        for (const m of meshes) { m.castShadow = sh && (m.userData.shade || !far.includes(m) || !farShade.length); m.receiveShadow = true; m.frustumCulled = false; m.count = 0; m.userData.batch = b; m.userData.far = far.includes(m); this.group.add(m); }
+        b = { meshes, near, far, shade, sh, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), refs: [], slot: new Int32Array(cap), slot2: new Int32Array(cap), n: 0 };
+        for (const m of meshes) { m.castShadow = sh && (m.userData.shade || !shade.length); m.receiveShadow = true; m.frustumCulled = false; m.count = 0; m.userData.batch = b; m.userData.far = far.includes(m); this.group.add(m); }
         this.batches.set(key, b);
       }
       b.n = n; b.refs = refs;
@@ -358,9 +360,16 @@ export class Vegetation {
         const trunk = new THREE.InstancedMesh(P.lo, cut(propMat, true), cap), meshes = [trunk];
         const lc = P.loCards === undefined ? P.cards : P.loCards;   // (a pack plant's far version has cards of its own, thinned)
         if (lc && P.leafFar) { const lm = new THREE.InstancedMesh(lc, cut(P.cardMat || leafMat, true), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
+        // (its shadow: past the near band a tree still casts into the shadow box, the same stand-in as nearer in, so a low
+        // sun's long shadows don't appear and vanish as trees cross into the near band; its own instances, packed by the
+        // shadow camera's view and kept even when the tree itself has dropped away behind the mist)
+        const shade = []; if (!SPECIES[it0[o0]].noShadow && !sinks(it0[o0])) { const st = new THREE.InstancedMesh(P.lo, cut(propMat, false), cap); shade.push(st);
+          if (lc) { const sl = new THREE.InstancedMesh(lc, cut(P.cardMat || leafMat, false), cap); sl.instanceMatrix = st.instanceMatrix; shade.push(sl); }
+          for (const q of shade) { q.layers.set(SHADE_LAYER); q.castShadow = true; q.frustumCulled = false; q.count = 0; } }
         P.lo.computeBoundingSphere(); const bs = P.lo.boundingSphere.clone(); if (meshes[1]) { lc.computeBoundingSphere(); bs.union(lc.boundingSphere); }
-        b = { meshes, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), sinks: sinks(it0[o0]), refs: [], n: 0 };
-        for (const m of meshes) { m.castShadow = false; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; this.group.add(m); }
+        b = { meshes: [...meshes, ...shade], shade, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), sinks: sinks(it0[o0]), refs: [], n: 0 };
+        for (const m of meshes) { m.castShadow = false; m.receiveShadow = true; m.frustumCulled = false; m.count = 0; }
+        for (const m of b.meshes) this.group.add(m);
         this.mids.set(key, b);
       }
       b.n = n; b.refs = refs;
@@ -374,43 +383,49 @@ export class Vegetation {
   cull(camera, pos) {
     if (this.nearDirty) this.rebuildNear();
     _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _fr.setFromProjectionMatrix(_pm);
-    const nr = NEAR_R + NF, keep2 = 48 * 48, now = performance.now() / 1000;
+    const nr = NEAR_R + NF, keep2 = 48 * 48, now = performance.now() / 1000;   // (keep2: a tree that casts by itself is kept this near, seen or not)
     for (const cell of this.shaken) { for (const [i, s] of cell.shake) if (now - s.t0 > SHAKE_T) cell.shake.delete(i); if (!cell.shake.size) { cell.shake = null; this.shaken.delete(cell); } }
-    const leaves = LIGHT.elev > -0.03;   // (the sun casts by day; the moon from about when the light hands over to it)
+    // (the sun's shadow camera as it will draw this frame: whatever stands in its box casts, seen or not)
+    sun.updateMatrixWorld(); sun.target.updateMatrixWorld(); sun.shadow.updateMatrices(sun); _sfr.copy(sun.shadow.getFrustum());
     for (const b of this.batches.values()) {
-      if (b.leaves !== leaves && b.nearShade.length) { b.leaves = leaves; for (const m of b.near) m.castShadow = b.sh && leaves; for (const m of b.nearShade) m.castShadow = !leaves; }
-      const dst = b.near[0].instanceMatrix.array, dst2 = b.far[0]?.instanceMatrix.array, split2 = dst2 ? SPLIT * SPLIT : Infinity; let m = 0, m2 = 0;
+      const dst = b.near[0].instanceMatrix.array, dst2 = b.far[0]?.instanceMatrix.array, sdst = b.shade[0]?.instanceMatrix.array, split2 = dst2 ? SPLIT * SPLIT : Infinity; let m = 0, m2 = 0, s = 0;
       for (let k = 0; k < b.n; k++) {
         const x = b.cen[k * 4], y = b.cen[k * 4 + 1], z = b.cen[k * 4 + 2], r = b.cen[k * 4 + 3], dx = x - pos.x, dz = z - pos.z, d2 = dx * dx + dz * dz;
         if (d2 > (nr + r) * (nr + r)) continue;                                            // beyond the near band: the mid band draws it
-        const cell = b.refs[k * 2]; if (cell.hidden && cell.hidden.has(b.refs[k * 2 + 1])) continue;   // faded out of the way of the camera
-        if (d2 > keep2) { _sp.center.set(x, y, z); _sp.radius = r; if (!_fr.intersectsSphere(_sp)) continue; }
+        const cell = b.refs[k * 2], sh = cell.shake?.get(b.refs[k * 2 + 1]);              // (struck by an axe just now: shaking)
+        _sp.center.set(x, y, z); _sp.radius = r;
+        if (sdst && d2 <= b.keep[k] * b.keep[k] && _sfr.intersectsSphere(_sp)) {         // its shadow's stand-in, wherever the shadow camera sees it
+          for (let e = 0; e < 16; e++) sdst[s * 16 + e] = b.mats[k * 16 + e]; if (b.keep[k] < Infinity) shrink(sdst, s, b.keep[k] - Math.sqrt(d2)); if (sh) sway(sdst, s, sh, now - sh.t0); s++; }
+        if (cell.hidden && cell.hidden.has(b.refs[k * 2 + 1])) continue;                  // faded out of the way of the camera
+        if ((sdst || d2 > keep2) && !_fr.intersectsSphere(_sp) && !(!sdst && b.sh && _sfr.intersectsSphere(_sp))) continue;   // (out of view: only a tree that casts by itself is kept for its shadow)
         if (d2 > b.keep[k] * b.keep[k]) continue;                                           // (the small things drop away well before the mist)
-        const sh = cell.shake?.get(b.refs[k * 2 + 1]);                                     // (struck by an axe just now: shaking)
         if (d2 > split2) { for (let e = 0; e < 16; e++) dst2[m2 * 16 + e] = b.mats[k * 16 + e]; if (b.keep[k] < Infinity) shrink(dst2, m2, b.keep[k] - Math.sqrt(d2)); if (sh) sway(dst2, m2, sh, now - sh.t0); b.slot2[m2++] = k; continue; }
         for (let e = 0; e < 16; e++) dst[m * 16 + e] = b.mats[k * 16 + e];
         if (b.keep[k] < Infinity) shrink(dst, m, b.keep[k] - Math.sqrt(d2));
         if (sh) sway(dst, m, sh, now - sh.t0);
         b.slot[m++] = k;
       }
-      for (const mesh of [...b.near, ...b.nearShade]) { mesh.count = m; mesh.boundingSphere = null; }
-      for (const mesh of [...b.far, ...b.farShade]) { mesh.count = m2; mesh.boundingSphere = null; }
-      b.near[0].instanceMatrix.needsUpdate = true; if (dst2) b.far[0].instanceMatrix.needsUpdate = true;
+      for (const mesh of b.near) { mesh.count = m; mesh.boundingSphere = null; }
+      for (const mesh of b.far) { mesh.count = m2; mesh.boundingSphere = null; }
+      for (const mesh of b.shade) mesh.count = s;
+      b.near[0].instanceMatrix.needsUpdate = true; if (dst2) b.far[0].instanceMatrix.needsUpdate = true; if (sdst) b.shade[0].instanceMatrix.needsUpdate = true;
     }
     if (this.midDirty) this.rebuildMid();
     const lo = NEAR_R - NF, hi = MID_R + MF;
     for (const b of this.mids.values()) {
-      const dst = b.meshes[0].instanceMatrix.array; let m = 0;
+      const dst = b.meshes[0].instanceMatrix.array, sdst = b.shade[0]?.instanceMatrix.array; let m = 0, s = 0;
       for (let k = 0; k < b.n; k++) {
         const x = b.cen[k * 4], y = b.cen[k * 4 + 1], z = b.cen[k * 4 + 2], r = b.cen[k * 4 + 3], dx = x - pos.x, dz = z - pos.z, d2 = dx * dx + dz * dz;
+        _sp.center.set(x, y, z); _sp.radius = r;
+        if (sdst && d2 > nr * nr && d2 < SHADE_R * SHADE_R && _sfr.intersectsSphere(_sp)) { for (let e = 0; e < 16; e++) sdst[s * 16 + e] = b.mats[k * 16 + e]; s++; }   // (beyond the near band's casters)
         const inner = Math.max(0, lo - r); if (d2 < inner * inner || d2 > (hi + r) * (hi + r) || d2 > b.keep[k] * b.keep[k]) continue;   // (and dropped away behind the mist)
-        _sp.center.set(x, y, z); _sp.radius = r; if (!_fr.intersectsSphere(_sp)) continue;
+        if (!_fr.intersectsSphere(_sp)) continue;
         for (let e = 0; e < 16; e++) dst[m * 16 + e] = b.mats[k * 16 + e];
         if (b.sinks) shrink(dst, m, b.keep[k] - Math.sqrt(d2));
         m++;
       }
-      for (const mesh of b.meshes) mesh.count = m;
-      b.meshes[0].instanceMatrix.needsUpdate = true;
+      for (const mesh of b.meshes) mesh.count = b.shade.includes(mesh) ? s : m;
+      b.meshes[0].instanceMatrix.needsUpdate = true; if (sdst) b.shade[0].instanceMatrix.needsUpdate = true;
     }
   }
   // the top of the tallest tree or rock within r of pos (for the mist's ceiling), or -Infinity

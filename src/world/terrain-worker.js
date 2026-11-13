@@ -1,7 +1,7 @@
 // Terrain worker: builds terrain patches (positions, normals, colours, uvs, bare rock) off the main thread so streaming
 // the world never stutters. Also bakes the world height texture used by the water shader.
 import { heightAt, biomeWeights, groundColor, fbm, isRock } from './gen.js';
-import { layoutCell, CELL, shadeAround, bakeShade, solidsAround, SPECIES, STRIDE } from './flora.js';
+import { layoutCell, CELL, shadeAround, bakeShade, solidsAround, SPECIES, STRIDE, treeDensity } from './flora.js';
 // how wide a space to keep round the things that stand about but aren't solid (metres at scale 1)
 const CLEAR_R = { lavender: 0.5, broom: 0.7, myrtle: 0.8, fern: 0.6, redbush: 0.7, colfall: 1.4, colstand: 0.6, herm: 0.4, amphorae: 0.7, wallruin: 1.6, stump: 0.6, log: 1.6, driftwood: 1.2 };
 import './sites.js';   // registers the flattened ground under the trial's sites
@@ -54,10 +54,23 @@ function heightTexture({ id, N, extent }) {
   return { id, data, N, extent };
 }
 
+// World woods texture for the air (atmosphere.js): how wooded each place is (R: 0 open meadow … 1 a full wood, from the
+// same density the trees are laid out by, so it is smooth and fixed in the world) and the ground's height there (G), so
+// the woods' haze can lie low over the ground anywhere along a line of sight, not just round the player
+function woodsTexture({ id, N, extent }) {
+  const data = new Float32Array(N * N * 2), w = { p: 0, y: 0, v: 0, r: 0 };
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const x = ((i + 0.5) / N - 0.5) * extent, z = ((j + 0.5) / N - 0.5) * extent, k = (j * N + i) * 2, h = heightAt(x, z);
+    data[k] = Math.min(1, treeDensity(x, z, h, biomeWeights(x, z, w)) * 36); data[k + 1] = h;
+  }
+  return { id, data, N, extent };
+}
+
 self.onmessage = (e) => {
   const msg = e.data;
   if (msg.type === 'patch') { const r = patch(msg); self.postMessage({ type: 'patch', ...r }, [r.pos.buffer, r.nor.buffer, r.col.buffer, r.uv.buffer, r.rock.buffer]); }
   else if (msg.type === 'heightTex') { const r = heightTexture(msg); self.postMessage({ type: 'heightTex', ...r }, [r.data.buffer]); }
+  else if (msg.type === 'woodsTex') { const r = woodsTexture(msg); self.postMessage({ type: 'woodsTex', ...r }, [r.data.buffer]); }
   else if (msg.type === 'grassTex') {      // local ground texture for the grass carpet: R height, G grass amount (+ 2 × tallness 0-7), B tint variation, A flowers
     const { N, x0, z0, size } = msg, data = new Float32Array(N * N * 4), w = { p: 0, y: 0, v: 0, r: 0 };
     const occ = new Float32Array(N * N), kk = size / N; bakeShade(shadeAround(x0, z0, x0 + size, z0 + size), x0 + kk / 2, z0 + kk / 2, kk, N, N, occ);   // the grass shaded under trees too
