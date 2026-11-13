@@ -7,8 +7,8 @@ import { BIOME_NAMES, biomeAt } from '../world/gen.js';
 import { input, lock, unlock } from '../input.js';
 
 const EXT = 3200, N = 512, FOG = 256, SEEN_R = 70;
-const LABEL = { temple: 'Ancient Temple', house: 'Abandoned House', labyrinth: 'The Labyrinth', chimera: "Chimera's Shrine", olive: 'Ancient Olive', cave: 'Giant Cave', town: 'Abandoned Town' };
-const ICON = { temple: 'temple', house: 'roof', labyrinth: 'goal', chimera: 'goal', olive: 'olivebranch', cave: 'stone', town: 'roof' };
+const LABEL = { temple: 'Ancient Temple', house: 'Abandoned House', labyrinth: 'The Labyrinth', chimera: "Chimera's Shrine", olive: 'Ancient Olive', cave: 'Giant Cave' };
+const ICON = { temple: 'temple', house: 'roof', labyrinth: 'goal', chimera: 'goal', olive: 'olivebranch', cave: 'stone' };
 
 export class WorldMap {
   constructor(g) {
@@ -29,14 +29,14 @@ export class WorldMap {
     // compass
     const mm = document.createElement('div'); mm.id = 'minimap'; mm.innerHTML = '<canvas width="240" height="240"></canvas><div id="biomeLabel"></div>'; document.getElementById('hud').appendChild(mm); this.mini = mm.querySelector('canvas'); this.biomeEl = mm.querySelector('#biomeLabel');
     const c = document.createElement('div'); c.id = 'compass'; c.innerHTML = '<div id="compassStrip"></div><i></i>'; document.getElementById('hud').appendChild(c); this.strip = c.querySelector('#compassStrip');
-    this.know(SITES.house);   // the temple is found by exploring (the abandoned town is always known: isKnown)
+    this.know(SITES.house);   // the temple is found by exploring
   }
   know(s) { if (s && !this.st.known.includes(s.x.toFixed(0) + ',' + s.z.toFixed(0))) this.st.known.push(s.x.toFixed(0) + ',' + s.z.toFixed(0)); }
-  isKnown(s) { return s.kind === 'town' || this.st.known.includes(s.x.toFixed(0) + ',' + s.z.toFixed(0)); }   // (the town is on the map from the start, older saves too)
+  isKnown(s) { return this.st.known.includes(s.x.toFixed(0) + ',' + s.z.toFixed(0)); }
   reveal(s) { this.know(s); this.uncover(s.x, s.z, 90); }
   uncover(x, z, r) { const k = FOG / EXT, f = this.fctx; f.globalCompositeOperation = 'destination-out'; const g = f.createRadialGradient((x + EXT / 2) * k, (z + EXT / 2) * k, 0, (x + EXT / 2) * k, (z + EXT / 2) * k, r * k); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.7, 'rgba(0,0,0,.9)'); g.addColorStop(1, 'rgba(0,0,0,0)'); f.fillStyle = g; f.beginPath(); f.arc((x + EXT / 2) * k, (z + EXT / 2) * k, r * k, 0, 7); f.fill(); f.globalCompositeOperation = 'source-over'; }
   done(s) { const st = this.g.trial?.st; if (!st) return false; const i = SITES.olives.indexOf(s); if (i >= 0) return st.scraps.includes('olive' + i); const k = SITES.caves.indexOf(s); return k >= 0 && st.carvings.includes('cave' + k); }
-  sites() { return [SITES.temple, SITES.house, SITES.labyrinth, SITES.chimera, ...SITES.olives, ...SITES.caves, SITES.town].filter(Boolean); }
+  sites() { return [SITES.temple, SITES.house, SITES.labyrinth, SITES.chimera, ...SITES.olives, ...SITES.caves].filter(Boolean); }   // (the abandoned town isn't marked: it's there to be come upon)
   toggle(on = !this.open) { this.open = on; this.panel.classList.toggle('hidden', !on); input.uiOpen = on || this.g.hud.open; if (on) { unlock(); this.cx = this.g.player.pos.x; this.cz = this.g.player.pos.z; this.zoom = 2; this.fit(); this.draw(); } else if (!this.g.hud.open) lock(); }
   fit() { const s = Math.min(innerWidth - 80, innerHeight - 140, 900); this.cv.width = this.cv.height = s; this.cv.style.width = this.cv.style.height = s + 'px'; }
   draw() {
@@ -74,7 +74,7 @@ export class WorldMap {
   update(dt) {
     const P = this.g.player.pos; this.t = (this.t || 0) - dt;
     this.mt = (this.mt || 0) - dt; if (this.mt <= 0) { this.mt = 0.125; this.drawMini(); const bn = 'Biome: ' + BIOME_NAMES[biomeAt(P.x, P.z)]; if (bn !== this.lastBiome) { this.lastBiome = bn; this.biomeEl.textContent = bn; } }
-    if (this.t <= 0) { this.t = 0.5; this.uncover(P.x, P.z, SEEN_R); for (const s of this.sites()) if (!this.isKnown(s) && Math.hypot(s.x - P.x, s.z - P.z) < (s.kind === 'temple' || s.kind === 'town' ? 70 : 45) && (s.kind === 'olive' || s.kind === 'cave' || s.kind === 'house' || s.kind === 'temple' || s.kind === 'town')) { this.know(s); this.g.hud.toast(`Found: <b>${LABEL[s.kind]}</b>`); } if (this.open) this.draw(); }
+    if (this.t <= 0) { this.t = 0.5; this.uncover(P.x, P.z, SEEN_R); for (const s of this.sites()) if (!this.isKnown(s) && Math.hypot(s.x - P.x, s.z - P.z) < (s.kind === 'temple' ? 70 : 45) && (s.kind === 'olive' || s.kind === 'cave' || s.kind === 'house' || s.kind === 'temple')) { this.know(s); this.g.hud.toast(`Found: <b>${LABEL[s.kind]}</b>`); } if (this.open) this.draw(); }
     // compass: 1 px per 0.25°, cardinal points and known places
     const yaw = this.g.player.camYaw, W = this.strip.parentElement.clientWidth || 440, deg = (((yaw * 180) / Math.PI + 180) % 360 + 360) % 360, px = 2.4;
     let html = ''; const put = (bearing, label, cls) => { let d = bearing - deg; d = ((d + 540) % 360) - 180; if (Math.abs(d) > 90) return; html += `<span class="${cls}" style="left:${W / 2 - d * px}px">${label}</span>`; };
