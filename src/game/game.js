@@ -21,6 +21,7 @@ import { sound, updateAmbience } from '../audio/sound.js';
 import { LIGHT } from '../world/sky.js';
 import { WEATHER, flashSky } from '../world/weather.js';
 import { heightAt, biomeWeights, isRock } from '../world/gen.js';
+import { treeDensity } from '../world/flora.js';
 import { groundAt } from '../world/groundcut.js';
 import { heldModel, isLeftHanded } from '../player/held.js';
 import { strikeKind } from '../player/hero.js';
@@ -139,6 +140,7 @@ export function installGame(g) {
   };
 
   // ---- per frame
+  const _bw = { p: 0, y: 0, v: 0, r: 0 };
   // reaching the top of Olympos
   const olympos = (P) => { const pk = SITES.peak; if (!pk) return; const d = Math.hypot(P.x - pk.x, P.z - pk.z);
     if (d < 40 && P.y > pk.y - 25 && !g.atPeak) { g.atPeak = true; hud.region('Olympos', 'The seat of Zeus. All Argonisos lies below you'); sound('reveal'); } else if (d > 140) g.atPeak = false; };
@@ -150,8 +152,11 @@ export function installGame(g) {
     if (hit('KeyM') || (hit('Escape') && g.map.open)) g.map.toggle();
     g.map.update(dt);
     { const f = g.build.nearFire(player.pos, 9), fd = f ? Math.max(0, 1 - f.pos.distanceTo(player.pos) / 9) : g.structures.nearSacredFire(player.pos) ? 0.5 : 0;
-      // where you are, sampled twice a second: the biome, and how much sea is around you
-      if (!(g.ambT > 0)) { g.ambT = 0.5; const P = player.pos, bw = biomeWeights(P.x, P.z); let sea = 0; for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; if (heightAt(P.x + Math.cos(a) * 45, P.z + Math.sin(a) * 45) < -0.5) sea++; } g.amb = { forest: bw.y, marsh: bw.v, sea: sea / 8 }; } g.ambT -= dt;
+      // where you are, sampled twice a second: the biome, how much sea is around you, and how wooded it is round you and
+      // just where you stand (the same density the trees are laid out by: the meadows' woods count as much as the forest's)
+      if (!(g.ambT > 0)) { g.ambT = 0.5; const P = player.pos, bw = biomeWeights(P.x, P.z), wood = (x, z) => Math.min(1, treeDensity(x, z, heightAt(x, z), biomeWeights(x, z, _bw)) * 36);
+        let sea = 0, trees = 0; for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; if (heightAt(P.x + Math.cos(a) * 45, P.z + Math.sin(a) * 45) < -0.5) sea++; trees += wood(P.x + Math.cos(a) * 18, P.z + Math.sin(a) * 18); }
+        const deep = wood(P.x, P.z); g.amb = { forest: Math.max(bw.y, (trees / 8 + deep) / 2), deep, marsh: bw.v, sea: sea / 8 }; } g.ambT -= dt;
       const roof = player.stats.has('underRoof');
       updateAmbience(dt, { wind: WEATHER.k.overcast * 0.8 + 0.1, rain: WEATHER.k.rain, night: LIGHT.night, dusk: LIGHT.dusk, fire: fd, roof: roof ? 1 : 0, inside: roof ? 0.6 : 0, ...g.amb }); }
     if (hit('KeyC') && !g.map.open && !g.buildMenu.open) hud.toggle(!hud.open);   // C opens and closes the pack and crafting, on whichever tab you left it

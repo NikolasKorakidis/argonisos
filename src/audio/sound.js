@@ -4,8 +4,10 @@
 //   Mix: everything goes through a gentle compressor; a generated reverb gives space to thunder, birds, music and the
 //   echo of strikes.
 //   Ambience follows the world: layered rain (a far hiss, the heavy rumble of a downpour, droplets, drumming on the roof
-//   above you and muffled when you're inside), wind that gusts and whistles, leaves in the forest, waves near the shore,
-//   birdsong by day, crickets, owls and (in the marsh) frogs at night, fires that crackle and roar.
+//   above you and muffled when you're inside), wind that gusts and whistles, the wind in the leaves wherever trees stand
+//   round you (day and night), waves near the shore, birdsong by day; crickets from dusk (a chorus in the meadows and
+//   at the woods' edges, quieter deep in the trees, with a few singing close by), an owl now and then, a fox far off,
+//   and (in the marsh) frogs at night; fires that crackle and roar.
 //   Music: a sparse lyre in an old Greek mode, a phrase now and then, with a soft drone at dawn and dusk.
 let ctx = null, out = null, sfxBus = null, ambBus = null, musicBus = null, verb = null, noiseBuf = null, brownBuf = null;
 let volume = 0.8, musicVol = 0.5;
@@ -33,7 +35,7 @@ function init() {
     out = ctx.createGain(); out.gain.value = volume; comp.connect(out).connect(ctx.destination);
     verb = makeVerb(); const verbOut = ctx.createGain(); verbOut.gain.value = 0.5; verb.connect(verbOut).connect(comp);
     sfxBus = ctx.createGain(); sfxBus.gain.value = 0.9; sfxBus.connect(comp);
-    ambBus = ctx.createGain(); ambBus.gain.value = 0.85; ambBus.connect(comp);
+    ambBus = ctx.createGain(); ambBus.gain.value = 1; ambBus.connect(comp);
     musicBus = ctx.createGain(); musicBus.gain.value = 0.55 * musicVol; musicBus.connect(comp); const mv = ctx.createGain(); mv.gain.value = 0.7; musicBus.connect(mv).connect(verb);
     noiseBuf = makeNoise(4, false); brownBuf = makeNoise(4, true);
     // looping beds: noise → filter(s) → gain, faded by updateAmbience()
@@ -41,7 +43,8 @@ function init() {
     amb.windLow = bed(brownBuf, [['lowpass', 380, 0.6]]);
     amb.windHigh = bed(noiseBuf, [['bandpass', 900, 0.8]]);
     amb.whistle = bed(noiseBuf, [['bandpass', 1500, 14]]);
-    amb.leaves = bed(noiseBuf, [['highpass', 2500, 0.5], ['lowpass', 7000, 0.5]]);
+    amb.leaves = bed(noiseBuf, [['highpass', 2500, 0.5], ['lowpass', 7000, 0.5]]);   // (the wind in the leaves: their hiss, and the softer rush under it)
+    amb.leavesLo = bed(noiseBuf, [['bandpass', 1100, 0.6], ['lowpass', 2400, 0.5]]);
     amb.rainHiss = bed(noiseBuf, [['highpass', 1500, 0.4], ['lowpass', 9000, 0.4]]);
     amb.rainBody = bed(brownBuf, [['lowpass', 700, 0.5]]);
     amb.roof = bed(noiseBuf, [['bandpass', 600, 0.9], ['lowpass', 1400, 0.6]]);
@@ -63,7 +66,12 @@ async function loadBank() {
   try {
     const index = await (await fetch(new URL('index.json', SND))).json();
     await Promise.all(Object.entries(index).map(async ([k, n]) => { BANK[k] = await Promise.all([...Array(n)].map(async (_, i) => ctx.decodeAudioData(await (await fetch(new URL(`${k}_${i}.mp3`, SND))).arrayBuffer()))); }));
-    for (const k of ['loopBirds', 'loopCrickets', 'loopRain', 'loopStorm']) if (BANK[k]) { const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = BANK[k][0]; s.loop = true; g.gain.value = 0; s.connect(g).connect(ambBus); s.start(0, Math.random() * s.buffer.duration); LOOPS[k] = g; }
+    const loop = (k, name = k, rate = 1) => { const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = BANK[k][0]; s.loop = true; s.playbackRate.value = rate; g.gain.value = 0; s.connect(g).connect(ambBus); s.start(0, Math.random() * s.buffer.duration); LOOPS[name] = g; };
+    for (const k of ['loopBirds', 'loopRain', 'loopStorm']) if (BANK[k]) loop(k);
+    // (the pack's crickets sing at 13-17 kHz, too high for many ears to hear at all, and thin on small speakers: played
+    // slower they come down to where field crickets sing, 4-6 kHz, as two choruses at different pitches, each loop
+    // three times as long, so it doesn't sound like a loop)
+    if (BANK.loopCrickets) { loop('loopCrickets', 'loopCrickets', 0.32); loop('loopCrickets', 'crickets2', 0.47); }
   } catch { /* no pack: the synthesis plays */ }
 }
 // one of a sound's recordings, a little higher or lower each time; false if it has none
@@ -152,19 +160,23 @@ const SFX = {
 export function sound(name, ...a) { if (!ctx) return; try { SFX[name]?.(...a); } catch { /* audio is optional */ } }
 
 // ---- the world's ambience, called every frame with what's around the player
-// { wind 0..1, rain 0..1, night 0..1, dusk 0..1, fire 0..1, inside 0/1, roof 0/1, forest 0..1, marsh 0..1, sea 0..1 }
-let gust = 0, gustTo = 0.3, gustT = 0, birdT = 2, crickT = 1, owlT = 20, frogT = 3, dropT = 0, musicT = 25, droneOn = false, drone = null;
+// { wind 0..1, rain 0..1, night 0..1, dusk 0..1, fire 0..1, inside 0/1, roof 0/1, forest 0..1 (trees round you), deep 0..1
+//   (trees just where you stand), marsh 0..1, sea 0..1 }
+let gust = 0, gustTo = 0.3, gustT = 0, birdT = 2, crickT = 1, owlT = 20, foxT = 60, frogT = 3, dropT = 0, musicT = 25, droneOn = false, drone = null;
 const MODE = [146.83, 164.81, 174.61, 196.0, 220.0, 246.94, 261.63, 293.66, 329.63, 349.23, 392.0, 440.0];   // D Dorian over two octaves
 export function updateAmbience(dt, w = {}) {
   if (!ctx) return; const t = now(), A = amb, sh = (node, v, tc = 0.6) => node.g.gain.setTargetAtTime(v, t, tc);
-  const { wind = 0.3, rain = 0, night = 0, dusk = 0, fire = 0, inside = 0, roof = 0, forest = 0, marsh = 0, sea = 0 } = w, open = 1 - inside * 0.7;
+  const { wind = 0.3, rain = 0, night = 0, dusk = 0, fire = 0, inside = 0, roof = 0, forest = 0, deep = 0, marsh = 0, sea = 0 } = w, open = 1 - inside * 0.7;
   // wind: a slow random walk of gusts
   gustT -= dt; if (gustT <= 0) { gustT = rnd(2, 7); gustTo = Math.min(1, Math.max(0, wind + rnd(-0.25, 0.4))); }
   gust += (gustTo - gust) * Math.min(1, dt * 0.6);
   sh(A.windLow, (0.05 + gust * 0.22) * open); A.windLow.f[0].frequency.setTargetAtTime(220 + gust * 420, t, 1);
   sh(A.windHigh, gust * gust * 0.08 * open); A.windHigh.f[0].frequency.setTargetAtTime(600 + gust * 900, t, 1);
   sh(A.whistle, Math.max(0, gust - 0.65) * 0.05 * open); A.whistle.f[0].frequency.setTargetAtTime(1200 + gust * 900 + Math.sin(t * 0.7) * 150, t, 0.5);
-  sh(A.leaves, forest * (0.02 + gust * 0.07) * open);
+  // the wind in the leaves, wherever trees stand round you, by day and by night: a soft bed that swells with the gusts
+  const sway = 0.7 + 0.3 * Math.sin(t * 0.37) * Math.sin(t * 0.23 + 1);
+  sh(A.leaves, forest * (0.035 + gust * 0.09) * sway * open, 1.2); sh(A.leavesLo, forest * (0.05 + gust * 0.1) * sway * open, 1.2);
+  A.leavesLo.f[0].frequency.setTargetAtTime(900 + gust * 500, t, 1.5);
   // rain: hiss, body and droplets outside; drumming and a muffled hush under a roof
   const rec = !!LOOPS.loopRain, L = (k, v) => LOOPS[k]?.gain.setTargetAtTime(v, t, 0.8);   // (recorded rain, birds and crickets when there are some)
   L('loopRain', rain * 0.45 * (1 - inside * 0.8) * (roof ? 0.6 : 1)); L('loopStorm', Math.max(0, rain - 0.6) * 1.2 * (1 - inside * 0.7));
@@ -178,12 +190,23 @@ export function updateAmbience(dt, w = {}) {
   // fire: a low roar and crackles
   sh(A.fire, fire * 0.16, 0.2);
   if (fire > 0.1 && Math.random() < dt * 9 * fire) noise(rnd(0.01, 0.04), { freq: rnd(1800, 5000), q: 3, vol: rnd(0.04, 0.12) * fire, pan: rnd(-0.3, 0.3), bus: ambBus, wet: 0.05 });
-  // creatures: birds by day, crickets, owls and frogs by night; the forest and the marsh have their own
-  const calm = (1 - rain * 0.85) * open;
-  L('loopBirds', night < 0.3 ? calm * (1 - night) * 0.3 : 0); L('loopCrickets', night > 0.5 && rain < 0.3 ? calm * 0.18 : 0);
-  birdT -= dt; if (birdT <= 0) { birdT = rnd(1.5, 6) / (1 + forest * 0.6); if (night < 0.3 && calm > 0.2 && !LOOPS.loopBirds) bird(calm * (1 - night)); }
-  crickT -= dt; if (crickT <= 0) { crickT = rnd(0.25, 0.7); if (night > 0.5 && rain < 0.3 && !LOOPS.loopCrickets) { const f = rnd(4100, 4600), p = rnd(-0.8, 0.8); for (let i = 0; i < 3; i++) tone(f, 0.035, { type: 'square', vol: 0.005 * calm * night, delay: i * 0.055, pan: p, wet: 0.1, bus: ambBus }); } }
-  owlT -= dt; if (owlT <= 0) { owlT = rnd(18, 45); if (night > 0.6 && rain < 0.4) { const p = rnd(-0.7, 0.7), f = rnd(330, 380); tone(f, 0.35, { vol: 0.03 * calm, slide: -25, attack: 0.05, pan: p, wet: 0.7, bus: ambBus }); tone(f * 0.97, 0.55, { vol: 0.03 * calm, slide: -35, attack: 0.05, delay: 0.55, pan: p, wet: 0.7, bus: ambBus }); } }
+  // creatures: birds by day; crickets from dusk on, owls, a fox far off and frogs by night; the forest and the marsh have
+  // their own. The crickets sing most in the open and at the woods' edges (deep: how wooded it is just where you stand),
+  // swelling as the light goes and dying away at first light.
+  const calm = (1 - rain * 0.85) * open, crick = Math.min(1, night * 1.2 + dusk * 0.6) * Math.max(0, 1 - rain / 0.3) * (1 - deep * 0.55);
+  L('loopBirds', night < 0.3 ? calm * (1 - night) * 0.42 : 0);
+  L('loopCrickets', calm * crick * 0.24); L('crickets2', calm * crick * 0.08);
+  birdT -= dt; if (birdT <= 0) { birdT = rnd(1.5, 6) / (1 + forest * 0.6) * (LOOPS.loopBirds ? 2.5 : 1); if (night < 0.3 && calm > 0.2) bird(calm * (1 - night)); }   // (calls of their own over the recorded chorus too, now and then)
+  // a cricket singing near you: a few chirps from one side, then quiet (bouts of them over the chorus, or on their own)
+  crickT -= dt; if (crickT <= 0) { crickT = LOOPS.loopCrickets ? rnd(0.8, 3) : rnd(0.25, 0.7);
+    if (crick > 0.2 && calm > 0.2) { const f = rnd(4200, 4900), p = rnd(-0.8, 0.8), n = 2 + Math.floor(Math.random() * 4), v = 0.016 * calm * crick;
+      for (let k = 0; k < n; k++) for (let i = 0; i < 3; i++) tone(f, 0.022, { vol: v, attack: 0.004, delay: k * 0.33 + i * 0.045, pan: p, wet: 0.15, bus: ambBus }); } }
+  // an owl now and then: a long hoot, a pause, then a soft wavering one (the tawny owl's call), off in the trees
+  owlT -= dt; if (owlT <= 0) { owlT = rnd(25, 60); if (night > 0.5 && rain < 0.4) { const p = rnd(-0.7, 0.7), f = rnd(360, 400), v = 0.07 * calm, o = { type: 'sine', pan: p, wet: 0.75, bus: ambBus };
+    tone(f, 0.6, { ...o, vol: v, slide: -18, attack: 0.07 }); tone(f * 0.94, 0.25, { ...o, vol: v * 0.6, attack: 0.05, delay: 1.5 });
+    for (let i = 0; i < 4; i++) tone(f * (0.96 - i * 0.004), 0.16, { ...o, vol: v * 0.8, attack: 0.03, delay: 1.9 + i * 0.17 }); } }
+  // a fox crying far off, rarely
+  foxT -= dt; if (foxT <= 0) { foxT = rnd(70, 160); if (night > 0.6 && rain < 0.3) sample('foxCry', { vol: 0.16 * calm, pan: rnd(-0.8, 0.8), wet: 0.6, rate: [0.9, 1.05], bus: ambBus }); }
   frogT -= dt; if (frogT <= 0) { frogT = rnd(0.4, 1.6); if (marsh > 0.3 && (night > 0.3 || rain > 0.3)) { const p = rnd(-0.9, 0.9), f = rnd(110, 180); for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) tone(f, 0.09, { type: 'sawtooth', vol: 0.02 * marsh, slide: -20, delay: i * 0.13, pan: p, wet: 0.3, bus: ambBus }); } }
   // music: a lyre phrase now and then; a drone that swells at dawn and dusk
   musicT -= dt; if (musicT <= 0) { musicT = rnd(40, 90); phrase(night); }

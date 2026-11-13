@@ -4,6 +4,29 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-18', name: 'Patch 18', title: 'Steady Light', date: '13 November 2026',
+    intro: 'The light in the woods no longer flickers on and off as you walk, and the nights have their crickets back.',
+    sections: [
+      { t: 'Light', icon: 'blessing', items: [
+        'Sunbeams stay put. You can see them from a distance, walk up to them and through them, and they don\'t vanish or pop back.',
+        'Leaving the woods no longer floods the screen with white light, and walking two steps on no longer switches it all off.',
+        'Shafts of sun break through gaps in the leaves, past temple columns and over hills, strongest when the sun is low and in front of you.',
+        'Woods have a soft, thin haze that glows towards the sun. Far woods look hazy too.',
+        'Shade and dappled sunlight under the trees no longer change shape as you walk closer to a tree.',
+        'Nights are calmer: moonlit blue and dark, with no bright fog in the woods.',
+      ] },
+      { t: 'Sound', icon: 'owl', items: [
+        'You can hear the crickets now. They start at dusk, sing loudest in the meadows and at the edges of woods, and go quiet at dawn.',
+        'An owl calls from the trees now and then at night, and sometimes a fox cries far away.',
+        'You hear the wind in the leaves wherever there are trees around you, by day and by night.',
+        'More birdsong by day, and the countryside sounds a little fuller overall.',
+      ] },
+      { t: 'The Map', icon: 'goal', items: [
+        'The abandoned town is no longer marked on your map: you\'ll have to come upon it yourself.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-17', name: 'Patch 17', title: 'A Hero Who Moves', date: '12 November 2026',
     intro: 'Your hero walks, sneaks, swims, fights, kneels and rests like a real person, and the woods are lit by real sunbeams.',
     sections: [

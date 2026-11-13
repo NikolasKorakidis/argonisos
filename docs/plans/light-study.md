@@ -99,20 +99,50 @@ documentation for the effects it uses. Each trait says which parts are sourced a
 
 ## What we built from it
 
-- **One light source for the woods:** within 20 m of the player the trees cast into the sun's shadow map with their own
-  leaf cards (`vegetation.js`); further out their light stand-ins cast. The shadow box steps by whole texels as it follows
-  you, so the dapple on the floor and on the hero, the floor's warm pools of sun and the shafts in the haze all come from
-  one shadow that stays put in the world.
-- **The woods' haze and shafts** (`atmosphere.js`): a 24-step march to 38 m through that shadow map at half resolution,
-  jittered per pixel by a fixed pattern (still pictures stay still) and smoothed by a depth-aware 3×3 upsample. It is
-  gated by how many crowns stand over and round the player (the canopy map, read in the vertex shader), so meadows stay
-  clear. The light scatters mostly forwards, so the beams blaze towards a low sun and still show across it at noon.
-- **Night** (`sky.js`, `weather.js`): bluer moonlight, ambient and fog, slightly higher night exposure, and a forest fog
-  that turns navy instead of black.
+Reworked on 13 November 2026, after a tester found the first version "broken". The beams popped on and off as he walked
+towards them and away. Leaving the trees flooded the screen white, and two steps later everything switched off. The
+nights felt "too much". There were three causes. The whole woods' light was switched by how many crowns stood round the
+*player*. Trees within 20 m cast their real leaves into the shadow map and further ones cast stand-ins, so every
+shadow, beam and fleck changed shape at 20 m. And the haze's lit share was sharpened and brightened up to ×2.8 at high
+sun. The rule now: **nothing about the light depends on where the player stands, only on what lies along each line of
+sight.**
+
+- **One caster per tree** (`vegetation.js`): every tree casts its light far version (with that version's leaf cards)
+  into the sun's shadow map at every distance, by day and by night. Trees out of view but inside the shadow box stay
+  packed, and the mid band past 75 m casts the same stand-ins into the box. So the shadow of a tree never changes as you
+  walk towards it, turn, or let it cross a band. Drawing only stand-ins also took the real leaves' cost out of the
+  shadow pass. The shadow box still steps by whole texels, so the shadow stays put in the world.
+- **Shafts of sun** (`atmosphere.js`, trait 2): Valheim's own technique. At a quarter of the resolution a mask marks where
+  the sky shows, weighted towards the bright sky round the sun (four depth looks per texel, so twigs don't flicker).
+  Three passes blur it outward from the sun's place on the screen, reaching further each time. Looks beyond the screen's
+  edge count as dark, and each look steps a little to either side, so rays have soft edges. It is added in the sun's
+  colour, scaled by how near the view looks towards the sun (eased, so it fades as the sun leaves the screen) and by the
+  sun's height (strongest low). It is scaled down by the air in front of each surface, so the hero beside you isn't
+  washed out, and kept faint on the open sky. Every gap in the crowns, every column of the temple and every ridge throws
+  rays the same way, in the meadow and in the woods.
+- **The woods' haze** (trait 3): thin by design, with the shafts carrying the drama.
+  - Its thickness at each step of the march comes from the world: a 512² texture of how wooded each place is and how high
+    its ground lies, baked once by the worker pool from the same density the trees are laid out by. It lies low over the
+    ground, falling off over about 8 m. Within the canopy map round you, it is a little thicker under a crown and thinner
+    in a gap, faded smoothly towards the map's edge.
+  - It is lit by the shadow map, easing into the usual share of light towards the shadow box's edge.
+  - It scatters by Henyey-Greenstein with g = 0.65 and sits under a soft ceiling, so it glows towards the sun and can't
+    blow out.
+  - It is marched 28 steps to 90 m, denser near the eye, at half resolution. The starting spots turn a little each frame
+    (held for screenshots), and the result is blended over the frames before: reprojected through last frame's camera
+    and held within this frame's neighbourhood. A depth-aware upsample spreads it back over the screen.
+- **Flecks of sun** on the forest floor come from the same shadow map, as much as the place is wooded.
+- **Night** (`sky.js`, `weather.js`): bluer moonlight, ambient and fog. The woods' haze is thin and only faintly
+  moonlit, there are no shafts, and a little blue is lifted into the darkest parts of the picture.
 - **Fireflies** (`fireflies.js`, fed by `ambient.js`).
+- **The test** (`tests/suites/light.mjs`): the hero walks out of a wood into the meadow and back, by day and by night, and
+  straight towards the sun through the trees. Every 100 ms it compares the picture, and the light the haze and shafts add,
+  with the last. It fails if the haze ever jumps (any step over four times the steps round it), or the picture leaps or
+  blows out. The first version jumped 13–477×, blew out to a mean of 251 and moved the picture up to 35 levels in a step.
 
 ## Not done, worth doing later
 
 - Light on the leaves themselves (translucency towards the sun, graphics plan 5.2) would make the gaps glow more.
-- A real low-resolution, temporally reprojected froxel fog would give smoother shafts than a 16-step march, at a
-  higher cost.
+- A real low-resolution froxel fog would let the haze carry visible beams across the view, not only towards the sun,
+  at a higher cost.
+- The shadow box is 80 m. A second, coarser cascade would let the haze's shadows reach further than the box's fade.

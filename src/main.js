@@ -24,7 +24,7 @@ import { LIGHT_U } from './world/trees.js';
 import { updateGiantwood, GIANTWOOD } from './world/giantwood.js';
 import { updateAmbient } from './world/ambient.js';
 import { PEAK } from './world/gen.js';
-import { updateAtmosphere } from './render/atmosphere.js';
+import { updateAtmosphere, setWoodsTexture } from './render/atmosphere.js';
 import { HUD } from './ui/hud.js';
 import { installGame } from './game/game.js';
 import { titleScreen, pauseMenu } from './ui/title.js';
@@ -42,6 +42,7 @@ cutTerrain(terrainMat);           // floors press the ground down under them
 wettable(terrainMat, { dark: 0.54, gloss: 0.4, puddles: true, shine: 0.3 });   // wet in the rain, puddles on flat open ground
 const terrain = new Terrain(scene, terrainMat, pool);
 terrain.requestHeightTexture(1024, WORLD.SIZE).then(setHeightTexture);
+pool.post({ type: 'woodsTex', N: 512, extent: WORLD.SIZE }).then(setWoodsTexture);   // (how wooded each place is, for the woods' air)
 await Promise.all([loadFlora(), loadSiteProps(), loadPieces()]);   // (the packs' trees, rocks, site props and the town's pieces: in before the world is built)
 const veg = new Vegetation(scene, pool);
 veg.prebuild();
@@ -187,7 +188,7 @@ function loop() {
   // it doesn't jump, and never lower than a few metres over the ground you stand on
   mistT -= dt; if (mistT <= 0) { mistT = 0.25; const g0 = heightAt(focus.x, focus.z); mistAim = Math.min(g0 + 40, Math.max(g0 + 8, veg.tallestNear(focus, 110) + 4, game.structures?.tallestNear(focus, 110) ?? -Infinity, game.build?.tallestNear(focus, 110) ?? -Infinity)); }   // (at most 40 m up: a tree up on a hill mustn't lift it over the sky)
   mistTop += (mistAim - mistTop) * (S.still ? 1 : Math.min(1, dt * 0.6));   // (screenshot tests: settled at once)
-  updateAtmosphere(camera, { dt, player: focus, mistTop, fogFar: scene.fog.far, wp: bw.p, wy: bw.y + bw.v, night: LIGHT.night, giant: GIANTWOOD.k, sunDir, sunCol: sun.color, sunK: Math.min(1.4, sun.intensity / 2.4), fogCol: scene.fog.color, day: LIGHT.day, dusk: LIGHT.dusk, overcast: atmo.overcast, rays: 1,
+  updateAtmosphere(camera, { dt, player: focus, mistTop, fogFar: scene.fog.far, wp: bw.p, wy: bw.y + bw.v, night: LIGHT.night, giant: GIANTWOOD.k, sunDir, sunCol: sun.color, sunK: Math.min(1.4, sun.intensity / 2.4), fogCol: scene.fog.color, day: LIGHT.day, dusk: LIGHT.dusk, overcast: atmo.overcast, rays: 1, still: S.still, wetAir: Math.min(1, WEATHER.k.rain * 0.6 + (WEATHER.k.fog || 0)),
     mist: Math.min(1, LIGHT.mist + (WEATHER.k.fog || 0) * 0.4) * (S.fly ? 0.5 : 1), mistDen: 0.01 + biomeWeights(focus.x, focus.z).y * 0.012, ground: Math.min(heightAt(focus.x, focus.z), 60) });   // (mist lies in the valleys: from a summit you look down on it)
   render(); adaptResolution(dt, terrain.pending > 0 || !game.started);
   endFrame();

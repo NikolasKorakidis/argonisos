@@ -150,9 +150,12 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   `terrain.js` + `terrain-worker.js` (worker pool, `pool.js`) · `structures.js` + `greek.js` the sites' buildings and
   props · `town.js` the abandoned town and the small scenes about the island (`SITES.town`, `SITES.spots`) · `sky.js`, `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`), `water.js`, `giantwood.js`, `ambient.js` (+ `fireflies.js`, GPU), `stormwall.js` · `groundcut.js` · `pickups.js`
   (+ `pickup-layout.js`) · `colliders.js`. `src/util/math.js` shared helpers. `src/assets.js` model and texture loading.
-- `src/render`: `core.js` renderer, composer, shadows, adaptive resolution · `atmosphere.js` mist, haze, sun shafts, cloud
-  shadows, grade, and the woods' light (a half-resolution haze march lit through the crowns, dappled floor from the canopy
-  shelter map; notes in `docs/plans/light-study.md`) · `occlusion.js` fades what blocks the camera · `fx.js`, `lights.js`.
+- `src/render`: `core.js` renderer, composer, shadows, adaptive resolution · `atmosphere.js` mist, haze, cloud shadows,
+  grade, and the light in the air: screen-space sun shafts (quarter resolution, blurred out from the sun), the woods'
+  haze (a half-resolution march blended over frames, its thickness from a world texture of how wooded each place is, lit
+  through the shadow map) and the flecks of sun on the forest floor. None of it may depend on where the player stands
+  (`tests/suites/light.mjs` walks out of a wood and back and fails on any jump; notes in `docs/plans/light-study.md`) ·
+  `occlusion.js` fades what blocks the camera · `fx.js`, `lights.js`.
 - `src/player`: `player.js` controller and camera (`speeds.js` its speeds) · `hero.js` rig and clips: the old FBX clips plus the
   Mixamo library `moves.glb`/`acts.glb` (made by `tools/assets/moves.mjs` from `incoming assets/mixamo/`, retargeted onto
   our rig's rest pose); a base layer blending walk/run/sprint, backwards, strafes and sneak by speed and direction; the

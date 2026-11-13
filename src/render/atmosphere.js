@@ -1,21 +1,32 @@
 // The air, painted after the scene from its depth: morning mist that lies in the low ground and thins with height (heavy
 // at first light, burning off as the day warms), a haze that glows towards the sun when you look into the light, and
-// shafts of sun breaking past trees, trunks and ridges (rays marched towards the sun on the screen, lit wherever the
-// sky shows through). All in linear light, before bloom and tone mapping.
-// Under the trees (the light study, docs/plans/light-study.md): a low haze in the woods, lit by shafts of sun that slant
-// down between the crowns (marched through the sun's shadow map, so every gap in the leaves throws its own ray), thicker
-// in the morning and evening than at noon, blue under the moon; and flecks of sun on the forest floor.
+// shafts of sun breaking past trees, columns and ridges. All in linear light, before bloom and tone mapping.
+// The light (docs/plans/light-study.md; reworked after the tester's report of 13 Nov, beams that popped on and off and a
+// screen that blew out white as you left the trees): nothing in it depends on where the player stands, only on what lies
+// along each line of sight, so it is the same light from afar, close up and walking through it.
+//   Shafts of sun (Valheim's own way, Unity's classic Sun Shafts): where the sky shows round the sun on the screen, in the
+//   gaps between the crowns, past columns and over ridges, blurred outward from the sun at a quarter of the resolution
+//   and added in the sun's colour; strongest with the sun low and ahead of you, fading as it leaves the view.
+//   The woods' air: a thin haze lying low over the ground wherever there is wood (a world texture of how wooded each
+//   place is, with the crowns' own map for detail near you), lit by the sun through the same shadow map the trees cast
+//   into; it scatters mostly forward (Henyey-Greenstein) and is held below a ceiling, so it glows rather than blinds.
+//   Marched at half resolution and blended over the frames before, so it doesn't shimmer as you walk.
+//   Flecks of sun on the forest floor, from that same shadow map. By night only a faint blue air under the moon.
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from '../../vendor/three/jsm/postprocessing/Pass.js';
 import { MIST_R0, MIST_R1 } from '../world/reach.js';
 import { WET_U, SHELTER } from '../world/wetness.js';
 
+// (until the first shadow map is drawn: a texel at the far plane, so everything reads as lit; until the woods texture is
+// baked: no wood anywhere)
+const LIT = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); LIT.needsUpdate = true;
+const BARE = new THREE.DataTexture(new Float32Array([0, 0]), 1, 1, THREE.RGFormat, THREE.FloatType); BARE.needsUpdate = true;
 export const ATMO = {
   tDiffuse: { value: null }, tDepth: { value: null },
   projInv: { value: new THREE.Matrix4() }, camWorld: { value: new THREE.Matrix4() }, camPos: { value: new THREE.Vector3() },
-  sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color(1, 0.9, 0.7) }, sunUV: { value: new THREE.Vector2(0.5, 0.5) }, sunVis: { value: 0 },
+  sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color(1, 0.9, 0.7) }, sunUV: { value: new THREE.Vector2(0.5, 0.5) },
   mistCol: { value: new THREE.Color(0.7, 0.75, 0.8) }, mistAmt: { value: 0 }, mistBase: { value: 0 }, mistH: { value: 14 }, mistDen: { value: 0.012 },
-  hazeCol: { value: new THREE.Color(1, 0.75, 0.5) }, hazeAmt: { value: 0 }, rayAmt: { value: 0.5 }, rays: { value: 1 },
+  hazeCol: { value: new THREE.Color(1, 0.75, 0.5) }, hazeAmt: { value: 0 },
   vigOffset: { value: 0.95 }, vigDark: { value: 1.15 },
   // a soft blur on what lies far off, so the end of the view melts into the haze instead of ending in a sharp line
   texel: { value: new THREE.Vector2(1 / 1280, 1 / 720) }, blurNear: { value: 600 }, blurFar: { value: 1100 }, blurAmt: { value: 1 },
@@ -30,78 +41,119 @@ export const ATMO = {
   // the grade (white balance, saturation, a tint in the shadows) and the cloud shadows drifting over the land
   gTint: { value: new THREE.Color(1, 1, 1) }, gSat: { value: 1 }, gShadow: { value: new THREE.Color(0, 0, 0) },
   cloudOff: { value: new THREE.Vector2() }, cloudCover: { value: 0.4 }, cloudK: { value: 0 },
+  // the shafts of sun: how strong (by the hour, how near the sun the view looks, cloud), and the quarter-sized pictures
+  // they're blurred in (rays: 0 turns them off, on the lower graphics settings; tIn: the one a pass reads, shRad: how far it reaches, in screen heights)
+  shaftK: { value: 0 }, rays: { value: 1 }, tShafts: { value: null }, tIn: { value: null }, shRad: { value: 0.1 }, qTexel: { value: new THREE.Vector2(1 / 320, 1 / 180) },
   // the woods' light: the shadow map and where it lies (set from the shadow-casting light as the pass renders), the light's
-  // direction and colour, how much haze (woodK: by the hour; the crowns overhead decide where), its colour where no shaft
-  // lights it, the ground under the player (the haze lies low), and how strong the flecks of sun on the floor are
-  tShadow: { value: null }, shadowMat: { value: new THREE.Matrix4() }, lightDir: { value: new THREE.Vector3(0, 1, 0) }, lightCol: { value: new THREE.Color() },
-  woodK: { value: 0 }, woodBeam: { value: new THREE.Vector2(1, 1) }, woodAmb: { value: new THREE.Color() }, woodFoot: { value: new THREE.Vector3() }, fleckK: { value: 0 },
+  // direction and colour, how thick the woods' air is (woodK, per metre, by the hour and weather), how much light it
+  // throws back (woodLit), its colour lit only from the sky round it (woodAmb), and how strong the flecks of sun on the
+  // floor are; the woods texture (how wooded and how high the ground is, everywhere: setWoodsTexture)
+  tShadow: { value: LIT }, shadowMat: { value: new THREE.Matrix4() }, lightDir: { value: new THREE.Vector3(0, 1, 0) }, lightCol: { value: new THREE.Color() },
+  woodK: { value: 0 }, woodLit: { value: 0.1 }, woodAmb: { value: new THREE.Color() }, fleckK: { value: 0 },
+  tWoods: { value: BARE }, woodsExt: { value: 4096 },
   uCanopy: WET_U.uCanopy, uShelter: WET_U.uShelter, uShelterBox: WET_U.uShelterBox, uShelterNF: WET_U.uShelterNF,
   // the haze as marched at half resolution (its light, and how much of the scene shows through), the size of one of its
-  // texels, and the camera's near and far (to tell, as it's spread back over the screen, which of it lies at what depth)
+  // texels, and the camera's near and far (to tell, as it's spread back over the screen, which of it lies at what depth);
+  // for blending it over the frames before: last frame's view, the march just made and the blend so far, and whether
+  // there is a blend so far; frame: turns the march's starting spots a little each frame (held still for screenshots)
   tHaze: { value: null }, hTexel: { value: new THREE.Vector2(1 / 640, 1 / 360) }, camNF: { value: new THREE.Vector2(0.15, 6000) },
-  // a little moonlit blue lifted into the darkest parts of the picture by night (more in the woods), so the dark stays readable
+  prevVP: { value: new THREE.Matrix4() }, tHazeNew: { value: null }, tHazeOld: { value: null }, histOK: { value: 0 }, frame: { value: 0 },
+  // a little moonlit blue lifted into the darkest parts of the picture by night, so the dark stays readable
   nightLift: { value: new THREE.Color(0, 0, 0) },
 };
-const SAMPLES = 32, WOOD_STEPS = 24, WOOD_LEN = 38;   // (the haze is marched to 38 m: about as far as the 80 m shadow box round the player reaches)
-// (how deep in the woods the player stands, once per corner of the screen: the share of 13 spots within 12 m of them
-// with a tree's crown standing well over their head, from the canopy map)
-const WOODS_VERT = `${SHELTER} uniform float woodK; uniform vec3 woodFoot; varying vec2 vUv; varying float vWoods;
-        void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          float n = step(woodFoot.y + 3.0, coverTop(uCanopy, woodFoot.xz));
-          if (woodK > 0.001) for (int i = 0; i < 12; i++) { float a = float(i) * 1.0472 + (i < 6 ? 0.0 : 0.5236); vec2 q = woodFoot.xz + vec2(cos(a), sin(a)) * (i < 6 ? 6.0 : 12.0);
-            n += step(woodFoot.y + 3.0, coverTop(uCanopy, q)); }
-          vWoods = smoothstep(0.12, 0.55, n / 13.0); }`;
-// what both passes need to know about where a pixel lies and what the light reaches
-const LIGHT_PARS = `${SHELTER} uniform sampler2D tDepth, tShadow; uniform mat4 projInv, camWorld, shadowMat; uniform vec3 camPos, lightDir, lightCol, woodAmb, woodFoot;
-  uniform float woodK; uniform vec2 woodBeam; varying float vWoods; varying vec2 vUv;
+// The woods texture, baked once by the worker pool (terrain-worker.js woodsTexture)
+export function setWoodsTexture({ data, N, extent }) {
+  const t = new THREE.DataTexture(data, N, N, THREE.RGFormat, THREE.FloatType); t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
+  ATMO.tWoods.value = t; ATMO.woodsExt.value = extent;
+}
+const WOOD_STEPS = 28, WOOD_LEN = MIST_R1 - 10;   // (marched as far as the player's mist leaves anything to see; denser near the eye)
+const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
+// what the passes need to know about where a pixel lies and what the light reaches
+const LIGHT_PARS = `${SHELTER} uniform sampler2D tDepth, tShadow, tWoods; uniform mat4 projInv, camWorld, shadowMat; uniform vec3 camPos, lightDir, lightCol, woodAmb;
+  uniform float woodK, woodLit, woodsExt; varying vec2 vUv;
   vec3 worldAt(vec2 uv, float d) { vec4 v = projInv * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0); v /= v.w; return (camWorld * v).xyz; }
-  // 1 where the light reaches a point (nothing between it and the sun or moon in the shadow map: near the player the trees'
-  // own leaves cast into it, see vegetation.js), 0 in shade; outside the shadow box, where nothing is known, the woods'
-  // usual share. The shadow map is fixed in the world (its box steps by whole texels as it follows you), so this is too.
-  float sunLit(vec3 p) { vec4 s = shadowMat * vec4(p, 1.0); s.xyz /= s.w;
-    if (s.x < 0.0 || s.y < 0.0 || s.x > 1.0 || s.y > 1.0 || s.z > 1.0) return 0.3;
-    return step(s.z - 0.0015, dot(texture2D(tShadow, s.xy), vec4(255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0))); }
+  // how wooded a place is (r) and how high its ground lies (g): fixed in the world
+  vec2 woodsAt(vec2 xz) { return texture2D(tWoods, xz / woodsExt + 0.5).rg; }
+  // 1 where the light reaches a point (nothing between it and the sun or moon in the shadow map: the trees cast their light
+  // stand-ins into it, the same ones at every distance, see vegetation.js), 0 in shade. Towards the edge of the shadow box
+  // it eases into 'usual' (the share of light usually found there), so nothing changes where the box ends. The shadow map
+  // is fixed in the world (its box steps by whole texels as it follows you), so this is too.
+  float sunLit(vec3 p, float usual) { vec4 s = shadowMat * vec4(p, 1.0); s.xyz /= s.w;
+    float k = smoothstep(0.0, 0.12, min(min(s.x, 1.0 - s.x), min(s.y, 1.0 - s.y))) * step(s.z, 1.0); if (k <= 0.0) return usual;
+    return mix(usual, step(s.z - 0.0015, dot(texture2D(tShadow, s.xy), vec4(255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0))), k); }
+  // how much the crowns' map counts at a place (it covers 112 m round the player: faded out towards its edge)
+  float canopyK(vec2 xz) { vec2 uv = (xz - uShelterBox.xy) / uShelterBox.z; return smoothstep(0.0, 0.18, min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y))); }
 `;
-// The woods' haze, at half resolution: marched from the eye through the sun's shadow map, lying low over the ground; lit
-// where the sun gets through the leaves (a shaft, lined up with the real gaps in the crowns), dim where it doesn't. Each pixel starts its march
-// at a different spot (a fixed pattern, so a still picture stays still), which the main pass smooths away as it spreads the
-// haze back over the screen. Out: the light gathered (rgb) and how much of the scene shows through (a).
-const HAZE_FRAG = `${LIGHT_PARS}
+// The woods' haze, at half resolution: marched from the eye along the line of sight, its thickness at each step taken
+// from the world there (how wooded, how high over the ground; under a crown a little thicker, in a gap a little thinner),
+// lit where the shadow map says the sun gets through. The light scattered towards the eye follows the Henyey-Greenstein
+// phase (g 0.65: mostly forward, so the air glows towards the sun and the beams show faintly across it), and the whole is
+// held under a soft ceiling so it can never wash the picture out. Each pixel starts its march at a different spot (a
+// fixed pattern, turned a little each frame), which the blend over frames and the depth-aware upsample smooth away.
+// Out: the light gathered (rgb) and how much of the scene shows through (a).
+const HAZE_FRAG = `${LIGHT_PARS} uniform float frame;
   void main() {
-    if (vWoods <= 0.01) { gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
     float d = texture2D(tDepth, vUv).x; vec3 P = worldAt(vUv, min(d, 0.9999)); float dist = length(P - camPos);
-    float L = min(dist, ${WOOD_LEN}.0), st = L / ${WOOD_STEPS}.0, j = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-    vec3 rd0 = (P - camPos) / max(dist, 1e-3); float od = 0.0, lit = 0.0, amb = 0.0, mu = dot(rd0, lightDir);
-    for (int i = 0; i < ${WOOD_STEPS}; i++) { vec3 s = camPos + rd0 * (float(i) + j) * st;
-      // (thicker in the low air under the crowns, where the beams have something to light)
-      float den = woodK * vWoods * exp(-max(s.y - woodFoot.y, 0.0) / 7.0) * (0.6 + 0.9 * smoothstep(s.y + 1.0, s.y + 4.0, coverTop(uCanopy, s.xz)));
-      float tr = exp(-od), dd = den * st; lit += tr * dd * sunLit(s); amb += tr * dd; od += dd; }
-    // (the light scatters mostly forward: the shafts blaze when you look towards the sun, and still show across it; the
-    // unlit haze stays dim, so the beams stand out against it. With the sun high most of the air under the crowns is lit a
-    // little, which reads as a glow: woodBeam sharpens it, so a line of sight wholly in a shaft shines and one half in the
-    // shade falls away, and the beams stand out as columns)
-    float ph = 0.7 + 2.8 * pow(max(mu, 0.0), 10.0) + 1.4 * pow(max(mu, 0.0), 2.0), f = lit / max(amb, 1e-6);
-    gl_FragColor = vec4(lightCol * amb * pow(f, woodBeam.x) * woodBeam.y * ph * 1.4 + woodAmb * amb * 0.16, exp(-od));
+    float L = min(dist, ${WOOD_LEN}.0), j = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + frame * 0.618034);
+    vec3 rd = (P - camPos) / max(dist, 1e-3); float mu = dot(rd, lightDir), od = 0.0, lit = 0.0, amb = 0.0;
+    for (int i = 0; i < ${WOOD_STEPS}; i++) { float u = (float(i) + j) / ${WOOD_STEPS}.0, ds = L * (2.0 * float(i) + 1.0) / ${WOOD_STEPS * WOOD_STEPS}.0;
+      vec3 s = camPos + rd * (L * u * u); vec2 w = woodsAt(s.xz); if (w.r < 0.01) continue;
+      float under = smoothstep(s.y + 1.0, s.y + 4.0, coverTop(uCanopy, s.xz));
+      float den = woodK * w.r * exp(-max(s.y - w.g, 0.0) / 8.0) * mix(1.0, 0.55 + 0.6 * under, canopyK(s.xz)), dd = den * ds, tr = exp(-od);
+      lit += tr * dd * sunLit(s, 1.0 - 0.6 * w.r); amb += tr * dd; od += dd; }
+    float g = 0.65, hg = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * mu, 1.5);   // (relative to scattering evenly: 13.5 straight towards the light, 0.34 across it)
+    vec3 c = lightCol * woodLit * hg * lit + woodAmb * amb;
+    float cl = max(max(c.r, c.g), c.b); c *= 1.0 / (1.0 + cl / 0.45);   // (the ceiling: a soft knee towards 0.45)
+    gl_FragColor = vec4(c, exp(-od));
   }`;
-// (until the first shadow map is drawn: a texel at the far plane, so everything reads as lit)
-const LIT = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); LIT.needsUpdate = true; ATMO.tShadow.value = LIT;
+// The march blended over the frames before: last frame's blend, looked up where this pixel's line of sight was then, held
+// within what this frame's march shows round the pixel (so nothing lingers that has gone), and mixed in a fifth at a time
+const RESOLVE_FRAG = `uniform sampler2D tHazeNew, tHazeOld, tDepth; uniform mat4 projInv, camWorld, prevVP; uniform vec3 camPos; uniform vec2 hTexel; uniform float histOK; varying vec2 vUv;
+  void main() {
+    vec4 c = texture2D(tHazeNew, vUv), lo = c, hi = c;
+    for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec4 q = texture2D(tHazeNew, vUv + vec2(float(x), float(y)) * hTexel); lo = min(lo, q); hi = max(hi, q); }
+    vec4 v = projInv * vec4(vUv * 2.0 - 1.0, min(texture2D(tDepth, vUv).x, 0.9999) * 2.0 - 1.0, 1.0); v /= v.w; vec3 P = (camWorld * v).xyz;
+    P = camPos + normalize(P - camPos) * min(length(P - camPos), ${WOOD_LEN}.0);
+    vec4 q = prevVP * vec4(P, 1.0); vec2 pv = q.xy / q.w * 0.5 + 0.5;
+    if (histOK < 0.5 || q.w <= 0.0 || pv.x < 0.0 || pv.y < 0.0 || pv.x > 1.0 || pv.y > 1.0) { gl_FragColor = c; return; }
+    gl_FragColor = mix(clamp(texture2D(tHazeOld, pv), lo, hi), c, 0.2);
+  }`;
+// The shafts' mask, at a quarter of the resolution: how much of each little patch is sky (four looks at the depth, so a
+// twig doesn't flicker in and out), counted as much as it is the bright sky close round the sun, a little elsewhere
+const MASK_FRAG = `uniform sampler2D tDepth; uniform mat4 projInv, camWorld; uniform vec3 camPos, sunDir; uniform vec2 texel; varying vec2 vUv;
+  void main() {
+    float sky = 0.0; for (int i = 0; i < 4; i++) { vec2 o = vec2(i == 0 || i == 2 ? -1.0 : 1.0, i < 2 ? -1.0 : 1.0) * texel * 1.5; sky += step(0.99999, texture2D(tDepth, vUv + o).x); }
+    vec4 v = projInv * vec4(vUv * 2.0 - 1.0, 0.0, 1.0); v /= v.w; vec3 rd = normalize((camWorld * v).xyz - camPos);
+    gl_FragColor = vec4(sky / 4.0 * (0.06 + 0.94 * pow(max(dot(rd, sunDir), 0.0), 40.0)), 0.0, 0.0, 1.0);
+  }`;
+// One pass of the blur outward from the sun: each pixel gathers what lies between it and the sun, up to shRad screen
+// heights away (three passes, each reaching further, make long rays from a few looks). The looks step a little to either
+// side of the line as they go, so a ray has soft sides; past the edge of the screen nothing is known, and counts as dark
+// (so a sun above the picture doesn't draw its top row down the whole screen in hard columns).
+const BLUR_FRAG = `uniform sampler2D tIn; uniform vec2 sunUV, qTexel; uniform float shRad, aspect; varying vec2 vUv;
+  void main() {
+    vec2 to = sunUV - vUv; float l = length(to * vec2(aspect, 1.0)); vec2 st = l > 1e-4 ? to / l * min(l, shRad) / 10.0 : vec2(0.0);
+    vec2 side = l > 1e-4 ? normalize(vec2(-to.y * aspect, to.x / aspect)) * qTexel * 0.8 : vec2(0.0);
+    float acc = 0.0, w = 1.0, tot = 0.0; for (int i = 0; i < 10; i++) { vec2 q = vUv + st * float(i) + side * (mod(float(i), 2.0) - 0.5);
+      vec2 e = smoothstep(vec2(-0.04), vec2(0.0), q) * smoothstep(vec2(1.04), vec2(1.0), q);
+      acc += texture2D(tIn, q).r * e.x * e.y * w; tot += w; w *= 0.86; }
+    gl_FragColor = vec4(acc / tot, 0.0, 0.0, 1.0);
+  }`;
+
 export class AtmospherePass extends Pass {
   constructor() {
     super();
+    const quad = (fragmentShader) => new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: ATMO, depthTest: false, depthWrite: false, vertexShader: VERT, fragmentShader }));
     this.material = new THREE.ShaderMaterial({
-      uniforms: ATMO, depthTest: false, depthWrite: false,
-      // (how deep in the woods the player stands, once per corner of the screen: the share of 13 spots within 12 m of them
-      // with a tree's crown standing well over their head, from the canopy map)
-      vertexShader: WOODS_VERT,
-      fragmentShader: `${LIGHT_PARS} uniform sampler2D tDiffuse, tHaze; uniform vec3 sunDir, sunCol, mistCol, hazeCol, mzCol, nightLift; uniform vec2 hTexel, camNF;
-        uniform float fleckK;
-        uniform vec2 sunUV, cloudOff, texel, mzC; uniform float blurNear, blurFar, blurAmt, focus, aspect, mzR0, mzR1, mzAmt, mzTop, mzSoft, sunVis, mistAmt, mistBase, mistH, mistDen, hazeAmt, rayAmt, rays, vigOffset, vigDark, gSat, cloudCover, cloudK;
+      uniforms: ATMO, depthTest: false, depthWrite: false, vertexShader: VERT,
+      fragmentShader: `${LIGHT_PARS} uniform sampler2D tDiffuse, tHaze, tShafts; uniform vec3 sunDir, sunCol, mistCol, hazeCol, mzCol, nightLift; uniform vec2 hTexel, camNF;
+        uniform float fleckK, shaftK;
+        uniform vec2 sunUV, cloudOff, texel, mzC; uniform float blurNear, blurFar, blurAmt, focus, aspect, mzR0, mzR1, mzAmt, mzTop, mzSoft, mistAmt, mistBase, mistH, mistDen, hazeAmt, vigOffset, vigDark, gSat, cloudCover, cloudK;
         uniform vec3 gTint, gShadow;
         float h12(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h12(i), h12(i + vec2(1, 0)), f.x), mix(h12(i + vec2(0, 1)), h12(i + vec2(1, 1)), f.x), f.y); }
         // the woods' haze spread back over the screen: nine looks round the pixel in the half-sized haze, each counted as
-        // much as it lies at the same depth (so a trunk's edge keeps its own haze, not the air's behind it); their varied
-        // starting spots average out into a smooth veil
+        // much as it lies at the same depth (so a trunk's edge keeps its own haze, not the air's behind it)
         float linD(float d) { return camNF.x * camNF.y / (camNF.y - d * (camNF.y - camNF.x)); }
         vec4 hazeAt(vec2 uv, float d0) { float z0 = min(linD(d0), ${WOOD_LEN + 4}.0); vec4 acc = vec4(0.0); float tot = 0.0;
           for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 q = uv + vec2(float(x), float(y)) * hTexel;
@@ -124,13 +176,13 @@ export class AtmospherePass extends Pass {
             // cloud shadows: soft patches of shade drifting across the land with the wind
             if (cloudK > 0.001) { vec2 q = (P.xz + cloudOff) * 0.0035; float n = vn(q) * 0.65 + vn(q * 2.3 + 7.1) * 0.35;
               col.rgb *= 1.0 - cloudK * smoothstep(cloudCover, cloudCover + 0.18, n); }
-            // the sun on the forest floor: where it gets through the leaves (the real shadow map, fixed in the world) it
-            // glows a little warmer and the shade beside it is a little deeper, so the floor under the crowns reads as pools
-            // of sun in the shade
-            if (fleckK > 0.001 && vWoods > 0.01 && dist < 36.0) {
+            // the sun on the forest floor: where it gets through the leaves (the shadow map, fixed in the world) it glows a
+            // little warmer and the shade beside it is a little deeper, so the floor under the crowns reads as pools of sun
+            // in the shade; as much as the place is wooded, fading out with distance
+            if (fleckK > 0.001 && dist < 36.0) {
               vec3 fn = normalize(cross(dFdx(P), dFdy(P)));   // (only the ground: the hero and the trunks take the sun as it falls)
-              float k = fleckK * vWoods * (1.0 - smoothstep(24.0, 36.0, dist)) * smoothstep(0.6, 0.85, abs(fn.y)), lit = sunLit(P + lightDir * 0.12);
-              col.rgb *= (1.0 - 0.22 * k * (1.0 - lit)) * (1.0 + lit * k * 0.45 * normalize(lightCol + 1e-4) * 1.7);
+              float k = fleckK * smoothstep(0.15, 0.6, woodsAt(P.xz).r) * (1.0 - smoothstep(24.0, 36.0, dist)) * smoothstep(0.6, 0.85, abs(fn.y));
+              if (k > 0.001) { float lit = sunLit(P + lightDir * 0.12, 0.5); col.rgb *= (1.0 - 0.18 * k * (1.0 - lit)) * (1.0 + lit * k * 0.35 * normalize(lightCol + 1e-4) * 1.7); }
             }
             // mist: density falling off with height above the valley floor, averaged along the ray from the camera's height
             // to the point's (the exact integral of an exponential), so it pools in hollows and thins up on the hills
@@ -142,51 +194,64 @@ export class AtmospherePass extends Pass {
             col.rgb += hazeCol * pow(toSun, 5.0) * (1.0 - exp(-dist / 900.0)) * hazeAmt;
           }
           // the woods' haze (marched at half resolution: see HAZE_FRAG)
-          if (woodK > 0.001 && vWoods > 0.01) { vec4 h = hazeAt(vUv, d); col.rgb = col.rgb * h.a + h.rgb; }
+          if (woodK > 0.0001) { vec4 h = hazeAt(vUv, d); col.rgb = col.rgb * h.a + h.rgb; }
           // the player's mist: how far out from the hero (across the ground) and how high; for the sky, and for anything past
           // the mist's far edge, where the line of sight is when it reaches that edge, so only the band low over the horizon
           // is covered and nothing far off (a giant tree on a ridge) stands out of the mist above its ceiling
           vec3 rd = normalize(P - camPos); float mpEdge = camPos.y + rd.y * (mzR1 / max(length(rd.xz), 1e-3)), mh = mzR1, mp = mpEdge;
           if (d < 0.99999) { mh = length(P.xz - mzC); mp = mix(P.y, mpEdge, smoothstep(mzR1 * 0.9, mzR1 * 1.1, mh)); }
           col.rgb = mix(col.rgb, mzCol, mzAmt * smoothstep(mzR0, mzR1, mh) * (1.0 - smoothstep(mzTop - mzSoft, mzTop + mzSoft, mp)));
-          // shafts of sun: march towards the sun on the screen, gathering light wherever the sky shows through
-          if (sunVis > 0.001 && rays > 0.5) {
-            vec2 st = (sunUV - vUv) / float(${SAMPLES}) * 0.92, uv = vUv; float lit = 0.0, w = 1.0, tot = 0.0;
-            for (int i = 0; i < ${SAMPLES}; i++) { uv += st; float sky = step(0.99999, texture2D(tDepth, clamp(uv, 0.001, 0.999)).x); lit += sky * w; tot += w; w *= 0.95; }
-            float fall = 1.0 - smoothstep(0.0, 0.9, length((vUv - sunUV) * vec2(1.6, 1.0)));
-            col.rgb += sunCol * (lit / tot) * fall * sunVis * rayAmt;
-          }
+          // shafts of sun (blurred outward from the sun at a quarter of the resolution: see MASK_FRAG and BLUR_FRAG); light
+          // scattered by the air between you and what you see, so the hero and the trunk beside you take little of it, and
+          // the open sky (which has the sun's own glow) only a little
+          if (shaftK > 0.001) col.rgb += sunCol * texture2D(tShafts, vUv).r * shaftK * (d < 0.99999 ? 1.0 - exp(-dist / 18.0) : 0.3);
           // the grade: white balance and saturation for the place and the hour, a cool or warm cast in the shadows
           col.rgb *= gTint; float l = dot(col.rgb, vec3(0.2126, 0.7152, 0.0722)); col.rgb = max(mix(vec3(l), col.rgb, gSat), 0.0);
           col.rgb += gShadow * (1.0 - smoothstep(0.0, 0.35, l)) * 0.06;
           vec2 vu = (vUv - 0.5) * vigOffset; col.rgb = mix(col.rgb, vec3(1.0 - vigDark), dot(vu, vu));   // the vignette
           // by night a little moonlit blue in the darkest parts (after the vignette, so the corners don't fall to black)
-          col.rgb += nightLift * (0.6 + 0.4 * vWoods) * (1.0 - smoothstep(0.0, 0.08, dot(col.rgb, vec3(0.2126, 0.7152, 0.0722))));
+          col.rgb += nightLift * (1.0 - smoothstep(0.0, 0.08, dot(col.rgb, vec3(0.2126, 0.7152, 0.0722))));
           gl_FragColor = col;
         }`,
     });
     this.fsQuad = new FullScreenQuad(this.material);
-    this.hazeRT = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, depthBuffer: false }); this.hazeRT.texture.generateMipmaps = false; ATMO.tHaze.value = this.hazeRT.texture;
-    this.hazeMat = new THREE.ShaderMaterial({ uniforms: ATMO, depthTest: false, depthWrite: false, vertexShader: WOODS_VERT, fragmentShader: HAZE_FRAG });
-    this.hazeQuad = new FullScreenQuad(this.hazeMat);
+    const rt = () => { const t = new THREE.WebGLRenderTarget(2, 2, { type: THREE.HalfFloatType, depthBuffer: false }); t.texture.generateMipmaps = false; return t; };
+    this.hazeRT = rt(); this.hist = [rt(), rt()]; this.hi = 0; this.histOK = false; this.sh = [rt(), rt()];
+    this.hazeQuad = quad(HAZE_FRAG); this.resolveQuad = quad(RESOLVE_FRAG); this.maskQuad = quad(MASK_FRAG); this.blurQuad = quad(BLUR_FRAG);
   }
   render(renderer, writeBuffer, readBuffer) {
     const L = this.light; if (L?.shadow?.map) { ATMO.tShadow.value = L.shadow.map.texture; ATMO.shadowMat.value.copy(L.shadow.matrix); ATMO.lightDir.value.subVectors(L.position, L.target.position).normalize(); ATMO.lightCol.value.copy(L.color).multiplyScalar(L.intensity); }
     ATMO.tDiffuse.value = readBuffer.texture; ATMO.tDepth.value = readBuffer.depthTexture; ATMO.texel.value.set(1 / readBuffer.width, 1 / readBuffer.height); ATMO.aspect.value = readBuffer.width / readBuffer.height;
-    // the woods' haze first, at half resolution, when there is any
-    if (ATMO.woodK.value > 0.001) {
+    const size = (t, w, h) => { if (t.width === w && t.height === h) return false; t.setSize(w, h); return true; };
+    // the woods' haze first, at half resolution, when there is any; then blended with the frames before
+    if (ATMO.woodK.value > 0.0001) {
       const w = Math.max(1, Math.ceil(readBuffer.width / 2)), h = Math.max(1, Math.ceil(readBuffer.height / 2));
-      if (this.hazeRT.width !== w || this.hazeRT.height !== h) this.hazeRT.setSize(w, h);
+      if (size(this.hazeRT, w, h) | size(this.hist[0], w, h) | size(this.hist[1], w, h)) this.histOK = false;
       ATMO.hTexel.value.set(1 / w, 1 / h); renderer.setRenderTarget(this.hazeRT); this.hazeQuad.render(renderer);
+      ATMO.tHazeNew.value = this.hazeRT.texture; ATMO.tHazeOld.value = this.hist[this.hi].texture; ATMO.histOK.value = this.histOK ? 1 : 0;
+      this.hi = 1 - this.hi; renderer.setRenderTarget(this.hist[this.hi]); this.resolveQuad.render(renderer);
+      ATMO.tHaze.value = this.hist[this.hi].texture; this.histOK = true;
+    } else this.histOK = false;
+    // the shafts of sun, at a quarter of the resolution: the sky round the sun, then three blurs outward from it
+    if (ATMO.shaftK.value > 0.001) {
+      const w = Math.max(1, Math.ceil(readBuffer.width / 4)), h = Math.max(1, Math.ceil(readBuffer.height / 4)), [a, b] = this.sh;
+      size(a, w, h); size(b, w, h); ATMO.qTexel.value.set(1 / w, 1 / h);
+      renderer.setRenderTarget(a); this.maskQuad.render(renderer);
+      for (const [src, dst, r] of [[a, b, 0.05], [b, a, 0.15], [a, b, 0.4]]) { ATMO.tIn.value = src.texture; ATMO.shRad.value = r; renderer.setRenderTarget(dst); this.blurQuad.render(renderer); }
+      ATMO.tShafts.value = b.texture;
     }
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer); if (this.clear) renderer.clear();
     this.fsQuad.render(renderer);
   }
-  dispose() { this.material.dispose(); this.fsQuad.dispose(); this.hazeMat.dispose(); this.hazeQuad.dispose(); this.hazeRT.dispose(); }
+  dispose() {
+    this.material.dispose(); this.fsQuad.dispose();
+    for (const q of [this.hazeQuad, this.resolveQuad, this.maskQuad, this.blurQuad]) { q.material.dispose(); q.dispose(); }
+    for (const t of [this.hazeRT, ...this.hist, ...this.sh]) t.dispose();
+  }
 }
 
 // Per frame: where the camera and the sun are, and how much mist, haze and light there is
-const _v = new THREE.Vector3(), _f = new THREE.Vector3();
+const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _vp = new THREE.Matrix4();
 // The look for the place and the hour: warm and golden in the meadows, cool and green in the forest and under the giants,
 // amber at sunrise and sunset, blue and muted at night
 const G = { pedias: [1.04, 1.0, 0.93, 1.08, [0.02, 0.0, -0.02]], yleos: [0.95, 1.01, 0.98, 0.96, [-0.02, 0.01, 0.03]], dusk: [1.1, 0.97, 0.84, 1.12, [0.03, -0.01, -0.03]], night: [0.8, 0.92, 1.18, 0.76, [-0.02, 0.0, 0.06]], giant: [0.92, 1.03, 0.94, 0.94, [-0.03, 0.02, 0.0]] };
@@ -197,12 +262,21 @@ function grade(o) {
   for (const k in w) { const g = G[k], a = w[k]; if (a <= 0) continue; tot += a; _t.r += g[0] * a; _t.g += g[1] * a; _t.b += g[2] * a; sat += g[3] * a; _sh.x += g[4][0] * a; _sh.y += g[4][1] * a; _sh.z += g[4][2] * a; }
   tot = Math.max(tot, 1e-3); ATMO.gTint.value.setRGB(_t.r / tot, _t.g / tot, _t.b / tot); ATMO.gSat.value = sat / tot; ATMO.gShadow.value.setRGB(_sh.x / tot, _sh.y / tot, _sh.z / tot);
 }
+// How strong the light in the air is (kept together here, so they can be weighed against each other): the woods' air,
+// per metre at the ground in a full wood, by day and by night; how much sun and moonlight it scatters; how much of the
+// sky's light round it; and the shafts of sun
+export const AIR = { woodDay: 0.004, woodNight: 0.004, lit: 0.25, litNight: 0.12, amb: 0.15, ambNight: 0.35, shafts: 1.2 };
+const clamp01 = (x) => Math.max(0, Math.min(1, x)), sstep = (a, b, x) => { const k = clamp01((x - a) / (b - a)); return k * k * (3 - 2 * k); };
 export function updateAtmosphere(camera, o) {
   grade(o);
   ATMO.cloudOff.value.x += o.dt * (3 + o.overcast * 9); ATMO.cloudOff.value.y += o.dt * 1.2;
-  ATMO.cloudCover.value = 0.5 - o.overcast * 0.25; ATMO.cloudK.value = 0.28 * o.day * Math.max(0, Math.min(1, (o.sunDir.y - 0.05) / 0.2)) * (1 - o.overcast * 0.7);
-  ATMO.camNF.value.set(camera.near, camera.far); ATMO.nightLift.value.setRGB(0.005, 0.009, 0.022).multiplyScalar(o.night);
+  ATMO.cloudCover.value = 0.5 - o.overcast * 0.25; ATMO.cloudK.value = 0.28 * o.day * clamp01((o.sunDir.y - 0.05) / 0.2) * (1 - o.overcast * 0.7);
+  ATMO.camNF.value.set(camera.near, camera.far); ATMO.nightLift.value.setRGB(0.006, 0.011, 0.026).multiplyScalar(o.night);
+  // (the camera as it will be drawn this frame: its world matrix is otherwise only brought up to date as the scene renders)
+  camera.updateMatrixWorld();
+  ATMO.prevVP.value.copy(_vp); _vp.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
   ATMO.projInv.value.copy(camera.projectionMatrixInverse); ATMO.camWorld.value.copy(camera.matrixWorld); ATMO.camPos.value.copy(camera.position);
+  if (!o.still) ATMO.frame.value = (ATMO.frame.value + 1) % 64;
   ATMO.sunDir.value.copy(o.sunDir).normalize();
   ATMO.sunCol.value.copy(o.sunCol).multiplyScalar(o.sunK);
   ATMO.mistCol.value.copy(o.fogCol).lerp(o.sunCol, 0.15 * o.day).multiplyScalar(0.9 + 0.3 * o.day);
@@ -212,19 +286,19 @@ export function updateAtmosphere(camera, o) {
   ATMO.mzCol.value.copy(o.fogCol).lerp(o.sunCol, 0.08 * o.day);
   ATMO.mistAmt.value = o.mist; ATMO.mistBase.value = o.ground - 6; ATMO.mistDen.value = o.mistDen;
   ATMO.hazeCol.value.copy(o.sunCol).multiplyScalar(0.35 * o.sunK); ATMO.hazeAmt.value = (0.25 + o.dusk * 0.9) * o.day;
-  // the woods' haze: much the same through the day (the beams want it at noon too), thicker in rain or fog; at night a
-  // thin blue air the moon lights. Unlit it takes the fog's colour, a little warmed by the sun by day (it's lit from all
-  // round by the light coming through the leaves), deep blue by night.
-  const high = Math.max(0, Math.min(1, (o.sunDir.y - 0.25) / 0.55)), wet = o.wetAir || 0;
-  ATMO.woodK.value = (0.026 * (1 - 0.1 * high) * o.day + 0.022 * o.night) * (1 + wet * 0.8);
-  // the beams sharpened (and brightened to make up for it) the higher the sun: a low sun's shafts are already crisp
-  const hb = Math.max(0, Math.min(1, (o.sunDir.y - 0.3) / 0.45)) * o.day; ATMO.woodBeam.value.set(1 + 2.4 * hb, 1 + 1.8 * hb);
-  ATMO.woodAmb.value.copy(o.fogCol).lerp(o.sunCol, 0.35 * o.day).multiplyScalar(0.55 + 0.25 * o.day);
-  if (o.player) ATMO.woodFoot.value.copy(o.player);
+  // the woods' air: thin by day, a little thicker with the sun low, thicker in rain or fog; by night thinner still and
+  // only faintly lit by the moon. Lit only from the sky round it, it takes the fog's colour, a little warmed by the sun by
+  // day, a dim blue by night.
+  const low = 1 - sstep(0.15, 0.6, o.sunDir.y), wet = o.wetAir || 0;
+  ATMO.woodK.value = (AIR.woodDay * (1 + 0.4 * low) * o.day + AIR.woodNight * o.night) * (1 + wet * 0.8);
+  ATMO.woodLit.value = AIR.lit * o.day + AIR.litNight * o.night;
+  ATMO.woodAmb.value.copy(o.fogCol).lerp(o.sunCol, 0.3 * o.day).multiplyScalar(AIR.amb * o.day + AIR.ambNight * o.night);
   ATMO.fleckK.value = o.day * (1 - o.overcast * 0.85);
-  // the sun on the screen, and how strongly its shafts show (only with the sun up, ahead of you, and not behind cloud)
-  _v.copy(camera.position).addScaledVector(ATMO.sunDir.value, 1000).project(camera);
+  // the sun on the screen, and how strong its shafts are: the sun up and not behind cloud, strongest low; and how near the
+  // view looks towards it, eased so they fade as the sun leaves the screen rather than stopping at its edge (looking
+  // across a high sun some still stream down from the gaps overhead)
   camera.getWorldDirection(_f); const ahead = _f.dot(ATMO.sunDir.value);
+  _v.copy(camera.position).addScaledVector(ATMO.sunDir.value, 1000).project(camera);
   ATMO.sunUV.value.set(_v.x * 0.5 + 0.5, _v.y * 0.5 + 0.5);
-  ATMO.sunVis.value = Math.max(0, Math.min(1, (ahead - 0.15) / 0.4)) * Math.max(0, Math.min(1, (o.sunDir.y + 0.02) / 0.12)) * o.day * (1 - o.overcast) * o.rays;
+  ATMO.shaftK.value = ahead < 0.02 ? 0 : AIR.shafts * sstep(0.0, 0.8, ahead) * (1 - 0.5 * sstep(0.15, 0.8, o.sunDir.y)) * clamp01((o.sunDir.y + 0.02) / 0.12) * o.day * (1 - o.overcast) * (o.rays ?? 1) * ATMO.rays.value;
 }
