@@ -6,7 +6,8 @@
 // game's rig names its bones.
 // - Retargeted: Y Bot's bones don't rest turned as our rig's do (its shoulders, feet and toes by up to a quarter turn), so
 //   each frame's pose is carried over in world space: how far each bone has turned from Y Bot's T-pose is applied to our
-//   rig's T-pose (the one the old clips in assets/models/run.fbx were made on), and turned back into our bones' frames.
+//   rig's T-pose (the one the old clips in assets/models/run.fbx were made on; its legs as the rig rests), and turned back
+//   into our bones' frames.
 // - The hips' travel is taken out (we move the player ourselves) and kept on a track of its own, root.position: for a
 //   cycle only its steady travel (its sway stays), for anything else all of it, so the game can move the player along it
 //   or keep it in the pose (a fall backwards). Hip heights are scaled from Y Bot's hips to ours.
@@ -54,8 +55,13 @@ function worlds(root, get) {
   return W;
 }
 
-// Our rig's T-pose: the bones of the old run clip's file, which rest in it (the rig itself rests with its arms a little down)
-const hero = load(path.join(OUT, 'run.fbx')), HB = bonesOf(hero), heroT = worlds(hero, (b) => b.quaternion), heroHips = bonesOf(load(path.join(OUT, 'hero_rig.fbx'))).mixamorigHips.position.y;
+// Our rig's T-pose: the bones of the old run clip's file, which rest in it (the rig itself rests with its arms a little down).
+// The legs, though, as the rig itself rests, the pose the bodies are bound in (hero_rig.fbx): the run file's T-pose holds
+// the legs 6.6° nearer together but the feet as they were, so carried over from it, every clip pulled the feet in under
+// the body (they crossed its middle line) and rolled each ankle in by as much over a sole kept flat
+const rig = load(path.join(OUT, 'hero_rig.fbx')), RB = bonesOf(rig), rigT = worlds(rig, (b) => b.quaternion), heroHips = RB.mixamorigHips.position.y;
+const hero = load(path.join(OUT, 'run.fbx')), HB = bonesOf(hero), heroT = worlds(hero, (b) => b.quaternion);
+for (const [n, b] of Object.entries(HB)) if (/UpLeg|Leg$|Foot|Toe/.test(n) && RB[n]) heroT.set(b, rigT.get(RB[n]));
 const KEEP = Object.keys(HB).filter((n) => !END.test(n));
 
 function convert(name, file, o = {}) {

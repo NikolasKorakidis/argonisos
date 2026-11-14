@@ -55,7 +55,7 @@ export function fixMaterials(obj, roughness = 0.7) {
   return obj;
 }
 // Re-orient a held prop so its longest axis is +y, the heavy end (head) on top, the grip end at y=0, length L
-export function normalizeHandle(model, L) {
+export function normalizeHandle(model, L, slimHead) {   // (slimHead: the head is the narrower end, a knife whose guarded grip outweighs its blade)
   const wrap = new THREE.Group(), obj = new THREE.Group(); obj.add(model); wrap.add(obj);
   obj.updateMatrixWorld(true);
   let size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3());
@@ -65,7 +65,7 @@ export function normalizeHandle(model, L) {
   const box = new THREE.Box3().setFromObject(obj), mid = (box.min.y + box.max.y) / 2;
   let top = 0, bot = 0; const v = new THREE.Vector3();
   obj.traverse((m) => { if (!m.isMesh) return; const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i += 3) { v.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld); const w = Math.hypot(v.x, v.z); if (v.y > mid) top = Math.max(top, w); else bot = Math.max(bot, w); } });
-  if (bot > top) { obj.rotation.x += Math.PI; obj.updateMatrixWorld(true); }
+  if ((bot > top) !== !!slimHead) { obj.rotation.x += Math.PI; obj.updateMatrixWorld(true); }
   // centred on the handle (its lower third), not the whole box: a head sticking out to one side would put the handle
   // beside the hand
   const b2 = new THREE.Box3().setFromObject(obj), low = b2.min.y + (b2.max.y - b2.min.y) * 0.3, hb = new THREE.Box3();

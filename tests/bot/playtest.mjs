@@ -143,7 +143,7 @@ const ACTIVITIES = {
     await ev('window.__mon.allowPause = false; return true;'); await check('the hammer menu');
   },
   async timewarp() {
-    const w = pick(['clear', 'cloudy', 'lightRain', 'heavyRain', 'thunder', 'fog', null]);
+    const w = pick(['clear', 'cloudy', 'lightRain', 'heavyRain', 'thunder', 'fog', 'thickFog', 'denseFog', null]);
     say(`time ×60${w ? ', weather ' + w : ''}`); await ev(`AG.S.timeScale = 60; ${w ? `AG.setWeather('${w}');` : 'AG.setWeather(null);'} return true;`);
     await walkFor(between(10000, 20000)); await ev('AG.S.timeScale = 1; AG.setWeather(null); return true;');
   },

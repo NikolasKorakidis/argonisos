@@ -92,7 +92,7 @@ export class Owl {
     if (!this.st.done.includes('intro')) return;                           // nothing else before the first meeting
     if (g.S.time > 0.62 && g.S.time < 0.74) this.want('night');
     if (near(S.house, 30)) this.want('house');
-    if (near(S.temple, 38)) this.want('temple');
+    if (near(S.temple, 60)) this.want('temple');   // (the precinct: the temple stands on its hill with the altar 40 m out, Patch 19)
     if (S.olives.some((o) => near(o, 18)) || tr.scraps?.length) this.want('olive');
     if (tr.revealed?.labyrinth) this.want('labyrinth');
     if (near(S.labyrinth, 32)) this.want('labyrinthAltar');

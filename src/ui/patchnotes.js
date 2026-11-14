@@ -4,6 +4,75 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-19', name: 'Patch 19', title: 'Storm and Shade', date: '13 November 2026',
+    intro: 'Zeus\'s storm towers over the marsh, the temple stands on its own hill, Olympos has become a true mountain and the Giants live in caves. Real shadows fall across the land, and the fog and the storms finally look the part.',
+    sections: [
+      { t: 'The Temple of Zeus', icon: 'temple', items: [
+        'The temple stands on its own hill now, bigger and grander: columns seven times your height, doors fit for a god, and a great hall round a towering Zeus.',
+        'A broad marble plaza surrounds it, and a paved sacred way climbs the hill between tall cypresses, through a marble gateway and past the lions. Olives, plane trees, myrtle and lavender grow round the hill.',
+        'The back door is as grand as the front, and the slim posts inside are now great columns that reach the roof.',
+      ] },
+      { t: 'The Giants\' Caves', icon: 'stone', items: [
+        'Each Giant now lives in a cave inside a wooded hill: a cliff with roots hanging over the mouth, fallen boulders and a worn path. You can climb the hill and walk over it.',
+        'Inside, a smoky lair lit by his fire: his supper on the spit, a bed of straw and hides, heaps of bones, his club, hunts painted on the walls, stalactites, glowing mushrooms in the damp, and the carving lit at the back.',
+      ] },
+      { t: 'Olympos', icon: 'goal', items: [
+        'Olympos has grown into a true mountain of ridges, gullies and crags, with snow lying high up. Its upper faces are too steep to climb: a single mule track winds up it, past cairns, to the old altar at the top.',
+      ] },
+      { t: 'Zeus\'s Storm', icon: 'wet', items: [
+        'The storm that seals the marsh is now a towering wall of churning black cloud, five times taller than before, with a ragged shelf, rain sheets and lightning flickering inside it. You can see it looming from across the island.',
+        'Three great rolls of storm cloud circle the wall at its foot, its middle and its crown, turning slowly round it, each the other way from the one below.',
+        'Its thunder carries only so far: a faint rumble now and then from the temple, growing as you come nearer, and the full roar of wind and storm right at its foot. On Olympos you won\'t hear it at all.',
+        '<b>Thunderstorms:</b> forked bolts strike the land, the whole world flashes blue-white, and wet stone and leaves glint in it. The thunder follows a moment later, sooner the closer the strike. At night a close strike lights up the land for an instant.',
+        'A new setting, <b>Reduce flashing</b>, softens lightning and other bright flashes.',
+      ] },
+      { t: 'Weather and Sky', icon: 'wet', items: [
+        '<b>Fog</b> is thick now: you see only some thirty metres, the sky disappears, and the light goes soft and grey.',
+        '<b>Three kinds of fog:</b> a fog, a thick fog where you see half as far, and a dense fog where the world ends ten metres away. The thicker ones are rarer, more common in the forest and the marsh, and the dense one comes mostly at night and in the early morning. Fog rolls in and lifts slowly, over a minute or so.',
+        'Fog is pale grey-white by day, a dark blue by night and a green grey over the marsh, and it glows warmer and brighter towards the sun. Fires, braziers and torches glow through it with a soft halo.',
+        '<b>Light on the lens:</b> look towards the sun through fog or mist and soft stains of light bloom on the screen, as on a camera lens, fading as you turn away. On a clear day you see only a hint of them. (High and Ultra graphics; gentler with Reduce flashing.)',
+        'The sun now crosses the sky from the side, so it no longer sets behind Olympos or rises out of the storm.',
+        '<b>New clouds:</b> billowing low-poly cumulus with flat grey bases drift across the sky with the wind, a few on a fine day, crowds of them and a few towering ones when it clouds over, golden at dawn and dusk and dark blue by moonlight, with great banks of cloud low on the horizon. None drift into Zeus\'s storm.',
+        '<b>Storms are heavy now:</b> a thick, low, lumpy ceiling of dark cloud covers the whole sky in heavy rain and thunderstorms, with ragged cloud racing beneath it. No more stars, moon or sun through a storm, and lightning lights the clouds up from inside.',
+        '<b>Olympos makes its own weather:</b> soft rings of cloud wrap round its upper slopes in layers, turning slowly round the peak, now and then with one more ring hugging the summit, and mist pools in the valleys at its foot in the morning. More of it in bad weather and early in the day; some days it clears. Climb into one and you walk through the fog of the cloud itself.',
+      ] },
+      { t: 'Every Blow Counts', icon: 'log', items: [
+        'You feel every blow now, as in Valheim: the view gives a short, sharp kick when your axe bites into a trunk, harder when a pickaxe rings on rock, and a big jolt when a tree crashes down beside you. Heavy blows hold your swing for a split second where they land.',
+        'Chips, splinters and bark fly off wood, stone chips, dust and sparks off rock, and leaves and twigs off bushes. Every chop and strike sounds a little different, a thin trunk higher than a great one.',
+        'The wrong tool only gives a dull clink and a little jolt: an axe glances off rock, a pickaxe off a trunk.',
+        '<b>Bushes give wood:</b> chop a bush (the leafy bushes, myrtle, broom and the red-leaved bushes of the hills) two to four times by its size and it is gone, leaving one to three wood, and sometimes a little fiber. Old stumps, fallen logs and driftwood can be chopped up for wood too. Flowers, ferns, lavender, grass and moss are left alone. What you clear stays cleared.',
+        'In a fight your blows land with a punch: a light one with a dagger, a heavy one with an axe or club, the heaviest on a killing blow. Blows you take jolt the view by how much they hurt, and blocks and parries strike sparks with a crisp jolt. A swing that hits nothing doesn\'t shake at all.',
+        'A new setting, <b>Camera shake</b>: On, Reduced or Off.',
+      ] },
+      { t: 'Small Things', icon: 'build', items: [
+        'A felled tree leaves a log and a stump as thick as its trunk was.',
+        'The lightstone dagger is held the right way round, blade forward.',
+        'Footsteps are a little softer, and quieter still the further you pull the camera back.',
+        'Things dropped on top of a cave\'s hill stay there instead of falling through to the cave floor.',
+        'The owl speaks about the temple as you reach its plaza, not only once you are on its steps.',
+      ] },
+      { t: 'Shadows', icon: 'blessing', items: [
+        'The trees cast their shadows again. The forest floor is a patchwork of shade and dappled sun, and the trunks throw long stripes when the sun is low.',
+        'Shadows are deeper and a little blue, not a faint grey, so you can see the shade of a rock, a wall or your hero in bright daylight.',
+        'Shadows now reach well into the distance, not just the area right around you: woods and buildings far ahead throw shade too.',
+        'Shadows are soft where they fall from high up, like the shade of a treetop, and sharp where something touches the ground, like your feet or a stone.',
+        'The meadow grass and wildflowers take the shade of the trees, rocks and your hero.',
+        'Far-off forests look darker beneath their treetops, as near ones do.',
+      ] },
+      { t: 'Light', icon: 'goal', items: [
+        'Corners, steps, the foot of a column, the base of a tree and the ground under a boulder are softly shaded, so everything sits in the world instead of floating on it (Medium and High settings).',
+        'Rays of light in the woods reach further, and still don\'t change as you walk.',
+        'By moonlight the trees cast faint shadows close by.',
+        'A new <b>Ultra</b> graphics setting, above High, for powerful PCs. It sees about twice as far: the mist starts further out, full trees, grass and flowers reach much further, and the whole forest stays on the hills to the horizon. It also adds sharper, smoother edges and shadows, the sea mirroring the shore, more firelight at once, and a sharper picture when your graphics card has room to spare. Its view distance comes in after a reload. High, Medium and Low are unchanged.',
+      ] },
+      { t: 'Your hero', icon: 'you', items: [
+        'Your hero walks and runs on straight legs: the feet land side by side under the hips instead of crossing in a line, and the ankles no longer bend inwards.',
+        'The woman stands and moves with her feet flat on the ground, not rolled onto their inner edges.',
+        'A foot set down stands flat on the ground, across a slope too.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-18', name: 'Patch 18', title: 'Steady Light', date: '13 November 2026',
     intro: 'The light in the woods no longer flickers on and off as you walk, and the nights have their crickets back.',
     sections: [

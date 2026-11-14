@@ -69,13 +69,13 @@ const PACKED = {
   spearDoru: () => prop('doru', (o) => { const h = normalizeHandle(o, 1.75); h.position.y = -0.35; return h; }),
   // tools: length, and how far below the grip the handle's end sits
   axe: () => prop('axeCrude', (o) => tool(o, 0.75, 0.09)), axeLight: () => prop('axeGood', (o) => tool(o, 0.85, 0.09)),
-  club: () => prop('club', (o) => tool(o, 0.85, 0.08)), dagger: () => prop('knifeCrude', (o) => tool(o, 0.42, 0.02)), daggerLight: () => prop('knifeGood', (o) => tool(o, 0.38, 0.02)),
+  club: () => prop('club', (o) => tool(o, 0.85, 0.08)), dagger: () => prop('knifeCrude', (o) => tool(o, 0.42, 0.02)), daggerLight: () => prop('knifeGood', (o) => tool(o, 0.38, 0.02, false, true)),   // (its guarded grip is wider than its blade: point the slim end out)
   hammer: () => prop('mallet', (o) => tool(o, 0.55, 0.06)), pickaxe: () => prop('pickaxe', (o) => tool(o, 0.8, 0.08)), hoe: () => prop('spade', (o) => tool(o, 1.0, 0.15, true)),
   spear: () => prop('stake', (o) => { const g = tool(o, 1.8, 0.35); g.scale.set(0.3, 1, 0.3); return grp(g); }),   // (a stake for a palisade, thinned to a shaft; the hand sets the outer group's scale)
   torch: () => prop('torch', (o) => { const g = tool(o, 0.8, 0.05), top = new THREE.Box3().setFromObject(g).max.y;   // our flame and light on its head
     g.add(flame(top - 0.04)); const L = new THREE.Object3D(); L.name = 'torchLight'; L.position.y = top + 0.12; g.add(L); return g; }),
 };
-function tool(o, len, below, flat) { const h = headAlong(normalizeHandle(o, len), flat); h.position.y = -below; return grp(h); }
+function tool(o, len, below, flat, slim) { const h = headAlong(normalizeHandle(o, len, slim), flat); h.position.y = -below; return grp(h); }
 // Each pack model comes out of normalizeHandle with its head pointing whichever way its maker turned it. The hand holds
 // them all one way (hero.holdRight: +x to the knuckles, the way the hand strikes), so each is turned about its handle until
 // its head (the top two fifths) lies widest along x, the longer side (an axe's blade, not its poll) to +x. flat: a blade

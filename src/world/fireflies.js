@@ -9,7 +9,7 @@ import { WET_U, SHELTER } from './wetness.js';
 import { grassU } from './grass.js';
 
 const N = 420, SWARMS = 28, BOX = 56;
-export const FIREFLY_U = { uCam: { value: new THREE.Vector3() }, uTime: { value: 0 }, uAmount: { value: 0 }, uScale: { value: 400 } };
+export const FIREFLY_U = { uCam: { value: new THREE.Vector3() }, uTime: { value: 0 }, uAmount: { value: 0 }, uScale: { value: 400 }, uFogR: { value: new THREE.Vector2(300, 2400) } };
 const seed = new Float32Array(N * 4); { let s = 29; const r = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; for (let i = 0; i < N * 4; i++) seed[i] = r(); }
 const geo = new THREE.BufferGeometry();
 geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3)); geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 4));
@@ -17,7 +17,7 @@ const mat = new THREE.ShaderMaterial({
   uniforms: { ...FIREFLY_U, ...WET_U, uHeight: grassU.uHeight, uOrigin: grassU.uOrigin, uSize: grassU.uSize },
   transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   vertexShader: `${SHELTER}
-    uniform vec3 uCam; uniform float uTime, uAmount, uScale; uniform sampler2D uHeight; uniform vec2 uOrigin; uniform float uSize;
+    uniform vec3 uCam; uniform float uTime, uAmount, uScale; uniform vec2 uFogR; uniform sampler2D uHeight; uniform vec2 uOrigin; uniform float uSize;
     attribute vec4 aSeed; varying float vA;
     float fh(float n) { return fract(sin(n * 91.345) * 47453.5453); }
     void main() {
@@ -41,7 +41,7 @@ const mat = new THREE.ShaderMaterial({
       // gone at the box's edge (so the wrap never shows) and right in your face
       vec2 e = abs(xz - uCam.xz); float edge = 1.0 - smoothstep(${BOX * 0.36}, ${BOX * 0.48}, max(e.x, e.y));
       vec4 mv = viewMatrix * vec4(p, 1.0); float d = -mv.z;
-      vA = (0.08 + 0.92 * blink) * edge * smoothstep(0.8, 2.0, d);
+      vA = (0.08 + 0.92 * blink) * edge * smoothstep(0.8, 2.0, d) * (1.0 - smoothstep(uFogR.x, uFogR.y * 1.4, d));   // (a glow reaches a little further through the fog than a leaf does)
       gl_PointSize = clamp(0.5 * uScale / max(d, 0.1), 3.0, 22.0);
       gl_Position = projectionMatrix * mv;
     }`,
@@ -56,5 +56,5 @@ const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.visible =
 // amount 0..1 (night, the meadows, clear weather), cam: the camera's position, t: the clock (fixed for screenshots)
 export function updateFireflies(amount, cam, t) {
   pts.visible = amount > 0.01; if (!pts.visible) return;
-  FIREFLY_U.uAmount.value = amount; FIREFLY_U.uCam.value.copy(cam); FIREFLY_U.uTime.value = t; FIREFLY_U.uScale.value = renderer.domElement.height / 2;
+  FIREFLY_U.uAmount.value = amount; FIREFLY_U.uCam.value.copy(cam); FIREFLY_U.uTime.value = t; FIREFLY_U.uScale.value = renderer.domElement.height / 2; FIREFLY_U.uFogR.value.set(scene.fog.near, scene.fog.far);
 }

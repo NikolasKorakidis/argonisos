@@ -1,7 +1,7 @@
 // Moving about: sprinting and jumping, swimming, dying and coming back, and the feet finding the ground on slopes and
 // the temple steps (planted feet never sink, nothing breaks, foot placement stays cheap).
 const feetOk = `const HB = P.hero.bones, v = new V(); for (const s of ['Left', 'Right']) { HB['mixamorig' + s + 'Foot'].getWorldPosition(v); if (!Number.isFinite(v.y) || Math.abs(v.y - P.pos.y) > 2.5) return 'foot ' + s + ' at ' + (v.y - P.pos.y); } return true;`;
-const temple = `const s = g.map.sites().find((q) => q.kind === 'temple'), r = Math.atan2(-s.x, -s.z), lz = 12.5 * 1.5 + 4; AG.teleport(s.x + lz * Math.sin(r) + 0.6 * Math.cos(r), s.z + lz * Math.cos(r) - 0.6 * Math.sin(r), r, -0.2); return true;`;
+const temple = `const s = g.map.sites().find((q) => q.kind === 'temple'), r = Math.atan2(-s.x, -s.z), lz = 12.66 * 2.25 + 4; AG.teleport(s.x + lz * Math.sin(r) + 0.6 * Math.cos(r), s.z + lz * Math.cos(r) - 0.6 * Math.sin(r), r, -0.2); return true;`;
 const hill = `for (let r = 400; r < 1400; r += 5) for (let a = 0; a < 6.28; a += 0.2) { const x = r * Math.cos(a), z = r * Math.sin(a), gx = AG.heightAt(x + 1, z) - AG.heightAt(x - 1, z), gz = AG.heightAt(x, z + 1) - AG.heightAt(x, z - 1), s = Math.hypot(gx, gz) / 2; if (s > 0.25 && s < 0.7 && AG.heightAt(x, z) > 2 && AG.heightAt(x + gx * 4, z + gz * 4) > AG.heightAt(x, z) + 1 && AG.heightAt(x + gx * 8 / Math.hypot(gx, gz), z + gz * 8 / Math.hypot(gx, gz)) > AG.heightAt(x, z) + 3) { AG.teleport(x, z, Math.atan2(gx, gz) + Math.PI, -0.2); window._hy = AG.heightAt(x, z); return true; } } return 'no hillside found';`;
 
 // walk forward for a while, sampling how far each foot is above its own ground
@@ -27,7 +27,8 @@ export default {
     await t.step('…and coming back on your feet', `if (P.dead) return 'still dead'; ${feetOk}`);
     const a = await walk(t, temple, 5);
     // (crossing a step edge, a swinging foot can dip into the riser for a frame or two: allowed, briefly and shallowly; the
-    // limit grew with the temple, half as big again since Patch 16 and its risers with it: 20 cm then, 30 cm now)
+    // limit grew with the temple's risers in Patch 16, to 30 cm; the platform's steps are walked as the model has them
+    // since, eight of 21 cm up to the colonnade and seven more up to the hall, from 4 m out on the plaza)
     t.check('up the temple steps: no broken bones; feet sink over 3 cm in under 3% of frames, never over 30 cm', a.bad === 0 && a.deep / a.frames < 0.03 && a.sink > -0.3, JSON.stringify(a));
     const b = await walk(t, hill, 4), hy = await t.eval('return window._hy;');
     t.check('up a hillside: no broken bones, planted feet never sink more than 3 cm, and you get somewhere', b.bad === 0 && b.sink > -0.03 && b.y - hy > 1, JSON.stringify({ ...b, climbed: b.y - hy }));

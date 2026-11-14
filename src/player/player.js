@@ -5,6 +5,7 @@ import { camera } from '../render/core.js';
 import { groundAt } from '../world/groundcut.js';
 import { colliders } from '../world/colliders.js';
 import { stormWallDepth, stormWallOut } from '../world/stormwall.js';
+import { climbable, climbLimit } from '../world/gen.js';
 import { input, down, hit } from '../input.js';
 import { Hero, strikeOf } from './hero.js';
 import { RUN, SPRINT, SWIM, SNEAK, AIM, BLOCK_K, GRAV, JUMP_V } from './speeds.js';
@@ -48,9 +49,12 @@ export class Player {
     if (this.swing > 0 || this.dead || this.swimming || this.equip || this.hero.moveK < 0.5) return false;
     if (!this.stats.use(cost, kind === 'punch' ? 'unarmed' : null)) { this.onToast?.('Too tired'); return false; }
     this.combo = this.comboT > 0 && this.swingKind === kind ? this.combo + 1 : 0; this.strikeMove = strikeOf(kind, this.combo);
-    this.swing = 1; this.swingKind = kind; this.swingHit = false; this.yaw = Math.atan2(-Math.sin(this.camYaw), -Math.cos(this.camYaw));
+    this.swing = 1; this.swingKind = kind; this.swingHit = false; this.stopT = 0; this.yaw = Math.atan2(-Math.sin(this.camYaw), -Math.cos(this.camYaw));
     return true;
   }
+  // A blow that lands hard holds the swing for a moment where the weapon meets what it hit (Valheim's freeze frame): t
+  // seconds, 0.03 to 0.08 (two to five frames), the swing going on at a tenth of its pace meanwhile
+  hitStop(t) { this.stopT = Math.max(this.stopT || 0, t); }
   die() { if (this.dead) return; this.seat = null; this.dead = true; this.deadT = 0; this.swing = 0; this.bow = null; this.dodge = null; this.fell = this.hero.die(); }
   // no blow lands in the heart of a dodge roll
   get dodging() { return !!this.dodge && this.dodge.t > DODGE.safe[0] && this.dodge.t < DODGE.safe[1]; }
@@ -87,6 +91,13 @@ export class Player {
       if (this.onGround && !this.swimming) { const d = want.clone().normalize(), e = 0.7; this.slope = clamp((this.groundHere(this.pos.x + d.x * e, this.pos.z + d.z * e) - this.groundHere(this.pos.x - d.x * e, this.pos.z - d.z * e)) / (2 * e), -1, 1);
         want.multiplyScalar(this.slope > 0 ? 1 - 0.35 * Math.min(this.slope, 0.8) : 1 + 0.12 * Math.min(-this.slope, 0.6)); }
     } else this.slope = 0;
+    // Olympos is climbed, not walked (gen.js CLIMB): on its upper slopes, ground steeper than CLIMB.slip under your feet
+    // (off the path) slides you back down it, whatever you do (moves below refuse what's too steep to walk up)
+    const steep = climbable(this.pos.x, this.pos.z); this.sliding = false;
+    if (steep && this.onGround && !this.swimming) {
+      const e = 0.7, gx = (this.groundHere(this.pos.x + e, this.pos.z) - this.groundHere(this.pos.x - e, this.pos.z)) / (2 * e), gz = (this.groundHere(this.pos.x, this.pos.z + e) - this.groundHere(this.pos.x, this.pos.z - e)) / (2 * e), gr = Math.hypot(gx, gz);
+      if (gr > climbLimit(this.pos.x, this.pos.z, true)) { const k = 3 + 6 * Math.min(1, (gr - 1) * 2); want.multiplyScalar(0.25); want.x -= (gx / gr) * k; want.z -= (gz / gr) * k; this.sliding = true; this.sprinting = false; }
+    }
     // momentum: accelerate into a run, ease to a stop, little air control
     const acc = !this.onGround && !this.swimming ? 2.5 : want.lengthSq() ? 11 : 14;
     this.hv.x += (want.x - this.hv.x) * Math.min(1, acc * dt); this.hv.z += (want.z - this.hv.z) * Math.min(1, acc * dt);
@@ -98,7 +109,18 @@ export class Player {
     if (this.sneaking && speed > 0.3) { S.drain(5, dt, 'sneaking'); this.sneakD = (this.sneakD || 0) + speed * dt; if (this.sneakD > 3.05) { this.sneakD = 0; S.train('sneaking', 12.5); } }
     if (this.sneaking && S.stamina <= 0.5) this.sneaking = false;
     if (this.swimming) { S.add('wet'); if (S.stamina <= 0.5 && speed > 0.3) S.damage(5 * dt); }
-    this.pos.x += this.hv.x * dt; this.pos.z += this.hv.z * dt;
+    let mx = this.hv.x * dt, mz = this.hv.z * dt;
+    // ...and a move that would take you up onto ground steeper than CLIMB.up (off the path) is refused (the part of it
+    // across the slope still goes), on foot or in the air, unless you're already above where it lands: so a rock step can
+    // be jumped onto, but a face can't be hopped up (the speed you were going at is kept, as against a wall, for the jump)
+    if (steep && (mx || mz)) {
+      const too = (dx, dz) => { const l = Math.hypot(dx, dz), g1 = this.groundHere(this.pos.x + dx, this.pos.z + dz); return l > 1e-5 && g1 > this.pos.y + 0.02 && (g1 - Math.min(this.pos.y, this.groundHere(this.pos.x, this.pos.z))) / l > climbLimit(this.pos.x + dx, this.pos.z + dz); };
+      if (too(mx, mz)) {
+        const e = 0.3, gx = this.groundHere(this.pos.x + e, this.pos.z) - this.groundHere(this.pos.x - e, this.pos.z), gz = this.groundHere(this.pos.x, this.pos.z + e) - this.groundHere(this.pos.x, this.pos.z - e), gl = Math.hypot(gx, gz) || 1, up = (mx * gx + mz * gz) / gl;
+        if (up > 0) { mx -= (gx / gl) * up; mz -= (gz / gl) * up; } if (too(mx, mz)) mx = mz = 0;
+      }
+    }
+    this.pos.x += mx; this.pos.z += mz;
     // the travel an action asks for (a roll, a stagger back), from the hero's last frame
     this.pos.x += H.step.x; this.pos.z += H.step.z; H.step.set(0, 0, 0);
     // facing: where you move, or where the camera looks while striking, aiming or blocking (then the legs walk the way
@@ -145,7 +167,7 @@ export class Player {
     }
     // ---- strikes
     if (this.swing > 0) {
-      const m = this.strikeMove || strikeOf(this.swingKind); this.swing -= dt / m.time;
+      const m = this.strikeMove || strikeOf(this.swingKind), held = this.stopT > 0; this.swing -= (dt / m.time) * (held ? 0.1 : 1); if (held) this.stopT -= dt;
       if (!this.swingHit && this.swing < 1 - m.at) { this.swingHit = true; this.onStrike?.(this.swingKind); }
       if (this.swing <= 0) { this.swing = 0; this.comboT = 0.45; }
     } else if (this.comboT > 0) this.comboT -= dt;

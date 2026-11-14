@@ -4,7 +4,7 @@
 // goes by. One-shots (jump, strikes, draw / sheathe, the bow, the block, hits, and any action: hero.action) are sampled
 // straight from their tracks and blended over it: whole body when standing, upper body only while moving.
 import * as THREE from 'three';
-import { FootIK } from './footik.js';
+import { FootIK, soleOf } from './footik.js';
 import { Cape, CAPE_MODEL } from './cape.js';
 import { loadFBX, loadGLB, loadPack, loadTex } from '../assets.js';
 import { clamp, lerp, smooth } from '../util/math.js';
@@ -148,10 +148,12 @@ export const GRIP = { at: [0, 10.6, 4.1], tilt: -1.8, curl: 1.0 };
 // A shield is strapped to the left forearm (bone space: +y elbow to wrist, the body's side +z): its middle this far down
 // the forearm, its back this far out from the bone, on the outside of the arm, so the arm never passes through it
 export const STRAP = { along: 15, out: 5 };
-// The run and sprint clips put each foot down across the line under the body (the run's right foot most), a catwalk
-// stride on our long-legged heroes: in motion each thigh turns out this far (radians, [left, right] at full stride, the
-// run's and the sprint's), its foot turned back flat, which sets the feet down a hand's width either side of it
-const STANCE = { run: [0.12, 0.19], sprint: [0.095, 0.095] };
+// The run and sprint clips put each foot down across the line under the body (the run's right foot most, the sprint's
+// left), a catwalk stride on our long-legged heroes, each planted shin leaning in over a flat foot (the ankle seen to
+// buckle): in motion each thigh turns out this far (radians, [left, right] at full stride, the run's and the sprint's),
+// its foot turned back flat, which sets the feet down 7 to 9 cm either side of that line, as the walk's own are, the
+// shins nearer upright
+const STANCE = { run: [0.17, 0.23], sprint: [0.2, 0.12] };
 // The swimming clip is a crawl under the water, the body flat: tipped this far head up (radians), the head kept this far
 // over the surface (its bone sits at the base of the skull: the face clears it)
 const SWIM_TILT = 0.45, SWIM_HEAD = 0.16;
@@ -243,6 +245,33 @@ export const FEET_OFF = new Set(['roll', 'deathBack', 'deathLeft', 'getUp', 'sit
 const _fa = new THREE.Vector3();
 export const BOW_DUR = { equip: 0.88, draw: 0.8, lower: 0.3, disarm: 1.0, blend: 0.14 };
 
+// A body bound with its legs astride (the refit turns the pack's legs to point as the rig's, which rest a little apart,
+// and the feet go with them: the woman stands with her shins 9° out and her soles rolled onto their inner edges) shows
+// every clip so: legs wide, ankles bent in. The legs are set straight from the start of every pose instead, each leg bone
+// turned (in the world, about its own joint, the feet with the shins) as far as it would take the body to stand as the
+// man is bound, his thighs LEG_FIT[0] out from upright and his shins LEG_FIT[1] (radians, seen from the front). A bone's
+// fix is a turn in its own frame and its parent's undone (fitBone), so it holds under any pose. [[bone, k, parent's k]...]
+// per leg; empty for a body already standing so
+const LEG_FIT = [0.032, 0.007];
+function legFit(B) {
+  const out = [], v = new THREE.Vector3(), w = new THREE.Vector3(), q = new THREE.Quaternion(), FWD = new THREE.Vector3(0, 0, 1);
+  for (const [sd, x] of [['Left', 1], ['Right', -1]]) {
+    const up = B[`mixamorig${sd}UpLeg`], knee = B[`mixamorig${sd}Leg`], foot = B[`mixamorig${sd}Foot`], toe = B[`mixamorig${sd}ToeBase`]; if (!up || !knee || !foot) continue;
+    const lean = (a, b) => { a.getWorldPosition(v); b.getWorldPosition(w); return Math.atan2((w.x - v.x) * x, v.y - w.y); };   // (how far a bone leans out, foot first)
+    const turn = (d) => (Math.abs(d) > 0.017 ? q.setFromAxisAngle(FWD, -d * x).clone() : null), dUp = turn(lean(up, knee) - LEG_FIT[0]), dLeg = turn(lean(knee, foot) - LEG_FIT[1]);
+    if (!dUp && !dLeg) continue;
+    // k = W⁻¹·D·W: D, a turn in the world about the bone's joint, as a turn in the bone's own frame (W, as it rests)
+    const local = (b, D) => { const W = b.getWorldQuaternion(new THREE.Quaternion()); return D ? W.clone().invert().multiply(D).multiply(W) : new THREE.Quaternion(); };
+    const kUp = local(up, dUp), kLeg = local(knee, dLeg), kFoot = local(foot, dLeg), list = [[up, kUp, null], [knee, kLeg, kUp], [foot, kFoot, kLeg]];
+    if (toe) list.push([toe, local(toe, dLeg), kFoot]);
+    out.push(list);
+  }
+  return out;
+}
+const _fk = new THREE.Quaternion();
+// a bone's local rotation with its fit: its parent's undone before it, its own after (the world rotation then W·k)
+function fitBone(b, k, kp) { if (kp) b.quaternion.premultiply(_fk.copy(kp).invert()); b.quaternion.multiply(k); }
+
 const _hq = new THREE.Quaternion(), _ab = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()];
 const _sq = new THREE.Quaternion(), _sp = new THREE.Quaternion(), _sb = new THREE.Quaternion(), _sv = new THREE.Vector3();
 // turn a bone by a world-space rotation q, keeping its parent where it is
@@ -298,6 +327,11 @@ export class Hero {
       m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;   // skinned bounds don't follow the pose
       m.material = mat;
     });
+    // (the legs set straight, legFit, and then how each sole lies in its foot bone: for FootIK to set planted feet flat)
+    obj.updateMatrixWorld(true); this.legFit = legFit(bones);
+    const restQ = new Map(); for (const f of this.legFit) for (const [b, k, kp] of f) { restQ.set(b, b.quaternion.clone()); fitBone(b, k, kp); }
+    obj.updateMatrixWorld(true); for (const sd of ['Left', 'Right']) { const f = bones[`mixamorig${sd}Foot`], t = bones[`mixamorig${sd}ToeBase`]; if (f && t) f.userData.sole = soleOf(f, t); }
+    for (const [b, q] of restQ) b.quaternion.copy(q); obj.updateMatrixWorld(true);
     if (gl && kind.brows) { let head = null; obj.traverse((m) => { if (m.name === 'base_head') head = m; }); const brows = head && newBrows(head, mat); if (brows) head.parent.add(brows); }
     this.mat = gl ? mat : null;
     if (gl && dress) this.dress(obj, dress.scene, bones);
@@ -603,6 +637,8 @@ export class Hero {
     if (this.stillT > this.fidgetAt) { this.action('look', { cancel: true, blend: 0.5, fade: 0.6, layer: true, quiet: true }); this.stillT = 0; this.fidgetAt = 10 + Math.random() * 8; }
     this.runActions(dt, st); this.poseActions();
     if (st.bow) this.poseBow(st.bow, st.aimPt, st.sprinting);
+    // the legs set straight on a body bound standing astride (legFit), the clips' poses kept
+    for (const f of this.legFit || []) for (const [b, k, kp] of f) fitBone(b, k, kp);
     this.keepAboveFloor(dt, st);
     // swimming: the old run, leaned into a crawl, while the swimming clips aren't in
     if (st.swimming && B.mixamorigHips && !lib) B.mixamorigHips.rotateX(0.9);

@@ -1,6 +1,6 @@
 // Argonisos: the trial of Zeus. Entry point: builds the world and the player, runs the frame loop.
 import * as THREE from 'three';
-import { renderer, scene, camera, render, followShadow, groundDetail, sun, GPU, ADAPT, adaptResolution } from './render/core.js';
+import { renderer, scene, camera, render, followShadow, setShadowSky, SHADOW, groundDetail, sun, GPU, ADAPT, adaptResolution } from './render/core.js';
 import { Terrain, rockGround } from './world/terrain.js';
 import { WorkerPool } from './world/pool.js';
 import { Vegetation } from './world/vegetation.js';
@@ -11,8 +11,10 @@ import { updateGrass } from './world/grass.js';
 import { heightAt, biomeWeights, BIOME_NAMES, biomeAt, WORLD } from './world/gen.js';
 import { skyDome, updateSky, fogSky, sunDir, moonDir, lightDir, LIGHT, DAY_SECONDS, DAY_FRACTION } from './world/sky.js';
 import { updateWeather, setWeather, snapWeather, WEATHER } from './world/weather.js';
+import { updateClouds } from './world/clouds.js';
 import { setHeightTexture, updateWater } from './world/water.js';
 import { buildStormWall, updateStormWall, STORM_WALL } from './world/stormwall.js';
+import { updateLightning } from './world/lightning.js';
 import { SPECIES, STRIDE } from './world/flora.js';
 import { colliders } from './world/colliders.js';
 import { input, endFrame, hit, down } from './input.js';
@@ -64,7 +66,7 @@ export const S = { time: 0.06, day: 1, timeScale: 1, debug: false, fly: false, f
 const SPAWN = { x: 6, z: 4 };
 
 // ---- Player, pack and HUD
-const player = new Player(scene);
+const player = new Player(scene); player.hero.root.userData.nearShadow = true;   // (the hero moves: near shadow map only, render/core.js)
 player.spawn(SPAWN.x, SPAWN.z); player.camYaw = Math.PI * 0.8; player.yaw = player.camYaw + Math.PI;
 const inv = new Inventory(), hud = new HUD();
 hud.bind(player, inv);
@@ -158,17 +160,19 @@ function loop() {
   if (!busy) { updateConditions(); player.stats.update(dt); updateRegion(); }
   const focus = S.fly ? camera.position : player.pos;
   updateSky(S.time, dt, t, atmo.overcast, atmo.dark);
-  atmo = updateWeather(dt, focus, LIGHT, (k) => setTimeout(() => game.sound?.('thunder', Math.min(1.5, k * 0.6)), 300 + k * 900));
+  atmo = updateWeather(dt, focus, LIGHT, { still: S.still });
+  updateStormWall(t, dt, { light: LIGHT, focus, still: S.still, atmo, sun, sunDir: lightDir, fogCol: scene.fog.color, inside: game.structures?.inCave?.(camera.position) });   // (near it the wind turns into the wall: before the wind lines)
+  updateLightning(dt, S.still);   // (the world lit by the storms' lightning: after the sky has set its light)
   updateWindLines(dt, { light: Math.max(0.12, LIGHT.day), rain: WEATHER.k.rain, still: S.still });   // the wind drawn in the air (wind.js)
   // high up the air clears: from the hills, and from the top of Olympos, you see out across the island
   const up = Math.min(1.6, Math.max(0, (camera.position.y - 60) / 160)), clear = Math.min(1, Math.max(0, (camera.position.y - 90) / 140));
   scene.fog.near = (scene.fog.near + (300 - scene.fog.near) * clear) * (1 + up); scene.fog.far = (scene.fog.far + (2400 - scene.fog.far) * clear) * (1 + up * 1.4);   // (above the forest's own haze)
   const fx = S.still ? 0 : dt;   // (screenshot tests: dust, pollen and the like hold still too)
   updateGiantwood(dt, focus, camera, lightDir, LIGHT.day, S.still);
+  updateClouds(dt, { time: t, still: S.still, dayT: S.time, dayN: S.day });   // (the clouds, and the fog inside one: before fogSky, which hides the sky in a thick one)
   fogSky(Math.min(1, Math.max(0, 1 - scene.fog.far / 1400, atmo.overcast)));
   updateWater(t, camera.position, LIGHT, skyDome, sunDir, moonDir);
-  updateStormWall(t, LIGHT);
-  followShadow(focus, lightDir);
+  followShadow(focus, lightDir, !LIGHT.moon); setShadowSky(SHADOW.sky * (LIGHT.day + 0.6 * LIGHT.night) * (1 - atmo.overcast * 0.8), LIGHT.moon ? SHADOW.nightFade : 0);   // (the share of sky light a shadow takes: core.js)
   LIGHT_U.uSunDir.value.copy(lightDir); LIGHT_U.uSunCol.value.copy(sun.color).multiplyScalar(sun.intensity * 0.32);
   terrain.update(camera.position);
   veg.update(dt, focus); windUniform.value = t; updateCuts(focus); updateGrass(pool, focus);
@@ -181,14 +185,14 @@ function loop() {
   updateShelter(renderer, scene, focus, () => ({ solid: [...(game.build?.placed || []).map((p) => p.obj), ...(game.structures?.groups || [])], canopy: [...veg.batches.values()].flatMap((b) => b.meshes) }), dt, WET.value > 0.001 || WEATHER.k.rain > 0.02);
   const bw = biomeWeights(focus.x, focus.z);
   // pollen in the sunny meadows, fireflies at dusk and by night, leaves in the woods, snow blowing on the summit
-  const wet = 1 - Math.min(1, WEATHER.k.rain * 1.5), snowK = PEAK.on ? Math.min(1, Math.max(0, (camera.position.y - 215) / 50)) : 0;
+  const wet = 1 - Math.min(1, WEATHER.k.rain * 1.5), snowK = PEAK.on ? Math.min(1, Math.max(0, (camera.position.y - PEAK.snow + 70) / 50)) : 0;   // (from a little under the snow line)
   updateAmbient(fx, camera.position, { pollen: LIGHT.day * bw.p * wet * (1 - atmo.overcast * 0.7), firefly: (LIGHT.dusk * 0.6 + LIGHT.night) * (bw.p + bw.y * 0.7) * wet,
     leaf: (0.35 + LIGHT.day * 0.65) * Math.min(1, bw.y * 1.2 + GIANTWOOD.k), snow: snowK }, t);
   // the player's mist: its ceiling a little over the tallest thing standing near you (trees, giants, buildings), eased so
   // it doesn't jump, and never lower than a few metres over the ground you stand on
   mistT -= dt; if (mistT <= 0) { mistT = 0.25; const g0 = heightAt(focus.x, focus.z); mistAim = Math.min(g0 + 40, Math.max(g0 + 8, veg.tallestNear(focus, 110) + 4, game.structures?.tallestNear(focus, 110) ?? -Infinity, game.build?.tallestNear(focus, 110) ?? -Infinity)); }   // (at most 40 m up: a tree up on a hill mustn't lift it over the sky)
   mistTop += (mistAim - mistTop) * (S.still ? 1 : Math.min(1, dt * 0.6));   // (screenshot tests: settled at once)
-  updateAtmosphere(camera, { dt, player: focus, mistTop, fogFar: scene.fog.far, wp: bw.p, wy: bw.y + bw.v, night: LIGHT.night, giant: GIANTWOOD.k, sunDir, sunCol: sun.color, sunK: Math.min(1.4, sun.intensity / 2.4), fogCol: scene.fog.color, day: LIGHT.day, dusk: LIGHT.dusk, overcast: atmo.overcast, rays: 1, still: S.still, wetAir: Math.min(1, WEATHER.k.rain * 0.6 + (WEATHER.k.fog || 0)),
+  updateAtmosphere(camera, { dt, player: focus, mistTop, fogNear: scene.fog.near, fogFar: scene.fog.far, wp: bw.p, wy: bw.y + bw.v, night: LIGHT.night, giant: GIANTWOOD.k, sunDir, sunCol: sun.color, sunK: Math.min(1.4, sun.intensity / 2.4), fogCol: scene.fog.color, day: LIGHT.day, dusk: LIGHT.dusk, overcast: atmo.overcast, rays: 1, still: S.still, wetAir: Math.min(1, WEATHER.k.rain * 0.6 + (WEATHER.k.fog || 0)),
     mist: Math.min(1, LIGHT.mist + (WEATHER.k.fog || 0) * 0.4) * (S.fly ? 0.5 : 1), mistDen: 0.01 + biomeWeights(focus.x, focus.z).y * 0.012, ground: Math.min(heightAt(focus.x, focus.z), 60) });   // (mist lies in the valleys: from a summit you look down on it)
   render(); adaptResolution(dt, terrain.pending > 0 || !game.started);
   endFrame();

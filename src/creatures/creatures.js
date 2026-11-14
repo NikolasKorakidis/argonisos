@@ -50,7 +50,7 @@ export class Creatures {
   spawn(type, x, z, o = {}) {
     const T = TYPES[type], level = o.level ?? (Math.random() < 0.12 ? (Math.random() < 0.25 ? 2 : 1) : 0), k = 1 + 0.25 * level;
     const body = makeBody(type, level, x, z, o.young), y = Math.max(heightAt(x, z), -0.3), young = !!body.young, yk = young ? YOUNG_K : 1;
-    body.obj.position.set(x, y, z); body.obj.rotation.order = 'YXZ'; this.g.scene.add(body.obj);
+    body.obj.position.set(x, y, z); body.obj.rotation.order = 'YXZ'; body.obj.userData.nearShadow = true; this.g.scene.add(body.obj);   // (it moves: it casts into the near shadow map only, render/core.js)
     const c = { type, T: young ? youngOf(type) : T, body, level, young, dropK: yk, hp: rr(...T.hp) * k * yk, max: 0, pos: body.obj.position, yaw: Math.random() * 6.28, speed: 0, state: 'idle', t: Math.random() * 4, target: null, home: new THREE.Vector3(x, y, z),
       atkCd: rr(0.5, 1.5), rangedCd: rr(2, 4), hitT: 0, flash: 0, aware: !!o.aware, dmgK: k * yk, deadT: 0, boss: o.boss, summoned: o.summoned, vy: 0, stuck: 0, lastP: new THREE.Vector3(x, y, z) };
     c.max = c.hp; this.list.push(c); return c;

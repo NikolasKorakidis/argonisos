@@ -17,7 +17,7 @@ export function updateGiantwood(dt, pos, cam, lightDir, day, still = false) {   
   const target = titanBand(pos.x, pos.z); GIANTWOOD.k = lerp(GIANTWOOD.k, target, still ? 1 : Math.min(1, dt * 0.8)); const k = GIANTWOOD.k;
   if (k > 0.01) {
     sun.intensity *= 1 - 0.62 * k; hemi.intensity *= 1 - 0.5 * k; scene.environmentIntensity *= 1 - 0.55 * k;
-    scene.fog.near *= 1 - 0.6 * k; scene.fog.far *= 1 - 0.55 * k; scene.fog.color.lerp(_c.setRGB(0.16, 0.24, 0.18).multiplyScalar(0.4 + day * 0.6), 0.45 * k);
+    scene.fog.near = Math.max(scene.fog.near * (1 - 0.6 * k), Math.min(scene.fog.near, 3)); scene.fog.far = Math.max(scene.fog.far * (1 - 0.55 * k), Math.min(scene.fog.far, 14));   // (a thick fog no closer: the hero stays in sight) scene.fog.color.lerp(_c.setRGB(0.16, 0.24, 0.18).multiplyScalar(0.4 + day * 0.6), 0.45 * k);
   }
   // dust in the light
   motes.material.opacity = Math.min(0.7, k * day * 1.2); motes.visible = motes.material.opacity > 0.02;
