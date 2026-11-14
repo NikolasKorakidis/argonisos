@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { scene, waterNormals } from '../render/core.js';
 import { WET_U, RIPPLES } from './wetness.js';
+import { ATMO } from '../render/atmosphere.js';
 
 export const WATER_U = { uRainK: WET_U.uRainK, uRainT: WET_U.uRainT, uTime: { value: 0 }, uH: { value: null }, uHExt: { value: 4096 }, uNorm: { value: waterNormals }, uSky: { value: new THREE.Color(0x3a78c8) },
   uHor: { value: new THREE.Color(0xb8dcf0) }, uDay: { value: 1 }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(0xfff1d6) } };
@@ -79,7 +80,7 @@ export function setHeightTexture({ data, N, extent }) {
   WATER_U.uH.value = t; WATER_U.uHExt.value = extent; return t;
 }
 export function updateWater(time, camPos, light, skyDome, sunDir, moonDir) {
-  WATER_U.uTime.value = time; WATER_U.uDay.value = Math.min(1, light.day + light.dusk * 0.3);
+  WATER_U.uTime.value = time; ATMO.wT.value = time; ATMO.seaK.value = 1 - 0.7 * WET_U.uRainK.value; WATER_U.uDay.value = Math.min(1, light.day + light.dusk * 0.3);
   WATER_U.uSky.value.copy(skyDome.material.uniforms.top.value); WATER_U.uHor.value.copy(skyDome.material.uniforms.hor.value);
   WATER_U.uSunDir.value.copy(sunDir.y > 0 ? sunDir : moonDir);
   WATER_U.uSunCol.value.setHex(light.day > 0.1 ? (light.dusk > 0.4 ? 0xffb070 : 0xfff1d6) : 0x7088b8).multiplyScalar(0.3 + light.day * 0.7);

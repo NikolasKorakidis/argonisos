@@ -8,7 +8,7 @@ import { ITEMS } from './items.js';
 import { heightAt } from '../world/gen.js';
 import { camera, scene } from '../render/core.js';
 import { input } from '../input.js';
-import { burst, dust, addShake } from '../render/fx.js';
+import { burst, dust, addShake, punch, impact, spark } from '../render/fx.js';
 import { BOW_DUR, CLIPS } from '../player/hero.js';
 import { loadFBX, loadGLB, loadTex } from '../assets.js';
 import { clamp, rr } from '../util/math.js';
@@ -16,6 +16,10 @@ import { clamp, rr } from '../util/math.js';
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const REACH = { dagger: 1.8, spear: 2.8, axe: 2.3, mace: 2.3 };
 const ARROW_V = [24, 70], ARROW_FLAT = [0.05, 0.6];
+// How hard a blow you land feels (render/fx.js punch, the same scale as the gathering's: harvest.js): by the weapon's heft
+// and the damage done, more for a killing blow. The heavy weapons' hits and every killing blow hold the swing a moment
+// (player.hitStop). A swing that meets nothing is not felt at all.
+const HEFT = { dagger: 0.1, spear: 0.15, axe: 0.22, mace: 0.26, unarmed: 0.1 }, HEAVY = new Set(['axe', 'mace']);
 export const armorReduce = (dmg, armor) => (armor <= 0 ? dmg : armor < dmg / 2 ? dmg - armor : (dmg * dmg) / (armor * 4));
 
 let arrowProto = null;
@@ -39,8 +43,12 @@ export class Combat {
     const targets = g.creatures.inArc(P.pos, P.yaw, reach).slice(0, kind === 'axe' || kind === 'mace' ? 2 : 1);
     if (!targets.length) return false;
     const dmg = item?.dmg || (P.stats.has('claws') ? [[30, 'slash'], [10, 'poison']] : [[2, 'blunt']]), k = P.stats.damageK(kind) * (P.stats.has('zeusBlessing') ? 1.1 : 1);
-    for (const c of targets) g.creatures.hurt(c, dmg, P.pos, { k, backstab: item?.backstab || 2, knock: item?.knock ?? 0.1 });
-    P.stats.train(kind, 12.5); addShake(0.18); g.sound?.('hit');
+    let felt = 0, kill = false;
+    for (const c of targets) { const n = g.creatures.hurt(c, dmg, P.pos, { k, backstab: item?.backstab || 2, knock: item?.knock ?? 0.1 }); felt = Math.max(felt, n); kill ||= c.dead;
+      impact(c.pos.clone().setY(c.pos.y + c.T.h * 0.6).addScaledVector(new THREE.Vector3(Math.sin(P.yaw), 0, Math.cos(P.yaw)), -Math.min(0.5, c.T.r ?? 0.4)), 'hide', clamp(felt / 40, 0.2, 1)); }
+    punch((HEFT[kind] ?? 0.15) + clamp(felt / 80, 0, 0.2) + (kill ? 0.12 : 0), { x: Math.sin(P.yaw), z: Math.cos(P.yaw) });
+    if (kill || HEAVY.has(kind)) P.hitStop(kill ? 0.08 : 0.045);
+    P.stats.train(kind, 12.5); g.sound?.('hit');
     return true;
   }
   // ---- a creature's blow lands on the player
@@ -53,14 +61,16 @@ export class Combat {
       const parry = this.blockT < 0.25, blk = this.blockValue() * S.damageK('blocking') * (parry ? this.parryBonus() : 1);
       const soaked = Math.min(dmg, blk), cost = 5 + soaked * 0.5;
       if (S.use(cost, 'blocking')) {
-        dmg -= soaked; S.train('blocking', 12.5); burst(P.pos.clone().setY(P.pos.y + 1.3).addScaledVector(new THREE.Vector3(Math.sin(P.yaw), 0, Math.cos(P.yaw)), 0.6), { color: 0xfff0c0, n: 10, speed: 3, size: 0.04, grav: 4 });
+        const at = P.pos.clone().setY(P.pos.y + 1.3).addScaledVector(new THREE.Vector3(Math.sin(P.yaw), 0, Math.cos(P.yaw)), 0.6), from = { x: P.pos.x - c.pos.x, z: P.pos.z - c.pos.z };
+        dmg -= soaked; S.train('blocking', 12.5); burst(at, { color: 0xfff0c0, n: 10, speed: 3, size: 0.04, grav: 4 }); spark(at, parry ? 8 : 4); punch(parry ? 0.24 : 0.15, from);   // (a crisp jolt as the blow meets the guard)
         g.sound?.(parry ? 'parry' : 'block');
         if (parry) { c.hitT = 1.2; c.atkCd = 2.5; g.hud.toast('<b>Parry!</b>'); }
       } else { S.add('stunned', 1.2); g.hud.toast('Your guard breaks'); }
     }
     if (dmg <= 0.05) return;
     const final = armorReduce(dmg, g.armor?.() ?? 0);
-    S.damage(final); g.hud.hurt(final / Math.max(10, S.maxHealth) * 2); addShake(clamp(final / 20, 0.2, 0.9)); g.sound?.('hurt');
+    // (a blow taken kicks the view away from whoever struck it, by how much it hurt; a big one rumbles on a little)
+    S.damage(final); g.hud.hurt(final / Math.max(10, S.maxHealth) * 2); punch(clamp(final / 22, 0.2, 0.85), { x: P.pos.x - c.pos.x, z: P.pos.z - c.pos.z }); if (final > 20) addShake(clamp((final - 20) / 60, 0, 0.3)); g.sound?.('hurt');
     if (!S.dead) P.hero.hurt(final, S.maxHealth);   // (a flinch, or a stagger back from a big blow)
     g.acts?.hurt(final);   // (a hard enough blow breaks off eating, praying, sitting)
     if (c.T.heavy) { const d = P.pos.clone().sub(c.pos).setY(0).normalize(); P.hv.addScaledVector(d, 9); P.vel.y = 4; P.onGround = false; }

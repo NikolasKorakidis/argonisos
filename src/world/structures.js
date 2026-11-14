@@ -17,6 +17,7 @@ import { GMAT, amphora, pithos, bowl, jug, tripod, acroterion, antefixes, cartWh
 import { wettable } from './wetness.js';
 import { siteProp, sitePropAt, piece, pieceAt, hasPiece, chestParts } from './site-pack.js';
 import { buildTown, buildSpot } from './town.js';
+import { ULTRA } from '../render/quality.js';
 
 const rnd = (() => { let s = 77; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; })(), rr = (a, b) => a + rnd() * (b - a);
 function canvasTex(draw, n = 512, rep = 1) { const c = document.createElement('canvas'); c.width = c.height = n; draw(c.getContext('2d'), n); const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; }
@@ -126,8 +127,10 @@ const BONES = ['all/pnb-swamp-marshland/sm-prop-bone-pile-01', 'all/pnb-swamp-ma
 const CAVE_PK = { fire: 'all/polygonnature/sm-prop-campfire-01', bones: 'all/pnb-arid-desert/sm-prop-bones-01', bones2: 'all/pnb-arid-desert/sm-prop-bones-04', skull: 'all/polygonnature/sm-prop-skull-01', skull2: 'all/polygongeneric/sm-gen-prop-skull-01' };
 const MOSSY = new Map(), mossy = (m) => { if (!MOSSY.has(m)) MOSSY.set(m, wettable(new THREE.MeshStandardMaterial({ map: m.map, color: 0x7d8a6a, roughness: 0.95 }), { dark: 0.7, gloss: 0.4 })); return MOSSY.get(m); };
 // how far off each kind of site is drawn: the landmarks you find your way by far out under the mist, the minor sites
-// (the farmhouse, the olive markers, the caves) only a little way beyond it
-const VIEW_R = { temple: 1700, labyrinth: 1400, chimera: 1200, house: 220, peak: 600, olive: 220, cave: 220, town: 650, spot: 260 };
+// (the farmhouse, the olive markers, the caves) only a little way beyond it. On Ultra (render/quality.js) the mist lies
+// twice as far out, and so does where the minor sites go; the landmarks a little further than they already were.
+const VIEW_R = Object.fromEntries(Object.entries({ temple: 1700, labyrinth: 1400, chimera: 1200, house: 220, peak: 600, olive: 220, cave: 220, town: 650, spot: 260 })
+  .map(([k, r]) => [k, ULTRA ? Math.round(r * (r < 700 ? 1.8 : 1.25)) : r]));
 // The pack's temple is converted at half the demo scene's size (tools/assets/manifest.json plTemple) and stood here TK
 // times as big; its plan (templeHall) is written at the converted size and grown by this. At 2.25 it is near the real
 // thing, a little larger, as games make their landmarks: its platform 44 × 57 m (the Parthenon's 31 × 70, Zeus's
@@ -803,7 +806,7 @@ export class Structures {
       for (const [k, a, m] of [['position', pos, 3], ['normal', nor, 3], ['color', col, 3], ['uv', uv, 2], ['rock', rock, 1]]) g.setAttribute(k, new THREE.BufferAttribute(a, m));
       g.setIndex(new THREE.BufferAttribute(index, 1)); g.computeBoundingSphere();
       const m = new THREE.Mesh(g, caveMat()); m.castShadow = m.receiveShadow = true;
-      const far = new THREE.Group(); far.position.copy(ctx.grp.position); far.rotation.y = ctx.rot; far.userData.viewR = 1100; far.add(new THREE.Group().add(m)); this.g.scene.add(far); this.groups.push(far); }
+      const far = new THREE.Group(); far.position.copy(ctx.grp.position); far.rotation.y = ctx.rot; far.userData.viewR = ULTRA ? 1500 : 1100; far.add(new THREE.Group().add(m)); this.g.scene.add(far); this.groups.push(far); }
     (this.caveRocks ||= []).push({ ctx, R });
     // its walls to bump into: posts just inside the rock at hip height, round the chamber and the passage and along the
     // cliff's foot (not where the hill's own slope rises gently out of the cut: that is walked up)

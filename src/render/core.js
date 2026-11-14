@@ -5,8 +5,10 @@ import { EffectComposer } from '../../vendor/three/jsm/postprocessing/EffectComp
 import { RenderPass } from '../../vendor/three/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from '../../vendor/three/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from '../../vendor/three/jsm/postprocessing/OutputPass.js';
-import { AtmospherePass } from './atmosphere.js';
+import { AtmospherePass, ATMO } from './atmosphere.js';
+import { fitLens } from './lensdirt.js';
 import { tileNoise, hash21 } from '../util/math.js';
+import { ULTRA } from './quality.js';
 
 THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace('vec3 CustomToneMapping( vec3 color ) { return color; }',
   `vec3 CustomToneMapping( vec3 color ) {
@@ -20,6 +22,10 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.CustomToneMapping; renderer.toneMappingExposure = 0.95; renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.prepend(renderer.domElement);
+// On Ultra every mipmapped texture is filtered at the card's best (16× anisotropic on any desktop card), so the ground,
+// bark, marble and roof tiles stay sharp to the horizon at a glancing angle. Set on the prototype, before anything is
+// loaded, so each texture made anywhere takes it; three applies it only where it means something (mipmapped, linear).
+if (ULTRA) { const top = renderer.capabilities.getMaxAnisotropy(); Object.defineProperty(THREE.Texture.prototype, 'anisotropy', { get: () => top, set() { /* (Ultra: always the best) */ }, configurable: true }); }
 
 export const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0x9cc8e8, 380, 3200);
@@ -32,8 +38,11 @@ export const hemi = new THREE.HemisphereLight(0xbfdcff, 0x3f6a5a, 0.9); scene.ad
 // what three draws); the lighting code below reads both maps for the sun and blends from one to the other. Each map
 // is filtered over the same few centimetres of ground, widening where the caster stands high over the receiver (a
 // crown's shade soft, a foot's sharp), so the hand-over doesn't show.
-export const SHADOW = { nearR: 32, farR: 110, ahead: 0.35, depth: 400, soft: 0.05, far: true, sky: 0.4,
-  farStep: 6, farTurn: 0.2,   // (the far map is drawn again only when you are this many metres from where it was drawn, or the sun has turned this many degrees)
+// (On Ultra, render/quality.js, both boxes are wider, the near one half as wide again and the far one out past the
+// pushed-back mist, with maps twice the size: the near one sharper than High's, the far one as sharp over more than
+// twice the ground; drawn again a little less often, as there is more in it.)
+export const SHADOW = { nearR: ULTRA ? 48 : 32, farR: ULTRA ? 260 : 110, ahead: 0.35, depth: ULTRA ? 520 : 400, soft: 0.05, far: true, sky: 0.4,
+  farStep: ULTRA ? 8 : 6, farTurn: 0.2,   // (the far map is drawn again only when you are this many metres from where it was drawn, or the sun has turned this many degrees)
   nightR: 20, nightFade: 14,  // (by moonlight trees cast only this near you, their shadows fading out by this far from the camera: faint, and cheap)
   night: false };
 export const sun = new THREE.DirectionalLight(0xffdca0, 2.6);
@@ -142,8 +151,17 @@ composer.setPixelRatio(GFX.scale); composer.setSize(innerWidth, innerHeight);
 composer.addPass(new RenderPass(scene, camera));
 export const atmosphere = new AtmospherePass(); atmosphere.light = sun; atmosphere.far = sunFar; composer.addPass(atmosphere);   // (it marches the woods' haze through the sun's far shadow map)
 export const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.18, 0.5, 0.92); composer.addPass(bloom);
+fitLens(bloom, { camera, scene, atmo: ATMO, gfx: GFX });   // (light on the lens, the sun in the fog and halos round fires, in the bloom's last step: lensdirt.js)
 // (the vignette lives in the atmosphere pass now: one full-screen pass fewer)
 composer.addPass(new OutputPass());
+// The scene's antialiasing: 4× on Low to High, 8× on Ultra where the card allows (alpha-to-coverage then gives leaf
+// edges nine steps of see-through instead of five). Both of the composer's buffers take it; disposed, they are made
+// again at the new count when next drawn.
+const MAX_SAMPLES = renderer.getContext().getParameter(renderer.getContext().MAX_SAMPLES) || 4;
+export function setSamples(n) {
+  n = Math.min(n, MAX_SAMPLES); if (composer.renderTarget1.samples === n) return;
+  for (const t of [composer.renderTarget1, composer.renderTarget2]) { t.samples = n; t.dispose(); }
+}
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
@@ -167,18 +185,22 @@ export function render() {
 }
 // Resolution that follows the frame time: when frames run long the picture is drawn a little smaller (down to 70%), and
 // when the GPU has room again it climbs back. Steps of 10%, at most one every two seconds, with a dead band in between so
-// it never hunts; it never goes above the resolution chosen in the settings.
+// it never hunts; it never goes above the resolution chosen in the settings (on Ultra it may: up to half as much again,
+// drawn larger than the screen and shrunk to it, when the card has room; a step above the screen's own it had to leave is
+// not tried again for two minutes, so a card just short of it doesn't stutter every twenty seconds).
 // (Decided on the frame time alone: some browsers' GPU timers report the whole frame interval, not the GPU's work. While
 // the world is still streaming in it waits; and a step it had to leave for being too slow isn't retried for 20 s.)
-export const ADAPT = { on: true, k: 1, t: 3, frame: 16.7, until: {} };
+export const ADAPT = { on: true, k: 1, t: 3, frame: 16.7, until: {}, min: 0.7, max: 1 };
 export function adaptResolution(dt, loading) {
   ADAPT.frame += (Math.min(dt, 0.1) * 1000 - ADAPT.frame) * 0.05; ADAPT.t -= dt; if (!ADAPT.on || ADAPT.t > 0) return;
   if (loading) { ADAPT.t = 1; return; }
-  const now = performance.now(), slow = ADAPT.frame > 19.5, up = Math.min(1, +(ADAPT.k + 0.1).toFixed(1)), roomy = ADAPT.frame < 17.3 && !(ADAPT.until[up] > now);
-  const k = slow ? Math.max(0.7, +(ADAPT.k - 0.1).toFixed(1)) : roomy ? up : ADAPT.k;
-  if (slow && k !== ADAPT.k) ADAPT.until[ADAPT.k] = now + 20000;
+  const now = performance.now(), slow = ADAPT.frame > 19.5, up = Math.min(ADAPT.max, +(ADAPT.k + 0.1).toFixed(1)), roomy = ADAPT.frame < 17.3 && !(ADAPT.until[up] > now) && !(up > 1 && !bigEnough(up));
+  const k = slow ? Math.max(ADAPT.min, +(ADAPT.k - 0.1).toFixed(1)) : roomy ? up : ADAPT.k;
+  if (slow && k !== ADAPT.k) ADAPT.until[ADAPT.k] = now + (ADAPT.k > 1 ? 120000 : 20000);
   if (k !== ADAPT.k) { ADAPT.k = k; ADAPT.t = 2.5; setScale(); } else ADAPT.t = 0.5;
 }
+// (above the screen's own resolution: never wider than 5120 pixels drawn, 4K's width and a third)
+const bigEnough = (k) => innerWidth * GFX.scale * k <= 5120;
 export function setScale() { const s = GFX.scale * ADAPT.k; renderer.setPixelRatio(s); composer.setPixelRatio(s); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); }
 
 // Keep the sun's shadow boxes round the player, snapped to shadow-map texels so edges don't shimmer as you move: the near
@@ -219,6 +241,7 @@ export const waterNormals = (() => {
   }
   const t = new THREE.DataTexture(d, N, N); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.needsUpdate = true; return t;
 })();
+ATMO.tWaterN.value = waterNormals;   // (the sea's reflections ripple with the water: atmosphere.js SEA_SSR)
 // Ground detail: soft painterly strokes that break up flat vertex colour up close (sampled at world xz / 3)
 export const groundDetail = (() => {
   const N = 256, c = document.createElement('canvas'); c.width = c.height = N;

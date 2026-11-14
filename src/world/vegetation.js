@@ -9,28 +9,32 @@ import { MIST_R0, MIST_R1 } from './reach.js';
 import { heightAt } from './gen.js';
 import { renderer, sun, sunFar, hemi, SHADOW } from '../render/core.js';
 import { PRIORITY } from './pool.js';
+import { ULTRA } from '../render/quality.js';
 
-export const NEAR_R = 75;                     // full-detail radius
-export const MID_R = 180;                     // light meshes out to here, impostors beyond
+// (On Ultra, render/quality.js, each band reaches about twice as far, as the mist does: reach.js)
+export const NEAR_R = ULTRA ? 130 : 75;       // full-detail radius
+export const MID_R = ULTRA ? 340 : 180;       // light meshes out to here, impostors beyond
 const SHADE_LAYER = 6; for (const L of [sun, sunFar]) L.shadow.camera.layers.enable(SHADE_LAYER);   // (the trees' shadow stand-ins: the sun's shadow cameras see them, no other camera does)
 const SHADE_R = SHADOW.farR;                  // (past the near band trees still cast to here, as far as the far shadow map reaches: a low sun's shadow from further off lands beyond the mist)
-const SPLIT = 20;                             // (a pack tree's own detail out to here; its thinned version beyond, to NEAR_R)
-const NEAR_KEEP = NEAR_R + CELL * 1.5, FAR = 256, FAR_R = 600;
+const SPLIT = ULTRA ? 45 : 20;                // (a pack tree's own detail out to here; its thinned version beyond, to NEAR_R)
+const NEAR_KEEP = NEAR_R + CELL * 1.5, FAR = 256, FAR_R = ULTRA ? 1400 : 600;
 // Behind the player's mist (tester feedback, 15 and 16 Oct; see atmosphere.js and reach.js) the distant land is drawn
 // with much less: from MIST_R0 out to MIST_R1 things drop away one by one (each at its own distance, so there's no ring
 // where they vanish), until only a share of each kind is left: half the trees and ruins, a tenth of the big rocks, none
-// of the small stuff. Coming closer, they come back the same way.
+// of the small stuff. Coming closer, they come back the same way. (On Ultra every tree and ruin stays, and half the big
+// rocks: little is left for the mist to hide, so it is thinner there too.)
 const SMALL = new Set(['lavender', 'broom', 'myrtle', 'fern', 'redbush', 'amphorae', 'herm', 'reeds', 'bush', 'stump', 'log', 'lilypads', 'swampgrass', 'driftwood', 'moss']);
 // the smallest things on the ground (Patch 12) go well inside the mist, from 35 m to 75 m: there are a great many of them
 const TINY = new Set(['flowers', 'tallgrass', 'mushrooms', 'pebbles', 'branch', 'roots']);
-const farKeep = (sp) => { const n = SPECIES[sp].name; return SMALL.has(n) || TINY.has(n) ? 0 : n === 'rock' || n === 'boulder' ? 0.1 : 0.5; };
+const farKeep = (sp) => { const n = SPECIES[sp].name; return SMALL.has(n) || TINY.has(n) ? 0 : n === 'rock' || n === 'boulder' ? (ULTRA ? 0.5 : 0.1) : ULTRA ? 1 : 0.5; };
 const dice = (x, z) => { const v = Math.sin(x * 12.9898 + z * 78.233) * 43758.5453; return v - Math.floor(v); };
 // how far off this one is still drawn (Infinity: always, as one of the share that stays); over its last few metres it
 // sinks into the ground (shrinks about its foot), so nothing pops out of sight as you walk away
 const SHRINK = 6;
 const sinks = (sp) => SMALL.has(SPECIES[sp].name) || TINY.has(SPECIES[sp].name);   // (trees and rocks don't: they drop away behind the mist as before)
 function shrink(m, i, left) { if (left >= SHRINK) return; const f = Math.max(left, 0) / SHRINK; for (const e of [0, 1, 2, 4, 5, 6, 8, 9, 10]) m[i * 16 + e] *= f; }
-const keepTo = (sp, x, z) => { const k = farKeep(sp), h = dice(x, z); if (TINY.has(SPECIES[sp].name)) return 35 + 40 * h; return h < k ? Infinity : MIST_R0 + (MIST_R1 - MIST_R0) * ((h - k) / (1 - k)); };
+const TINY0 = ULTRA ? 55 : 35, TINY1 = ULTRA ? 65 : 40;   // (Ultra: from 55 m to 120 m)
+const keepTo = (sp, x, z) => { const k = farKeep(sp), h = dice(x, z); if (TINY.has(SPECIES[sp].name)) return TINY0 + TINY1 * h; return h < k ? Infinity : MIST_R0 + (MIST_R1 - MIST_R0) * ((h - k) / (1 - k)); };
 // A tree struck by an axe shakes (tester, 12 Nov): its crown sways away from the blow and back, dying out within
 // SHAKE_T seconds, while its foot stays put. Drawn as a shear about the instance's foot (each point moved along the blow
 // by its height above it), so trunk, leaves and shadow move as one and the bent tree keeps its height.
@@ -160,7 +164,7 @@ function cut(mat, far) {
 }
 
 // ---- impostors: each species painted from the side into one atlas tile, shown as a card that turns to face you
-const TILE = 256, COLS = 8, ATLAS = { tex: null, tiles: [] };
+const TILE = ULTRA ? 512 : 256, COLS = 8, ATLAS = { tex: null, tiles: [] };   // (Ultra: twice as sharp)
 function buildAtlas() {
   const rows = Math.ceil(SPECIES.length / COLS), rt = ATLAS.rt ||= new THREE.WebGLRenderTarget(TILE * COLS, TILE * rows, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, samples: 4 });
   const sc = new THREE.Scene(); sc.add(new THREE.AmbientLight(0xffffff, 1.1)); const dl = new THREE.DirectionalLight(0xfff2dc, 2.4); dl.position.set(0.4, 1, 1); sc.add(dl);
@@ -397,7 +401,7 @@ export class Vegetation {
   cull(camera, pos) {
     if (this.nearDirty) this.rebuildNear();
     _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); _fr.setFromProjectionMatrix(_pm);
-    const nr = NEAR_R + NF, keep2 = 48 * 48, now = performance.now() / 1000;   // (keep2: a tree that casts by itself is kept this near, seen or not)
+    const nr = NEAR_R + NF, keep2 = (SHADOW.nearR * 1.5) ** 2, now = performance.now() / 1000;   // (keep2: a tree that casts by itself is kept this near, seen or not)
     for (const cell of this.shaken) { for (const [i, s] of cell.shake) if (now - s.t0 > SHAKE_T) cell.shake.delete(i); if (!cell.shake.size) { cell.shake = null; this.shaken.delete(cell); } }
     // (the sun's shadow camera as it will draw this frame: whatever stands in its box casts, seen or not)
     // (with the far cascade on, its box for the stand-ins: it holds the near one, and both maps draw the same stand-ins;

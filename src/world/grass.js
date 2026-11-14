@@ -11,12 +11,17 @@ import { GRASS_R, GRASS_END } from './reach.js';
 import { cutList, onCutsChanged, shapeGround } from './groundcut.js';
 import { PRIORITY } from './pool.js';
 import { wettable } from './wetness.js';
+import { ULTRA } from '../render/quality.js';
 
 let s0 = 4242; const rand = () => ((s0 = (s0 * 16807) % 2147483647) - 1) / 2147483646, rr = (a, b) => a + rand() * (b - a);
 export const GRASS = { mesh: null, far: null, flowers: [] };
-export const TEX_N = 400, TEX_SIZE = 248;      // 0.62 m per texel over 248 m, re-centred when you move 25 m (the far carpet, 95 m out, never runs off it)
-const NEAR_TILE = 76, FAR_TILE = 2 * GRASS_END, FAR_COUNT = 100000;
-const FAR_KEEP = (FAR_COUNT / FAR_TILE ** 2) / (160000 / NEAR_TILE ** 2);   // how sparse the far carpet is next to the near one
+export const TEX_N = ULTRA ? 710 : 400, TEX_SIZE = ULTRA ? 440 : 248;      // 0.62 m per texel over 248 m, re-centred when you move 25 m (the far carpet, 95 m out, never runs off it)
+// On Ultra (render/quality.js) both carpets reach further at the same density as High's: the dense one out to 48 m
+// rather than 37, the sparse one to GRASS_END, 180 m rather than 95, so each takes more blades for its wider tile.
+// (DENSE: the near carpet's blades; HAND: where it hands over to the far one; THIN: where its own blades start thinning.)
+const NEAR_TILE = ULTRA ? 100 : 76, FAR_TILE = 2 * GRASS_END, AREA = (NEAR_TILE / 76) ** 2, DENSE = Math.round(160000 * AREA), FAR_COUNT = Math.round(100000 * (FAR_TILE / 190) ** 2);
+const HAND = ULTRA ? [36, 48] : [26, 37], THIN = ULTRA ? [14, 46] : [10, 34];
+const FAR_KEEP = (FAR_COUNT / FAR_TILE ** 2) / (DENSE / NEAR_TILE ** 2);   // how sparse the far carpet is next to the near one
 export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { value: new THREE.Vector2() }, uTile: { value: NEAR_TILE }, uHeight: { value: null },
   uOrigin: { value: new THREE.Vector2(-1e6, -1e6) }, uSize: { value: TEX_SIZE },
   uBaseA: { value: new THREE.Color(0x1d3a24) }, uBaseB: { value: new THREE.Color(0x3a4a1e) },
@@ -26,7 +31,7 @@ export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { va
     const g = new THREE.PlaneGeometry(0.14, H, 1, segs); g.translate(0, H / 2, 0);
     const bp = g.attributes.position; for (let i = 0; i < bp.count; i++) bp.setX(i, bp.getX(i) * (1 - Math.pow(bp.getY(i) / H, 1.5))); return g; };
   const carpet = (far) => {
-    const COUNT = far ? FAR_COUNT : 160000, T = far ? FAR_TILE : NEAR_TILE, U = { ...grassU, uTile: { value: T } };
+    const COUNT = far ? FAR_COUNT : DENSE, T = far ? FAR_TILE : NEAR_TILE, U = { ...grassU, uTile: { value: T } };
     const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 }); mat.defines = { SUN_SHADOW_CHEAP: '' };   // (one bilinear look into the sun's shadow: the blades are most of the pixels on screen)
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, U);
@@ -41,9 +46,9 @@ export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { va
           // Tsushima's trick); a blade seen edge-on is widened so it doesn't thin away to a line. Between 26 and 37 m the
           // near carpet hands over to the far one blade by blade (by count, not by shrinking them), and the far one thins
           // away the same way at the edge of the grass.
-          float dc = length(wp - uCenter), hand = smoothstep(26.0, 37.0, dc), r2 = fract(rnd * 91.73), r3 = fract(rnd * 53.17);
+          float dc = length(wp - uCenter), hand = smoothstep(${HAND[0].toFixed(1)}, ${HAND[1].toFixed(1)}, dc), r2 = fract(rnd * 91.73), r3 = fract(rnd * 53.17);
           ${far ? `float keep = ${FAR_KEEP.toFixed(4)}, fade = step(r3, hand * (1.0 - smoothstep(${GRASS_R.toFixed(1)}, ${GRASS_END.toFixed(1)}, dc)));`
-                : `float keep = mix(1.0, 0.42, smoothstep(10.0, 34.0, dc)), fade = step(r2, keep) * step(r3, 1.0 - hand);`}
+                : `float keep = mix(1.0, 0.42, smoothstep(${THIN[0].toFixed(1)}, ${THIN[1].toFixed(1)}, dc)), fade = step(r2, keep) * step(r3, 1.0 - hand);`}
           // the grass amount, and whether it's a tall patch (there it all stands about 0.7x the hero's height, 1.35 m: the
           // amount only says whether a blade grows, not how tall, and the blades barely differ)
           float gg = max(hm.g, 0.0), tl = floor(gg * 0.5) / 7.0, amt = gg - floor(gg * 0.5) * 2.0;
@@ -134,14 +139,14 @@ export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { va
     return merge(P);
   };
   const mk = (geo, n, col, size) => { const f = flowerCarpet(geo, n, [col], size); f.material.vertexColors = true; f.material.side = THREE.DoubleSide; return f; };
-  mk(flower(10, 0.09, 0.035, 0.35, 0xffffff, 0xe8b830, 0.42), 3200, 0xffffff, 1);        // daisies
-  mk(flower(5, 0.08, 0.06, 0.55, 0xffd23a, 0xc98a1a, 0.36), 2400, 0xffffff, 1);          // buttercups
-  mk(flower(4, 0.12, 0.11, 0.95, 0xd8322a, 0x201810, 0.5), 2200, 0xffffff, 1.05);       // poppies (cupped)
-  mk(flower(8, 0.08, 0.04, 0.4, 0x4f74e0, 0x2a2a60, 0.44), 1600, 0xffffff, 1);          // cornflowers
+  mk(flower(10, 0.09, 0.035, 0.35, 0xffffff, 0xe8b830, 0.42), Math.round(3200 * AREA), 0xffffff, 1);        // daisies
+  mk(flower(5, 0.08, 0.06, 0.55, 0xffd23a, 0xc98a1a, 0.36), Math.round(2400 * AREA), 0xffffff, 1);          // buttercups
+  mk(flower(4, 0.12, 0.11, 0.95, 0xd8322a, 0x201810, 0.5), Math.round(2200 * AREA), 0xffffff, 1.05);       // poppies (cupped)
+  mk(flower(8, 0.08, 0.04, 0.4, 0x4f74e0, 0x2a2a60, 0.44), Math.round(1600 * AREA), 0xffffff, 1);          // cornflowers
   // Lavender spikes
   const spikeParts = [[new THREE.CylinderGeometry(0.012, 0.012, 0.55, 3).translate(0, 0.27, 0), 0x3f6a2a]];
   for (let i = 0; i < 6; i++) spikeParts.push([new THREE.OctahedronGeometry(0.045 - i * 0.004, 0).translate(0, 0.42 + i * 0.07, 0), 0xffffff]);
-  const f2 = flowerCarpet(merge(spikeParts), 2600, [0x7a5fd0, 0x5b4fc4, 0x9a6ad8], 1.1);
+  const f2 = flowerCarpet(merge(spikeParts), Math.round(2600 * AREA), [0x7a5fd0, 0x5b4fc4, 0x9a6ad8], 1.1);
   f2.material.vertexColors = true;
 }
 let pending = false, lastX = 1e9, lastZ = 1e9, cur = null;

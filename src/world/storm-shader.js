@@ -34,8 +34,8 @@ export const NOISE_FRAG = `
     gl_FragColor = clamp(vec4((pw - 0.5) / 0.33, (wfbm(p, 8.0) - 0.12) / 0.75, (wfbm(p, 16.0) - 0.12) / 0.75, (pfbm(p, 2.0) * 0.7 + 0.5 - 0.36) / 0.32), 0.0, 1.0);
   }`;
 
-// ---- What the march and the spread share
-const COMMON = `
+// ---- What the march and the spread share (and the rings round the storm: storm-rings.js)
+export const COMMON = `
   precision highp sampler3D;
   uniform sampler2D tDepth, tField; uniform sampler3D tNoise;
   uniform mat4 projInv, camWorld; uniform vec3 camPos; uniform vec2 fullRes, camNF;

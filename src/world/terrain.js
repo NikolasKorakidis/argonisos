@@ -6,8 +6,11 @@ import * as THREE from 'three';
 import { WORLD } from './gen.js';
 import { seeded, hash21, tileNoise } from '../util/math.js';
 import { PRIORITY } from './pool.js';
+import { ULTRA } from '../render/quality.js';
 
-const RES = 32, MIN_SIZE = 64, ROOT = WORLD.SIZE, SPLIT = 1.35, MAX_INFLIGHT = 6, CACHE = 700;
+// (On Ultra, render/quality.js, a patch splits into finer ones half as far out again, so the land keeps its shape further
+// off: hills and ridges in the distance with their own folds rather than a few broad facets; more of them kept.)
+const RES = 32, MIN_SIZE = 64, ROOT = WORLD.SIZE, SPLIT = ULTRA ? 2.1 : 1.35, MAX_INFLIGHT = ULTRA ? 8 : 6, CACHE = ULTRA ? 1600 : 700;
 
 // one shared index buffer: the grid plus the skirt quads
 const INDEX = (() => {

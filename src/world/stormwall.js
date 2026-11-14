@@ -20,9 +20,11 @@ import { WEATHER } from './weather.js';
 import { strike, flashP, flashI, boltGeo, BOLT_U } from './lightning.js';
 import { addShake } from '../render/fx.js';
 import { stormAmbience } from '../audio/sound.js';
-import { NOISE_FRAG, MARCH_FRAG, BLUR_FRAG, KEEP_FRAG, BOLT_VERT, BOLT_FRAG, DUST_VERT, DUST_FRAG } from './storm-shader.js';
+import { buildStormRings, updateStormRings } from './storm-rings.js';
+import { COMMON, NOISE_FRAG, MARCH_FRAG, BLUR_FRAG, KEEP_FRAG, BOLT_VERT, BOLT_FRAG, DUST_VERT, DUST_FRAG } from './storm-shader.js';
+import { ULTRA } from '../render/quality.js';
 
-const WALL_V = 0.3, TOP = 790, SCALE = 4;   // (the cloud is marched at a quarter of the resolution: it is soft, and it is costly)
+const WALL_V = 0.3, TOP = 790, SCALE = ULTRA ? 2 : 4;   // (the cloud is marched at a quarter of the resolution: it is soft, and it is costly. On Ultra at half: its billows' edges sharper)
 const E = 2600, FS = 20, FN = Math.round((2 * E) / FS) + 1;   // (the border field: ±E metres, a texel every FS)
 const CENTRE = new THREE.Vector2(-950, 950);                   // (the marsh's middle, which the storm turns round)
 const _w = { p: 0, y: 0, v: 0, r: 0 };
@@ -132,7 +134,7 @@ const quad = (fragmentShader) => new FullScreenQuad(new THREE.ShaderMaterial({ u
 const _frustum = new THREE.Frustum(), _m = new THREE.Matrix4(), _cc = new THREE.Color();
 class StormPass extends Pass {
   constructor() {
-    super(); this.needsSwap = false; this.wall = false;
+    super(); this.needsSwap = false; this.wall = false; this.rings = false;
     const rt = (w = 2) => { const t = new THREE.WebGLRenderTarget(w, w, { type: THREE.HalfFloatType, depthBuffer: false }); t.texture.generateMipmaps = false; return t; };
     this.rt = rt(); this.soft = rt(); this.lin = rt(); this.lin.texture.minFilter = this.lin.texture.magFilter = THREE.NearestFilter;
     this.march = quad(MARCH_FRAG); this.blur = quad(BLUR_FRAG); this.keep = quad(KEEP_FRAG);
@@ -144,6 +146,7 @@ class StormPass extends Pass {
   render(renderer, writeBuffer, readBuffer) {
     ATMO.stormOn.value = 0; if (!U.tNoise.value) bakeNoise(renderer);
     U.fogCol.value.copy(scene.fog.color).multiplyScalar(0.8); U.fogV.value = Math.max(scene.fog.far * 2.2, 170);   // (the fog as it is drawn: high up it has opened out)
+    const veil = Math.min(1, Math.max(0, (60 - scene.fog.far) / 40)); U.fogV.value += (scene.fog.far * 0.5 - U.fogV.value) * veil; U.fogMax.value = 0.62 + 0.38 * veil; U.fogCol.value.multiplyScalar(1 + 0.25 * veil);   // (a thick fog veils the wall as it does the land, in the fog's own colour)
     U.tDepth.value = readBuffer.depthTexture; U.projInv.value.copy(camera.projectionMatrixInverse); U.camWorld.value.copy(camera.matrixWorld); U.camPos.value.copy(camera.position); U.camNF.value.set(camera.near, camera.far);
     const ac = renderer.autoClear; renderer.autoClear = false; renderer.getClearColor(_cc); const ca = renderer.getClearAlpha();
     if (this.wall) {
@@ -151,7 +154,7 @@ class StormPass extends Pass {
       U.tStorm.value = this.rt.texture; renderer.setRenderTarget(this.soft); this.blur.render(renderer);
       ATMO.tStorm.value = this.soft.texture; ATMO.stormOn.value = 1;
     }
-    if (BOLTS_LIT()) { renderer.setRenderTarget(this.lin); this.keep.render(renderer); U.tLin.value = this.lin.texture; }
+    if (BOLTS_LIT() || this.rings) { renderer.setRenderTarget(this.lin); this.keep.render(renderer); U.tLin.value = this.lin.texture; }
     renderer.setClearColor(_cc, ca); renderer.autoClear = ac;
   }
 }
@@ -220,6 +223,7 @@ export function buildStormWall(scene) {
   STORM_WALL.mesh = buildCurtain(scene); scene.add(dust);
   PASS = new StormPass(); BOLT_PASS = new BoltPass(); PASS.enabled = BOLT_PASS.enabled = false;
   composer.insertPass(PASS, composer.passes.indexOf(atmosphere)); composer.insertPass(BOLT_PASS, composer.passes.indexOf(atmosphere) + 1);
+  buildStormRings(fieldAt, U, COMMON);   // (the bands of cloud wheeling round it)
   return STORM_WALL.mesh;
 }
 
@@ -229,8 +233,9 @@ const _c = new THREE.Color(), _o = new THREE.Vector2();
 export function updateStormWall(time, dt, { light, focus, still, atmo, sun, sunDir, fogCol, inside = false }) {
   const open = STORM_WALL.open, m = STORM_WALL.mesh; if (!m || !FIELD) return;
   m.visible = !open && !GFX.post;
-  // the pass only while some of the wall can be seen, or a bolt is lit (it draws the weather's too)
-  if (PASS) { PASS.wall = !open && wallInView(dt, inside); BOLT_PASS.enabled = BOLTS_LIT(); PASS.enabled = PASS.wall || BOLT_PASS.enabled; if (!PASS.enabled) ATMO.stormOn.value = 0; } m.material.uniforms.uDay.value = 0.25 + light.day * 0.75;
+  // the pass only while some of the wall can be seen, or a bolt is lit (it draws the weather's too), or the rings round it are in
+  // view (storm-rings.js: they need the scene's depth kept)
+  if (PASS) { PASS.wall = !open && wallInView(dt, inside); PASS.rings = updateStormRings(!open && !inside); BOLT_PASS.enabled = BOLTS_LIT(); PASS.enabled = PASS.wall || PASS.rings || BOLT_PASS.enabled; if (!PASS.enabled) ATMO.stormOn.value = 0; } m.material.uniforms.uDay.value = 0.25 + light.day * 0.75;
   U.uT.value = time;
   // the cloud's light: the sun (or moon) and the sky's light round it, from the hemisphere light's sky colour; its
   // distance haze from the fog, but thinner (it must read from across the island) and never quite closing in

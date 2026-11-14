@@ -49,9 +49,12 @@ export class Player {
     if (this.swing > 0 || this.dead || this.swimming || this.equip || this.hero.moveK < 0.5) return false;
     if (!this.stats.use(cost, kind === 'punch' ? 'unarmed' : null)) { this.onToast?.('Too tired'); return false; }
     this.combo = this.comboT > 0 && this.swingKind === kind ? this.combo + 1 : 0; this.strikeMove = strikeOf(kind, this.combo);
-    this.swing = 1; this.swingKind = kind; this.swingHit = false; this.yaw = Math.atan2(-Math.sin(this.camYaw), -Math.cos(this.camYaw));
+    this.swing = 1; this.swingKind = kind; this.swingHit = false; this.stopT = 0; this.yaw = Math.atan2(-Math.sin(this.camYaw), -Math.cos(this.camYaw));
     return true;
   }
+  // A blow that lands hard holds the swing for a moment where the weapon meets what it hit (Valheim's freeze frame): t
+  // seconds, 0.03 to 0.08 (two to five frames), the swing going on at a tenth of its pace meanwhile
+  hitStop(t) { this.stopT = Math.max(this.stopT || 0, t); }
   die() { if (this.dead) return; this.seat = null; this.dead = true; this.deadT = 0; this.swing = 0; this.bow = null; this.dodge = null; this.fell = this.hero.die(); }
   // no blow lands in the heart of a dodge roll
   get dodging() { return !!this.dodge && this.dodge.t > DODGE.safe[0] && this.dodge.t < DODGE.safe[1]; }
@@ -164,7 +167,7 @@ export class Player {
     }
     // ---- strikes
     if (this.swing > 0) {
-      const m = this.strikeMove || strikeOf(this.swingKind); this.swing -= dt / m.time;
+      const m = this.strikeMove || strikeOf(this.swingKind), held = this.stopT > 0; this.swing -= (dt / m.time) * (held ? 0.1 : 1); if (held) this.stopT -= dt;
       if (!this.swingHit && this.swing < 1 - m.at) { this.swingHit = true; this.onStrike?.(this.swingKind); }
       if (this.swing <= 0) { this.swing = 0; this.comboT = 0.45; }
     } else if (this.comboT > 0) this.comboT -= dt;

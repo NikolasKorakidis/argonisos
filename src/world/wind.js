@@ -30,7 +30,7 @@ export function updateWind(dt, { rain = 0, storm = 0, overcast = 0 } = {}) {
 // are drawn, never where a line is; at the patch's edge they fade.
 const GRID = 14, CELL = 8, SEG = 96, N = GRID * GRID;   // (out to ~55 m, where the mist begins: spread wide, never crowding round you)
 export const WINDLINE_U = { uCam: { value: new THREE.Vector3() }, uTime: { value: 0 }, uDir: { value: new THREE.Vector2(1, 0) }, uSpeed: { value: 3 },
-  uAmount: { value: 0 }, uLight: { value: 1 } };
+  uAmount: { value: 0 }, uLight: { value: 1 }, uFogR: { value: new THREE.Vector2(300, 2400) } };
 const geo = new THREE.InstancedBufferGeometry(), pos = [], idx = [];
 for (let i = 0; i <= SEG; i++) for (const s of [-1, 1]) pos.push(i / SEG, s, 0);
 for (let i = 0; i < SEG; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
@@ -41,7 +41,7 @@ const mat = new THREE.ShaderMaterial({
   uniforms: { ...WINDLINE_U, ...WET_U, uHeight: grassU.uHeight, uOrigin: grassU.uOrigin, uSize: grassU.uSize },
   transparent: true, depthWrite: false,
   vertexShader: `${SHELTER}
-    uniform vec3 uCam; uniform float uTime, uSpeed, uAmount; uniform vec2 uDir; uniform sampler2D uHeight; uniform vec2 uOrigin; uniform float uSize;
+    uniform vec3 uCam; uniform float uTime, uSpeed, uAmount; uniform vec2 uDir, uFogR; uniform sampler2D uHeight; uniform vec2 uOrigin; uniform float uSize;
     attribute vec2 aCell; varying float vA, vS;
     float h1(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
     // one strand's path: along the wind, a gentle wave travelling down it (sideways and a little up and down), and now
@@ -78,7 +78,7 @@ const mat = new THREE.ShaderMaterial({
       float vis = step(tail, u) * step(u, head) * pow(sin(along * 3.1416), 0.8);
       float bright = 0.28 + pow(h1(k * 12.3), 3.0) * 0.32;                // (most faint, a few a little brighter)
       float dist = distance(p, cameraPosition), width = dist * 0.0019 * (0.8 + bright * 0.5) * (0.3 + 0.7 * vis);   // (a hairline: the same pixels wide near or far)
-      vA = vis * bright * smoothstep(0.0, 0.15, ph) * (1.0 - smoothstep(0.8, 1.0, ph)) * (1.0 - smoothstep(40.0, 55.0, length(p.xz - uCam.xz))) * smoothstep(5.0, 11.0, dist);   // (none in your face, the far ones into the mist)
+      vA = vis * bright * smoothstep(0.0, 0.15, ph) * (1.0 - smoothstep(0.8, 1.0, ph)) * (1.0 - smoothstep(40.0, 55.0, length(p.xz - uCam.xz))) * smoothstep(5.0, 11.0, dist) * (1.0 - smoothstep(uFogR.x, uFogR.y, dist));   // (none in your face, the far ones into the mist, and the fog)
       gl_Position = projectionMatrix * viewMatrix * vec4(p + w * position.y * width, 1.0);
     }`,
   fragmentShader: `uniform float uAmount, uLight; varying float vA, vS;
@@ -96,5 +96,5 @@ export function updateWindLines(dt, { light = 1, rain = 0, still = false } = {})
   WINDLINE_U.uTime.value = still ? 7.3 : WINDLINE_U.uTime.value + dt;   // (screenshot tests: held at one moment)
   WINDLINE_U.uCam.value.copy(camera.position); if (still) { WINDLINE_U.uDir.value.set(0.94, 0.34); WINDLINE_U.uSpeed.value = 3; }   // (screenshot tests: one fixed wind)
   else { WINDLINE_U.uDir.value.copy(WIND.dir); WINDLINE_U.uSpeed.value = WIND.speed * (1 + WIND.gust); }
-  WINDLINE_U.uAmount.value = amount; WINDLINE_U.uLight.value = light;
+  WINDLINE_U.uAmount.value = amount; WINDLINE_U.uLight.value = light; WINDLINE_U.uFogR.value.set(scene.fog.near, scene.fog.far);
 }

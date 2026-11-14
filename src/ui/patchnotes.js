@@ -21,16 +21,28 @@ export const PATCHES = [
       ] },
       { t: 'Zeus\'s Storm', icon: 'wet', items: [
         'The storm that seals the marsh is now a towering wall of churning black cloud, five times taller than before, with a ragged shelf, rain sheets and lightning flickering inside it. You can see it looming from across the island.',
+        'Three great rolls of storm cloud circle the wall at its foot, its middle and its crown, turning slowly round it, each the other way from the one below.',
         'Its thunder carries only so far: a faint rumble now and then from the temple, growing as you come nearer, and the full roar of wind and storm right at its foot. On Olympos you won\'t hear it at all.',
         '<b>Thunderstorms:</b> forked bolts strike the land, the whole world flashes blue-white, and wet stone and leaves glint in it. The thunder follows a moment later, sooner the closer the strike. At night a close strike lights up the land for an instant.',
         'A new setting, <b>Reduce flashing</b>, softens lightning and other bright flashes.',
       ] },
       { t: 'Weather and Sky', icon: 'wet', items: [
         '<b>Fog</b> is thick now: you see only some thirty metres, the sky disappears, and the light goes soft and grey.',
+        '<b>Three kinds of fog:</b> a fog, a thick fog where you see half as far, and a dense fog where the world ends ten metres away. The thicker ones are rarer, more common in the forest and the marsh, and the dense one comes mostly at night and in the early morning. Fog rolls in and lifts slowly, over a minute or so.',
+        'Fog is pale grey-white by day, a dark blue by night and a green grey over the marsh, and it glows warmer and brighter towards the sun. Fires, braziers and torches glow through it with a soft halo.',
+        '<b>Light on the lens:</b> look towards the sun through fog or mist and soft stains of light bloom on the screen, as on a camera lens, fading as you turn away. On a clear day you see only a hint of them. (High and Ultra graphics; gentler with Reduce flashing.)',
         'The sun now crosses the sky from the side, so it no longer sets behind Olympos or rises out of the storm.',
-        '<b>New clouds:</b> puffy low-poly clouds drift across the sky with the wind, a few on a fine day and crowds of them when it clouds over, golden at dawn and dusk and dark blue by moonlight, with a ring of cloud banks low on the horizon.',
+        '<b>New clouds:</b> billowing low-poly cumulus with flat grey bases drift across the sky with the wind, a few on a fine day, crowds of them and a few towering ones when it clouds over, golden at dawn and dusk and dark blue by moonlight, with great banks of cloud low on the horizon. None drift into Zeus\'s storm.',
         '<b>Storms are heavy now:</b> a thick, low, lumpy ceiling of dark cloud covers the whole sky in heavy rain and thunderstorms, with ragged cloud racing beneath it. No more stars, moon or sun through a storm, and lightning lights the clouds up from inside.',
-        '<b>Olympos makes its own weather:</b> a cap of cloud sits on the summit at times with a banner streaming off it downwind, banks of cloud lie in its gullies, and mist pools in the valleys at its foot in the morning. More of it in bad weather and early in the day; some days it clears. Climb into one and you walk through the fog of the cloud itself.',
+        '<b>Olympos makes its own weather:</b> soft rings of cloud wrap round its upper slopes in layers, turning slowly round the peak, now and then with one more ring hugging the summit, and mist pools in the valleys at its foot in the morning. More of it in bad weather and early in the day; some days it clears. Climb into one and you walk through the fog of the cloud itself.',
+      ] },
+      { t: 'Every Blow Counts', icon: 'log', items: [
+        'You feel every blow now, as in Valheim: the view gives a short, sharp kick when your axe bites into a trunk, harder when a pickaxe rings on rock, and a big jolt when a tree crashes down beside you. Heavy blows hold your swing for a split second where they land.',
+        'Chips, splinters and bark fly off wood, stone chips, dust and sparks off rock, and leaves and twigs off bushes. Every chop and strike sounds a little different, a thin trunk higher than a great one.',
+        'The wrong tool only gives a dull clink and a little jolt: an axe glances off rock, a pickaxe off a trunk.',
+        '<b>Bushes give wood:</b> chop a bush (the leafy bushes, myrtle, broom and the red-leaved bushes of the hills) two to four times by its size and it is gone, leaving one to three wood, and sometimes a little fiber. Old stumps, fallen logs and driftwood can be chopped up for wood too. Flowers, ferns, lavender, grass and moss are left alone. What you clear stays cleared.',
+        'In a fight your blows land with a punch: a light one with a dagger, a heavy one with an axe or club, the heaviest on a killing blow. Blows you take jolt the view by how much they hurt, and blocks and parries strike sparks with a crisp jolt. A swing that hits nothing doesn\'t shake at all.',
+        'A new setting, <b>Camera shake</b>: On, Reduced or Off.',
       ] },
       { t: 'Small Things', icon: 'build', items: [
         'A felled tree leaves a log and a stump as thick as its trunk was.',
@@ -51,6 +63,7 @@ export const PATCHES = [
         'Corners, steps, the foot of a column, the base of a tree and the ground under a boulder are softly shaded, so everything sits in the world instead of floating on it (Medium and High settings).',
         'Rays of light in the woods reach further, and still don\'t change as you walk.',
         'By moonlight the trees cast faint shadows close by.',
+        'A new <b>Ultra</b> graphics setting, above High, for powerful PCs. It sees about twice as far: the mist starts further out, full trees, grass and flowers reach much further, and the whole forest stays on the hills to the horizon. It also adds sharper, smoother edges and shadows, the sea mirroring the shore, more firelight at once, and a sharper picture when your graphics card has room to spare. Its view distance comes in after a reload. High, Medium and Low are unchanged.',
       ] },
       { t: 'Your hero', icon: 'you', items: [
         'Your hero walks and runs on straight legs: the feet land side by side under the hips instead of crossing in a line, and the ankles no longer bend inwards.',

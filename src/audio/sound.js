@@ -127,10 +127,16 @@ const SFX = {
   },
   jump: () => noise(0.14, { freq: 500, vol: 0.06 }),
   land: (surface, k = 1) => { if (sample(LANDS[surface] || 'landGrass', { vol: 0.45 * k, wet: 0 })) return; noise(0.22, { type: 'lowpass', freq: 260, vol: 0.28 * k, brown: true }); noise(0.1, { freq: 2800, q: 0.8, vol: 0.05 * k }); },
-  chop: () => { noise(0.09, { freq: 1500, q: 3, vol: 0.32, wet: 0.25 }); tone(170, 0.14, { type: 'triangle', vol: 0.22, slide: -60, wet: 0.3 }); noise(0.25, { type: 'lowpass', freq: 400, vol: 0.12, brown: true }); },
+  // (p: pitch, about 1; a thin trunk or a bush's stems ring higher, a great trunk lower; every blow a little different)
+  chop: (p = 1) => { p *= 0.93 + Math.random() * 0.14; noise(0.09, { freq: 1500 * p, q: 3, vol: 0.32, wet: 0.25 }); tone(170 * p, 0.14, { type: 'triangle', vol: 0.22, slide: -60 * p, wet: 0.3 }); noise(0.25, { type: 'lowpass', freq: 400 * p, vol: 0.12, brown: true }); },
   creak: () => { tone(95, 1.6, { type: 'sawtooth', vol: 0.045, slide: -30, attack: 0.4, wet: 0.4 }); tone(140, 1.2, { type: 'sawtooth', vol: 0.025, slide: 40, attack: 0.3, delay: 0.5, wet: 0.4 }); },
   thud: () => { noise(0.9, { type: 'lowpass', freq: 200, vol: 0.7, slide: -120, brown: true, wet: 0.4 }); tone(48, 0.7, { vol: 0.4, slide: -18 }); for (let i = 0; i < 6; i++) noise(0.2, { freq: 2500 + Math.random() * 2000, q: 1, vol: 0.05, delay: 0.1 + Math.random() * 0.5 }); },
-  mine: () => { if (sample('stoneHit', { vol: 0.5, wet: 0.2 })) return; tone(1800 + Math.random() * 400, 0.22, { type: 'triangle', vol: 0.12, slide: -400, wet: 0.35 }); noise(0.08, { freq: 2600, q: 2, vol: 0.2 }); noise(0.3, { type: 'lowpass', freq: 500, vol: 0.12, brown: true, delay: 0.03 }); },
+  mine: (p = 1) => { if (sample('stoneHit', { vol: 0.5, wet: 0.2, rate: [0.88 * p, 1.1 * p] })) return; tone((1800 + Math.random() * 400) * p, 0.22, { type: 'triangle', vol: 0.12, slide: -400, wet: 0.35 }); noise(0.08, { freq: 2600, q: 2, vol: 0.2 }); noise(0.3, { type: 'lowpass', freq: 500, vol: 0.12, brown: true, delay: 0.03 }); },
+  // the wrong tool: a dull clink off rock (or a dead knock off wood) that does nothing
+  clink: (wood) => { if (wood) { noise(0.07, { type: 'lowpass', freq: 520, vol: 0.22, brown: true }); tone(120, 0.08, { type: 'triangle', vol: 0.08, slide: -30 }); return; }
+    tone(900 + Math.random() * 200, 0.09, { type: 'triangle', vol: 0.07, slide: -250, wet: 0.15 }); noise(0.05, { freq: 1400, q: 2, vol: 0.12 }); noise(0.1, { type: 'lowpass', freq: 380, vol: 0.1, brown: true }); },
+  // a bush struck: its leaves thrash (the pack's recording of foliage, or a burst of shaped noise)
+  rustle: (k = 1) => { if (sample('foliage', { vol: 0.42 * k, wet: 0.1, rate: [0.9, 1.15] })) return; noise(0.35, { freq: 3400, q: 0.6, vol: 0.14 * k, attack: 0.02, slide: -1200 }); noise(0.25, { freq: 1200, q: 0.8, vol: 0.07 * k, delay: 0.04 }); },
   hit: () => { noise(0.14, { type: 'lowpass', freq: 650, vol: 0.38, brown: true, wet: 0.15 }); tone(110, 0.12, { type: 'square', vol: 0.05, slide: -40 }); noise(0.05, { freq: 2200, q: 1, vol: 0.08 }); },
   hurt: () => { noise(0.22, { freq: 480, q: 1.5, vol: 0.3 }); tone(210, 0.2, { type: 'sawtooth', vol: 0.06, slide: -90 }); },
   block: () => { tone(380, 0.18, { type: 'square', vol: 0.07, slide: -120, wet: 0.25 }); noise(0.12, { freq: 1100, q: 2, vol: 0.22 }); },
