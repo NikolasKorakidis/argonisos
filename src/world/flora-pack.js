@@ -37,7 +37,6 @@ const LIST = {
   flowers: ['fl_flowers0', 'fl_flowers1', 'fl_flowers2', 'fl_flowers3', 'fl_flowers4', 'fl_flowers5', 'fl_flowers6', 'fl_flowers7'],
   tallgrass: ['fl_tallgrass0', 'fl_tallgrass1', 'fl_tallgrass2'],
   bush: ['fl_bush0', 'fl_bush1', 'fl_bush2', 'fl_bush3'],
-  mushrooms: ['fl_mushrooms0', 'fl_mushrooms1', 'fl_mushrooms2', 'fl_mushrooms3', 'fl_mushrooms4'],
   pebbles: ['fl_pebbles0', 'fl_pebbles1'],
   stump: ['fl_stump0', 'fl_stump1', 'fl_stump2', 'fl_stump3', 'fl_stump4'],
   log: ['fl_log0', 'fl_log1', 'fl_log2', 'fl_log3'],
@@ -47,7 +46,13 @@ const LIST = {
   swampgrass: ['fl_swampgrass0', 'fl_swampgrass1', 'fl_swampgrass2'],
   driftwood: ['fl_driftwood0', 'fl_driftwood1', 'fl_driftwood2'],
   moss: ['fl_moss0', 'fl_moss1', 'fl_moss2'],
+  // (Patch 20) the tomato bush, ripe and picked bare: one of the pack's leafy plants with fruit hung on it (manifest "fruit")
+  tomato: ['fl_tomato0', 'fl_tomato1'],
 };
+// Every tree stands 30% taller than the carved one it was fitted to (reviewer, Patch 20), stretched upwards only: no
+// wider, no deeper. Done to the geometry, so each band, the impostors painted from it, the shadow stand-ins, a felled tree
+// and the trees planted at the sites all agree.
+export const TREE_TALL = 1.3;
 // (the species converted with lighter versions too: fl_…_mid and fl_…_far, tools/assets manifest "mid" and "far")
 const FAR = new Set(['olive', 'oak', 'cypress', 'pomegranate', 'fig', 'holm', 'plane', 'qtree', 'qpine', 'fir', 'dead', 'qdead', 'myrtle', 'broom', 'redbush', 'fern']);
 const NATURAL = new Set(SPECIES.filter((s) => s.natural).map((s) => s.name));
@@ -139,6 +144,9 @@ export function floraGeo(sp, v, box, tree) {
   }
   for (const q of [...parts, ...others()]) { q.translate(-fx, -b.min.y, -fz); q.scale(k, k, k); q.translate(0, NATURAL.has(sp) ? 0 : footY(k), 0); }   // (the lighter versions moved with it: the same pivot)
   if (need > -Infinity) { c = prune(c, need); if (mc) mc = prune(mc, need); if (lc) lc = prune(lc, need); }
+  // (the stretch last of all, about the ground: the same leaf patches are kept, their crown starts higher still, and the
+  // roots go down with the trunk they flare into, so the ground still meets it where they close)
+  if (tree) for (const q of [g, c, mid, mc, lo, lc]) q?.scale(1, TREE_TALL, 1);
   if (!g.attributes.position.count) { g.setAttribute('position', new THREE.Float32BufferAttribute(9, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 1, 0, 0, 1, 0, 0, 1, 0], 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(9, 3)); }   // (all cards: an empty trunk)
   // (a touch darker: the packs' palettes come out pale in our light)
   for (const q of [g, mid, lo].filter(Boolean)) { const col = q.attributes.color; if (col) for (let i = 0; i < col.array.length; i++) col.array[i] *= 0.82; }

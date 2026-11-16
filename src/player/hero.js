@@ -509,6 +509,7 @@ export class Hero {
   //   blend / fade  seconds to blend in (0.2) and out (0.25); weight: its full weight (1)
   //   layer   true: plays alongside what's playing; otherwise it replaces any other action (which fades, onDone('replaced'))
   //   quiet   not counted in hero.busy (the hero's own fidgets)
+  //   pose(hero, w)  called once the clip is posed, to set some bones another way (sitting cross-legged: game/acts.js)
   //   onDone(why)  'end', 'stopped', 'cancelled', 'replaced' or 'missing' (its clip never came)
   // The clip comes from moves.glb or acts.glb (tools/assets/moves.mjs; fetched if it isn't in yet: the action starts when
   // it arrives, or gives up after 4 s). Returns a handle: h.stop(fade?) to end it, h.playing, h.done, h.t (seconds in),
@@ -555,6 +556,7 @@ export class Hero {
     for (const h of this.actions) {
       if (!h.C.ready || h.w <= 0.001) continue; const up = h.o.upper === 'auto' ? this.upperK : h.o.upper;
       this.overlay(h.C, h.time / h.C.dur, h.w, up, up === true ? false : h.o.root === 'keep' ? 'keep' : true);
+      h.o.pose?.(this, h.w);
     }
   }
   // The game's own: a flinch or (a hard enough blow) a stagger back, a death (held on the ground until revive), a hard

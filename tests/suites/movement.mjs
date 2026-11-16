@@ -35,5 +35,27 @@ export default {
     const cost = await t.eval(`const h = P.hero, st = { speed: 3, onGround: true, ground: P.groundFn, rootY: P.pos.y }; let t0 = performance.now(); for (let i = 0; i < 300; i++) h.update(1 / 60, st); const on = (performance.now() - t0) / 300; st.ground = null; t0 = performance.now(); for (let i = 0; i < 300; i++) h.update(1 / 60, st); return { with: on, without: (performance.now() - t0) / 300 };`);
     t.metric('hero update ms (with / without feet)', `${cost.with.toFixed(3)} / ${cost.without.toFixed(3)}`);
     t.check('foot placement costs under 0.2 ms a frame', cost.with - cost.without < 0.2, JSON.stringify(cost));
+    // Sitting (X): cross-legged, the camera free round the hero and kept within 30 m of him and over the ground
+    await t.eval(`P.spawn(12, 14); await new Promise((r) => { const w = () => (P.hero.has('sit') && P.hero.has('getUp') ? r() : setTimeout(w, 200)); w(); }); return true;`);
+    await t.wait(800); await t.page.keyboard.press('KeyX'); await t.wait(2000);
+    await t.step('X sits you down cross-legged, the camera free', `if (g.acts.pose?.kind !== 'sit' || !P.seat?.look) return 'not seated: ' + g.acts.pose?.kind;
+      const HB = P.hero.bones, inv4 = P.hero.root.matrixWorld.clone().invert(), at = (n) => HB[n].getWorldPosition(new V()).applyMatrix4(inv4);
+      const l = at('mixamorigLeftFoot'), r = at('mixamorigRightFoot'), lk = at('mixamorigLeftLeg'), rk = at('mixamorigRightLeg');
+      // (the knees out wide and low, each shin running across in front towards the other side: in the clip alone the knees
+      // stand up close together, the feet straight ahead of them)
+      return (lk.x - rk.x > 0.6 && lk.y < 0.35 && rk.y < 0.35 && lk.x - l.x > 0.25 && r.x - rk.x > 0.25 && l.z > 0 && r.z > 0) || 'legs not crossed: feet ' + [l.x, l.z, r.x, r.z].map((v) => v.toFixed(2)) + ' knees ' + [lk.x, lk.y, rk.x, rk.y].map((v) => v.toFixed(2));`);
+    await t.eval(`const h = P.pos.clone(); window._s = { h, far: 0, low: 1e9, moved: 0, n: 0 }; P.camPitch = 1.4; P.camDist = 14; window._iv = setInterval(() => { const c = AG.camera.position, s = window._s; s.far = Math.max(s.far, c.distanceTo(P.pos)); s.low = Math.min(s.low, c.y - P.groundHere(c.x, c.z, c.y)); s.moved = Math.max(s.moved, P.pos.distanceTo(h)); s.n++; }, 30); return true;`);
+    await t.page.keyboard.down('ShiftLeft'); await t.page.keyboard.down('KeyW'); await t.page.keyboard.down('KeyQ'); await t.wait(4000);
+    await t.page.keyboard.up('KeyQ'); await t.page.keyboard.down('KeyD'); await t.wait(3000); await t.page.keyboard.up('KeyD'); await t.page.keyboard.up('KeyW'); await t.page.keyboard.up('ShiftLeft');
+    await t.step('seated, WASD and Q move the camera, not the hero: within 30 m of him, never under the ground', `clearInterval(window._iv); const s = window._s, off = P.lookOff.length();
+      return (g.acts.pose?.kind === 'sit' && s.moved < 0.05 && off > 12 && off + P.camDist <= 30.01 && s.far <= 30.6 && s.low >= 0.1) || JSON.stringify({ ...s, off, kind: g.acts.pose?.kind });`);
+    await t.page.keyboard.press('KeyX'); await t.wait(3000);
+    await t.step('X again stands you up, the camera back behind you', `const c = AG.camera.position, d = c.distanceTo(P.pos), behind = Math.abs(Math.atan2(Math.sin(P.camYaw - P.yaw - Math.PI), Math.cos(P.camYaw - P.yaw - Math.PI)));
+      return (!g.acts.pose && !P.seat && P.lookOff.length() < 0.5 && d < 12 && behind < 0.3) || JSON.stringify({ kind: g.acts.pose?.kind, seat: !!P.seat, off: P.lookOff.length(), d, behind });`);
+    await t.page.keyboard.press('KeyX'); await t.wait(1500); await t.page.keyboard.press('Space'); await t.wait(3000);
+    await t.step('Space stands you up too', `return (!g.acts.pose && !P.seat) || 'still ' + g.acts.pose?.kind;`);
+    await t.eval(`g.give('hammer'); g.useSlot(g.inv.slots.findIndex((s) => s?.id === 'hammer')); return true;`); await t.wait(1500);
+    await t.page.keyboard.press('KeyX'); await t.wait(500);
+    await t.step('with the hammer in hand X does not sit you down (it takes down a piece)', `return !g.acts.pose || 'sat down: ' + g.acts.pose.kind;`);
   },
 };

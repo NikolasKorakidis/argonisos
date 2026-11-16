@@ -6,7 +6,7 @@ import QTREES from '../../assets/models/qtrees.js';
 import QBUSH from '../../assets/models/qbushes.js';
 import { clamp, lerp } from '../util/math.js';
 import { patchWet } from './wetness.js';
-import { FLORA, floraGeo } from './flora-pack.js';
+import { FLORA, floraGeo, TREE_TALL } from './flora-pack.js';
 
 let seed = 1337;
 const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -379,6 +379,7 @@ function propGeo(species, v) {
     const s0 = seed, r = TREE_BUILDERS[species](v), s1 = seed, cards = CARD_PARTS.length ? mergeCards(CARD_PARTS) : null; CARD_PARTS = [];
     seed = s0; PROP_LO = true; const lo = TREE_BUILDERS[species](v); PROP_LO = false; seed = s1;
     PROPS[k] = { species, geo: r.isBufferGeometry ? r : mergeParts(r), lo: lo.isBufferGeometry ? lo : mergeParts(lo), cards, items: [] };
+    if (species === 'titan') for (const g of new Set([PROPS[k].geo, PROPS[k].lo, cards])) g?.scale(1, TREE_TALL, 1);   // (the giants, carved, stretched as the pack's trees are: flora-pack.js)
   }
   // the pack's model in the carved one's place (flora-pack.js; the carved one was still built, so the shared dice roll on as before)
   const P = PROPS[k];

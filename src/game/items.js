@@ -34,6 +34,7 @@ export const ITEMS = {
   pomegranateSeed: M('Pomegranate Seed', { weight: 0.1, icon: 'seed' }),
   pineCone: M('Pine Cone', { weight: 0.2, icon: 'cone' }),
   firCone: M('Fir Cone', { weight: 0.2, icon: 'cone' }),
+  tomatoSeed: M('Tomato Seed', { weight: 0.1, icon: 'seed', note: 'Now and then found picking tomatoes. Keep it for planting.' }),
   oliveScrap: M('Olive-tree Scrap', { weight: 0.1, icon: 'oliveScrap', stack: 10, note: 'Carved marks in old olive wood. Pieced together, they point the way to the Minotaur.' }),
   caveCarving: M('Giant Cave Carving', { weight: 0.5, icon: 'caveCarving', stack: 10, note: 'A slab scratched by Giants. Together, they show where the Chimera sleeps.' }),
   minotaurHead: M('Minotaur Head', { weight: 5, stack: 1, icon: 'trophy', trophy: true }),
@@ -42,6 +43,7 @@ export const ITEMS = {
   olive: F('Olive', 7, 20, 1, 600, { icon: 'olive' }),
   acorn: F('Acorn', 15, 15, 1, 900, { icon: 'acorn' }),
   pomegranate: F('Pomegranate', 8, 25, 1, 900, { icon: 'pomegranate', effect: { cond: 'swift', time: 60 } }),
+  tomato: F('Tomato', 7, 23, 1, 900, { icon: 'tomato' }),   // (picked from the meadows' tomato bushes, harvest.js)
   rawMeat: F('Raw Meat', -10, -10, 0, 0, { icon: 'meat', spoil: 140, spoilTo: 'spoiledMeat', cook: { to: 'cookedMeat', time: 30 } }),
   cookedMeat: F('Cooked Meat', 40, 30, 2, 1200, { icon: 'cookedMeat', spoil: 900, spoilTo: 'spoiledMeat' }),
   spoiledMeat: F('Spoiled Meat', -25, -25, 0, 0, { icon: 'spoiledMeat' }),

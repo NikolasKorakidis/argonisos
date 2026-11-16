@@ -10,9 +10,10 @@ export function clearSave() { try { localStorage.removeItem(KEY); } catch { /* p
 // The layout of the land (which trees and pickups stand where). Saves remember felled trees and gathered pickups by their
 // place in that layout, so when it changes (2: the woods of Pedias and bare rock on steep ground, Patch 4; 3: woods over
 // most of Pedias, Patch 5; 4: the abandoned town and the small scenes about the island, Patch 11; 5: the temple's hill,
-// its marble precinct and the meadow cleared round it) an older save keeps everything else but lets the trees and
-// pickups come back.
-const WORLD_LAYOUT = 5;
+// its marble precinct and the meadow cleared round it; 6: a fifth fewer trees in the meadows' woods, new trees in the
+// hills, the mushrooms gone and tomato bushes in the meadows, Patch 20) an older save keeps everything else but lets the
+// trees and pickups come back.
+const WORLD_LAYOUT = 6;
 export function save(g) {
   const P = g.player, S = g.S;
   const data = {
@@ -42,7 +43,7 @@ export function load(g) {
   // the world's changes
   if ((d.world || 1) === WORLD_LAYOUT) {
     for (const id of d.harvest.removed || []) g.veg.removed.add(id);
-    g.harvest.hp = new Map(d.harvest.hp || []); g.harvest.picked = new Map(d.harvest.picked || []);
+    g.harvest.hp = new Map(d.harvest.hp || []); g.harvest.picked = new Map(d.harvest.picked || []); g.harvest.bare = new Map(d.harvest.bare || []);   // (bare: the tomato bushes picked, drawn so once loaded: harvest.js growBack)
     for (const s of d.harvest.stumps || []) g.harvest.addStump(s.x, s.y, s.z, s.r);
     g.pickups.load(d.pickups);
   } else { g.pickups.load({ taken: [], drops: d.pickups?.drops || [] }); setTimeout(() => g.hud.toast('The land has changed since you were last here: the trees and what lies on the ground have grown back'), 4000); }

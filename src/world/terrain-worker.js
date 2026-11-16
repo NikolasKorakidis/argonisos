@@ -1,6 +1,6 @@
 // Terrain worker: builds terrain patches (positions, normals, colours, uvs, bare rock) off the main thread so streaming
 // the world never stutters. Also bakes the world height texture used by the water shader.
-import { heightAt, biomeWeights, groundColor, fbm, isRock, CAVE, CAVES } from './gen.js';
+import { heightAt, biomeWeights, groundColor, fbm, isRock, meadowPath, CAVE, CAVES } from './gen.js';
 import { caveRock } from './cave.js';
 import { layoutCell, CELL, shadeAround, bakeShade, solidsAround, SPECIES, STRIDE, treeDensity } from './flora.js';
 // how wide a space to keep round the things that stand about but aren't solid (metres at scale 1)
@@ -11,7 +11,7 @@ import { layoutPickups } from './pickup-layout.js';
 
 function patch({ id, x0, z0, size, res }) {
   const n = res + 1, step = size / res, NV = n * n + 4 * res;
-  const pos = new Float32Array(NV * 3), nor = new Float32Array(NV * 3), col = new Float32Array(NV * 3), uv = new Float32Array(NV * 2), rock = new Float32Array(NV);
+  const pos = new Float32Array(NV * 3), nor = new Float32Array(NV * 3), col = new Float32Array(NV * 3), uv = new Float32Array(NV * 2), rock = new Float32Array(NV), bio = new Float32Array(NV * 2);   // (bio: how much forest and marsh, for each biome's ground texture: terrain.js floorGround)
   // heights with a one-sample border so normals match across patch edges
   const m = n + 2, H = new Float32Array(m * m);
   for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) H[j * m + i] = heightAt(x0 + (i - 1) * step, z0 + (j - 1) * step);
@@ -28,7 +28,7 @@ function patch({ id, x0, z0, size, res }) {
     const cav = Math.max(-0.05, Math.min(0.1, ((hl + hr + hd + hu) / 4 - h) * 0.25 / Math.max(step, 1)));   // hollows a touch darker, ridges a touch lighter
     const ao = (1 - Math.min(0.45, occ[k])) * (1 - cav);
     col[k * 3] = c[0] * ao; col[k * 3 + 1] = c[1] * ao; col[k * 3 + 2] = c[2] * ao;
-    uv[k * 2] = x / 3; uv[k * 2 + 1] = z / 3; rock[k] = c[3];
+    uv[k * 2] = x / 3; uv[k * 2 + 1] = z / 3; rock[k] = c[3]; bio[k * 2] = w.y; bio[k * 2 + 1] = w.v;
     if (h < minH) minH = h; if (h > maxH) maxH = h;
   }
   // skirt: copy of the outer ring, pushed down (deeper for coarse patches whose neighbours may differ more)
@@ -40,9 +40,9 @@ function patch({ id, x0, z0, size, res }) {
   for (let j = res; j > 0; j--) ring.push(j * n);                      // left edge
   for (const k of ring) {
     pos[s * 3] = pos[k * 3]; pos[s * 3 + 1] = pos[k * 3 + 1] - drop; pos[s * 3 + 2] = pos[k * 3 + 2];
-    nor.set(nor.subarray(k * 3, k * 3 + 3), s * 3); col.set(col.subarray(k * 3, k * 3 + 3), s * 3); uv.set(uv.subarray(k * 2, k * 2 + 2), s * 2); rock[s] = rock[k]; s++;
+    nor.set(nor.subarray(k * 3, k * 3 + 3), s * 3); col.set(col.subarray(k * 3, k * 3 + 3), s * 3); uv.set(uv.subarray(k * 2, k * 2 + 2), s * 2); bio.set(bio.subarray(k * 2, k * 2 + 2), s * 2); rock[s] = rock[k]; s++;
   }
-  return { id, pos, nor, col, uv, rock, minH, maxH };
+  return { id, pos, nor, col, uv, rock, bio, minH, maxH };
 }
 
 // World height texture for the water: depth below the surface everywhere (shoreline foam, colour by depth)
@@ -69,23 +69,24 @@ function woodsTexture({ id, N, extent }) {
 
 self.onmessage = (e) => {
   const msg = e.data;
-  if (msg.type === 'patch') { const r = patch(msg); self.postMessage({ type: 'patch', ...r }, [r.pos.buffer, r.nor.buffer, r.col.buffer, r.uv.buffer, r.rock.buffer]); }
+  if (msg.type === 'patch') { const r = patch(msg); self.postMessage({ type: 'patch', ...r }, [r.pos.buffer, r.nor.buffer, r.col.buffer, r.uv.buffer, r.rock.buffer, r.bio.buffer]); }
   else if (msg.type === 'heightTex') { const r = heightTexture(msg); self.postMessage({ type: 'heightTex', ...r }, [r.data.buffer]); }
   else if (msg.type === 'woodsTex') { const r = woodsTexture(msg); self.postMessage({ type: 'woodsTex', ...r }, [r.data.buffer]); }
   else if (msg.type === 'grassTex') {      // local ground texture for the grass carpet: R height, G grass amount (+ 2 × tallness 0-7), B tint variation, A flowers
     // (on the hill over a Giant's cave, not on its floor: where the ground is cut down for the cave, the grass grows on the
     // rock's top, which is the hill as it would be without the cave: gen.js CAVE)
     CAVE.cut = false;
-    const { N, x0, z0, size } = msg, data = new Float32Array(N * N * 4), w = { p: 0, y: 0, v: 0, r: 0 };
+    const { N, x0, z0, size } = msg, data = new Float32Array(N * N * 4), meadow = new Uint8Array(N * N), w = { p: 0, y: 0, v: 0, r: 0 };   // (meadow: how much of Pedias each texel is, where the grass grows as the pack's clumps: grass.js)
     const occ = new Float32Array(N * N), kk = size / N; bakeShade(shadeAround(x0, z0, x0 + size, z0 + size), x0 + kk / 2, z0 + kk / 2, kk, N, N, occ);   // the grass shaded under trees too
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
       const x = x0 + (i + 0.5) / N * size, z = z0 + (j + 0.5) / N * size, h = heightAt(x, z), k = (j * N + i) * 4;
-      biomeWeights(x, z, w);
+      biomeWeights(x, z, w); meadow[j * N + i] = Math.round(w.p * 255);
       const sl = Math.hypot(heightAt(x + 1, z) - h, heightAt(x, z + 1) - h);
       let g = Math.min(1, Math.max(0, (h - 1.4) / 0.8)) * Math.min(1, Math.max(0, (1.15 - sl) / 0.45));
       g *= w.p * 1 + w.y * 0.45 + w.v * (h > 0.4 ? 0.55 : 0);
       g *= Math.min(1, Math.max(0, (fbm(x * 0.05 + 3, z * 0.05, 2) - 0.22) / 0.1));
       g *= Math.min(1, Math.max(0, (190 - h) / 40));   // none on the bare rock and snow of the peak
+      g *= 1 - meadowPath(x, z, w) * 0.85;   // (thin on the meadows' worn paths: gen.js)
       data[k] = h; data[k + 1] = g; data[k + 2] = Math.min(0.99, Math.max(0, fbm(x * 0.03 + 9, z * 0.03 - 4, 2))) + Math.round(Math.min(1, w.y + w.v * 0.6 + occ[j * N + i] * 1.3) * 15) * 2;   // tint, plus the forest shade packed above it
       data[k + 3] = Math.min(1, Math.max(0, (fbm(x * 0.07, z * 0.07 + 5, 2) - 0.42) * 3)) * (w.p * 1 + w.y * 0.2);
       // taller grass: patches here and there, 20-40 m across, where it all grows to about 0.7x the hero's height (a crisp
@@ -112,7 +113,13 @@ self.onmessage = (e) => {
       }
     }
     CAVE.cut = true;
-    self.postMessage({ type: 'grassTex', id: msg.id, data, N, x0, z0, size }, [data.buffer]);
+    const base = data.slice();   // (a copy to stamp the clearings over again and again: made here, off the main thread)
+    // and the least and most of Pedias within each carpet's reach round the middle (msg.reach, metres): its blades or its
+    // clumps aren't drawn at all where there are none of them to draw
+    const span = (msg.reach || []).flatMap((r) => { let lo = 255, hi = 0; const c = N / 2, q = r / (size / N);
+      for (let j = Math.max(0, Math.floor(c - q)); j < Math.min(N, Math.ceil(c + q)); j++) for (let i = Math.max(0, Math.floor(c - q)); i < Math.min(N, Math.ceil(c + q)); i++) if ((i + 0.5 - c) ** 2 + (j + 0.5 - c) ** 2 <= q * q) { const v = meadow[j * N + i]; if (v < lo) lo = v; if (v > hi) hi = v; }
+      return [lo, hi]; });
+    self.postMessage({ type: 'grassTex', id: msg.id, data, base, meadow, span, N, x0, z0, size }, [data.buffer, base.buffer, meadow.buffer]);
   }
   else if (msg.type === 'mapImage') {     // the world map: painted like an old chart, hill-shaded
     const { N, extent } = msg, data = new Uint8ClampedArray(N * N * 4), w = { p: 0, y: 0, v: 0, r: 0 }, k = extent / N, H = new Float32Array(N * N);

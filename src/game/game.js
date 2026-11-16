@@ -130,6 +130,7 @@ export function installGame(g) {
     const ow = g.owl.interactable(player.pos) || g.graves.interactable(player.pos); if (ow) return ow;
     const tr = g.trial.interactable(player.pos); if (tr) return tr;
     const s = g.build?.interactable?.(player.pos, f); if (s) return s;
+    const tb = g.harvest.tomatoBush(); if (tb) return { label: tb.ready ? 'Pick tomatoes' : 'No ripe tomatoes', sub: 'Tomato bush', use: () => g.harvest.pickTomatoes(tb) };
     const t = g.harvest.fruitTree(); if (t) return { kind: 'fruit', t, label: t.ready ? `Pick ${t.fruit[0]}s` : 'Picked clean' };
     return null;
   }

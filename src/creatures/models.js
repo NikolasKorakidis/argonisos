@@ -3,12 +3,12 @@
 // Chimera are rigged characters with their own clips (KitBody). Dryads, dryadlings and giants are the packs' characters
 // fitted onto the hero's Mixamo rig (so they share its run and strike clips), or the hero's own body dressed in bark or
 // stone-grey hide without the packs. Every body exposes the same small interface: obj, animate(state, speed, dt),
-// flash(k), dispose().
+// flash(k), dispose(), and cue(move) for the blows (BLOWS), point(bone) for where a part of it is in the world.
 import * as THREE from 'three';
 import { FootIK } from '../player/footik.js';
 import { clone as cloneSkinned } from '../../vendor/three/jsm/utils/SkeletonUtils.js';
 import { loadGLB, loadFBX, loadPack, normalizeHandle } from '../assets.js';
-import { CLIPS, GRIP } from '../player/hero.js';
+import { CLIPS, GRIP, loadMoves } from '../player/hero.js';
 import { clamp, hash21 } from '../util/math.js';
 
 const flat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, flatShading: true, ...o });
@@ -31,6 +31,33 @@ const TEX = {
     for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(${80 + r() * 40},${120 + r() * 40},${50},${0.35})`; g.beginPath(); g.ellipse(r() * n, r() * n, 6 + r() * 14, 4 + r() * 10, r() * 3, 0, 7); g.fill(); } }),
   hide: canvasTex((g, n) => { g.fillStyle = '#7a7266'; g.fillRect(0, 0, n, n); for (let i = 0; i < 400; i++) { const v = 90 + r() * 60; g.fillStyle = `rgba(${v},${v * 0.95},${v * 0.85},.35)`; g.beginPath(); g.arc(r() * n, r() * n, 2 + r() * 9, 0, 7); g.fill(); } for (let i = 0; i < 30; i++) { g.strokeStyle = 'rgba(40,34,28,.35)'; g.beginPath(); g.moveTo(r() * n, r() * n); g.lineTo(r() * n, r() * n); g.stroke(); } }),
 };
+
+// ---- The blows: when each attack lands, in its clip's own seconds, measured from the clips (tests/suites/combat.mjs
+// samples them again and fails if one drifts): the frame where the striking part (tusks, hand, labrys, paws, the tail's
+// sting) stops dead at the end of its swing, at its furthest forward or lowest; a throw's, where the hand is fastest as it
+// lets go. from: where the move starts (past a still lead-in), to: where it has settled enough to blend away, rate: how
+// fast the game plays it (a rig's pace, DRESS, on top). Each move plays from its start, so the wind-up is always there
+// to read, and the game lands the blow at that moment (cue: creatures.js, trial.js), not when the move begins.
+//   (a rig is any body on the hero's Mixamo rig: the downward chop is the hero's own 'attack' clip, the throw is acts.glb's)
+export const BLOWS = {
+  hog: { attack: [['Attack', { hit: 0.6, to: 1.1 }]] },
+  rig: { attack: [['attack', { hit: 0.85, to: 1.5 }]], throw: [['throw', { from: 0.2, hit: 0.87, to: 1.6 }]] },
+  minotaur: { attack: [['Attack2', { hit: 1.5, to: 2.45, rate: 1.1 }], ['Attack3', { hit: 0.62, to: 1.35, rate: 1.1 }]], slam: [['Attack1', { hit: 1.25, to: 2, rate: 1.15 }]],
+    throw: [['Attack3', { hit: 0.62, to: 1.35, rate: 1.1 }]], roar: [['Taunt', { hit: 0.9, to: 2, rate: 1.2 }]] },
+  skeleton: { attack: [['Attack1', { hit: 0.85, to: 1.45, rate: 1.1 }], ['Attack2', { hit: 0.88, to: 1.6, rate: 1.1 }], ['Attack3', { hit: 0.75, to: 1.9, rate: 1.1 }]] },
+  // (breath: the lion's head drawn low, then held there while the fire pours out, hold)
+  chimera: { attack: [['Attack1', { from: 0.45, hit: 1.1, to: 2.2, rate: 1.1 }]], claw: [['Attack1', { from: 0.45, hit: 1.1, to: 2.2, rate: 1.1 }]], sting: [['Attack2', { hit: 1.65, to: 2.5, rate: 1.3 }]],
+    breath: [['Roar', { from: 0.3, hit: 0.95, to: 3.2, hold: true }]], roar: [['Roar', { hit: 1.3, to: 2.4, rate: 1.2 }]] },
+};
+// A move taken up (one of its clips at random): what the body will play once the state starts, and when, in the game's
+// seconds from then, its blow lands (hit) and it's over (dur)
+function cueMove(body, list, st, pace = 1) {
+  if (!list) return null;
+  const [name, b] = list[Math.floor(Math.random() * list.length)], from = b.from ?? 0, rate = (b.rate ?? 1) * pace;
+  body.cued = { ...b, st, name, from, rate };
+  return { hit: (b.hit - from) / rate, dur: (b.to - from) / rate };
+}
+const at = (bone) => (bone ? bone.getWorldPosition(new THREE.Vector3()) : null);
 
 // ---- the rigged animal pack (PolyArt forest animals, converted by tools/assets: Idle / Walk / Gallop / Attack / Death...)
 // len: nose to tail in metres (the young as much smaller as the pack draws them); walk and run: the speeds (m/s) its walk
@@ -87,15 +114,19 @@ class PackBody {
   }
   animate(st, speed, dt) {
     if (!this.mixer) return;
-    let want = 'Idle', rate = 1;
-    if (st === 'dead') want = 'Death'; else if (st === 'attack') want = 'Attack'; else if (st === 'hit' && this.acts.Idle_HitReact1) want = 'Idle_HitReact1';
+    let want = 'Idle', rate = 1; const q = this.cued?.st === st ? this.cued : null;
+    if (st === 'dead') want = 'Death'; else if (st === 'attack') { want = q?.name || 'Attack'; rate = this.move?.rate ?? 1; } else if (st === 'hit' && this.acts.Idle_HitReact1) want = 'Idle_HitReact1';
     else if (speed > this.speedRef * 0.45) { want = 'Gallop'; rate = clamp(speed / (this.speedRef * 0.8), 0.7, 1.8); }   // (the young scurry to keep up)
     else if (speed > 0.15) { want = 'Walk'; rate = clamp(speed / this.walkRef, 0.6, 1.8); }
     else if (st === 'graze') want = 'Eating';
     const a = this.acts[want] || this.acts.Idle; if (!a) return;
-    if (this.cur !== want) { const prev = this.acts[this.cur]; a.reset().setEffectiveWeight(1).fadeIn(0.2).play(); prev?.fadeOut(0.2); this.cur = want; }
+    // (a blow taken up starts its clip again from the top, even straight after the last one)
+    if (this.cur !== want || q) { const prev = this.acts[this.cur]; a.reset().setEffectiveWeight(1).play(); if (prev !== a) { a.fadeIn(0.2); prev?.fadeOut(0.2); } this.cur = want;
+      if (q) { this.cued = null; a.time = q.from; rate = q.rate; this.move = { a, ...q }; } }
     a.timeScale = rate; this.mixer.update(dt);
   }
+  cue(st) { return cueMove(this, BLOWS.hog[st], st); }
+  point(name) { let b = null; this.obj.traverse((o) => { if (!b && o.isBone && o.name === name) b = o; }); return at(b); }
   flash(k) { for (const m of this.mats) { m.emissive?.setRGB(k * 0.6, 0, 0); } }
   dispose() { this.gone = true; this.mixer?.stopAllAction(); free(this.obj); }
 }
@@ -130,14 +161,14 @@ function rigTemplate(kind) {
 const held = {}, CLUB = { at: [0, 8, 3], turn: [0, 0, -1.9] };
 const packHeld = ({ model, len }) => (held[model] ||= loadPack(model).then((gl) => { const h = normalizeHandle(gl.scene, len); h.position.y = -8; share(h); return h; }).catch(() => null));
 const DRESS = {
-  dryad: () => ({ file: 'pack/dryad', mat: new THREE.MeshStandardMaterial({ map: TEX.bark, roughness: 0.95, color: 0xb8c49a }), scale: 1.05, crown: 0x5d8a34, eyes: 0xc8ff8a, hold: { model: 'witchStaff', len: 230, at: [0, -140, 6], turn: [0, 0, 0] } }),
+  dryad: () => ({ file: 'pack/dryad', mat: new THREE.MeshStandardMaterial({ map: TEX.bark, roughness: 0.95, color: 0xb8c49a }), scale: 1.05, pace: 1.1, crown: 0x5d8a34, eyes: 0xc8ff8a, hold: { model: 'witchStaff', len: 230, at: [0, -140, 6], turn: [0, 0, 0] } }),
   // a dryadling: a little one, the dryad's height brought down to its own (creatures.js h)
-  dryadling: () => ({ file: 'pack/dryadling', mat: new THREE.MeshStandardMaterial({ map: TEX.bark, roughness: 0.95, color: 0x9aa878 }), scale: 1.1 / 1.95, crown: 0x4d7a2c, eyes: 0xc8ff8a, hold: { model: 'evilGodWeapon', len: 80, at: GRIP.at, turn: [0, Math.PI * 1.5, GRIP.tilt, 'ZYX'] } }),
-  giant: () => ({ file: 'pack/giant', mat: new THREE.MeshStandardMaterial({ map: TEX.hide, roughness: 0.9, color: 0x8a8f9a }), scale: 3.1, crown: null, eyes: 0xffd27a, club: true, hold: { model: 'mutantClub', len: 95, ...CLUB }, tint: 0.5 }),
+  dryadling: () => ({ file: 'pack/dryadling', mat: new THREE.MeshStandardMaterial({ map: TEX.bark, roughness: 0.95, color: 0x9aa878 }), scale: 1.1 / 1.95, pace: 1.25, crown: 0x4d7a2c, eyes: 0xc8ff8a, hold: { model: 'evilGodWeapon', len: 80, at: GRIP.at, turn: [0, Math.PI * 1.5, GRIP.tilt, 'ZYX'] } }),
+  giant: () => ({ file: 'pack/giant', mat: new THREE.MeshStandardMaterial({ map: TEX.hide, roughness: 0.9, color: 0x8a8f9a }), scale: 3.1, pace: 0.7, crown: null, eyes: 0xffd27a, club: true, hold: { model: 'mutantClub', len: 95, ...CLUB }, tint: 0.5 }),
 };
 class RigBody {
   constructor(kind, size = 1) {
-    this.obj = new THREE.Group(); this.kind = kind; this.mats = []; this.mixer = null; this.acts = {}; this.t = 0; this.deadT = 0; this.atkT = 0;
+    this.obj = new THREE.Group(); this.kind = kind; this.mats = []; this.mixer = null; this.acts = {}; this.t = 0; this.deadT = 0; this.one = null;
     const D = DRESS[kind](); D.scale *= size; this.dress = D;
     rigTemplate(kind).then((T) => {
       if (this.gone) return;
@@ -154,7 +185,8 @@ class RigBody {
         if (!pc) mesh(new THREE.CylinderGeometry(4, 7, 95, 8).translate(0, 40, 0), new THREE.MeshStandardMaterial({ color: 0x6e5238, roughness: 0.9 }), 0, 0, 0, w);   // (the carved club, without the pack)
         w.position.fromArray(H.at); w.rotation.set(...H.turn); hand.add(w); });
       const act = (C, key, once) => { if (!C.ready) return; const a = this.mixer.clipAction(C.clip.clone()); if (once) { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; } a.setEffectiveWeight(0); a.play(); this.acts[key] = a; };
-      const go = () => { act(CLIPS.run, 'run'); act(CLIPS.attack, 'attack', true); act(CLIPS.punch, 'punch', true); if (CLIPS.disarm.ready) { const a = this.mixer.clipAction(CLIPS.disarm.clip.clone()); a.time = CLIPS.disarm.dur * 0.97; a.paused = true; a.play(); this.acts.idle = a; } this.ready = true; };
+      // (the throw is in acts.glb, fetched for the dryads as their bodies come in)
+      const go = () => { act(CLIPS.run, 'run'); act(CLIPS.attack, 'attack', true); act(CLIPS.punch, 'punch', true); loadMoves('acts').then(() => !this.gone && CLIPS.throw && act(CLIPS.throw, 'throw', true)); if (CLIPS.disarm.ready) { const a = this.mixer.clipAction(CLIPS.disarm.clip.clone()); a.time = CLIPS.disarm.dur * 0.97; a.paused = true; a.play(); this.acts.idle = a; } this.ready = true; };
       const wait = () => (CLIPS.run.ready && CLIPS.attack.ready && CLIPS.disarm.ready ? go() : setTimeout(wait, 300)); wait();
     }).catch((e) => console.warn(kind, 'rig failed', e));
   }
@@ -162,12 +194,18 @@ class RigBody {
     if (!this.ready) return; this.t += dt;
     if (st === 'dead') { this.deadT += dt; this.obj.rotation.x = -Math.min(Math.PI / 2, this.deadT * 2.5 * this.deadT * 2); this.mixer.update(0); return; }
     const runV = (this.dress.scale) * 3.9, k = clamp(speed / (runV * 0.5), 0, 1);
-    const A = this.acts; A.run && (A.run.setEffectiveWeight(k), A.run.timeScale = clamp(speed / runV, 0.4, 1.4)); A.idle && A.idle.setEffectiveWeight(1 - k);
-    const atk = st === 'attack' || st === 'slam' ? A.attack : null;   // (slam: the same blow, slow and heavy)
-    if (atk && this.atkT <= 0) { atk.reset(); atk.setEffectiveWeight(1); atk.timeScale = st === 'slam' ? 0.62 : this.kind === 'giant' ? 0.7 : 1.1; atk.play(); this.atkT = atk.getClip().duration / atk.timeScale; }
-    if (this.atkT > 0) { this.atkT -= dt; if (this.atkT <= 0 && A.attack) A.attack.setEffectiveWeight(0); }
+    const A = this.acts, q = this.cued?.st === st ? this.cued : null;
+    // a blow or a throw taken up: its clip from the top, over the run and the stance (which give way to it, so it's seen
+    // whole, not half mixed with them), until it has settled or the creature does something else (a throw cut short)
+    if (q) { this.cued = null; const a = A[q.name]; if (a) { if (this.one && this.one.a !== a) this.one.a.setEffectiveWeight(0); a.reset(); a.time = q.from; a.timeScale = q.rate; a.play(); this.one = { a, st, e: 0, t: (q.to - q.from) / q.rate }; this.move = { a, ...q }; } }
+    let w = 0; const o = this.one;
+    if (o) { if (st !== o.st) o.t = Math.min(o.t, 0.15); o.t -= dt; o.e += dt; w = clamp(Math.min(o.e / 0.08, o.t / 0.15), 0, 1); o.a.setEffectiveWeight(w); if (o.t <= 0) this.one = null; }
+    A.run && (A.run.setEffectiveWeight(k * (1 - w)), A.run.timeScale = clamp(speed / runV, 0.4, 1.4)); A.idle && A.idle.setEffectiveWeight((1 - k) * (1 - w));
     this.mixer.update(dt);
   }
+  cue(st) { return cueMove(this, BLOWS.rig[st], st, this.dress.pace); }
+  point(name) { return at(this.bones?.[name]); }
+  hand() { return this.point('mixamorigRightHand'); }
   feet(dt, ground, rootY, active) { if (this.ready && this.bones) plantFeet(this, dt, ground, rootY, active); }
   flash(k) { for (const m of this.mats) m.emissive?.setRGB(k * 0.6, 0, 0); }
   dispose() { this.gone = true; this.mixer?.stopAllAction(); free(this.obj); }
@@ -175,20 +213,21 @@ class RigBody {
 
 // ---- characters with their own clips (converted by tools/assets from the team's packs)
 // h: height in metres; walk and run: how fast (m/s, at that height) its walk and run clips are drawn, so the feet
-// don't slide; blow: how long after an attack starts the game lands it. A one-shot clip is [name, the
-// moment in it that matters (the blow lands, the roar peaks)]: it's started early or played quicker to put that moment
-// where the game wants it.
+// don't slide. A one-shot clip is [name, the moment in it that matters (a stagger's jolt, the charge's lunge, the paws
+// landing)]: it's started early or played quicker to put that moment where the game wants it (WHEN). The blows, roars and
+// the fire are BLOWS's, played whole.
 const KIT = {
-  minotaur: { file: 'pack/minotaur', legs: (s) => [`${s}UpLeg`, `${s}Leg`, `${s}Foot`], h: 3.2, walk: 1.85, run: 5.75, blow: 0.65, clips: { idle: 'Idle', walk: 'Walk', run: 'RamRun', dead: 'Death',
+  minotaur: { file: 'pack/minotaur', legs: (s) => [`${s}UpLeg`, `${s}Leg`, `${s}Foot`], h: 3.2, walk: 1.85, run: 5.75, clips: { idle: 'Idle', walk: 'Walk', run: 'RamRun', dead: 'Death',
     attack: [['Attack2', 1.53], ['Attack3', 0.53]], slam: [['Attack1', 1.17]], roar: [['Taunt', 0.93]], paw: [['RamStart', 1.3]], hit: [['GotHit', 0.2]], dazed: [['RamWall', 0.17]] } },
-  skeleton: { file: 'pack/skeleton', legs: (s) => [`Base Human${s[0]}Thigh1`, `Base Human${s[0]}Calf`, `Base Human${s[0]}Foot`], h: 1.9, walk: 1.1, run: 1.1, blow: 0.3, clips: { idle: 'Idle', walk: 'Walk', run: 'Walk', dead: 'Death',
+  skeleton: { file: 'pack/skeleton', legs: (s) => [`Base Human${s[0]}Thigh1`, `Base Human${s[0]}Calf`, `Base Human${s[0]}Foot`], h: 1.9, walk: 1.1, run: 1.1, clips: { idle: 'Idle', walk: 'Walk', run: 'Walk', dead: 'Death',
     attack: [['Attack1', 0.8], ['Attack2', 0.8], ['Attack3', 0.67]], roar: [['Taunt', 0.87]], hit: [['GotHit', 0.2]] } },
   // the Chimera: a great spined beast six metres long; its fire, claws and sting are the boss's moves (trial.js)
-  chimera: { file: 'pack/chimera', len: 6, walk: 2.4, run: 2.4, blow: 0.35, clips: { idle: 'Idle', walk: 'Walk', run: 'Walk', dead: 'Death',
-    attack: [['Attack1', 1.1]], claw: [['Attack1', 1.1]], sting: [['Attack2', 1.3]], breath: [['Roar', 0.9]], roar: [['Roar', 0.9]], crouch: [['Block', 0.4]], leap: [['Attack1', 0.6]], hit: [['GotHit', 0.2]] } },
+  chimera: { file: 'pack/chimera', len: 6, walk: 2.4, run: 2.4, clips: { idle: 'Idle', walk: 'Walk', run: 'Walk', dead: 'Death',
+    attack: [['Attack1', 1.1]], roar: [['Roar', 1.3]], crouch: [['Block', 0.4]], leap: [['Attack1', 1.02]], hit: [['GotHit', 0.2]] } },
 };
-// when in the clip the game's moment falls (s after the state starts) for each one-shot state
-const WHEN = { slam: 0.95, paw: 0.75, roar: 0.1, hit: 0.1, dazed: 0.1, claw: 0.35, sting: 0.45, breath: 0.6, crouch: 0.3, leap: 0.3 };
+// when in the clip the game's moment falls (s after the state starts) for each one-shot state (leap: the paws come down
+// as the pounce lands, trial.js)
+const WHEN = { paw: 0.75, hit: 0.1, dazed: 0.1, crouch: 0.3, leap: 0.8 };
 const kits = {};
 function kitTemplate(kind) {
   const K = KIT[kind];
@@ -201,7 +240,7 @@ function kitTemplate(kind) {
 }
 class KitBody {
   constructor(kind, scale = 1) {
-    this.K = KIT[kind]; this.obj = new THREE.Group(); this.mixer = null; this.acts = {}; this.mats = []; this.cur = null; this.once = null; this.onceT = 0;
+    this.kind = kind; this.K = KIT[kind]; this.obj = new THREE.Group(); this.mixer = null; this.acts = {}; this.mats = []; this.cur = null; this.once = null; this.onceT = 0;
     kitTemplate(kind).then((T) => {
       if (this.gone) return; const m = cloneSkinned(T.root); m.scale.multiplyScalar(scale);
       this.bones = {}; m.traverse((o) => { if (o.isBone) this.bones[o.name] = o; if (o.isMesh) { o.material = o.material.clone(); o.material.userData.shared = false; this.mats.push(o.material); } });
@@ -220,12 +259,17 @@ class KitBody {
     if (st === 'dead') { if (this.cur !== C.dead) { this.play(C.dead, 0.15).timeScale = 1; this.once = null; } this.mixer.update(dt); return; }
     // a one-shot move (a blow, the roar, a stagger) starts as the creature takes it up and plays through, unless another
     // cuts in (the game passes through chase between blows, so each blow starts its own)
-    const moves = C[st], fresh = st !== this.prevSt; this.prevSt = st;
-    if (Array.isArray(moves) && fresh) {
-      const [name, at] = moves[Math.floor(Math.random() * moves.length)], want = st === 'attack' ? this.K.blow : WHEN[st];
-      const rate = clamp(at / Math.max(want ?? 0.3, 0.05), 0.8, 1.4), a = this.play(name, 0.12); a.reset(); a.time = Math.max(0, at - want * rate); a.timeScale = rate;
+    const moves = C[st], fresh = st !== this.prevSt, q = this.cued?.st === st ? this.cued : null; this.prevSt = st;
+    if (q) {   // a blow (or a roar, the fire) from BLOWS: played whole, from its start
+      this.cued = null; const a = this.play(q.name, 0.12); a.reset(); a.time = q.from; a.timeScale = q.rate;
+      this.once = st; this.onceT = (q.to - q.from) / q.rate; this.move = { a, ...q };
+    } else if (Array.isArray(moves) && fresh) {
+      const [name, at] = moves[Math.floor(Math.random() * moves.length)], want = WHEN[st] ?? 0.3;
+      const rate = clamp(at / Math.max(want, 0.05), 0.8, 1.4), a = this.play(name, 0.12); a.reset(); a.time = Math.max(0, at - want * rate); a.timeScale = rate;
       this.once = st; this.onceT = (a.getClip().duration - a.time) / rate - 0.15;
     }
+    // (the fire: once the head is down, it stays there, barely moving, while the state lasts; then the clip plays out)
+    const m = this.move; if (m?.hold && this.once === m.st) { if (st === m.st && m.a.time >= m.hit) { m.a.timeScale = 0.05; this.onceT = Math.max(this.onceT, 0.3); } else if (st !== m.st) { m.a.timeScale = m.rate; m.hold = false; } }
     if (this.once && (this.onceT -= dt) > 0) { this.mixer.update(dt); return; }
     this.once = null;
     // walking and running, drawn at the speed it's going
@@ -236,6 +280,8 @@ class KitBody {
     this.mixer.update(dt);
   }
   feet(dt, ground, rootY, active) { if (this.mixer) plantFeet(this, dt, ground, rootY, active, this.K.legs); }
+  cue(st) { return cueMove(this, BLOWS[this.kind]?.[st], st); }
+  point(name) { return at(this.bones?.[name]); }
   flash(k) { for (const m of this.mats) m.emissive?.setRGB(k * 0.6, 0, 0); }
   dispose() { this.gone = true; this.mixer?.stopAllAction(); free(this.obj); }
 }

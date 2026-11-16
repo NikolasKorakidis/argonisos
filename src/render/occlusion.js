@@ -10,6 +10,18 @@ import { STRIDE } from '../world/flora.js';
 
 const ray = new THREE.Raycaster(), _a = new THREE.Vector3(), _d = new THREE.Vector3(), _m = new THREE.Matrix4();
 const FADE = 0.28, KEEP = 0.25;   // opacity when faded; seconds an object stays faded after it stops obstructing
+// The faded copies of materials are kept for the next time rather than thrown away: a material disposed takes its shader
+// program with it, and walking through the woods, with trunk after trunk between the camera and the hero, compiled the
+// same program again and again, a hitch each time. Each copy is made like the source again when it is taken.
+const SPARE = new Map();   // source material → faded copies not in use
+function fadedCopy(src, coverage = true) {
+  const c = SPARE.get(src)?.pop() || src.clone(); c.copy(src); c.transparent = true; c.depthWrite = false; if (!coverage) c.alphaToCoverage = false;   // (coverage + blending would dither)
+  c.needsUpdate = true; c.userData.fadeSrc = src; return c;
+}
+function spare(c) { const src = c.userData.fadeSrc; (SPARE.get(src) || SPARE.set(src, []).get(src)).push(c); }
+// A faded copy of a tree's (or a site's: coverage kept) material made ahead, for the loading screen to compile (main.js warmUp), and kept for the
+// first tree that comes between the camera and the hero
+export function fadeAhead(src, coverage = false) { if (SPARE.get(src)?.length) return SPARE.get(src)[0]; const c = fadedCopy(src, coverage); spare(c); return c; }
 
 export class Occlusion {
   constructor(g) { this.g = g; this.faded = new Map(); this.t = 0; }   // key → { kind, ..., seen }
@@ -54,13 +66,13 @@ export class Occlusion {
   fade(key, hit, now) {
     const o = hit.object, e = { key, seen: now, k: 1 };
     if (key[0] === 'p') { const p = o.userData.piece; e.kind = 'piece'; e.piece = p; e.orig = p.mats.map((m) => ({ m, transparent: m.transparent, opacity: m.opacity, depthWrite: m.depthWrite })); }
-    else if (key[0] === 's') { e.kind = 'site'; e.mesh = o; e.origMat = o.material; e.mat = [].concat(o.material).map((m) => { const c = m.clone(); c.transparent = true; c.depthWrite = false; return c; }); o.material = Array.isArray(o.material) ? e.mat : e.mat[0]; }
+    else if (key[0] === 's') { e.kind = 'site'; e.mesh = o; e.origMat = o.material; e.mat = [].concat(o.material).map((m) => fadedCopy(m)); o.material = Array.isArray(o.material) ? e.mat : e.mat[0]; }
     else {
       const { cell: c, i } = hit.tree, veg = this.g.veg, it = c.items, s = i * STRIDE;
       if (veg.removed.has(`${c.cx},${c.cz},${i}`)) return;
       e.kind = 'tree'; e.cell = c; e.i = i;
       const single = veg.single(it[s], it[s + 1]); single.position.set(it[s + 2], it[s + 3], it[s + 4]); single.rotation.y = it[s + 5]; single.scale.setScalar(it[s + 6]);
-      e.mats = []; single.traverse((m) => { if (m.isMesh) { const cm = m.material.clone(); cm.transparent = true; cm.depthWrite = false; cm.alphaToCoverage = false;   /* (coverage + blending would dither) */ m.material = cm; m.castShadow = false; m.userData.fadeKey = key; e.mats.push(cm); } });
+      e.mats = []; single.traverse((m) => { if (m.isMesh) { const cm = fadedCopy(m.material, false); m.material = cm; m.castShadow = false; m.userData.fadeKey = key; e.mats.push(cm); } });
       this.g.scene.add(single); e.single = single;
       veg.hideTree(c, i, true);
     }
@@ -73,9 +85,9 @@ export class Occlusion {
   }
   restore(e) {
     if (e.kind === 'piece') { for (const o of e.orig) { o.m.transparent = o.transparent; o.m.opacity = o.opacity; o.m.depthWrite = o.depthWrite; } }
-    else if (e.kind === 'site') { e.mesh.material = e.origMat; for (const m of e.mat) m.dispose(); }
+    else if (e.kind === 'site') { e.mesh.material = e.origMat; for (const m of e.mat) spare(m); }
     else if (e.kind === 'tree') {
-      this.g.scene.remove(e.single); for (const m of e.mats) m.dispose();
+      this.g.scene.remove(e.single); for (const m of e.mats) spare(m);
       // put the instance back, unless the tree was felled meanwhile or its cell was rebuilt
       const { cx, cz } = e.cell, live = this.g.veg.near.get(cx + ',' + cz) === e.cell;
       if (live) this.g.veg.hideTree(e.cell, e.i, false);

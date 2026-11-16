@@ -14,7 +14,7 @@ export class HUD {
   constructor() {
     const hud = el('div'); hud.id = 'hud';
     hud.innerHTML = `
-      <div id="hurt"></div>
+      <div id="hurt"></div><div id="hurtDir" style="position:absolute;inset:0;pointer-events:none;opacity:0"></div>
       <div id="hotbar"></div>
       <div id="status"><div id="clock"></div><div id="conds"></div></div>
       <div id="toasts"></div><div id="pickups"></div>
@@ -71,6 +71,9 @@ export class HUD {
     const e = el('div', 'dmgn', Math.max(1, Math.round(n))); e.style.left = (v.x * 0.5 + 0.5) * innerWidth + 'px'; e.style.top = (-v.y * 0.5 + 0.5) * innerHeight + 'px';
     document.getElementById('hud').appendChild(e); setTimeout(() => e.remove(), 900);
   }
+  // which way a blow came from: a red glow at that edge of the screen (x: to the right of the view, y: ahead of it), held a
+  // moment and fading
+  hurtFrom(x, y, k = 0.5) { const e = $('hurtDir'), n = Math.hypot(x, y) || 1; e.style.transition = 'none'; e.style.background = `radial-gradient(ellipse 60% 60% at ${50 + (x / n) * 60}% ${50 - (y / n) * 60}%, rgba(215,24,16,${Math.min(0.85, 0.35 + k * 0.5)}) 0%, rgba(215,24,16,0) 70%)`; e.style.opacity = 1; void e.offsetWidth; e.style.transition = 'opacity .8s ease-in .2s'; e.style.opacity = 0; }
   hurt(k) { $('hurt').style.boxShadow = `inset 0 0 160px rgba(200,20,20,${Math.min(0.75, k)})`; clearTimeout(this.hurtT); this.hurtT = setTimeout(() => ($('hurt').style.boxShadow = ''), 250); }
   death(on) { $('death').classList.toggle('show', on); }
   // Fade out, let the night pass, fade back in

@@ -4,6 +4,53 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-20', name: 'Patch 20', title: 'Each Land Its Own', date: '16 November 2026',
+    intro: 'Our reviewer\'s list: taller trees and thinner woods, a darker, foggier Yleos, moonlit nights, a meadow of new grass and tomato bushes, fights you can read, free repairs, a seat for screenshots, and a smoother game.',
+    sections: [
+      { t: 'Smoother Play', icon: 'goal', items: [
+        'Far fewer hitches while you walk and run, on every graphics setting and above all on Ultra: the game no longer stalls for a moment when new trees come into view, when you pass behind a trunk, or every few seconds as the sun moves, and it sends the graphics card much less work each frame.',
+        'The automatic resolution no longer drops a step after a single slow frame, which itself caused a stutter.',
+        'A <b>Performance overlay</b> (F3, or in the settings) shows your frame rate, a graph of recent frames, the hitches and what caused the last one. If the game stutters for you, a screenshot of it helps us find out why.',
+      ] },
+      { t: 'Fighting', icon: 'bow', items: [
+        '<b>Dryads\' thorns:</b> a dryad now raises her arm to throw, and you see a green glow gather in her hand first. The thorn is a glowing bramble bolt trailing light and leaves, slow enough to see coming: step aside, roll under it or block it. You hear it leave her hand and crack where it strikes, in a burst of leaves.',
+        'Hit a dryad while she winds up and her throw is broken off.',
+        'Every enemy\'s blow lands when its swing does: hogs, dryads, dryadlings, giants, skeletons, the Minotaur and the Chimera all play their whole attack, wind-up included, and you are hurt only at the moment of the strike.',
+        'An enemy commits to its swing a moment before it lands: step out of the way, back off or roll, and it misses. A blow must catch you in front of the attacker and within its reach.',
+        'The Minotaur\'s war cry, his labrys slam and the rock he throws, and the Chimera\'s claws, sting, fire and pounce now all come with the moment you see in the animation. The Minotaur throws his rock from his hand, and the Chimera breathes its fire with its head lowered at you.',
+        'When you are hurt, a red glow at the edge of the screen shows which way the blow came from.',
+      ] },
+      { t: 'Night and Weather', icon: 'moon', items: [
+        '<b>Moonlit nights:</b> night now falls because the sun\'s light goes, not because the screen is tinted blue. The moon lights the land in a dim, cool silver, casting soft shadows near you; the sky turns a deep blue-black full of stars, and a campfire\'s warm glow stands out against it. Under thick cloud the night is very dark.',
+        '<b>Forest fog:</b> one spell in five in the Yleos forest brings a deep, pale fog that lies low among the trunks. You see only some thirty metres along the ground, while the dark crowns loom out of it overhead.',
+        'The Yleos forest is darker and heavier than before, its shade a deep green-teal, and a thin mist always lies on its floor, thicker in the early morning.',
+      ] },
+      { t: 'The Land', icon: 'stone', items: [
+        'Each land now looks and feels different underfoot. The meadows of Pedias are flatter and gentler, sunny green and gold, with dry patches and worn earthen paths winding across them where the grass grows thin.',
+        'The Yleos forest floor is dark loam strewn with needles and twigs, with cushions of moss and roots snaking across it, over rougher, hummocky ground.',
+        'At the edge of the marsh the ground turns to dark, wet mud with water shining in its hollows.',
+        '<b>Life in the air:</b> butterflies flutter over the meadows by day; in the forest, tiny motes and spores glitter in the shafts of sun; at the marsh\'s edge low mist drifts over the ground and pale wisps of swamp gas rise and fade, glowing faintly at night.',
+      ] },
+      { t: 'Trees and Plants', icon: 'tomato', items: [
+        'Every tree stands taller, by almost a third, and the woods of the meadows are a fifth thinner, with more light and room between the trunks.',
+        'Pedias grows broad, round-crowned trees only: olives, oaks, holm oaks, plane trees, pomegranates and figs. The cypresses by the temple\'s sacred way still stand.',
+        'The Yleos hills are a dark forest of firs and cypresses, with fig trees among them. The giants of the old forest still tower over the belt between the meadows and the hills.',
+        'The mushrooms are gone from the forest floor.',
+        '<b>Tomato bushes</b> grow here and there in the meadows and along the edges of the woods. Press E to pick 8 to 12 tomatoes, and now and then a tomato seed; the bush grows its fruit back in a day. An axe cuts one down for 6 to 8 wood.',
+        '<b>Tomatoes</b> are a light food: a little health and plenty of stamina for a quarter of an hour.',
+        'The grass of Pedias grows in full, leafy clumps, with tufts of tall grass in the tall patches, all swaying in the wind as before. The grass you walk through parts in a ring half as wide round your feet.',
+      ] },
+      { t: 'Sitting and Pictures', icon: 'you', items: [
+        'Press <b>X</b> to sit down cross-legged on the ground (it used to be Z), facing the fire if one burns nearby. X again or Space stands you up. With the hammer in hand, X still takes down a piece.',
+        'While you sit, the camera is free for pictures: the mouse takes it all the way round, down low over the grass or high above, the wheel brings it close or far, and WASD with Q and E move what it looks at, up to 30 metres from you. <b>F10</b> hides the HUD. Stand up and the camera comes back behind you.',
+      ] },
+      { t: 'Building and Crafting', icon: 'hammer', items: [
+        '<b>Repairing</b> tools, weapons and armour at the workbench is free now: no materials, just the bench.',
+        'The wooden door fills its frame: it is wider and taller, its top follows the arch and its foot the sill, with no more gap down the sides.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-19', name: 'Patch 19', title: 'Storm and Shade', date: '13 November 2026',
     intro: 'Zeus\'s storm towers over the marsh, the temple stands on its own hill, Olympos has become a true mountain and the Giants live in caves. Real shadows fall across the land, and the fog and the storms finally look the part.',
     sections: [

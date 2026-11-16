@@ -65,29 +65,20 @@ export class Crafting {
     this.draw();
   }
   open(tab) { if (tab) this.tab = tab; this.discover(true); this.draw(); }
-  // ---- Repair at the workbench. The data table gives no repair costs, so they come from each item's own recipe:
-  // half of every material, scaled by how worn the item is (at least one of something), and nothing is taken unless
-  // the whole repair can be paid for.
+  // ---- Repair at the workbench: free (the bench is all it needs), one item at a time, made as good as new
   nearBench() { return this.g.build?.nearStation?.('workbench', this.g.player.pos, 6); }
-  repairCost(slot) {
-    const def = ITEMS[slot.id], rec = RECIPES.find((r) => r.id === slot.id); if (!def?.dur || !rec || slot.dur >= def.dur) return null;
-    const worn = 1 - slot.dur / def.dur, cost = {};
-    for (const [m, n] of Object.entries(rec.mats)) { const k = Math.ceil(n * 0.5 * worn); if (k > 0) cost[m] = k; }
-    if (!Object.keys(cost).length) { const [m] = Object.keys(rec.mats); cost[m] = 1; }
-    return cost;
-  }
-  damaged() { return this.g.inv.slots.map((s, i) => [s, i]).filter(([s]) => s && this.repairCost(s)); }
+  needsRepair(slot) { const def = ITEMS[slot?.id]; return !!def?.dur && slot.dur < def.dur; }
+  damaged() { return this.g.inv.slots.map((s, i) => [s, i]).filter(([s]) => this.needsRepair(s)); }
   repair(i) {
-    const s = this.g.inv.slots[i], cost = s && this.repairCost(s); if (!cost) return;
+    const s = this.g.inv.slots[i]; if (!this.needsRepair(s)) return;
     if (!this.nearBench()) { this.g.hud.toast('Repairs need a workbench nearby'); return; }
-    if (!this.g.inv.has(cost)) { this.g.hud.toast('Not enough materials to repair it'); return; }
-    this.g.inv.takeMats(cost); s.dur = ITEMS[s.id].dur; this.g.inv.onChange?.(); this.g.sound?.('repair'); this.g.hud.toast(`${ITEMS[s.id].name} repaired`);
+    s.dur = ITEMS[s.id].dur; this.g.inv.onChange?.(); this.g.sound?.('repair'); this.g.hud.toast(`${ITEMS[s.id].name} repaired`);
   }
   drawRepair() {
-    const list = this.damaged(), have = (m) => this.g.inv.count(m);
-    $('craftDetail').innerHTML = `<div class="big">${icon('repair')}</div><h3>Repair Items</h3><p class="desc">Worn tools, weapons and armour are mended at the workbench, one at a time. The cost is part of what the item took to make.</p>
-      <div class="repairList">${list.length ? list.map(([s, i]) => { const d = ITEMS[s.id], cost = this.repairCost(s), ok = this.g.inv.has(cost);
-        return `<div class="rp"><i>${icon(d.icon)}</i><span><b>${d.name}</b><u><s style="width:${(s.dur / d.dur) * 100}%"></s></u></span><span class="rc">${Object.entries(cost).map(([m, n]) => `<em class="${have(m) < n ? 'no' : ''}">${icon(ITEMS[m].icon)}${n}</em>`).join('')}</span><button class="btn small" data-repair="${i}" ${ok ? '' : 'disabled'}>Repair</button></div>`; }).join('') : '<p class="desc"><i>Nothing in your pack needs repairing.</i></p>'}</div>`;
+    const list = this.damaged();
+    $('craftDetail').innerHTML = `<div class="big">${icon('repair')}</div><h3>Repair Items</h3><p class="desc">Worn tools, weapons and armour are mended at the workbench, one at a time, as good as new. It costs nothing.</p>
+      <div class="repairList">${list.length ? list.map(([s, i]) => { const d = ITEMS[s.id];
+        return `<div class="rp"><i>${icon(d.icon)}</i><span><b>${d.name}</b><u><s style="width:${(s.dur / d.dur) * 100}%"></s></u></span><button class="btn small" data-repair="${i}">Repair</button></div>`; }).join('') : '<p class="desc"><i>Nothing in your pack needs repairing.</i></p>'}</div>`;
   }
   draw() {
     if (!this.g.hud.open) return;

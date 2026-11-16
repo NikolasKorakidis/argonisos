@@ -11,7 +11,10 @@
 //   place is, with the crowns' own map for detail near you), lit by the sun through the same shadow map the trees cast
 //   into; it scatters mostly forward (Henyey-Greenstein) and is held below a ceiling, so it glows rather than blinds.
 //   Marched at half resolution and blended over the frames before, so it doesn't shimmer as you walk.
-//   Flecks of sun on the forest floor, from that same shadow map. By night only a faint blue air under the moon.
+//   Flecks of sun on the forest floor, from that same shadow map. By night only a faint air under the moon.
+// The low fog (weather.js): a fog lying on the ground and thinning with height, its foot the ground under each point
+// (the woods texture), so it fills the hollows and the crowns stand out of it: the forest's deep fog, and its thin
+// standing mist on any day. Nothing here darkens or tints the night: the night is the moon's light (sky.js).
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from '../../vendor/three/jsm/postprocessing/Pass.js';
 import { MIST_R0, MIST_R1 } from '../world/reach.js';
@@ -61,8 +64,10 @@ export const ATMO = {
   // there is a blend so far; frame: turns the march's starting spots a little each frame (held still for screenshots)
   tHaze: { value: null }, hTexel: { value: new THREE.Vector2(1 / 640, 1 / 360) }, camNF: { value: new THREE.Vector2(0.15, 6000) },
   prevVP: { value: new THREE.Matrix4() }, tHazeNew: { value: null }, tHazeOld: { value: null }, histOK: { value: 0 }, frame: { value: 0 },
-  // a little moonlit blue lifted into the darkest parts of the picture by night, so the dark stays readable
-  nightLift: { value: new THREE.Color(0, 0, 0) },
+  // the low fog (weather.js sets it): how much, how thick at the ground (per metre), the height over which it thins to
+  // a third, its colour, and how much of the sky (and of what lies far off) it veils: a deep fog's, so the crowns stand
+  // dark against it
+  lowAmt: { value: 0 }, lowDen: { value: 0.16 }, lowH: { value: 5.5 }, lowCol: { value: new THREE.Color(0.7, 0.73, 0.74) }, lowSky: { value: 0 },
   // the shade in corners, under rocks and at your feet (ambient occlusion, docs/plans/shadows-plan.md): on or off (the
   // graphics setting), how strong, its navy tint (Valheim's AO is a deep navy, not black), how far round each point it
   // looks (metres) and the camera's scale for that; the half-sized result (r: how open, g: the depth it was found at) and
@@ -220,7 +225,7 @@ export class AtmospherePass extends Pass {
     const quad = (fragmentShader) => new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: ATMO, depthTest: false, depthWrite: false, vertexShader: VERT, fragmentShader }));
     this.material = new THREE.ShaderMaterial({
       uniforms: ATMO, depthTest: false, depthWrite: false, vertexShader: VERT, defines: ULTRA ? { SEA_SSR: '' } : {},
-      fragmentShader: `${LIGHT_PARS} uniform sampler2D tDiffuse, tHaze, tShafts; uniform vec3 sunDir, sunCol, mistCol, hazeCol, mzCol, nightLift; uniform vec2 hTexel, camNF;
+      fragmentShader: `${LIGHT_PARS} uniform sampler2D tDiffuse, tHaze, tShafts; uniform vec3 sunDir, sunCol, mistCol, hazeCol, mzCol, lowCol; uniform vec2 hTexel, camNF; uniform float lowAmt, lowDen, lowH, lowSky;
         uniform float fleckK, shaftK, ao, aoK, woodsDark; uniform sampler2D tAO; uniform vec2 aoTexel; uniform vec3 aoTint;
         uniform vec2 sunUV, cloudOff, texel, mzC; uniform vec3 fogHide; uniform float blurNear, blurFar, blurAmt, focus, aspect, mzR0, mzR1, mzAmt, mzTop, mzSoft, mistAmt, mistBase, mistH, mistDen, hazeAmt, vigOffset, vigDark, gSat, cloudCover, cloudK;
         uniform vec3 gTint, gShadow; uniform sampler2D tStorm; uniform float stormOn, stormScale; uniform vec2 stormRes;
@@ -300,6 +305,13 @@ export class AtmospherePass extends Pass {
             // in a thick fog what the fog has hidden stays hidden: none of the above may show the land through it
             if (fogHide.z > 0.0) col.rgb = mix(col.rgb, drawn, fogHide.z * smoothstep(fogHide.x, fogHide.y, linD(d)));
           }
+          // the low fog: as the mist above, but its foot the ground under the point seen (so a trunk's foot is lost in it
+          // while its crown, twenty metres up, stands out darker), lit a little towards the sun. The sky too, as seen up
+          // through the whole of it (the line of sight to the far plane): pale low down, clearer overhead
+          if (lowAmt > 0.001) { float gy = woodsAt(P.xz).g, l0 = max(camPos.y - gy, 0.0), l1 = max(P.y - gy, 0.0), dl = l1 - l0;
+            float la = abs(dl) < 0.05 ? exp(-l0 / lowH) : lowH * (exp(-l0 / lowH) - exp(-l1 / lowH)) / dl;
+            float lk = max((1.0 - exp(-lowDen * la * dist)) * lowAmt, lowSky * 0.9 * (d < 0.99999 ? smoothstep(120.0, 400.0, dist) : 1.0));
+            col.rgb = mix(col.rgb, lowCol + sunCol * pow(max(dot(normalize(P - camPos), sunDir), 0.0), 8.0) * 0.12, clamp(lk, 0.0, 0.97)); }
           // the woods' haze (marched at half resolution: see HAZE_FRAG)
           if (woodK > 0.0001) { vec4 h = hazeAt(vUv, d); col.rgb = col.rgb * h.a + h.rgb; }
           // the player's mist: how far out from the hero (across the ground) and how high; for the sky, and for anything past
@@ -318,8 +330,6 @@ export class AtmospherePass extends Pass {
           col.rgb *= gTint; float l = dot(col.rgb, vec3(0.2126, 0.7152, 0.0722)); col.rgb = max(mix(vec3(l), col.rgb, gSat), 0.0);
           col.rgb += gShadow * (1.0 - smoothstep(0.0, 0.35, l)) * 0.06;
           vec2 vu = (vUv - 0.5) * vigOffset; col.rgb = mix(col.rgb, vec3(1.0 - vigDark), dot(vu, vu));   // the vignette
-          // by night a little moonlit blue in the darkest parts (after the vignette, so the corners don't fall to black)
-          col.rgb += nightLift * (1.0 - smoothstep(0.0, 0.08, dot(col.rgb, vec3(0.2126, 0.7152, 0.0722))));
           gl_FragColor = col;
         }`,
     });
@@ -372,9 +382,11 @@ export class AtmospherePass extends Pass {
 
 // Per frame: where the camera and the sun are, and how much mist, haze and light there is
 const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _vp = new THREE.Matrix4();
-// The look for the place and the hour: warm and golden in the meadows, cool and green in the forest and under the giants,
-// amber at sunrise and sunset, blue and muted at night
-const G = { pedias: [1.04, 1.0, 0.93, 1.08, [0.02, 0.0, -0.02]], yleos: [0.95, 1.01, 0.98, 0.96, [-0.02, 0.01, 0.03]], dusk: [1.1, 0.97, 0.84, 1.12, [0.03, -0.01, -0.03]], night: [0.8, 0.92, 1.18, 0.76, [-0.02, 0.0, 0.06]], giant: [0.92, 1.03, 0.94, 0.94, [-0.03, 0.02, 0.0]] };
+// The look for the place and the hour: warm and golden in the meadows, cool and green in the forest and under the giants
+// (its shadows a green teal, as Valheim's Black Forest), amber at sunrise and sunset; by night almost untouched, a
+// little less colour as the eye sees by moonlight: the night's darkness and its silver-blue are the moon's light
+// (sky.js), not a tint laid over the picture (the reviewer, 16 Nov)
+const G = { pedias: [1.04, 1.0, 0.93, 1.08, [0.02, 0.0, -0.02]], yleos: [0.94, 1.01, 0.98, 0.93, [-0.03, 0.02, 0.025]], dusk: [1.1, 0.97, 0.84, 1.12, [0.03, -0.01, -0.03]], night: [0.98, 1.0, 1.02, 0.86, [0.0, 0.0, 0.0]], giant: [0.92, 1.03, 0.94, 0.94, [-0.03, 0.02, 0.0]] };
 const _t = new THREE.Color(), _sh = new THREE.Vector3();
 function grade(o) {
   const w = { pedias: o.wp * (1 - o.dusk) * (1 - o.night), yleos: o.wy * (1 - o.dusk) * (1 - o.night), dusk: o.dusk * (1 - o.night), night: o.night, giant: o.giant * 1.2 }; let tot = 0;
@@ -391,7 +403,7 @@ export function updateAtmosphere(camera, o) {
   grade(o);
   ATMO.cloudOff.value.x += o.dt * (3 + o.overcast * 9); ATMO.cloudOff.value.y += o.dt * 1.2;
   ATMO.cloudCover.value = 0.5 - o.overcast * 0.25; ATMO.cloudK.value = 0.28 * o.day * clamp01((o.sunDir.y - 0.05) / 0.2) * (1 - o.overcast * 0.7);
-  ATMO.camNF.value.set(camera.near, camera.far); ATMO.nightLift.value.setRGB(0.006, 0.011, 0.026).multiplyScalar(o.night);
+  ATMO.camNF.value.set(camera.near, camera.far);
   // (the camera as it will be drawn this frame: its world matrix is otherwise only brought up to date as the scene renders)
   camera.updateMatrixWorld();
   ATMO.prevVP.value.copy(_vp); _vp.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); ATMO.viewProj.value.copy(_vp);
@@ -406,13 +418,13 @@ export function updateAtmosphere(camera, o) {
   if (o.player) ATMO.mzC.value.set(o.player.x, o.player.z);
   if (o.mistTop !== undefined) ATMO.mzTop.value = o.mistTop;
   ATMO.mzCol.value.copy(o.fogCol).lerp(o.sunCol, 0.08 * o.day * (1 - ATMO.fogHide.value.z));   // (in a thick fog the fog's own colour, as the sky is)
-  ATMO.mistAmt.value = o.mist; ATMO.mistBase.value = o.ground - 6; ATMO.mistDen.value = o.mistDen;
+  ATMO.mistAmt.value = o.mist * (1 - ATMO.lowSky.value * 0.8); ATMO.mistBase.value = o.ground - 6; ATMO.mistDen.value = o.mistDen;   // (in a deep fog the low fog is the air: the valley mist would pale the crowns too)
   ATMO.hazeCol.value.copy(o.sunCol).multiplyScalar(0.35 * o.sunK); ATMO.hazeAmt.value = (0.25 + o.dusk * 0.9) * o.day;
   // the woods' air: thin by day, a little thicker with the sun low, thicker in rain or fog; by night thinner still and
   // only faintly lit by the moon. Lit only from the sky round it, it takes the fog's colour, a little warmed by the sun by
   // day, a dim blue by night.
   const low = 1 - sstep(0.15, 0.6, o.sunDir.y), wet = o.wetAir || 0;
-  ATMO.woodK.value = (AIR.woodDay * (1 + 0.4 * low) * o.day + AIR.woodNight * o.night) * (1 + wet * 0.8) * (1 - 0.85 * ATMO.fogHide.value.z);   // (in a thick fog the fog itself is the air: its haze would show the hidden trunks)
+  ATMO.woodK.value = (AIR.woodDay * (1 + 0.4 * low) * o.day + AIR.woodNight * o.night) * (1 + wet * 0.8) * (1 - 0.85 * ATMO.fogHide.value.z) * (1 - 0.7 * ATMO.lowSky.value);   // (in a thick fog the fog itself is the air: its haze would show the hidden trunks)
   ATMO.woodLit.value = AIR.lit * o.day + AIR.litNight * o.night;
   ATMO.woodAmb.value.copy(o.fogCol).lerp(o.sunCol, 0.3 * o.day).multiplyScalar(AIR.amb * o.day + AIR.ambNight * o.night);
   ATMO.fleckK.value = o.day * (1 - o.overcast * 0.85);

@@ -36,7 +36,7 @@ export default {
       const e = end(prev), at = new V(e.x + s.dx * 1.5, prev.pos.y, e.z + s.dz * 1.5), under = new V(at.x, at.y - 3, at.z);
       const ok = !B.invalid(B.piece('wall'), under, s.rot, true, {}); if (!ok) return 'the wall under it was refused: ' + B.invalid(B.piece('wall'), under, s.rot, true, {});
       B.place('wall', under, s.rot); B.recompute(); const top = B.invalid(B.piece('wall'), at, s.rot, true, {});
-      done(); return (placed >= 2 && !top) || JSON.stringify({ placed, top });`);
+      done(); return (placed >= 1 && !top) || JSON.stringify({ placed, top });`);   // (on a steady 30% drop only one more wall fits under the 2.5 m fill: FILL_MAX)
     await t.step('aiming a floor clears the grass and shapes the ground under the green tile (for the eye only), and puts it back when you stop', `${ROW}
       const s = slope(0.1, 0.3); if (!s) return 'no slope found'; clear(s); const GM = await import('/src/world/grass.js'); P.spawn(s.x - 3, s.z - 3);
       const tgt = new V(s.x, G.heightAt(s.x, s.z), s.z); B.select('floor'); B.rot = 0; AG.camera.position.set(s.x - 4, tgt.y + 3, s.z - 4); AG.camera.lookAt(tgt); AG.camera.updateMatrixWorld(); AG.scene.updateMatrixWorld(true);

@@ -3434,6 +3434,52 @@
           "src": "SM_Prop_Brazier_04_Insert_01"
         }
       ]
+    },
+    "fl_tomato0": {
+      "src": "Synty/PolygonNature/Models/SM_Plant_06.fbx",
+      "plant": "polygonnature/sm-plant-06",
+      "static": true,
+      "join": true,
+      "height": 1.0,
+      "fruit": {
+        "clusters": 9,
+        "per": [
+          2,
+          4
+        ],
+        "r": [
+          0.055,
+          0.075
+        ],
+        "band": [
+          0.25,
+          0.75
+        ],
+        "colours": [
+          [
+            0.62,
+            0.07,
+            0.04
+          ],
+          [
+            0.72,
+            0.2,
+            0.04
+          ],
+          [
+            0.45,
+            0.5,
+            0.12
+          ]
+        ]
+      }
+    },
+    "fl_tomato1": {
+      "src": "Synty/PolygonNature/Models/SM_Plant_06.fbx",
+      "plant": "polygonnature/sm-plant-06",
+      "static": true,
+      "join": true,
+      "height": 1.0
     }
   },
   "textures": {
@@ -3583,6 +3629,10 @@
       "fl_herm0",
       "fl_herm1",
       "fl_herm2"
+    ],
+    "tomato": [
+      "fl_tomato0",
+      "fl_tomato1"
     ]
   },
   "sounds": {

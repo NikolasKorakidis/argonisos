@@ -82,6 +82,7 @@ export function updateFx(dt, camera) {
     _e.set(b.rot, b.rot * 0.7, 0); _q.setFromEuler(_e); _s.setScalar(b.s * k);
     const k2 = b.glow ? 2 : b.grav < 0 ? 1 : 0, mesh = MESHES[k2]; mesh.setMatrixAt(n[k2], _m.compose(b.p, _q, _s)); _c.set(b.c); if (b.glow) _c.multiplyScalar(4 * k); mesh.setColorAt(n[k2], _c); n[k2]++;
   }
-  for (const [k2, mesh] of MESHES.entries()) { mesh.count = n[k2]; mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor.needsUpdate = true; }
+  // (only the bits alive are sent to the card, and nothing when there are none: the buffers hold room for 600 each)
+  for (const [k2, mesh] of MESHES.entries()) { mesh.count = n[k2]; if (!n[k2]) continue; for (const [a, w] of [[mesh.instanceMatrix, 16], [mesh.instanceColor, 3]]) { a.clearUpdateRanges(); a.addUpdateRange(0, n[k2] * w); a.needsUpdate = true; } }
   applyShake(dt, camera);
 }

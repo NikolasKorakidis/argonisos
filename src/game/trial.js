@@ -178,7 +178,10 @@ export class Trial {
     this.pw.classList.remove('hidden'); this.pw.innerHTML = `${icon(P.icon)}<span><b>${P.name}</b>${st.powerCd > 0 ? `${Math.ceil(st.powerCd)}s` : '<span class="kbd">F</span> ready'}</span>`;
   }
   // ---- boss behaviour on top of the common chase-and-strike. Each boss has moves on their own timers; every move opens
-  // with a wind-up you can read (and get out of the way of), and while it runs it steers the boss (c.ctl). Below half
+  // with a wind-up you can read (and get out of the way of), and while it runs it steers the boss (c.ctl). A move with a
+  // clip of its own (models.js BLOWS: the roar, the slam, the throw, claws, sting, fire) takes its timing from it: the
+  // blow lands, the rock leaves the hand, the fire comes when the clip's moment does (m.hit), and the move lasts until
+  // the clip has settled (m.dur). Below half
   // health a boss is enraged: a roar, help from the dead (or the forest) at once, quicker moves and harder blows.
   //   Minotaur: follow-up swings, a bull charge (dazed for a moment if he runs into a wall), a labrys slam that sends a
   //             shockwave round him, a war cry that stuns, and rubble thrown at anyone keeping their distance.
@@ -191,7 +194,7 @@ export class Trial {
     // leash: a boss doesn't wander off its arena; if you run, it goes back and heals
     if (c.arena && c.pos.distanceTo(c.arena) > 45) { c.move = null; c.state = 'idle'; c.yaw = Math.atan2(c.arena.x - c.pos.x, c.arena.z - c.pos.z); c.hp = Math.min(c.max, c.hp + c.max * 0.05 * dt); return null; }
     if (!c.enraged && c.hp < c.max * 0.5) {
-      c.enraged = true; c.dmgK *= 1.15; this.helperT = Math.min(this.helperT, 1.5); c.move = { k: 'roar', t: 1.3, enrage: true };
+      c.enraged = true; c.dmgK *= 1.15; this.helperT = Math.min(this.helperT, 1.5); c.move = { k: 'roar', ph: 0, enrage: true, ...this.timed(c, 'roar', 1.3) };
       g.hud.region(`${T.name} is enraged`, c.type === 'minotaur' ? 'The dead of the Labyrinth answer his call' : 'The forest answers its call');
     }
     // follow-up swings: after a blow, often another straight away
@@ -199,7 +202,7 @@ export class Trial {
     if (c.move) return this.runMove(c, c.move, dt, d, toP);
     if (c.state !== 'chase' || c.hitT > 0) return null;
     const cd = c.cd, clear = this.clearLine(c, d);
-    const start = (k, t, extra) => { c.move = { k, t, ph: 0, ...extra }; return this.runMove(c, c.move, 0, d, toP); };
+    const start = (k, t, extra) => { c.move = { k, ph: 0, ...extra, ...this.timed(c, k, t) }; return this.runMove(c, c.move, 0, d, toP); };
     if (c.type === 'minotaur') {
       if (cd.roar <= 0 && d < 12) { cd.roar = rr(14, 18); return start('roar', 1.3); }
       if (cd.slam <= 0 && d < 5.5) { cd.slam = rr(7, 10); return start('slam', 0.95); }
@@ -215,6 +218,8 @@ export class Trial {
     }
     return null;
   }
+  // a move's timing: from its clip, if it has one (t: the wind-up, hit: when it lands, dur: when it's over), or t for all
+  timed(c, k, t) { const q = c.body.cue?.(k); return q ? { t: q.hit, hit: q.hit, dur: q.dur } : { t, hit: t, dur: t }; }
   // nothing solid between the boss and you (a wall, a column, a tree)
   clearLine(c, d) { const P = this.g.player.pos, dx = (P.x - c.pos.x) / Math.max(d, 0.01), dz = (P.z - c.pos.z) / Math.max(d, 0.01); return !this.g.colliders.pick(c.pos.x + dx * c.T.r, c.pos.z + dz * c.T.r, dx, dz, Math.max(0.1, d - c.T.r - 0.8)); }
   // one step of a move: wind-up (ph 0), then the move itself (ph 1), sometimes a recovery (ph 2)
@@ -223,20 +228,20 @@ export class Trial {
     const done = () => { c.move = null; c.ctl = null; return null; };
     m.t -= dt; m.e = (m.e || 0) + dt;
     switch (m.k) {
-      case 'roar':   // war cry: stuns anyone close who isn't behind a raised guard
+      case 'roar':   // war cry: stuns anyone close who isn't behind a raised guard, as the head thrusts out
         c.ctl = { want: 0, face: toP };
-        if (!m.done) { m.done = true; g.sound?.('roar'); addShake(m.enrage ? 0.9 : 0.6); dust(at(1), 40, 0xb8a684, 0.9); g.flashSky?.(m.enrage ? 0.4 : 0);
+        if (!m.done && m.e >= m.hit) { m.done = true; g.sound?.('roar'); addShake(m.enrage ? 0.9 : 0.6); dust(at(1), 40, 0xb8a684, 0.9); g.flashSky?.(m.enrage ? 0.4 : 0);
           if (d < 9 && !P.blocking) { P.stats.add('stunned', m.enrage ? 1.6 : 1.2); g.hud.toast(`The roar <b>stuns</b> you!`); } else if (d < 9) g.hud.toast('You hold your guard against the roar'); }
-        return m.t <= 0 ? done() : 'roar';
-      case 'slam':   // the labrys raised high, then brought down: a shockwave all round
-        c.ctl = { want: 0, face: m.t > 0.35 ? toP : undefined };
-        if (m.t <= 0) { const p = at(0.2).addScaledVector(fwd(), 2); for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; dust(p.clone().add(new THREE.Vector3(Math.cos(a) * 3, 0, Math.sin(a) * 3)), 6, 0x9a8a70, 0.8); }
-          addShake(0.9); g.sound?.('slam'); if (P.pos.distanceTo(p) < 6 && P.onGround !== false) g.combat.hitPlayer(c, [22, 28, 'blunt']); c.atkCd = Math.max(c.atkCd, 0.8); return done(); }
-        return 'slam';
-      case 'throw':  // tears up a block of the ruin and hurls it
-        c.ctl = { want: 0, face: toP };
-        if (m.t <= 0) { g.combat.throwAt(c, [18, 26, 'blunt'], { rock: true }); g.sound?.('boulder'); return done(); }
-        return 'attack';
+        return m.e >= m.dur ? done() : 'roar';
+      case 'slam':   // the labrys raised high, then brought down: a shockwave all round (from where the blade meets the ground)
+        c.ctl = { want: 0, face: m.e < m.hit - 0.35 ? toP : undefined };
+        if (!m.hit0 && m.e >= m.hit) { m.hit0 = true; const p = at(0.2).addScaledVector(fwd(), 2); for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; dust(p.clone().add(new THREE.Vector3(Math.cos(a) * 3, 0, Math.sin(a) * 3)), 6, 0x9a8a70, 0.8); }
+          addShake(0.9); g.sound?.('slam'); if (P.pos.distanceTo(p) < 6 && P.onGround !== false) g.combat.hitPlayer(c, [22, 28, 'blunt']); c.atkCd = Math.max(c.atkCd, 0.8); }
+        return m.e >= m.dur ? done() : 'slam';
+      case 'throw':  // tears up a block of the ruin and hurls it, from his free hand as the swing comes forward
+        c.ctl = { want: 0, face: m.e < m.hit ? toP : undefined };
+        if (!m.hit0 && m.e >= m.hit) { m.hit0 = true; g.combat.throwAt(c, [18, 26, 'blunt'], { rock: true, from: c.body.point?.('LeftHand') }); g.sound?.('boulder'); }
+        return m.e >= m.dur ? done() : 'throw';
       case 'charge':
         if (m.ph === 0) {   // pawing the ground, head down
           c.ctl = { want: 0, face: toP }; m.dir = toP; if (Math.floor(m.e * 7) !== m.dust) { m.dust = Math.floor(m.e * 7); dust(at(0.1).addScaledVector(fwd(), -1), 6, 0x9a8a70, 0.5); }
@@ -245,24 +250,24 @@ export class Trial {
         }
         if (m.ph === 1) {   // the charge: fast, turning only a little
           m.dir += clamp(angDiff(toP, m.dir), -0.55 * dt, 0.55 * dt); c.ctl = { want: c.enraged ? 14.5 : 13, face: m.dir, snap: true };
-          if (!m.hit && d < T.r + 1.5) { m.hit = true; g.combat.hitPlayer(c, [26, 32, 'pierce']); }
+          if (!m.gored && d < T.r + 1.5) { m.gored = true; g.combat.hitPlayer(c, [26, 32, 'pierce']); }
           const ahead = g.colliders.pick(c.pos.x, c.pos.z, Math.sin(m.dir), Math.cos(m.dir), T.r + 1.1);
           if (m.e > 0.2 && (ahead || c.stuck > 0.15)) {   // straight into a wall: dazed
             m.ph = 2; m.t = 2.4; c.hitT = 2.4; addShake(0.8); g.sound?.('slam'); dust(at(1.5).addScaledVector(fwd(), 1.4), 30, 0x8a7a64, 1);
             if (!this.dazeTold) { this.dazeTold = true; g.hud.toast('The Minotaur is <b>dazed</b>: strike now!'); } return 'dazed';
           }
-          if (m.t <= 0 || (m.hit && m.e > 0.9)) return done(); return 'run';
+          if (m.t <= 0 || (m.gored && m.e > 0.9)) return done(); return 'run';
         }
         c.ctl = { want: 0 }; return m.t <= 0 ? done() : 'dazed';
-      case 'claw': case 'sting':   // the old strikes, now as moves
-        c.ctl = { want: 0, face: toP };
-        if (!m.hit && m.e > (m.k === 'sting' ? 0.45 : 0.35)) { m.hit = true;
-          if (m.k === 'sting' && d < 5.5) { g.combat.hitPlayer(c, [40, 60, 'pierce']); P.stats.add('poisoned', 6); } else if (m.k === 'claw' && d < T.reach + 1.5) g.combat.hitPlayer(c, [15, 25, 'slash']); }
-        return m.t <= 0 ? done() : m.k;
-      case 'breath':   // fire from the lion's mouth, swept slowly after you
-        if (m.ph === 0) { c.ctl = { want: 0, face: toP }; if (m.t <= 0) { m.ph = 1; m.t = 1.5; g.sound?.('breath'); } return 'roar'; }
+      case 'claw': case 'sting':   // the old strikes, now as moves: committed a moment before they land, the claws only in front
+        c.ctl = { want: 0, face: m.e < m.hit - 0.3 ? toP : undefined };
+        if (!m.hit0 && m.e >= m.hit) { m.hit0 = true;
+          if (m.k === 'sting' && d < 5.5) { g.combat.hitPlayer(c, [40, 60, 'pierce']); P.stats.add('poisoned', 6); } else if (m.k === 'claw' && d < T.reach + 1.5 && Math.abs(angDiff(toP, c.yaw)) < 1) g.combat.hitPlayer(c, [15, 25, 'slash']); }
+        return m.e >= m.dur ? done() : m.k;
+      case 'breath':   // fire from the lion's mouth, swept slowly after you, once its head is down (the clip held there)
+        if (m.ph === 0) { c.ctl = { want: 0, face: toP }; if (m.t <= 0) { m.ph = 1; m.t = 1.5; g.sound?.('breath'); } return 'breath'; }
         c.ctl = { want: 0, face: c.yaw + clamp(angDiff(toP, c.yaw), -0.9 * dt, 0.9 * dt) };
-        { const f = fwd(), mouth = at(T.h * 0.62).addScaledVector(f, T.r + 1.2);
+        { const f = fwd(), mouth = c.body.point?.('mouth')?.addScaledVector(f, 0.6) || at(T.h * 0.62).addScaledVector(f, T.r + 1.2);
           for (let i = 0; i < 2; i++) burst(mouth.clone().addScaledVector(f, Math.random() * 6), { color: Math.random() < 0.5 ? 0xff7a20 : 0xffc040, n: 4, speed: 3.5, size: 0.12, grav: -2, life: 0.45 });
           m.tick = (m.tick || 0) - dt;
           if (m.tick <= 0) { m.tick = 0.25; if (d < 12 && Math.abs(angDiff(toP, c.yaw)) < 0.45) { g.combat.hitPlayer(c, [7, 10, 'fire']); P.stats.add('burning', 3); } } }
@@ -271,7 +276,7 @@ export class Trial {
         if (m.ph === 0) { c.ctl = { want: 0, face: toP }; if (m.t <= 0) { m.ph = 1; m.t = 0.8; m.from = c.pos.clone(); m.to = P.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(toP), 0, Math.cos(toP)), -1.6); g.sound?.('roar'); } return 'crouch'; }
         if (m.ph === 1) { const k = 1 - Math.max(0, m.t) / 0.8; c.ctl = { want: 0, face: Math.atan2(m.to.x - m.from.x, m.to.z - m.from.z), snap: true, at: m.from.clone().lerp(m.to, k), air: Math.sin(k * Math.PI) * 3.2 };
           if (m.t <= 0) { m.ph = 2; m.t = 0.5; addShake(0.8); g.sound?.('slam'); dust(at(0.2), 40, 0x8a7a64, 1); if (P.pos.distanceTo(c.pos) < T.r + 2) g.combat.hitPlayer(c, [30, 38, 'slash']); } return 'leap'; }
-        c.ctl = { want: 0 }; return m.t <= 0 ? done() : 'claw';
+        c.ctl = { want: 0 }; return m.t <= 0 ? done() : 'leap';
     }
     return done();
   }

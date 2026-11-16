@@ -1,9 +1,9 @@
 // Gathering from the world. Trees take axe blows until they topple, crash down and leave a log; chop the log into wood.
 // Bushes, and the stumps, fallen logs and driftwood lying about, are cut up for wood where they stand. Rocks and boulders
 // give stone (and lightstone in the Yleos hills) to a pickaxe. Olive, pomegranate and oak trees can be picked for fruit
-// once a day. Every blow that lands is felt (Valheim's way, tester 14 Nov): the camera kicks by how hard it was
-// (render/fx.js punch), heavy ones hold the swing a moment (player.hitStop), and chips, splinters, stone, sparks or
-// leaves fly by what was struck; the wrong tool only clinks.
+// once a day, and the meadows' tomato bushes for tomatoes, which grow back in a day. Every blow that lands is felt
+// (Valheim's way, tester 14 Nov): the camera kicks by how hard it was (render/fx.js punch), heavy ones hold the swing a
+// moment (player.hitStop), and chips, splinters, stone, sparks or leaves fly by what was struck; the wrong tool only clinks.
 import * as THREE from 'three';
 import { SPECIES, STRIDE, CELL } from '../world/flora.js';
 import { heightAt, biomeWeights, hash2 } from '../world/gen.js';
@@ -38,14 +38,17 @@ const rockHP = (name, s) => (name === 'boulder' ? 70 : 30) * s;
 // Bushes and the woody things on the ground an axe cuts up for wood (tester, 14 Nov: "hit them a few times, then collect
 // some wood"). A shrub takes blows by its height (under BUSH_H[0] two and one wood, under BUSH_H[1] three and two, taller
 // four and three), the broom's whippy stems and the leafy bushes giving a little fiber too; the forest floor's stumps
-// and fallen logs and the shore's driftwood are wood through and through. The small plants (lavender, ferns, flowers,
-// tall grass, moss, reeds, mushrooms) are left alone. Each is found by the blow among its near cell's items (most have
-// no collider: you walk through bushes) and removed through the vegetation, so a save remembers it as it does a tree.
+// and fallen logs and the shore's driftwood are wood through and through, and a tomato bush's woody stems give a good
+// armful (6 to 8, the design's numbers; Patch 20). The small plants (lavender, ferns, flowers, tall grass, moss, reeds)
+// are left alone. Each is found by the blow among its near cell's items (most have no collider: you walk through bushes)
+// and removed through the vegetation, so a save remembers it as it does a tree.
 const WOODY = {
   bush: { leafy: true, extra: [['fiber', 0.35, 1, 1]] }, myrtle: { leafy: true }, broom: { leafy: true, extra: [['fiber', 0.6, 1, 2]] }, redbush: { leafy: true, extra: [['fiber', 0.25, 1, 1]] },
-  stump: { hits: 4, wood: 2 }, log: { hits: 5, wood: 3 }, driftwood: { hits: 3, wood: 2 },
+  stump: { hits: 4, wood: 2 }, log: { hits: 5, wood: 3 }, driftwood: { hits: 3, wood: 2 }, tomato: { leafy: true, hits: 3, wood: [6, 8] },
 };
-const WOODY_SP = SPECIES.map((s) => WOODY[s.name] || null), BUSH_H = [0.9, 1.6];
+// A tomato bush picked bare grows its fruit back in a game day; picking gives 8 to 12 tomatoes and now and then a seed
+const TOMATO = { regrow: 1, n: [8, 12], seed: 0.25 };
+const WOODY_SP = SPECIES.map((s) => WOODY[s.name] || null), BUSH_H = [0.9, 1.6], SP_TOMATO = SPECIES.findIndex((s) => s.name === 'tomato');
 // how far along a blow (from x, z the way dx, dz) a circle of radius r centred ox, oz from it is met, or null if it is missed
 const along = (ox, oz, r, dx, dz) => { const t = ox * dx + oz * dz; if (t < -r) return null; const px = ox - dx * t, pz = oz - dz * t, d2 = px * px + pz * pz, rr = (r + 0.35) ** 2; return d2 > rr ? null : Math.max(0, t - Math.sqrt(rr - d2)); };
 // The log a felled tree leaves: one of the packs' fallen trunks (tools/assets, pLog…), turned to lie along x and centred,
@@ -65,6 +68,7 @@ LOGS.forEach((f, i) => loadPack(f).then((gl) => {
 export class Harvest {
   constructor(g) {
     this.g = g; this.hp = new Map(); this.picked = new Map(); this.falling = []; this.logs = []; this.seq = 0; this.stumps = [];
+    this.bare = new Map(); this.bareT = 0;   // (the tomato bushes picked: "cx,cz,i" → when, in days)
     this.stumpMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.85, 1, 0.5, 9).translate(0, 0.15, 0), trunkMat, 512); this.stumpMesh.count = 0;
     this.stumpMesh.castShadow = this.stumpMesh.receiveShadow = true; this.stumpMesh.frustumCulled = false; g.scene.add(this.stumpMesh);
   }
@@ -121,6 +125,7 @@ export class Harvest {
     this.stumpMesh.count = near.length; this.stumpMesh.instanceMatrix.needsUpdate = true;
   }
   update(dt) {
+    this.growBack(dt);
     for (const l of this.logs) if (l.kick !== undefined) { l.kick += dt; l.mesh.position.y = l.y0 + 0.05 * Math.sin(l.kick * 45) * Math.exp(-l.kick * 14); if (l.kick > 0.4) { l.mesh.position.y = l.y0; delete l.kick; } }
     for (let i = this.falling.length - 1; i >= 0; i--) {
       const f = this.falling[i]; f.t += dt;
@@ -239,8 +244,9 @@ export class Harvest {
     const mid = new THREE.Vector3(b.x, b.y + clamp(h * 0.4, 0.2, 0.8), b.z);
     if (w.leafy) { impact(mid, 'leaves', 1); impact(mid.setY(mid.y + h * 0.3), 'leaves', 0.8); } else { impact(mid, 'wood', 0.8); dust(mid, 6, 0x6e5e46, 0.3); }
     punch(w.leafy ? 0.16 : 0.26, dir);
-    const k = player.stats.skillK('gathering');
-    this.g.give('wood', Math.max(1, Math.round((w.wood ?? hits - 1) * k)));
+    const k = player.stats.skillK('gathering'), wood = Array.isArray(w.wood) ? w.wood[0] + Math.floor(Math.random() * (w.wood[1] - w.wood[0] + 1)) : w.wood ?? hits - 1;
+    if (this.bare.delete(id)) veg.setBare(b.cx, b.cz, b.i, false);   // (a tomato bush cut down while bare: nothing left to grow back)
+    this.g.give('wood', Math.max(1, Math.round(wood * k)));
     for (const [it, p, a, c] of w.extra || []) if (Math.random() < p) this.g.give(it, a + Math.floor(Math.random() * (c - a + 1)));
     player.stats.train('gathering', 6);
     return true;
@@ -263,5 +269,31 @@ export class Harvest {
     this.g.give(item, a + Math.floor(Math.random() * (b - a + 1))); this.g.sound?.('pick');
     burst(new THREE.Vector3(t.c.x, t.c.y + 2.2, t.c.z), { color: 0x5d8a34, n: 8, speed: 1.2, size: 0.07, grav: 6 });
   }
-  toJSON() { return { removed: [...this.g.veg.removed], hp: [...this.hp], picked: [...this.picked], stumps: this.stumps }; }
+  // E on a tomato bush within reach in front of you: { cx, cz, i, id, x, y, z, ready }, or null
+  tomatoBush() {
+    const P = this.g.player, veg = this.g.veg, sp = SP_TOMATO, fx = Math.sin(P.yaw), fz = Math.cos(P.yaw); let best = null;
+    for (let cz = Math.floor((P.pos.z - 3) / CELL); cz <= Math.floor((P.pos.z + 3) / CELL); cz++) for (let cx = Math.floor((P.pos.x - 3) / CELL); cx <= Math.floor((P.pos.x + 3) / CELL); cx++) {
+      const it = veg.near.get(cx + ',' + cz)?.items; if (!it) continue;
+      for (let o = 0, i = 0; o < it.length; o += STRIDE, i++) {
+        if (it[o] !== sp || !(it[o + 6] > 0)) continue;
+        const ox = it[o + 2] - P.pos.x, oz = it[o + 4] - P.pos.z, d = Math.hypot(ox, oz) - 0.45 * it[o + 6]; if (d > 1.5 || ox * fx + oz * fz < -0.3 || Math.abs(it[o + 3] - P.pos.y) > 2) continue;
+        const id = `${cx},${cz},${i}`; if (veg.removed.has(id) || (best && best.d < d)) continue;
+        best = { cx, cz, i, id, x: it[o + 2], y: it[o + 3], z: it[o + 4], d, ready: !this.bare.has(id) };
+      }
+    }
+    return best;
+  }
+  pickTomatoes(t) {
+    if (!t.ready) { this.g.hud.toast('No ripe tomatoes on this bush. They grow back in a day.'); return; }
+    const S = this.g.S, [a, b] = TOMATO.n; this.bare.set(t.id, S.day + S.time); this.g.veg.setBare(t.cx, t.cz, t.i, true);
+    this.g.give('tomato', a + Math.floor(Math.random() * (b - a + 1))); if (Math.random() < TOMATO.seed) this.g.give('tomatoSeed', 1);
+    this.g.sound?.('pick'); this.g.acts?.reach?.(); this.g.veg.shake(t.cx, t.cz, t.i, Math.sin(this.g.player.yaw), Math.cos(this.g.player.yaw), 1.5);
+    burst(new THREE.Vector3(t.x, t.y + 0.6, t.z), { color: 0x5d8a34, n: 6, speed: 1, size: 0.05, grav: 6 });
+  }
+  // (once a second: bushes whose fruit has grown back are ripe again, and the ones still bare, after a load too, drawn so)
+  growBack(dt) {
+    if ((this.bareT -= dt) > 0 || !this.bare.size) return; this.bareT = 1; const S = this.g.S, now = S.day + S.time;
+    for (const [id, t] of this.bare) { const [cx, cz, i] = id.split(',').map(Number); if (now - t >= TOMATO.regrow) this.bare.delete(id); this.g.veg.setBare(cx, cz, i, this.bare.has(id)); }
+  }
+  toJSON() { return { removed: [...this.g.veg.removed], hp: [...this.hp], picked: [...this.picked], bare: [...this.bare], stumps: this.stumps }; }
 }

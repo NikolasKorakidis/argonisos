@@ -132,8 +132,11 @@ sight.**
     (held for screenshots), and the result is blended over the frames before: reprojected through last frame's camera
     and held within this frame's neighbourhood. A depth-aware upsample spreads it back over the screen.
 - **Flecks of sun** on the forest floor come from the same shadow map, as much as the place is wooded.
-- **Night** (`sky.js`, `weather.js`): bluer moonlight, ambient and fog. The woods' haze is thin and only faintly
-  moonlit, there are no shafts, and a little blue is lifted into the darkest parts of the picture.
+- **Night** (`sky.js`, `weather.js`; reworked on 16 November after the reviewer asked for a night that is dark because
+  its light goes, not because of a filter): the moon is the key light, dim and a cool silver white (`MOON` in
+  `sky.js`, around `#B8C4D8`), casting the near moon shadows; the sky's light falls to a deep blue-black and the sky's
+  reflections dim with it. Nothing is laid over the picture: no blue lift in the darks and no blue tint in the grade,
+  only a little less colour. The woods' haze is thin and only faintly moonlit, and there are no shafts.
 - **Fireflies** (`fireflies.js`, fed by `ambient.js`).
 - **The test** (`tests/suites/light.mjs`): the hero walks out of a wood into the meadow and back, by day and by night, and
   straight towards the sun through the trees. Every 100 ms it compares the picture, and the light the haze and shafts add,

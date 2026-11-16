@@ -4,6 +4,10 @@
 //   passive: wander and graze, bolt when you come close or hurt them
 //   aggressive: attack when you come close (hogs) or as soon as they see you (dryads, giants, skeletons)
 //   Most of them won't come near a fire.
+//   Every blow is the attacker's clip played whole: it lands when the clip's strike does (models.js BLOWS), and only if
+//   you're still within reach and in front of it then; the last moments of a swing go where it was aimed, so stepping
+//   aside, backing off or rolling out of a wind-up you've read works. A dryad's thorns likewise leave her hand as her throw
+//   lets go (combat.js throwAt).
 //   Families: one hog spawn in four is a sow with one to three piglets, one deer in three a doe with her fawn. The young
 //   keep to their mother's side, and the family acts as one: alarmed, fleeing or charging together.
 import * as THREE from 'three';
@@ -19,6 +23,9 @@ import { rr } from '../util/math.js';
 
 const FT = 0.3048, ri = (a, b) => Math.floor(rr(a, b + 1));
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+// how long before a blow lands the attacker stops turning after you (a heavy one a little sooner): long enough to see it
+// coming and step out of the way
+const COMMIT = 0.3;
 // drops: [item, min, max, chance]
 export const TYPES = {
   rabbit: { name: 'Rabbit', hp: [3, 5], speed: [3 * FT, 15 * FT], passive: true, flee: 10 * FT, r: 0.3, h: 0.6, hops: true, mob: [1, 3], drops: [['rawMeat', 1, 1, 1], ['leather', 1, 1, 0.5], ['sharpBone', 1, 1, 0.2]] },
@@ -92,9 +99,9 @@ export class Creatures {
   }
   // A mother and her young are one family: when one of them takes fright or turns on you, so do the others
   kin(c) { const M = alive(c.mother) ? c.mother : c; return (M.brood || []).concat(M).filter((k) => k !== c && alive(k)); }
-  rouse(c, st = c.state === 'attack' ? 'chase' : c.state) {
+  rouse(c, st = c.state === 'attack' || c.state === 'throw' ? 'chase' : c.state) {
     for (const k of this.kin(c)) {
-      if (k.state === st || k.state === 'attack' || (st === 'alert' && !calm(k))) continue;
+      if (k.state === st || k.state === 'attack' || k.state === 'throw' || (st === 'alert' && !calm(k))) continue;
       k.aware = true; k.state = st;
       if (st === 'alert') { k.alertT = c.alertT + rr(0, 0.25); k.alertD = k.pos.distanceTo(this.g.player.pos); }
       else if (st === 'flee') k.t = c.t;
@@ -185,11 +192,11 @@ export class Creatures {
         face = Math.atan2(wp.x - c.pos.x, wp.z - c.pos.z); want = T.speed[1] * (T.heavy ? 0.75 : 0.85);
         if (fire) { const away = Math.atan2(c.pos.x - fire.pos.x, c.pos.z - fire.pos.z); if (c.pos.distanceTo(fire.pos) < 6.5) { face = away; want = T.speed[0] * 1.5; } else if (d < 9) want = 0; }   // won't come into the firelight
         const stopAt = T.reach + T.r * 0.5; if (d < stopAt + (c.boss ? 0 : c.speed * 0.25)) want = 0;   // (easing off in time, not running on into you)
-        if (d < stopAt) { want = 0; if (c.atkCd <= 0 && !c.move) { c.state = 'attack'; c.atkT = T.heavy ? 1.1 : 0.55; c.atkCd = T.heavy ? 3.2 : rr(1.4, 2.2); c.hitDone = false; } }
-        if (T.ranged && d > 5 && d < T.ranged.range && c.rangedCd <= 0) { c.rangedCd = T.ranged.every + rr(-1, 1); this.throwThorn(c); }
+        if (d < stopAt) { want = 0; if (c.atkCd <= 0 && !c.move) this.strike(c); }
+        if (T.ranged && c.state === 'chase' && d > 5 && d < T.ranged.range && c.rangedCd <= 0 && !c.move) { c.rangedCd = T.ranged.every + rr(-1, 1); this.strike(c, 'throw'); }
         if (d > 60 || (c.t < -30 && d > 30)) { c.state = 'idle'; c.t = rr(2, 4); }
-      } else if (c.state === 'alert') {
-        face = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z); want = 0;   // freeze and stare
+      } else if (c.state === 'alert' || c.state === 'throw') {
+        face = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z); want = 0;   // freeze and stare (or stand and throw)
       } else if (M) {   // a young one beside its mother: it keeps to its place by her, trotting to catch up when she moves off
         if (c.t <= 0) { c.state = T.passive && Math.random() < 0.5 ? 'graze' : 'idle'; c.t = rr(2, 5); }
         const a = M.yaw + c.slot, tx = M.pos.x + Math.sin(a) * c.slotR, tz = M.pos.z + Math.cos(a) * c.slotR, dm = Math.hypot(tx - c.pos.x, tz - c.pos.z);
@@ -202,10 +209,16 @@ export class Creatures {
           // a hare goes by fits and starts: a few hops, a pause to sit up and look about, a few more a little to one side
           if (T.hops) { c.hopT = (c.hopT ?? 0) - dt; if (c.hopT < -(c.rest ?? 0)) { c.hopT = rr(0.5, 1.1); c.rest = rr(0.6, 1.8); c.wanderYaw += rr(-0.9, 0.9); } want = c.hopT > 0 ? T.speed[0] * 1.6 : 0; } }
       }
-      if (c.state === 'attack') {
-        c.atkT -= dt; want = 0; face = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z);
-        if (!c.hitDone && c.atkT < (T.heavy ? 0.45 : 0.25)) { c.hitDone = true; if (d < T.reach + T.r + 0.6 && !P.dead) g.combat.hitPlayer(c, T.dmg); else if (T.heavy) { dust(c.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), 3), 18); addShake(0.3); } this.hitBuildings(c); }
-        if (c.atkT <= 0) c.state = 'chase';
+      if (c.state === 'attack' || c.state === 'throw') {
+        // the swing (or the throw) as its clip goes: it turns after you through the wind-up, then is committed (COMMIT
+        // before the blow); the blow lands as the clip's does, if you're still within reach and in front of it
+        const toP = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z); c.atkE += dt; want = 0; face = c.atkE < c.hitAt - (c.state === 'throw' ? 0.1 : T.heavy ? COMMIT * 1.4 : COMMIT) ? toP : c.yaw;
+        if (c.state === 'throw' && !c.hitDone) g.combat.charge?.(c, c.atkE / c.hitAt);   // (the glow gathering in her hand)
+        if (!c.hitDone && c.atkE >= c.hitAt) { c.hitDone = true;
+          if (c.state === 'throw') this.throwThorn(c);
+          else { const front = Math.abs(angDiff(toP, c.yaw)) < (T.heavy ? 1 : 0.75); c.blowAt = { e: c.atkE, hit: front && d < T.reach + T.r + 0.6 && !P.dead };
+            if (c.blowAt.hit) g.combat.hitPlayer(c, T.dmg); else if (T.heavy) { dust(c.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), 3), 18); addShake(0.3); } this.hitBuildings(c); } }
+        if (c.atkE >= c.atkT) c.state = 'chase';
       }
       // a boss move in progress steers: its own speed and heading (snapped for a charge), or a leap through the air
       const ctl = c.ctl; if (ctl) { want = ctl.want; if (ctl.face !== undefined) face = ctl.face; if (ctl.snap) c.yaw = face; if (ctl.want === 0) c.speed *= 0.8; }
@@ -226,12 +239,12 @@ export class Creatures {
       const fl = Math.max(this.groundAt(c.pos.x, c.pos.z, c.pos.y), -0.4); if (ctl?.air !== undefined) c.pos.y = fl + ctl.air; else c.pos.y += (fl - c.pos.y) * Math.min(1, dt * 12);
       // stuck against a wall while chasing: hit it
       c.stuck = c.pos.distanceTo(c.lastP) < 0.05 * dt * 60 && want > 0.5 ? c.stuck + dt : 0; c.lastP.copy(c.pos);
-      if (c.stuck > 1.2 && (c.state === 'chase') && c.atkCd <= 0) { c.state = 'attack'; c.atkT = 0.55; c.atkCd = 2; c.hitDone = false; c.stuck = 0; }
+      if (c.stuck > 1.2 && (c.state === 'chase') && c.atkCd <= 0) { this.strike(c); c.stuck = 0; }
       c.body.obj.rotation.y = c.yaw;
       // four-footed creatures lie along the slope they stand on: nose up a hill, down it going down
       if (QUAD.has(c.type)) { const e = T.r * 1.3 + 0.3, fx = Math.sin(c.yaw) * e, fz = Math.cos(c.yaw) * e, rise = this.groundAt(c.pos.x + fx, c.pos.z + fz, c.pos.y) - this.groundAt(c.pos.x - fx, c.pos.z - fz, c.pos.y);
         c.pitch = (c.pitch || 0) + (-Math.atan2(rise, 2 * e) * (ctl?.air !== undefined ? 0 : 1) - (c.pitch || 0)) * Math.min(1, dt * 8); c.body.obj.rotation.x = c.pitch; }
-      c.body.animate(special && special !== 'run' ? special : c.state === 'attack' ? 'attack' : c.hitT > 0 ? 'hit' : c.state, c.speed, dt);
+      c.body.animate(special && special !== 'run' ? special : c.state === 'attack' || c.state === 'throw' ? c.state : c.hitT > 0 ? 'hit' : c.state, c.speed, dt);
       c.body.feet?.(dt, this.groundFn ||= (x, z, y) => this.groundAt(x, z, y), c.pos.y, ctl?.air === undefined && c.hitT <= 0);
     }
     this.updatePlates();
@@ -242,7 +255,18 @@ export class Creatures {
     const B = this.g.build; if (!B) return; const f = new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw));
     const hit = this.g.colliders.pick(c.pos.x, c.pos.z, f.x, f.z, c.T.reach + c.T.r, (k) => k.ref?.piece); if (hit) B.damage(hit.ref.piece, rr(c.T.dmg[0], c.T.dmg[1]) * c.dmgK * (c.T.heavy ? 2 : 1));
   }
-  throwThorn(c) { this.g.combat?.throwAt(c, c.T.ranged.dmg); }
+  throwThorn(c) { this.g.combat?.throwAt(c, c.T.ranged.dmg, { from: c.body.hand?.() }); }
+  // A blow (or a throw: kind) taken up: its timing from the body's clip (models.js cue), or a quick one while the body
+  // isn't in yet. atkE counts up from the start; the blow lands at hitAt, the move is over at atkT, and the next can't
+  // start until it is.
+  strike(c, kind = 'attack') {
+    const T = c.T, q = c.body.cue?.(kind) || { hit: T.heavy ? 0.65 : 0.3, dur: T.heavy ? 1.1 : 0.55 };
+    c.state = kind; c.atkE = 0; c.hitAt = q.hit; c.atkT = q.dur; c.hitDone = false; c.blowAt = null;
+    if (kind === 'attack') c.atkCd = q.dur + (T.heavy ? rr(1, 1.6) : rr(0.4, 1)); else this.g.sound?.('thornCast', this.near(c));
+    return q;
+  }
+  // how loud something a creature does is where you stand (full within 6 m, gone by 40)
+  near(c) { return Math.max(0, Math.min(1, 1 - (c.pos.distanceTo(this.g.player.pos) - 6) / 34)); }
   // creatures in an arc in front of a point (for melee)
   inArc(from, yaw, reach, arc = 1.1) {
     const out = [];
@@ -252,7 +276,7 @@ export class Creatures {
   // ---- health bars over creatures that are hurt or hunting you
   updatePlates() {
     const P = this.g.player.pos, v = new THREE.Vector3();
-    const show = this.list.filter((c) => !c.dead && (c.hp < c.max || c.state === 'chase' || c.state === 'attack' || c.boss) && c.pos.distanceTo(P) < 30).slice(0, 8);
+    const show = this.list.filter((c) => !c.dead && (c.hp < c.max || c.state === 'chase' || c.state === 'attack' || c.state === 'throw' || c.boss) && c.pos.distanceTo(P) < 30).slice(0, 8);
     for (const [c, el] of this.plates) if (!show.includes(c)) { el.remove(); this.plates.delete(c); }
     for (const c of show) {
       if (c.boss) continue;

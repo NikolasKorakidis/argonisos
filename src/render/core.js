@@ -71,6 +71,7 @@ export function setShadowSky(k, fade = 0) { sunFar.color.setRGB(k, fade / 100, 0
 // map holds only what stands still, so it needn't be drawn again until you have walked on (followShadow).
 const drawShadows = renderer.shadowMap.render, one = [], _off = [];
 renderer.shadowMap.render = function (lights, scn, cam) {
+  if (this.autoUpdate === false && this.needsUpdate === false) return;   // (no maps to draw: as three's own, e.g. the shelter maps' draws, wetness.js)
   const mask = cam.layers.mask;
   for (const L of lights) { if (L.shadow.autoUpdate === false && !L.shadow.needsUpdate) continue;
     one[0] = L; cam.layers.mask = L.shadow.camera.layers.mask; SHADOW.onPass?.(L);
@@ -147,6 +148,11 @@ export const GFX = { level: 'high', post: true, scale: Math.min(devicePixelRatio
 // (the scene's depth is kept with its colour, for the atmosphere pass)
 const sceneRT = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 }); sceneRT.depthTexture = new THREE.DepthTexture(innerWidth, innerHeight);
 export const composer = new EffectComposer(renderer, sceneRT);
+// Only the scene needs the antialiasing samples and the depth: every pass after it draws a whole-screen picture, whose
+// samples would all be alike. So the composer's second buffer is a plain one, and each frame the scene goes into the
+// first (render): before, the two swapped every frame, so both had to be multisampled with a depth of their own, and the
+// atmosphere's and the bloom's pictures were each resolved from 4 (on Ultra 8) samples a pixel for nothing.
+const postRT = composer.renderTarget2; postRT.samples = 0; postRT.depthBuffer = false; postRT.depthTexture?.dispose(); postRT.depthTexture = null;
 composer.setPixelRatio(GFX.scale); composer.setSize(innerWidth, innerHeight);
 composer.addPass(new RenderPass(scene, camera));
 export const atmosphere = new AtmospherePass(); atmosphere.light = sun; atmosphere.far = sunFar; composer.addPass(atmosphere);   // (it marches the woods' haze through the sun's far shadow map)
@@ -155,12 +161,15 @@ fitLens(bloom, { camera, scene, atmo: ATMO, gfx: GFX });   // (light on the lens
 // (the vignette lives in the atmosphere pass now: one full-screen pass fewer)
 composer.addPass(new OutputPass());
 // The scene's antialiasing: 4× on Low to High, 8× on Ultra where the card allows (alpha-to-coverage then gives leaf
-// edges nine steps of see-through instead of five). Both of the composer's buffers take it; disposed, they are made
-// again at the new count when next drawn.
+// edges nine steps of see-through instead of five). The scene's buffer takes it; disposed, it is made again at the new
+// count when next drawn.
 const MAX_SAMPLES = renderer.getContext().getParameter(renderer.getContext().MAX_SAMPLES) || 4;
+// The target the scene is drawn into this frame: shaders are compiled for it (main.js warmUp), as three makes a different
+// program for a picture drawn to the screen (tone mapped there) than for one drawn into the composer's buffer
+export const sceneTarget = () => (GFX.post ? sceneRT : null);
 export function setSamples(n) {
-  n = Math.min(n, MAX_SAMPLES); if (composer.renderTarget1.samples === n) return;
-  for (const t of [composer.renderTarget1, composer.renderTarget2]) { t.samples = n; t.dispose(); }
+  n = Math.min(n, MAX_SAMPLES); if (sceneRT.samples === n) return;
+  sceneRT.samples = n; sceneRT.dispose();   // (the scene's buffer only: the other has none, see above)
 }
 
 addEventListener('resize', () => {
@@ -171,12 +180,12 @@ addEventListener('resize', () => {
 // Render one frame, timing it on the GPU where the browser allows (EXT_disjoint_timer_query_webgl2): GPU.ms, smoothed.
 // renderer.info counts the whole frame (all passes), reset here each frame.
 const gl = renderer.getContext(), timer = gl.getExtension('EXT_disjoint_timer_query_webgl2'), queries = [];
-export const GPU = { ms: 0, ok: !!timer };
+export const GPU = { ms: 0, ok: !!timer, on: false };   // (on: timed only while the performance overlay shows it, main.js)
 renderer.info.autoReset = false;
 export function render() {
   renderer.info.reset();
-  let q = null; if (timer && queries.length < 4) { q = gl.createQuery(); gl.beginQuery(timer.TIME_ELAPSED_EXT, q); }
-  if (GFX.post) composer.render(); else renderer.render(scene, camera);
+  let q = null; if (timer && GPU.on && queries.length < 4) { q = gl.createQuery(); gl.beginQuery(timer.TIME_ELAPSED_EXT, q); }
+  if (GFX.post) { composer.readBuffer = sceneRT; composer.writeBuffer = postRT; composer.render(); } else renderer.render(scene, camera);
   if (q) { gl.endQuery(timer.TIME_ELAPSED_EXT); queries.push(q); }
   while (queries.length && gl.getQueryParameter(queries[0], gl.QUERY_RESULT_AVAILABLE)) {
     const done = queries.shift(), ns = gl.getQueryParameter(done, gl.QUERY_RESULT); gl.deleteQuery(done);
@@ -190,14 +199,20 @@ export function render() {
 // not tried again for two minutes, so a card just short of it doesn't stutter every twenty seconds).
 // (Decided on the frame time alone: some browsers' GPU timers report the whole frame interval, not the GPU's work. While
 // the world is still streaming in it waits; and a step it had to leave for being too slow isn't retried for 20 s.)
+// It goes by the typical frame of the last second and a half (the middle one, and the one nine in ten beat), not an
+// average: one hitch (a shader compiled, a cell streamed in) dragged the average over the line, the picture dropped a
+// step, and changing the resolution makes every buffer again, a hitch of its own; the drawing was never too slow.
 export const ADAPT = { on: true, k: 1, t: 3, frame: 16.7, until: {}, min: 0.7, max: 1 };
+const RECENT = new Float32Array(90), SORTED = new Float32Array(90); let recentN = 0, recentI = 0;
 export function adaptResolution(dt, loading) {
-  ADAPT.frame += (Math.min(dt, 0.1) * 1000 - ADAPT.frame) * 0.05; ADAPT.t -= dt; if (!ADAPT.on || ADAPT.t > 0) return;
+  const ms = Math.min(dt, 0.1) * 1000; ADAPT.frame += (ms - ADAPT.frame) * 0.05; RECENT[recentI] = ms; recentI = (recentI + 1) % RECENT.length; recentN = Math.min(recentN + 1, RECENT.length);
+  ADAPT.t -= dt; if (!ADAPT.on || ADAPT.t > 0) return;
   if (loading) { ADAPT.t = 1; return; }
-  const now = performance.now(), slow = ADAPT.frame > 19.5, up = Math.min(ADAPT.max, +(ADAPT.k + 0.1).toFixed(1)), roomy = ADAPT.frame < 17.3 && !(ADAPT.until[up] > now) && !(up > 1 && !bigEnough(up));
+  const n = recentN, q = SORTED.subarray(0, n); q.set(RECENT.subarray(0, n)); q.sort(); const mid = q[n >> 1], p90 = q[Math.floor(n * 0.9)];
+  const now = performance.now(), slow = mid > 19.5, up = Math.min(ADAPT.max, +(ADAPT.k + 0.1).toFixed(1)), roomy = p90 < 17.3 && !(ADAPT.until[up] > now) && !(up > 1 && !bigEnough(up));
   const k = slow ? Math.max(ADAPT.min, +(ADAPT.k - 0.1).toFixed(1)) : roomy ? up : ADAPT.k;
   if (slow && k !== ADAPT.k) ADAPT.until[ADAPT.k] = now + (ADAPT.k > 1 ? 120000 : 20000);
-  if (k !== ADAPT.k) { ADAPT.k = k; ADAPT.t = 2.5; setScale(); } else ADAPT.t = 0.5;
+  if (k !== ADAPT.k) { ADAPT.k = k; ADAPT.t = 2.5; recentN = 0; setScale(); } else ADAPT.t = 0.5;   // (the frames before the change don't count after it)
 }
 // (above the screen's own resolution: never wider than 5120 pixels drawn, 4K's width and a third)
 const bigEnough = (k) => innerWidth * GFX.scale * k <= 5120;

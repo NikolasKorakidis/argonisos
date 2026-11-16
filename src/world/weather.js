@@ -6,6 +6,10 @@
 // Fog comes in three levels: a fog (you see some 30 m), a thick fog (half that) and a dense one (about 10 m, the world
 // past it gone), the thicker ones rarer, likelier in the forest and the marsh and the dense one mostly by night and in
 // the early morning. A fog rolls in and out over a minute or so, and from one level to the next as slowly.
+// The forest's deep fog (the reviewer, 16 Nov: Valheim's Black Forest, tall dark trees standing in a thick, pale fog that
+// lies low): one forest spell in five, a fog lying on the ground among the trunks (you see some 30 m at your feet) and
+// thinning with height, so the crowns loom out of it. The scene's fog stays loose in it; the atmosphere pass lays the low
+// fog over the ground (atmosphere.js lowAmt), the same pale air the forest has thinly on any day.
 import * as THREE from 'three';
 import { scene } from '../render/core.js';
 import { biomeWeights, BIOME } from './gen.js';
@@ -15,6 +19,7 @@ import { updateRain } from './rain.js';
 import { WIND, updateWind } from './wind.js';
 import { skyStrike, LIGHTNING } from './lightning.js';
 import { LENS } from '../render/lensdirt.js';
+import { ATMO } from '../render/atmosphere.js';
 
 const TYPES = {
   clear: { overcast: 0, rain: 0, fog: 0 },
@@ -25,6 +30,7 @@ const TYPES = {
   fog: { overcast: 0.45, rain: 0, fog: 1 },   // (the sun only a pale disc through it: the light is dimmed below, the fog itself pale)
   thickFog: { overcast: 0.45, rain: 0, fog: 1, close: 1 },   // (close: the fog's level, 0 a fog, 1 thick, 2 dense: FOG_FAR)
   denseFog: { overcast: 0.45, rain: 0, fog: 1, close: 2 },
+  deepFog: { overcast: 0.5, rain: 0, fog: 1, low: 1 },   // (the forest's: a fog lying low, see above)
 };
 const ODDS = [   // per biome: [type, chance %] (fog is rolled alongside, as the GDD lists it separately)
   [['clear', 70], ['cloudy', 10], ['lightRain', 10], ['heavyRain', 5], ['thunder', 5]],
@@ -35,23 +41,30 @@ const ODDS = [   // per biome: [type, chance %] (fog is rolled alongside, as the
 // by night and in the early morning; then which level, by weight [fog, thick, dense], the dense one's weight from a
 // third by day to four times by night and at first light. Per level, how far you see in it (the far edge, from the
 // camera, some 5 m behind the hero) and where it starts (a fog's near edge comes from the biome's mood, as before).
-const FOG_CHANCE = [0.12, 0.3, 0.4], FOG_LEVELS = [[75, 20, 5], [55, 30, 15], [45, 33, 22]];
+// (the forest's other fogs rarer than they were, now that one spell in five there is its deep fog: DEEP_CHANCE)
+const FOG_CHANCE = [0.12, 0.15, 0.4], FOG_LEVELS = [[75, 20, 5], [55, 30, 15], [45, 33, 22]];
 const FOG_FAR = [32, 18, 12], FOG_NEAR = [null, 3, 3.5];
-const MAX_MIN = { heavyRain: 10, lightRain: 10, thunder: 4, denseFog: 7 };
+// The deep fog: its chance per forest spell, and the scene's fog in it (near and far edge, m): loose, as the low fog
+// does the hiding near the ground; LOW: how thick the forest's low air is (atmosphere.js lowDen, per metre at the ground,
+// and lowH, the height over which it thins to a third), in deep fog and as the forest's thin standing mist on any day
+const DEEP_CHANCE = 0.2, DEEP_NEAR = 14, DEEP_FAR = 170, LOW = { den: 0.2, h: 4, mist: 0.16 };
+const MAX_MIN = { heavyRain: 10, lightRain: 10, thunder: 4, denseFog: 7, deepFog: 8 };
 // biome mood: light multiplier, fog near/far (m) and fog tint
+// (the forest a fifth darker than it was (the reviewer, 16 Nov), its air a deeper green-teal, as Valheim's Black Forest)
 const MOOD = [
   { light: 1, near: 300, far: 2400, tint: null },   // the far meadows soften into haze
-  { light: 0.42, near: 40, far: 520, tint: new THREE.Color(0x46604c) },
+  { light: 0.22, near: 40, far: 520, tint: new THREE.Color(0x3a5a52) },   // (with the sky light dimmed in sky.js: a fifth darker on screen than before)
   { light: 0.32, near: 18, far: 260, tint: new THREE.Color(0x4c5236) },
 ];
 
-export const WEATHER = { type: 'clear', biome: BIOME.PEDIAS, timer: 0, k: { overcast: 0, rain: 0, fog: 0, close: 0 }, mood: { light: 1, near: 300, far: 2400 }, storm: 0, boltT: 8, flash: 0, forced: null, stormRain: 0 };
+export const WEATHER = { type: 'clear', biome: BIOME.PEDIAS, timer: 0, k: { overcast: 0, rain: 0, fog: 0, close: 0, low: 0 }, mood: { light: 1, near: 300, far: 2400, wild: 0 }, storm: 0, boltT: 8, flash: 0, forced: null, stormRain: 0 };
 let rnd = Math.random, first = true;
 function roll(biome, light) {
   const list = ODDS[biome]; let t = 0; for (const [, w] of list) t += w; let a = rnd() * t, type = list[0][0];
   for (const [n, w] of list) { a -= w; if (a <= 0) { type = n; break; } }
   const early = clamp(light.night + light.mist, 0, 1);   // (by night and at first light, when the morning mist lies thick: sky.js)
-  if ((biome === BIOME.VALTOS ? type === 'lightRain' : type === 'clear' || type === 'cloudy') && rnd() < FOG_CHANCE[biome] * (1 + early / 3)) {
+  if (biome === BIOME.YLEOS && type !== 'thunder' && rnd() < DEEP_CHANCE) type = 'deepFog';
+  else if ((biome === BIOME.VALTOS ? type === 'lightRain' : type === 'clear' || type === 'cloudy') && rnd() < FOG_CHANCE[biome] * (1 + early / 3)) {
     const [f, th, d] = FOG_LEVELS[biome], wt = th * lerp(0.8, 1.5, early), wd = d * lerp(0.3, 4, early), r = rnd() * (f + wt + wd);
     type = r < f ? 'fog' : r < f + wt ? 'thickFog' : 'denseFog';
   }
@@ -75,7 +88,7 @@ export function updateWeather(dt, pos, light, { still = false } = {}) {
   // far edge comes in geometrically, below)
   const T = TYPES[WEATHER.type], e = first ? 1 : Math.min(1, dt * 0.08), toward = (k, to, rate) => (first ? to : k + clamp(to - k, -rate * dt, rate * dt));
   for (const k of ['overcast', 'rain']) WEATHER.k[k] = lerp(WEATHER.k[k], T[k], e);
-  WEATHER.k.fog = toward(WEATHER.k.fog, T.fog, 1 / 50); WEATHER.k.close = toward(WEATHER.k.close, T.close || 0, 1 / 30);
+  WEATHER.k.fog = toward(WEATHER.k.fog, T.fog, 1 / 50); WEATHER.k.close = toward(WEATHER.k.close, T.close || 0, 1 / 30); WEATHER.k.low = toward(WEATHER.k.low, T.low || 0, 1 / 50);
   WEATHER.storm = lerp(WEATHER.storm, T.storm ? 1 : 0, e);
   // biome mood, blended by where you stand
   const m = WEATHER.mood;
@@ -87,7 +100,7 @@ export function updateWeather(dt, pos, light, { still = false } = {}) {
   // A thick or dense fog (its level, close) closes further, to FOG_FAR, its near edge a few metres from the camera so the
   // hero stays clear in it; the night and the rain don't pull those in any further (keep), or you'd lose the hero too
   const fogK = WEATHER.k.fog, night = light.night, lv = WEATHER.k.close, i = Math.min(1, Math.floor(lv)), f = lv - i;
-  const nearFull = lerp(FOG_NEAR[i] ?? lerp(m.near, 1, 0.95), FOG_NEAR[i + 1], f), farFull = lerp(FOG_FAR[i], FOG_FAR[i + 1], f), keep = 1 - fogK * Math.min(1, lv) * 0.85;
+  const lowK = WEATHER.k.low, nearFull = lerp(lerp(FOG_NEAR[i] ?? lerp(m.near, 1, 0.95), FOG_NEAR[i + 1], f), DEEP_NEAR, lowK), farFull = lerp(lerp(FOG_FAR[i], FOG_FAR[i + 1], f), DEEP_FAR, lowK), keep = 1 - fogK * Math.min(1, lv) * 0.85;
   // (a fog's near edge comes in evenly, as before; a thick one's geometrically, as the far edge does, so it doesn't rush in
   // at the end; and never past half the far edge on the way)
   scene.fog.near = lerp(lerp(m.near, nearFull, fogK), m.near * Math.pow(nearFull / m.near, fogK), Math.min(1, lv)) * lerp(1, 0.6, night * (1 - w.p * 0.6) * keep);
@@ -99,10 +112,17 @@ export function updateWeather(dt, pos, light, { still = false } = {}) {
   scene.fog.color.lerp(_tint.setRGB(0.15, 0.175, 0.2).multiplyScalar(0.3 + light.day * 0.7), WEATHER.k.overcast * 0.85);
   // (a fog by day is pale and bright, not slate, the thicker the paler; in the marsh a green grey)
   scene.fog.color.lerp(_tint.setRGB(0.7, 0.73, 0.76).lerp(_tint2.setRGB(0.5, 0.58, 0.46), w.v * 0.8).multiplyScalar(0.25 + light.day * 0.75), fogK * lerp(0.55, 0.75, Math.min(1, lv)) * (1 - night * 0.8));
-  // by night the air is moonlit blue everywhere, the forest's too (it fell to a near-black green), less so under cloud;
-  // a fog by night a dark blue
-  scene.fog.color.lerp(_tint.setHex(0x14214a), night * (w.y + w.v) * 0.75 * (1 - WEATHER.k.overcast * 0.5));
-  scene.fog.color.lerp(_tint.setRGB(0.05, 0.075, 0.14).lerp(_tint2.setRGB(0.05, 0.07, 0.06), w.v * 0.5), fogK * night * 0.6);
+  // by night the air is the night sky's deep blue-black everywhere, the forest's too (it fell to a near-black green),
+  // the moon's light in it and no more (the reviewer, 16 Nov: the night is dark because its light goes, not from a
+  // tint); a fog by night a dark grey-blue
+  scene.fog.color.lerp(_tint.setHex(0x0b1322), night * (w.y + w.v) * 0.75 * (1 - WEATHER.k.overcast * 0.5));
+  scene.fog.color.lerp(_tint.setRGB(0.045, 0.055, 0.075).lerp(_tint2.setRGB(0.04, 0.05, 0.045), w.v * 0.5), fogK * night * 0.6);
+  // the low air over the forest floor (atmosphere.js): in a deep fog thick and pale, lying among the trunks; on any other
+  // day a thin standing mist in the forest and at the marsh's edge, thicker at first light; the fog's own colour, as pale
+  // as the deep fog by day. (The marsh counts from where the storm wall stands, so its edge has the marsh's air.)
+  m.wild = lerp(m.wild, Math.min(1, w.y + w.v / 0.3), me);
+  ATMO.lowAmt.value = Math.max(lowK, m.wild * LOW.mist * (1 + light.mist * 1.5) * (1 - WEATHER.k.rain * 0.5)); ATMO.lowDen.value = LOW.den; ATMO.lowH.value = LOW.h; ATMO.lowSky.value = lowK;
+  ATMO.lowCol.value.copy(scene.fog.color).lerp(_tint.setRGB(0.5, 0.55, 0.54).multiplyScalar(0.2 + light.day * 0.8), lowK * (1 - night * 0.85) * 0.7);
   // the light on the lens (lensdirt.js): the sun up, and how veiled it is by the fog, the morning mist or a forest's haze
   LENS.day = light.day * clamp(light.elev / 0.08, 0, 1); LENS.veil = clamp(Math.max(fogK * (1 + Math.min(1, lv) * 0.3), light.mist * 0.6, (w.y + w.v) * 0.3), 0, 1.3) * (1 - WEATHER.k.rain * 0.8); LENS.calm = LIGHTNING.soft;
   // the world gets wet in the rain and dries in the sun (and it always rains at the foot of the storm wall: stormwall.js)

@@ -203,9 +203,11 @@ export class Pickups {
     for (const k of this.cleared || []) if (!keep.has(k)) clearGrass(k, null);
     for (const p of this.visible) if (!this.cleared?.has('pk' + p.id)) clearGrass('pk' + p.id, { x: p.x, z: p.z, r: SHOW[p.kind][1] * 1.05 });
     this.cleared = keep;
-    for (const k in this.meshes) this.meshes[k].forEach((m, l) => { m.count = n[k][l]; m.instanceMatrix.needsUpdate = true; });
-    this.patch.count = np; this.patch.instanceMatrix.needsUpdate = true;
-    const gg = this.glint.geometry; gg.setDrawRange(0, ng); gg.attributes.position.needsUpdate = gg.attributes.aDat.needsUpdate = true;
+    // (only what is used is sent to the card: the buffers have room for a thousand or two each)
+    const send = (a, k) => { if (!k) return; a.clearUpdateRanges(); a.addUpdateRange(0, k * a.itemSize); a.needsUpdate = true; };
+    for (const k in this.meshes) this.meshes[k].forEach((m, l) => { m.count = n[k][l]; send(m.instanceMatrix, n[k][l]); });
+    this.patch.count = np; send(this.patch.instanceMatrix, np);
+    const gg = this.glint.geometry; gg.setDrawRange(0, ng); send(gg.attributes.position, ng); send(gg.attributes.aDat, ng);
   }
   // The nearest thing to pick up within reach of a point
   nearest(p, reach = 2.4) {

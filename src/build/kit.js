@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { loadPack, bake } from '../assets.js';
 import { wettable } from '../world/wetness.js';
+import { clamp } from '../util/math.js';
 
 // (a wall's logs end rounded, short of the corner: drawn half the wall's thickness longer at each end, so they reach the
 // outer face of the wall across the corner and overlap their neighbours in a row, and 4 cm down into the floor, so no
@@ -21,7 +22,7 @@ const roof = (run, rise) => ({ box: [-1.5, 1.5, -0.45 * rise / run, rise + 0.3, 
 const end = (file, trim, run, rise) => ({ file, box: [-run, run, 0, rise, -0.15, 0.15], trim: { file: trim, box: [-run - 0.45, run + 0.45, -0.45 * rise / run, rise + 0.3, -0.4, 0.4] } });
 const KIT = {
   wall: { file: 'kWall', box: wall(3) }, wallHalf: { file: 'kWallLow', box: wall(1) }, doorframe: { file: 'kDoorWall', box: wall(3, 1.52) },
-  door: { file: 'kDoor', box: [0, 1.36, 0, 2.28, -0.05, 0.05] },
+  door: { file: 'kDoor', box: [0, 1.36, 0, 2.28, -0.05, 0.05] },   // (the carved door's box, then made to the frame's opening: hang)
   beamV: { file: 'kBeam', box: [-0.13, 0.13, 0, 3, -0.13, 0.13] },
   beamH: { file: 'kBeamH', box: [-1.5, 1.5, -0.13, 0.13, -0.13, 0.13] },   // (a squared beam, lying as it comes)
   beamD: { file: 'kBeamD', lay: 'd', box: [-1.06, 1.06, 0, 2.12, -0.13, 0.13] },   // (the 4 m post: tilted, it keeps a slimmer section than the 3 m one)
@@ -54,11 +55,40 @@ function fit(geo, K) {
   geo.computeVertexNormals(); geo.computeBoundingSphere(); return geo;
 }
 
+// The door made to its frame's opening. The kit's door is narrower than the frame's (a gap of a hand's width each side)
+// and square, where the opening is arched over the top and its sill curves up into the posts. So the opening is
+// measured off the fitted frame itself (rays out from its middle, in the door's plane), the door is stretched across it
+// and its plank ends are bent to follow the arch and the sill, leaving clear only gap (m) all round: a snug, even fit
+// however the frame's model changes. Only the top and bottom ends bend (bend m of each), so the straps and the planks
+// between stay straight. hinge: where the door hangs in the frame (pieces.js: the door's own x 0)
+const DOOR = { gap: 0.012, bend: 0.3 };
+function hang(door, frame, hinge) {
+  const m = new THREE.Mesh(frame, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), rc = new THREE.Raycaster(), o = new THREE.Vector3(), dir = new THREE.Vector3();
+  const cast = (x, y, dx, dy) => { rc.set(o.set(x, y, 0), dir.set(dx, dy, 0)); return rc.intersectObject(m, false)[0]?.distance ?? NaN; };
+  let L = -Infinity, R = Infinity; for (let y = 0.6; y < 2; y += 0.1) { L = Math.max(L, -cast(0, y, -1, 0)); R = Math.min(R, cast(0, y, 1, 0)); }   // (the posts, at their nearest)
+  const N = 32, top = [], bot = [], c = DOOR.gap;
+  for (let i = 0; i <= N; i++) { const x = L + 0.004 + ((R - L - 0.008) * i) / N; top.push(1.2 + cast(x, 1.2, 0, 1)); bot.push(1.2 - cast(x, 1.2, 0, -1)); }
+  if (![L, R, ...top, ...bot].every(Number.isFinite) || R - L < 0.8) return;   // (not a frame we can measure: the door stays as fitted)
+  const at = (a, x) => { const f = clamp(((x - L) / (R - L)) * N, 0, N), i = Math.min(N - 1, Math.floor(f)); return a[i] + (a[i + 1] - a[i]) * (f - i); };
+  const B = Math.min(...bot) + c, T = Math.max(...top) - c, yb = B + DOOR.bend, yt = T - DOOR.bend;
+  // (across, the planks are fitted, not the hinges' ends standing out past them: those reach into the post)
+  door.computeBoundingBox(); const b = door.boundingBox, p = door.attributes.position; let x0 = Infinity, x1 = -Infinity;
+  for (let i = 0; i < p.count; i++) if (p.getY(i) > b.max.y - 0.03) { x0 = Math.min(x0, p.getX(i)); x1 = Math.max(x1, p.getX(i)); }
+  for (let i = 0; i < p.count; i++) {
+    const x = L + c + ((p.getX(i) - x0) / (x1 - x0)) * (R - L - 2 * c); let y = B + ((p.getY(i) - b.min.y) / (b.max.y - b.min.y)) * (T - B);
+    const lo = Math.min(at(bot, x) + c, yb - 0.05), hi = Math.max(at(top, x) - c, yt + 0.05);
+    if (y < yb) y = lo + ((y - B) * (yb - lo)) / (yb - B); else if (y > yt) y = yt + ((y - yt) * (hi - yt)) / (T - yt);
+    p.setXY(i, x - hinge, y);
+  }
+  p.needsUpdate = true; door.computeVertexNormals(); door.computeBoundingBox(); door.computeBoundingSphere();
+}
+
 // Load every piece's model and give the piece its look ({ geo, mat } like the carved ones); resolves when all are in
 export function loadKit(pieces) {
   const mats = new Map();   // (one material per atlas, made wettable like the carved planks)
   // (the kit's paint is pale in our light: taken down a little)
   const matFor = (src) => { const key = src.map?.uuid ?? src.uuid; if (!mats.has(key)) mats.set(key, wettable(new THREE.MeshStandardMaterial({ map: src.map, color: 0xa8a8a8, roughness: 0.9 }), { dark: 0.62, gloss: 0.32 })); return mats.get(key); };
   const look = (K) => loadPack(K.file).then((gl) => { let src = null; gl.scene.traverse((m) => { if (m.isMesh && !src) src = m.material; }); return { geo: fit(bake(gl.scene), K), mat: matFor(src) }; });
-  return Promise.all(pieces.filter((p) => KIT[p.id]).map((p) => Promise.all([KIT[p.id], KIT[p.id].trim].filter(Boolean).map(look)).then((m) => { p.meshes = m; }).catch(() => {})));
+  return Promise.all(pieces.filter((p) => KIT[p.id]).map((p) => Promise.all([KIT[p.id], KIT[p.id].trim].filter(Boolean).map(look)).then((m) => { p.meshes = m; }).catch(() => {})))
+    .then(() => { const d = pieces.find((p) => p.id === 'door'), f = pieces.find((p) => p.id === 'doorframe'); if (d?.meshes && f?.meshes) hang(d.meshes[0].geo, f.meshes[0].geo, d.door.hinge); });
 }

@@ -1,13 +1,13 @@
 // Argonisos: the trial of Zeus. Entry point: builds the world and the player, runs the frame loop.
 import * as THREE from 'three';
-import { renderer, scene, camera, render, followShadow, setShadowSky, SHADOW, groundDetail, sun, GPU, ADAPT, adaptResolution } from './render/core.js';
+import { renderer, scene, camera, render, followShadow, setShadowSky, SHADOW, groundDetail, sun, GPU, ADAPT, adaptResolution, sceneTarget } from './render/core.js';
 import { Terrain, rockGround } from './world/terrain.js';
 import { WorkerPool } from './world/pool.js';
 import { Vegetation } from './world/vegetation.js';
 import { loadFlora } from './world/flora-pack.js';
 import { loadSiteProps, loadPieces } from './world/site-pack.js';
 import { windUniform } from './world/trees.js';
-import { updateGrass } from './world/grass.js';
+import { updateGrass, GRASS } from './world/grass.js';
 import { heightAt, biomeWeights, BIOME_NAMES, biomeAt, WORLD } from './world/gen.js';
 import { skyDome, updateSky, fogSky, sunDir, moonDir, lightDir, LIGHT, DAY_SECONDS, DAY_FRACTION } from './world/sky.js';
 import { updateWeather, setWeather, snapWeather, WEATHER } from './world/weather.js';
@@ -33,6 +33,9 @@ import { titleScreen, pauseMenu } from './ui/title.js';
 import { devMenu } from './ui/dev.js';
 import { wettable, updateShelter, WET } from './world/wetness.js';
 import { updateWindLines } from './world/wind.js';
+import { perfBegin, perfEnd, lap, PERF } from './ui/perf.js';
+import { SETTINGS, setPerfOverlay } from './ui/settings.js';
+import { fadeAhead } from './render/occlusion.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -131,8 +134,16 @@ game.setFly = (on) => {
 // stalls the first time it comes into view. (renderer.compile, not compileAsync: in three r160 the async one throws if a
 // material is disposed while it waits, and this game disposes faded copies and felled logs as it goes.)
 let warmed = 0;   // 0: not yet, 2: done
-const warmUp = () => { if (warmed) return; warmed = 2; try { renderer.compile(scene, camera); } catch { /* a warm-up only */ } };
-const loaded = () => Math.min(1, (terrain.drawn > 40 && terrain.pending === 0 ? 0.6 : terrain.drawn / 70) + (player.hero.model ? 0.25 : 0) + (veg.near.size > 6 ? 0.15 : 0));
+// (with a stand-in of every tree, rock and plant, in each band's material, so a species met later doesn't compile then)
+// (and the faded copies of the sites' materials, for when a wall or a column comes between the camera and the hero)
+const warmUp = () => { if (warmed) return; warmed = 2; const w = veg.warmMeshes(fadeAhead), seen = new Set(); scene.add(w);
+  for (const grp of game.structures?.groups || []) for (const m of grp.children) if (m.isMesh) for (const mt of [].concat(m.material)) if (!seen.has(mt)) { seen.add(mt); w.add(m.isInstancedMesh ? new THREE.InstancedMesh(m.geometry, fadeAhead(mt, true), 1) : new THREE.Mesh(m.geometry, fadeAhead(mt, true))); }
+  const rt = renderer.getRenderTarget(); renderer.setRenderTarget(sceneTarget());   // (compiled for the buffer the scene is drawn into: render/core.js)
+  // (and each program's link finished and looked at now: the browser links them only when first asked, which three does
+  // the first time the program draws, so a program compiled here still stalled the frame that first used it)
+  try { renderer.compile(scene, camera); for (const p of renderer.info.programs) p.getUniforms(); } catch { /* a warm-up only */ } renderer.setRenderTarget(rt); scene.remove(w); for (const m of w.children) m.dispose?.(); };
+// (and the meadow's grass clumps in, so their shaders are compiled with the rest: grass.js)
+const loaded = () => Math.min(GRASS.settled ? 1 : 0.97, (terrain.drawn > 40 && terrain.pending === 0 ? 0.6 : terrain.drawn / 70) + (player.hero.model ? 0.25 : 0) + (veg.near.size > 6 ? 0.15 : 0));
 const readiness = () => { const k = loaded(); if (k >= 1) warmUp(); return warmed === 2 ? 1 : Math.min(k, 0.97); };
 pauseMenu(game); devMenu(game);
 if (new URLSearchParams(location.search).has('play')) game.started = true; else titleScreen(game, readiness);
@@ -141,7 +152,7 @@ const clockText = () => { const t = S.time, h = t < DAY_FRACTION ? 6 + (t / DAY_
 // ---- Loop
 const clock = new THREE.Clock(); let fpsT = 0, frames = 0, fps = 60, atmo = { overcast: 0, dark: 0 }, mistT = 0, mistAim = 30, mistTop = 30;
 function loop() {
-  requestAnimationFrame(loop);
+  requestAnimationFrame(loop); perfBegin(renderer);   // (the performance overlay, F3: ui/perf.js; nothing while it's off)
   if (!warmed && loaded() >= 1) warmUp();   // (also when the title screen is skipped)
   const dt = Math.min(clock.getDelta(), 0.05), t = S.still ? 100 : clock.elapsedTime;
   if (!game.paused) S.time += dt * S.timeScale / DAY_SECONDS; if (S.time >= 1) { S.time -= 1; S.day++; hud.toast(`<b>Day ${S.day}</b> dawns`); }
@@ -151,38 +162,39 @@ function loop() {
   if (game.started && pauseKey && !hud.open && !game.map?.open && !game.owl?.open && !game.buildMenu?.open && !(game.build?.sel && !game.paused)) game.pause(!game.paused);
   if (!busy && !game.buildMenu?.open && (hit('Tab') || hit('KeyI') || (hit('Escape') && hud.open))) hud.toggle();
   if (!busy && !input.uiOpen) for (let k = 1; k <= 8; k++) if (hit('Digit' + k)) useSlot(k - 1);
-  if (hit('F3')) { S.debug = !S.debug; $('dbg').classList.toggle('hidden', !S.debug); }
+  if (hit('F3')) setPerfOverlay(!SETTINGS.perf);
+  if (S.debug !== PERF.on) { S.debug = GPU.on = PERF.on; $('dbg').classList.toggle('hidden', !S.debug); }   // (the overlay and the old debug line together)
   if (hit('F9') && !busy) game.setFly(!S.fly);
   if (S.debug && hit('KeyT')) S.timeScale = S.timeScale === 1 ? 60 : 1;
-  if (!busy) game.update?.(dt, t);
+  lap('input'); if (!busy) game.update?.(dt, t); lap('game');
   player.frozen = S.fly || hud.open || busy; player.hero.still = S.still; if (!game.paused) player.update(dt);
-  if (S.fly) updateFly(dt);
+  if (S.fly) updateFly(dt); lap('player');
   if (!busy) { updateConditions(); player.stats.update(dt); updateRegion(); }
   const focus = S.fly ? camera.position : player.pos;
   updateSky(S.time, dt, t, atmo.overcast, atmo.dark);
   atmo = updateWeather(dt, focus, LIGHT, { still: S.still });
   updateStormWall(t, dt, { light: LIGHT, focus, still: S.still, atmo, sun, sunDir: lightDir, fogCol: scene.fog.color, inside: game.structures?.inCave?.(camera.position) });   // (near it the wind turns into the wall: before the wind lines)
   updateLightning(dt, S.still);   // (the world lit by the storms' lightning: after the sky has set its light)
-  updateWindLines(dt, { light: Math.max(0.12, LIGHT.day), rain: WEATHER.k.rain, still: S.still });   // the wind drawn in the air (wind.js)
+  lap('sky, weather'); updateWindLines(dt, { light: Math.max(0.12, LIGHT.day), rain: WEATHER.k.rain, still: S.still });   // the wind drawn in the air (wind.js)
   // high up the air clears: from the hills, and from the top of Olympos, you see out across the island
   const up = Math.min(1.6, Math.max(0, (camera.position.y - 60) / 160)), clear = Math.min(1, Math.max(0, (camera.position.y - 90) / 140));
   scene.fog.near = (scene.fog.near + (300 - scene.fog.near) * clear) * (1 + up); scene.fog.far = (scene.fog.far + (2400 - scene.fog.far) * clear) * (1 + up * 1.4);   // (above the forest's own haze)
   const fx = S.still ? 0 : dt;   // (screenshot tests: dust, pollen and the like hold still too)
-  updateGiantwood(dt, focus, camera, lightDir, LIGHT.day, S.still);
+  updateGiantwood(dt, focus, camera, lightDir, LIGHT.day, S.still); lap('wind, giants');
   updateClouds(dt, { time: t, still: S.still, dayT: S.time, dayN: S.day });   // (the clouds, and the fog inside one: before fogSky, which hides the sky in a thick one)
-  fogSky(Math.min(1, Math.max(0, 1 - scene.fog.far / 1400, atmo.overcast)));
+  lap('clouds'); fogSky(Math.min(1, Math.max(0, 1 - scene.fog.far / 1400, atmo.overcast)));
   updateWater(t, camera.position, LIGHT, skyDome, sunDir, moonDir);
   followShadow(focus, lightDir, !LIGHT.moon); setShadowSky(SHADOW.sky * (LIGHT.day + 0.6 * LIGHT.night) * (1 - atmo.overcast * 0.8), LIGHT.moon ? SHADOW.nightFade : 0);   // (the share of sky light a shadow takes: core.js)
   LIGHT_U.uSunDir.value.copy(lightDir); LIGHT_U.uSunCol.value.copy(sun.color).multiplyScalar(sun.intensity * 0.32);
-  terrain.update(camera.position);
-  veg.update(dt, focus); windUniform.value = t; updateCuts(focus); updateGrass(pool, focus);
-  game.lateUpdate?.(dt, t);
+  lap('water, shadows'); terrain.update(camera.position); lap('terrain');
+  veg.update(dt, focus); windUniform.value = t; updateCuts(focus); updateGrass(pool, focus); lap('trees, grass');
+  game.lateUpdate?.(dt, t); lap('fx, lights');
   hud.update(dt, clockText(), S.time >= DAY_FRACTION);
-  veg.cull(camera, focus);   // the near trees worth drawing this frame
-  game.structures?.cull(camera.position, dt);
+  lap('hud'); veg.cull(camera, focus); lap('tree packing');   // the near trees worth drawing this frame
+  game.structures?.cull(camera.position, dt); lap('sites');
   // what stands over the ground round you (roofs, the sites, tree crowns): below it stays dry, no rain falls and no wind
   // lines blow; re-drawn every half second while it rains (a roof you've just built shelters at once), else every two
-  updateShelter(renderer, scene, focus, () => ({ solid: [...(game.build?.placed || []).map((p) => p.obj), ...(game.structures?.groups || [])], canopy: [...veg.batches.values()].flatMap((b) => b.meshes) }), dt, WET.value > 0.001 || WEATHER.k.rain > 0.02);
+  updateShelter(renderer, scene, focus, () => ({ solid: [...(game.build?.placed || []).map((p) => p.obj), ...(game.structures?.groups || [])], canopy: [...veg.batches.values()].flatMap((b) => b.meshes) }), dt, WET.value > 0.001 || WEATHER.k.rain > 0.02); lap('shelter maps');
   const bw = biomeWeights(focus.x, focus.z);
   // pollen in the sunny meadows, fireflies at dusk and by night, leaves in the woods, snow blowing on the summit
   const wet = 1 - Math.min(1, WEATHER.k.rain * 1.5), snowK = PEAK.on ? Math.min(1, Math.max(0, (camera.position.y - PEAK.snow + 70) / 50)) : 0;   // (from a little under the snow line)
@@ -194,8 +206,8 @@ function loop() {
   mistTop += (mistAim - mistTop) * (S.still ? 1 : Math.min(1, dt * 0.6));   // (screenshot tests: settled at once)
   updateAtmosphere(camera, { dt, player: focus, mistTop, fogNear: scene.fog.near, fogFar: scene.fog.far, wp: bw.p, wy: bw.y + bw.v, night: LIGHT.night, giant: GIANTWOOD.k, sunDir, sunCol: sun.color, sunK: Math.min(1.4, sun.intensity / 2.4), fogCol: scene.fog.color, day: LIGHT.day, dusk: LIGHT.dusk, overcast: atmo.overcast, rays: 1, still: S.still, wetAir: Math.min(1, WEATHER.k.rain * 0.6 + (WEATHER.k.fog || 0)),
     mist: Math.min(1, LIGHT.mist + (WEATHER.k.fog || 0) * 0.4) * (S.fly ? 0.5 : 1), mistDen: 0.01 + biomeWeights(focus.x, focus.z).y * 0.012, ground: Math.min(heightAt(focus.x, focus.z), 60) });   // (mist lies in the valleys: from a summit you look down on it)
-  render(); adaptResolution(dt, terrain.pending > 0 || !game.started);
-  endFrame();
+  lap('ambient, air'); render(); lap('render'); adaptResolution(dt, terrain.pending > 0 || !game.started);
+  endFrame(); perfEnd(renderer.info.render, { preset: SETTINGS.graphics, res: ADAPT.k, w: renderer.domElement.width, h: renderer.domElement.height });
   frames++; fpsT += dt; if (fpsT > 0.5) { fps = frames / fpsT; frames = 0; fpsT = 0; }
   if (S.debug) {
     const p = focus, w = biomeWeights(p.x, p.z);
