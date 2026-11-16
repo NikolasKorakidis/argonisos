@@ -24,6 +24,7 @@ export const PATCHES = [
         '<b>Moonlit nights:</b> night now falls because the sun\'s light goes, not because the screen is tinted blue. The moon lights the land in a dim, cool silver, casting soft shadows near you; the sky turns a deep blue-black full of stars, and a campfire\'s warm glow stands out against it. Under thick cloud the night is very dark.',
         '<b>Forest fog:</b> one spell in five in the Yleos forest brings a deep, pale fog that lies low among the trunks. You see only some thirty metres along the ground, while the dark crowns loom out of it overhead.',
         'The Yleos forest is darker and heavier than before, its shade a deep green-teal, and a thin mist always lies on its floor, thicker in the early morning.',
+        'A clear night is dark but readable: the moon and the night sky light the land a cool blue, the woods fill with a faint moonlit haze between the trunks, and the horizon stays a shade lighter than the hills. Under heavy cloud the night is still nearly black.',
         'The haze on the horizon no longer creeps up into the open sky above the treetops: the sky overhead stays clear.',
         'After a long journey, or as the sun comes up, the shade of the trees in the distance and the sunlight in the woods\' air are right straight away, instead of glowing through crowns that weren\'t there until you had taken a few steps.',
       ] },
@@ -32,6 +33,7 @@ export const PATCHES = [
         'The Yleos forest floor is dark loam strewn with needles and twigs, with cushions of moss and roots snaking across it, over rougher, hummocky ground.',
         'At the edge of the marsh the ground turns to dark, wet mud with water shining in its hollows.',
         'Walking up a hillside, your feet now come down on the slope instead of dipping into it.',
+        'When the camera ends up inside a tree or right against its trunk in a thick wood, the tree fades out of the way instead of filling half the screen, and a tree faded between you and the camera keeps its leaves.',
         '<b>Life in the air:</b> butterflies flutter over the meadows by day; in the forest, tiny motes and spores glitter in the shafts of sun; at the marsh\'s edge low mist drifts over the ground and pale wisps of swamp gas rise and fade, glowing faintly at night.',
       ] },
       { t: 'Trees and Plants', icon: 'tomato', items: [

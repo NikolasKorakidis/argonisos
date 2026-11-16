@@ -10,8 +10,13 @@ import { clamp, lerp } from '../util/math.js';
 
 export const DAY_SECONDS = 32 * 60, DAY_FRACTION = 24 / 32;
 // The night's light (the reviewer, 16 Nov; Valheim's nights: deep blue-black, a silver moon, the land read by its cool
-// light): the moon's strength and colour as the key light, the sky's light by night (hemisphere), and the exposure
-export const MOON = { k: 0.8, col: 0xb8c4d8, sky: 0.36, exposure: 0.62 };
+// light): the moon's strength and colour as the key light; the sky's light by night (hemisphere: how strong, its colour
+// from above and from the ground); the night air (the fog's and the sky's colour round the horizon, a shade lighter than
+// the land, so hills and trees stand dark against it) and the dome's horizon; and the exposure (which tells only where the
+// picture is drawn without the post passes: they leave the tone mapping out). The first cut of Patch 20 left the land
+// black but for a pool round the hero, the sky's light a sixth of what it had been: a clear night now reads at about a
+// tenth of the day's brightness in the meadows and the woods (a mean of 25 to 35 of 255 on screen), cloud shuts it out
+export const MOON = { k: 1.1, col: 0xa8b8d8, sky: 5.5, skyCol: 0x3a5288, ground: 0x283450, air: 0x142240, horizon: 0x2a3a5a, exposure: 0.62 };
 
 export const skyDome = new THREE.Mesh(new THREE.SphereGeometry(5000, 48, 24), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
@@ -131,22 +136,23 @@ export function updateSky(t, dt, time, overcast = 0, dark = 0) {
   sunDir.set(SUN_RISE.x * Math.cos(az) + SUN_LEAN.x * 0.2, y, SUN_RISE.y * Math.cos(az) + SUN_LEAN.y * 0.2).normalize();
   moonDir.set(-SUN_RISE.x * mz - SUN_LEAN.x * 0.4, Math.max(0.3, night * 0.75 + 0.15), -SUN_RISE.y * mz - SUN_LEAN.y * 0.4).normalize();
   const swap = sstep(0.06, -0.12, e); LIGHT.moon = swap > 0.5; lightDir.copy(sunDir).lerp(moonDir, swap).normalize(); if (lightDir.y < 0.08) { lightDir.y = 0.08; lightDir.normalize(); }
-  const skyCol = _c1.copy(skyNight).lerp(skyDay, day).lerp(skyDusk, dusk * 0.55);
+  skyNight.setHex(MOON.air); const skyCol = _c1.copy(skyNight).lerp(skyDay, day).lerp(skyDusk, dusk * 0.55);
   scene.fog.color.copy(skyCol); scene.background = skyCol;
   // the light fades right down while the shadows hand over from the sun to the moon, so they never swing across the ground.
   // By night the moon is the light (the reviewer, 16 Nov: the night darker because the light goes, not from an effect):
   // dim, a cool silver white, the land read by it and its shadows; under cloud hardly any
-  sun.intensity = lerp(0.15 + day * 2.9, MOON.k, night) * (1 - overcast * lerp(0.8, 0.9, night)) * (1 - dark * 0.75) * (1 - 0.92 * 4 * swap * (1 - swap));
+  const shut = lerp(1 - overcast * 0.8, (1 - overcast * 0.95) ** 2, night);   // (by night cloud shuts out the moon and the sky's light alike, a thick cover almost all of it)
+  sun.intensity = lerp(0.15 + day * 2.9, MOON.k, night) * shut * (1 - dark * 0.75) * (1 - 0.92 * 4 * swap * (1 - swap));
   sun.color.setHex(0xffe2b0).lerp(_c2.setHex(0xffa060), dusk * 0.85).lerp(_c2.setHex(0xff6a38), sstep(0.16, 0.0, e) * (t < DAY_FRACTION ? 0.7 : 0)).lerp(_c2.setHex(MOON.col), night);
   // morning mist: thick at first light, burning off through the morning; a little at dusk and through the night
   LIGHT.mist = (t < DAY_FRACTION ? sstep(0.17, 0.0, t) + sstep(0.62, 0.75, t) * 0.25 : 0.35 + sstep(0.85, 1, t) * 0.5) * (1 - overcast * 0.4);
-  // the sky's own light: by night it falls to a deep blue-black, only a little of the moon's light thrown back, so what
-  // the moon doesn't reach is dark and a fire is the only warm light
-  hemi.intensity = lerp(0.22 + day * 0.45, MOON.sky, night) * (1 - overcast * 0.5) * (1 - dark * 0.45);
-  hemi.color.setHex(0xbfdcff).lerp(_c2.setHex(0x2c3a58), night); hemi.groundColor.setHex(0x3f6a5a).lerp(_c2.setHex(0x0e121a), night);
+  // the sky's own light: by night a cool blue from above, a dark one from the ground, so what the moon doesn't reach (the
+  // floor of a wood) is dim but readable and a fire is the only warm light
+  hemi.intensity = lerp(0.22 + day * 0.45, MOON.sky, night) * lerp(1 - overcast * 0.5, (1 - overcast * 0.95) ** 2, night) * (1 - dark * 0.45);
+  hemi.color.setHex(0xbfdcff).lerp(_c2.setHex(MOON.skyCol), night); hemi.groundColor.setHex(0x3f6a5a).lerp(_c2.setHex(MOON.ground), night);
   const U = skyDome.material.uniforms;
   U.top.value.copy(skyNight).lerp(_c2.setHex(0x3a78c8), day).lerp(_c2.setHex(0x6a6fae), dusk * 0.4);
-  U.hor.value.setHex(0x151f36).lerp(_c2.setHex(0xb8dcf0), day).lerp(_c2.setHex(0xf2b27a), dusk * 0.7);
+  U.hor.value.setHex(MOON.horizon).lerp(_c2.setHex(0xb8dcf0), day).lerp(_c2.setHex(0xf2b27a), dusk * 0.7);
   U.sunDir.value.copy(sunDir); U.night.value = night; U.uT.value = time; U.moonDir.value.copy(moonDir); U.dusk.value = dusk * (1 - overcast * 0.8); U.cover.value = sstep(0.4, 0.9, overcast);
   U.sunCol.value.copy(sun.color).lerp(_c2.setHex(0xfff0c8), 0.4); U.glowCol.value.setHex(0xff8a40).lerp(_c2.setHex(0xff5a50), sstep(0.1, -0.05, e));
   skyDome.position.copy(camera.position);

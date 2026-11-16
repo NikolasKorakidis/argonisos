@@ -397,8 +397,9 @@ function grade(o) {
 }
 // How strong the light in the air is (kept together here, so they can be weighed against each other): the woods' air,
 // per metre at the ground in a full wood, by day and by night; how much sun and moonlight it scatters; how much of the
-// sky's light round it; and the shafts of sun
-export const AIR = { woodDay: 0.004, woodNight: 0.004, lit: 0.25, litNight: 0.12, amb: 0.15, ambNight: 0.35, shafts: 1.2, ao: 0.8, woodsDark: 0.3 };
+// sky's light round it (by night a moonlit blue haze among the trunks, so a wood reads by night as Valheim's do, gone
+// under cloud); and the shafts of sun
+export const AIR = { woodDay: 0.004, woodNight: 0.009, lit: 0.25, litNight: 0.12, amb: 0.15, ambNight: 1.0, shafts: 1.2, ao: 0.8, woodsDark: 0.3 };
 const clamp01 = (x) => Math.max(0, Math.min(1, x)), sstep = (a, b, x) => { const k = clamp01((x - a) / (b - a)); return k * k * (3 - 2 * k); };
 export function updateAtmosphere(camera, o) {
   grade(o);
@@ -427,7 +428,7 @@ export function updateAtmosphere(camera, o) {
   const low = 1 - sstep(0.15, 0.6, o.sunDir.y), wet = o.wetAir || 0;
   ATMO.woodK.value = (AIR.woodDay * (1 + 0.4 * low) * o.day + AIR.woodNight * o.night) * (1 + wet * 0.8) * (1 - 0.85 * ATMO.fogHide.value.z) * (1 - 0.7 * ATMO.lowSky.value);   // (in a thick fog the fog itself is the air: its haze would show the hidden trunks)
   ATMO.woodLit.value = AIR.lit * o.day + AIR.litNight * o.night;
-  ATMO.woodAmb.value.copy(o.fogCol).lerp(o.sunCol, 0.3 * o.day).multiplyScalar(AIR.amb * o.day + AIR.ambNight * o.night);
+  ATMO.woodAmb.value.copy(o.fogCol).lerp(o.sunCol, 0.3 * o.day + 0.6 * o.night).multiplyScalar(AIR.amb * o.day + AIR.ambNight * o.night * (1 - o.overcast * 0.85));
   ATMO.fleckK.value = o.day * (1 - o.overcast * 0.85);
   // the shade in corners: a little stronger by night (Valheim's grows towards night), when there's no sun to soften it;
   // the far woods' floor kept in shade by day, less under cloud

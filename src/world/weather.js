@@ -141,7 +141,7 @@ export function updateWeather(dt, pos, light, { still = false } = {}) {
   }
   // what the sky and lights need: how overcast (a thick fog scatters the sun as a heavy sky does: soft light, faint
   // shadows), and how much light the biome lets through
-  return { overcast: Math.max(WEATHER.k.overcast, w.v * 0.6, WEATHER.k.fog * 0.85), dark: (1 - m.light) * (1 - night * 0.55) };   // (by night the woods shut out a little less: the moonlight is all there is)
+  return { overcast: Math.max(WEATHER.k.overcast, w.v * 0.6, WEATHER.k.fog * 0.85), dark: (1 - m.light) * (1 - night * 0.75) };   // (by night the woods shut out less: the moonlight and the sky's are all there is)
 }
 export function setWeather(type) { WEATHER.forced = type || null; if (type) WEATHER.type = type; }
 // After a teleport (respawn, fast travel): jump straight to the new place's air instead of easing into it
