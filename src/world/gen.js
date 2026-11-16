@@ -28,11 +28,11 @@ function ihash(ix, iz) {
 export function hash2(ix, iz) { return (ihash(ix, iz) >>> 0) / 4294967296; }
 const GX = new Float32Array(16), GZ = new Float32Array(16);
 for (let i = 0; i < 16; i++) { GX[i] = Math.cos(i / 16 * Math.PI * 2); GZ[i] = Math.sin(i / 16 * Math.PI * 2); }
+const grad = (i, j, dx, dz) => { const k = ihash(i, j) & 15; return GX[k] * dx + GZ[k] * dz; };   // (outside noise: a closure made each call was garbage)
 export function noise(x, z) {
   const xi = Math.floor(x), zi = Math.floor(z), xf = x - xi, zf = z - zi;
   const u = xf * xf * xf * (xf * (xf * 6 - 15) + 10), v = zf * zf * zf * (zf * (zf * 6 - 15) + 10);
-  const g = (i, j, dx, dz) => { const k = ihash(i, j) & 15; return GX[k] * dx + GZ[k] * dz; };
-  const a = g(xi, zi, xf, zf), b = g(xi + 1, zi, xf - 1, zf), c = g(xi, zi + 1, xf, zf - 1), d = g(xi + 1, zi + 1, xf - 1, zf - 1);
+  const a = grad(xi, zi, xf, zf), b = grad(xi + 1, zi, xf - 1, zf), c = grad(xi, zi + 1, xf, zf - 1), d = grad(xi + 1, zi + 1, xf - 1, zf - 1);
   return 0.5 + (a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v) * 0.72;
 }
 export function fbm(x, z, oct = 4) { let a = 0.5, f = 1, s = 0, n = 0; for (let i = 0; i < oct; i++) { s += a * noise(x * f + i * 17.3, z * f - i * 9.1); n += a; f *= 2.03; a *= 0.5; } return s / n; }
@@ -197,20 +197,24 @@ function routeY(s) {
 }
 
 // The lie of the land up close: bumps and dips of a few metres to a few tens of metres on top of the broad hills, so the
-// ground is never smooth underfoot (stronger in the forest hills, gentler in the meadows, faint in the marsh). Switched
-// on once the sites are laid out (sites.js), so it can't move them; their pads stay flat. Nothing finer than ~6 m: the
-// nearest terrain is drawn with a vertex every 2 m, and the ground you walk on must match the ground you see.
+// ground is never smooth underfoot. Each biome has its own (the reviewer, 16 Nov: the biomes must feel different
+// underfoot): the meadows gentle and open, long low swells with hardly a bump; the forest hills broken and rough,
+// hummocks and hollows among the trees; the marsh all but flat. Switched on once the sites are laid out (sites.js), so
+// it can't move them; their pads stay flat. Nothing finer than ~6 m: the nearest terrain is drawn with a vertex every
+// 2 m, and the ground you walk on must match the ground you see.
 export const DETAIL = { on: false };
 export function setDetail(on) { DETAIL.on = on; }
 function detail(x, z, w) {
   const big = noise(x * 0.04 + 31.7, z * 0.04 - 12.9) - 0.5, mid = noise(x * 0.09 - 5.3, z * 0.09 + 44.1) - 0.5, fine = noise(x * 0.16 + 70.2, z * 0.16 - 3.4) - 0.5;
-  return w.p * (big * 5 + mid * 2 + fine * 0.6) + w.y * (big * 8 + mid * 2.8 + fine * 0.8) + w.v * (big * 0.8 + mid * 0.4);
+  return w.p * (big * 2.6 + mid * 0.9 + fine * 0.25) + w.y * (big * 8 + mid * 2.8 + fine * 1.2) + w.v * (big * 0.8 + mid * 0.4);   // (the forest's no steeper overall: the slope rule already makes rock of some 40% of it, slopes suite)
 }
+const MEADOW_SMOOTH = 0.6;   // (how much of the meadows' smaller swells goes once the sites are laid out)
 
 // ---- Height (metres above sea level)
 export function rawHeight(x, z, w = biomeWeights(x, z)) {
-  const hp = 2.2 + fbm(x * 0.0032, z * 0.0032, 4) * 24 + (fbm(x * 0.017, z * 0.017, 2) - 0.5) * 3.5          // meadows,
-    + (fbm(x * 0.06 + 13, z * 0.06 - 7, 2) - 0.5) * 0.7;                                                     // with a gentle unevenness underfoot
+  // (once the sites are laid out, DETAIL, the meadows' smaller swells are mostly smoothed away: open, gentle land)
+  const hp = 2.2 + fbm(x * 0.0032, z * 0.0032, 4) * 24 + ((fbm(x * 0.017, z * 0.017, 2) - 0.5) * 3.5          // meadows,
+    + (fbm(x * 0.06 + 13, z * 0.06 - 7, 2) - 0.5) * 0.7) * (DETAIL.on ? 1 - MEADOW_SMOOTH : 1);                       // with a gentle unevenness underfoot
   const rise = smooth(0.5, 0.78, w.r);                                                                         // foothills first, ridges deeper in
   const hy = 16 + rise * 18 + (ridged(x * 0.0027 + 4, z * 0.0027 - 2, 4) * 60 + fbm(x * 0.011, z * 0.011, 3) * 14) * (0.25 + 0.75 * rise);   // forest hills
   const hv = -0.15 + (fbm(x * 0.013 + 7, z * 0.013, 3) - 0.5) * 3.6 + (fbm(x * 0.05, z * 0.05, 2) - 0.5) * 0.8;    // marsh: islands and pools
@@ -227,18 +231,20 @@ export function rawHeight(x, z, w = biomeWeights(x, z)) {
 // Flattened pads for sites (temples, ruins, the starting meadow): registered once, applied on top of the raw height
 const PADS = [];   // { x, z, r0, r1, y }
 const PAD_CELL = 256, PAD_GRID = new Map();
+// (a cell's key as a number, not a string: heightAt is asked thousands of times a frame, and each string was garbage)
+const padKey = (i, j) => (i + 4096) * 8192 + (j + 4096);
 export function addPad(x, z, r0, r1, y = rawHeight(x, z)) {
   const pad = { x, z, r0, r1, y }; PADS.push(pad);
   for (let i = Math.floor((x - r1) / PAD_CELL); i <= Math.floor((x + r1) / PAD_CELL); i++) for (let j = Math.floor((z - r1) / PAD_CELL); j <= Math.floor((z + r1) / PAD_CELL); j++) {
-    const k = i + ',' + j; (PAD_GRID.get(k) || PAD_GRID.set(k, []).get(k)).push(pad);
+    const k = padKey(i, j); (PAD_GRID.get(k) || PAD_GRID.set(k, []).get(k)).push(pad);
   }
   return pad;
 }
 export function heightAt(x, z) {
   let h = rawHeight(x, z);
-  const cell = PAD_GRID.get(Math.floor(x / PAD_CELL) + ',' + Math.floor(z / PAD_CELL));
+  const cell = PAD_GRID.get(padKey(Math.floor(x / PAD_CELL), Math.floor(z / PAD_CELL)));
   if (cell) for (const p of cell) { const d = Math.hypot(x - p.x, z - p.z); if (d < p.r1) { const t = smooth(p.r0, p.r1, d); h = lerp(p.y, h, t); } }
-  const cv = CAVE_GRID.get(Math.floor(x / PAD_CELL) + ',' + Math.floor(z / PAD_CELL));
+  const cv = CAVE_GRID.get(padKey(Math.floor(x / PAD_CELL), Math.floor(z / PAD_CELL)));
   if (cv) for (const c of cv) h = caveGround(c, x, z, h);
   return h;
 }
@@ -261,7 +267,7 @@ const CAVE_GRID = new Map(), CF = CAVE_FORM;
 export function addCave(x, z, y, rot, seed) {
   const c = { x, z, y, rot, cs: Math.cos(rot), sn: Math.sin(rot), seed, reach: -CF.HZ + CF.HR * 1.22 }; CAVES.push(c);
   for (let i = Math.floor((x - c.reach) / PAD_CELL); i <= Math.floor((x + c.reach) / PAD_CELL); i++) for (let j = Math.floor((z - c.reach) / PAD_CELL); j <= Math.floor((z + c.reach) / PAD_CELL); j++) {
-    const k = i + ',' + j; (CAVE_GRID.get(k) || CAVE_GRID.set(k, []).get(k)).push(c);
+    const k = padKey(i, j); (CAVE_GRID.get(k) || CAVE_GRID.set(k, []).get(k)).push(c);
   }
   return c;
 }
@@ -304,7 +310,7 @@ function caveGround(c, x, z, h) {
 // how far into a cave (x, z) lies, for the colour of its floor: [inside (0 outside … 1 within the walls), depth (0 at the
 // mouth … 1 at the back)], or null away from the caves
 export function caveIn(x, z) {
-  const cv = CAVE_GRID.get(Math.floor(x / PAD_CELL) + ',' + Math.floor(z / PAD_CELL)); if (!cv) return null;
+  const cv = CAVE_GRID.get(padKey(Math.floor(x / PAD_CELL), Math.floor(z / PAD_CELL))); if (!cv) return null;
   for (const c of cv) {
     const [u, v] = caveLocal(c, x, z); if (Math.abs(u) > 16 || v < CF.VC - CF.RZ - 6 || v > CF.MZ + 31) continue;
     const ch = (caveRho(c, u, v) - 1) * CF.RX, pa = Math.max(Math.abs(u) - CF.WM, CF.VC - v, v - CF.MZ - 0.5), d = Math.min(ch, pa);
@@ -328,12 +334,21 @@ export function slopeGrade(x, z) { return Math.hypot(heightAt(x + 4, z) - height
 export const rockLimit = (x, z) => ROCK_GRADE - 0.06 * smooth(0.42, 0.72, fbm(x * 0.07 + 13, z * 0.07 - 29, 2));
 export const isRock = (x, z) => heightAt(x, z) > 0.3 && slopeGrade(x, z) > rockLimit(x, z);
 
+// Worn paths across the meadows: thin winding lines of bare earth (where a warped noise crosses its middle), some 2-3 m
+// wide, broken into stretches so they wander off and fade rather than net the whole plain; only on gentle ground in
+// Pedias. 0 off a path, 1 on one. (The grass grows thin on them too: terrain-worker.js grassTex.)
+export function meadowPath(x, z, w = biomeWeights(x, z)) {
+  if (w.p < 0.3) return 0;
+  const wx = x + (noise(x * 0.01 + 5, z * 0.01) - 0.5) * 60, wz = z + (noise(x * 0.01, z * 0.01 - 9) - 0.5) * 60;
+  const n = Math.abs(noise(wx * 0.0045 + 17, wz * 0.0045 - 3) - 0.5), line = smooth(0.0085, 0.004, n);
+  return line > 0 ? line * smooth(0.42, 0.55, noise(x * 0.006 - 30, z * 0.006 + 12)) * smooth(0.3, 0.6, w.p) : 0;
+}
 // ---- Ground colour (linear-ish RGB 0..1), from biome weights, height, slope and a few noise layers
 const C = (hex) => [((hex >> 16) & 255) / 255, ((hex >> 8) & 255) / 255, (hex & 255) / 255];
 const PAL = {
-  meadow: C(0x5b8a32), meadow2: C(0x6f9a3a), golden: C(0xb0a24e), dry: C(0x8f8a42),
-  forest: C(0x2c4223), moss: C(0x3a5527), needles: C(0x4a3b29),
-  mud: C(0x3e3826), marshMoss: C(0x4b5530), reedy: C(0x5d6a36),
+  meadow: C(0x5b8a32), meadow2: C(0x6f9a3a), golden: C(0xb0a24e), dry: C(0x8f8a42), sunlit: C(0x86a23c), path: C(0x8a7650),
+  forest: C(0x2a2a1b), moss: C(0x2f4a24), needles: C(0x4f3520), humus: C(0x1f1b13), fern: C(0x34431f),
+  mud: C(0x2f2a1d), marshMoss: C(0x3a4424), reedy: C(0x4f5833), pool: C(0x1d2018),
   soil: C(0x6b5a3f), sand: C(0xd9c48e), wetSand: C(0xb8a272), seabed: C(0x9c8c62), rock: C(0x7f786d), rock2: C(0x6a645b), snow: C(0xbcc4ce), scree: C(0x7d776d), track: C(0x74674f),
   maquis: C(0x3f4d24), maquis2: C(0x55482c), lime: C(0x67635b), lime2: C(0x928d81), ochre: C(0x7d6342), rust: C(0x6e4a36), darkRock: C(0x3c3a36), scree2: C(0x9d968a),   // (Olympos)   // (snow a little blue-grey: pure white burned out in the sun)
   caveEarth: C(0x3f3528), caveRock: C(0x4d4740),
@@ -343,14 +358,21 @@ const PAL = {
 export const caveShade = (d) => 1 - 0.74 * d;
 const mix3 = (o, a, t) => { o[0] += (a[0] - o[0]) * t; o[1] += (a[1] - o[1]) * t; o[2] += (a[2] - o[2]) * t; return o; };
 export function groundColor(x, z, h, slope, w = biomeWeights(x, z), out = [0, 0, 0]) {
-  // Pedias: green meadow with golden fields and dry patches
-  const pc = PAL.meadow.slice(); mix3(pc, PAL.meadow2, fbm(x * 0.05, z * 0.05, 2));
+  // Each biome its own ground (the reviewer, 16 Nov: the biomes must look different underfoot; the terrain shader adds
+  // each one's own texture over these, terrain.js floorGround).
+  // Pedias: sunny green meadow with golden fields, brighter sunlit swards, dry patches and worn paths of bare earth
+  const pc = PAL.meadow.slice(); mix3(pc, PAL.meadow2, fbm(x * 0.05, z * 0.05, 2)); mix3(pc, PAL.sunlit, smooth(0.55, 0.72, fbm(x * 0.011 - 21, z * 0.011 + 6, 2)) * 0.5);
   mix3(pc, PAL.golden, smooth(0.56, 0.66, fbm(x * 0.006 + 40, z * 0.006, 3)) * 0.85);
-  mix3(pc, PAL.dry, smooth(0.5, 0.7, fbm(x * 0.02 - 9, z * 0.02, 2)) * 0.35);
-  // Yleos: dark forest floor, moss and needle litter
-  const yc = PAL.forest.slice(); mix3(yc, PAL.moss, fbm(x * 0.04 + 5, z * 0.04, 2)); mix3(yc, PAL.needles, smooth(0.5, 0.7, fbm(x * 0.03, z * 0.03 + 8, 2)) * 0.6);
-  // Valtos: mud and marsh moss
+  mix3(pc, PAL.dry, smooth(0.5, 0.7, fbm(x * 0.02 - 9, z * 0.02, 2)) * 0.45);
+  if (w.p > 0.05) mix3(pc, PAL.path, meadowPath(x, z) * 0.8);
+  // Yleos: a dark loam of humus, deep green moss in patches, rusty needle litter under the conifers and the odd fern
+  // bed, varied at two scales so the forest floor never reads as one colour
+  const yc = PAL.forest.slice(); mix3(yc, PAL.humus, smooth(0.45, 0.7, fbm(x * 0.09 - 3, z * 0.09 + 11, 2)) * 0.7);
+  mix3(yc, PAL.moss, smooth(0.42, 0.68, fbm(x * 0.04 + 5, z * 0.04, 2)) * 0.85); mix3(yc, PAL.needles, smooth(0.5, 0.68, fbm(x * 0.03, z * 0.03 + 8, 2)) * 0.75);
+  mix3(yc, PAL.fern, smooth(0.6, 0.75, fbm(x * 0.018 + 70, z * 0.018 - 40, 2)) * 0.6);
+  // Valtos: wet mud, dark green-brown, marsh moss and reedy tussocks, and darker sodden hollows where water stands
   const vc = PAL.mud.slice(); mix3(vc, PAL.marshMoss, fbm(x * 0.06, z * 0.06, 2)); mix3(vc, PAL.reedy, smooth(0.55, 0.7, fbm(x * 0.02 + 3, z * 0.02, 2)) * 0.5);
+  mix3(vc, PAL.pool, smooth(0.55, 0.7, fbm(x * 0.035 - 13, z * 0.035 + 2, 2)) * 0.7);
   out[0] = pc[0] * w.p + yc[0] * w.y + vc[0] * w.v; out[1] = pc[1] * w.p + yc[1] * w.y + vc[1] * w.v; out[2] = pc[2] * w.p + yc[2] * w.y + vc[2] * w.v;
   // beaches and seabed (not in the swamp, which goes straight into the water)
   const sandy = (1 - w.v * 0.9) * smooth(2.6 + fbm(x * 0.03, z * 0.03, 2) * 1.2, 1.2, h);

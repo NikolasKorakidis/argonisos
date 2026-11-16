@@ -159,6 +159,11 @@ const SFX = {
   // the bosses: a ground-shaking slam, the Chimera's fire, a block of stone hurled through the air
   slam: () => { noise(0.7, { type: 'lowpass', freq: 220, vol: 0.6, brown: true, wet: 0.5 }); tone(55, 0.8, { type: 'sine', vol: 0.3, slide: -25, wet: 0.4 }); noise(0.15, { freq: 900, q: 1, vol: 0.18, delay: 0.02 }); },
   breath: () => { if (sample('fireBurst', { vol: 0.6, wet: 0.3, rate: [0.8, 0.9] })) return; noise(1.5, { type: 'lowpass', freq: 900, vol: 0.32, brown: true, attack: 0.15, wet: 0.4 }); noise(1.4, { freq: 1800, q: 0.7, vol: 0.12, attack: 0.2, slide: -600 }); },
+  // a dryad's thorn (k: how near): the rustle and rising shimmer as the glow gathers in her hand, the whoosh as it leaves
+  // it, the crack and scatter of leaves where it strikes
+  thornCast: (k = 1) => { if (k <= 0) return; noise(0.6, { freq: 2600, q: 0.7, vol: 0.12 * k, attack: 0.3, slide: 1400, wet: 0.3 }); tone(520, 0.6, { type: 'sine', vol: 0.05 * k, slide: 380, attack: 0.35, wet: 0.5 }); tone(780, 0.5, { type: 'triangle', vol: 0.025 * k, slide: 500, attack: 0.3, delay: 0.1, wet: 0.5 }); },
+  thornThrow: (k = 1) => { if (k <= 0) return; noise(0.35, { freq: 1300, q: 1.2, vol: 0.22 * k, slide: -700, attack: 0.02, wet: 0.2 }); noise(0.25, { freq: 3600, q: 0.8, vol: 0.08 * k, slide: -1500 }); tone(900, 0.25, { type: 'sine', vol: 0.04 * k, slide: -500, wet: 0.4 }); },
+  thornHit: (k = 1) => { noise(0.06, { freq: 1900, q: 2.5, vol: 0.3 * k }); tone(260, 0.1, { type: 'triangle', vol: 0.1 * k, slide: -120 }); noise(0.4, { freq: 3800, q: 0.6, vol: 0.12 * k, attack: 0.01, slide: -1800, delay: 0.03 }); },
   boulder: () => { noise(0.45, { freq: 500, q: 0.8, vol: 0.22, slide: 300, attack: 0.05 }); tone(80, 0.3, { type: 'triangle', vol: 0.1, slide: -30 }); },
   // thunder: a crack when it's close, then a long roll of rumbling bursts under the reverb
   thunder: (k = 1) => {

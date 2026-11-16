@@ -130,6 +130,11 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   palettes dark (see `MARBLE` in `vegetation.js`).
 - The GPU timer is unreliable on ANGLE/Metal; resolution scaling decides on frame time only.
 - `pickups.visible` is rebuilt on the next frame after a pickup is taken; checks right after `interact()` must wait.
+- **Hitches come from shader compiles and uploads** (`docs/plans/perf-audit.md`). A material disposed takes its program
+  with it: keep materials you will make again (the fader's copies are pooled), give patched copies a program key shared
+  by every copy with the same shader (not their uuid), and put anything that first appears later into `warmUp`
+  (`main.js`). Send only the instances drawn (`addUpdateRange`), not the whole buffer. Never draw `scene` with a camera
+  that sees none of its lights (the light state changes and every material re-checks its program). F3 shows hitches.
 - **Heavy, pure work goes to the worker pool** (`world/pool.js`): terrain patches, flora cells and blocks, the grass
   texture, the map, and each cell's pickups (`pickup-layout.js`, laid out off the main thread: a cell's pickups appear a
   moment after you reach it). Jobs wait in one queue and run most urgent first (`PRIORITY`: the grass under your feet,
@@ -173,7 +178,7 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   kick, emotes) and what cancels them · `items.js` items and recipes · `inventory.js` · `crafting.js` ·
   `harvest.js` · `combat.js` · `trial.js` bosses, clues, offerings · `guide.js` the guided steps · `owl.js` · `save.js`.
 - `src/build`: `pieces.js` piece definitions · `build.js` placement, snapping, support. `src/creatures`: `creatures.js`
-  AI and spawning · `models.js` bodies. `src/ui`: HUD, map, title, menus, patch notes, `icons.js` (+ the black-figure
+  AI and spawning · `models.js` bodies. `src/ui`: HUD, map, title, menus, patch notes, `perf.js` the performance overlay (F3), `icons.js` (+ the black-figure
   `icon-set.js`, shared with the prototype). `src/audio/sound.js`: synthesised (its context opens while the world loads).
 
 ## Style

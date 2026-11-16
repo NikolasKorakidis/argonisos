@@ -7,7 +7,7 @@ addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement) return;
   if (!input.keys[e.code]) input.pressed.add(e.code);
   input.keys[e.code] = true;
-  if (['Tab', 'Space'].includes(e.code)) e.preventDefault();
+  if (['Tab', 'Space', 'F3', 'F10'].includes(e.code)) e.preventDefault();   // (F3: the performance overlay, not the browser's find bar; F10: the HUD hidden while seated, not the browser's menu)
 });
 addEventListener('keyup', (e) => { input.keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in input.keys) input.keys[k] = false; input.lmb = input.rmb = false; });

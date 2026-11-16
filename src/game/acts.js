@@ -18,6 +18,49 @@ const EAT = { time: 2.4, from: 2.0, to: 5.6, lock: 0.5, hurt: 8 };
 const PRAY = { time: 3.6, after: 0.9 };
 // Sitting: this long by a burning fire rests you (Rested for rest seconds, half a night in bed)
 const SIT = { rest: 20, rested: 600 };
+// Sitting cross-legged. The library's sitting clip (Mixamo "Sitting Idle") sits with the knees drawn up and the arms
+// round them; over it (crossLegs) the legs are laid down and crossed, each knee out to its side and each shin across in
+// front, the foot tucked under the other knee (the right shin in front of the left), and the hands come down to rest
+// on the knees (hand: from the knee, towards the middle and up). Directions in the body's own frame: x its left, y up,
+// z ahead; the right side is the left's mirror, but for the shins, which cross at different depths
+const CROSS = { thigh: [0.78, -0.08, 0.62], shinL: [-0.93, -0.05, -0.36], shinR: [-0.995, -0.03, -0.07], toes: 0.8, hand: [0.18, 0.08] };
+const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3(), _e = new THREE.Vector3(), _f = new THREE.Vector3();
+const _q = new THREE.Quaternion(), _p = new THREE.Quaternion(), _r = new THREE.Quaternion(), _body = new THREE.Quaternion(), _one = new THREE.Quaternion();
+// turn a bone in the world by q (its children with it), only a share w of the way
+function turn(bone, q, w) { if (w < 1) q.slerpQuaternions(_one, q, w); bone.parent.getWorldQuaternion(_p); bone.getWorldQuaternion(_r); bone.quaternion.copy(_p.invert().multiply(_r.premultiply(q))); bone.updateMatrixWorld(true); }
+const dirOf = (b, c, out) => c.getWorldPosition(out).sub(b.getWorldPosition(_f)).normalize();
+// A limb laid along two directions (world): bone a (towards its child b) along da, turned about that so the joint at b
+// still bends as a hinge into db, then b (towards its child c) along db
+function limb(a, b, c, da, db, w) {
+  turn(a, _q.setFromUnitVectors(dirOf(a, b, _a), da), w);
+  const cur = dirOf(b, c, _a), u = _b.copy(cur).addScaledVector(da, -cur.dot(da)), v = _c.copy(db).addScaledVector(da, -db.dot(da));
+  if (u.lengthSq() > 1e-6 && v.lengthSq() > 1e-6) { u.normalize(); v.normalize(); turn(a, _q.setFromAxisAngle(da, Math.atan2(_a.crossVectors(u, v).dot(da), u.dot(v))), w); }
+  turn(b, _q.setFromUnitVectors(dirOf(b, c, _a), db), w);
+}
+// (a direction in the body's frame, to the world)
+const bodyDir = (x, y, z, out) => out.set(x, y, z).normalize().applyQuaternion(_body);
+function crossLegs(H, w) {
+  const B = H.bones, bone = (n) => B['mixamorig' + n]; if (!bone('Hips') || !bone('LeftToeBase') || !bone('RightHand')) return;
+  H.root.updateMatrixWorld(true); H.root.getWorldQuaternion(_body);
+  for (const [side, k] of [['Left', 1], ['Right', -1]]) {
+    const [tx, ty, tz] = CROSS.thigh, sh = k > 0 ? CROSS.shinL : CROSS.shinR, thigh = bodyDir(tx * k, ty, tz, _d), shin = bodyDir(sh[0] * k, sh[1], sh[2], _e);
+    limb(bone(side + 'UpLeg'), bone(side + 'Leg'), bone(side + 'Foot'), thigh, shin, w);
+    // the foot on its outer edge under the other knee, the toes ahead along the shin
+    turn(bone(side + 'Foot'), _q.setFromUnitVectors(dirOf(bone(side + 'Foot'), bone(side + 'ToeBase'), _a), _b.copy(shin).add(bodyDir(0, -0.3, CROSS.toes, _c)).normalize()), w);
+  }
+  // the hands on the knees: shoulder, elbow and hand as two bones reaching for it, the elbow out to the side and back
+  const mid = bone('Hips').getWorldPosition(_f).clone();
+  for (const [side, k] of [['Left', 1], ['Right', -1]]) {
+    const S = bone(side + 'Arm').getWorldPosition(new THREE.Vector3()), E = bone(side + 'ForeArm').getWorldPosition(new THREE.Vector3()), Hd = bone(side + 'Hand').getWorldPosition(new THREE.Vector3());
+    const la = S.distanceTo(E), lb = E.distanceTo(Hd), T = bone(side + 'Leg').getWorldPosition(new THREE.Vector3());
+    T.lerp(mid.clone().setY(T.y), CROSS.hand[0]); T.y += CROSS.hand[1];
+    const n = T.clone().sub(S), d = Math.min(n.length(), (la + lb) * 0.999); n.normalize();
+    const x = (la * la - lb * lb + d * d) / (2 * d), h = Math.sqrt(Math.max(0, la * la - x * x)), pole = bodyDir(k, -0.6, -0.4, new THREE.Vector3());
+    pole.addScaledVector(n, -pole.dot(n)).normalize();
+    const elbow = S.clone().addScaledVector(n, x).addScaledVector(pole, h), hand = S.clone().addScaledVector(n, d);
+    limb(bone(side + 'Arm'), bone(side + 'ForeArm'), bone(side + 'Hand'), elbow.clone().sub(S).normalize(), hand.sub(elbow).normalize(), w);
+  }
+}
 // The kick: stamina, the clip's speed, when in it the foot lands (s), how far it reaches, the blow, how far a small
 // creature is shoved back (m) and over how long (s)
 const KICK = { cost: 10, rate: 1.25, at: 0.36, reach: 1.9, dmg: [[4, 'blunt']], shove: 1.6, shoveT: 0.25 };
@@ -34,7 +77,17 @@ const HAMMER = { from: 0.25, to: 1.25, rate: 1.6 };
 const BED = { top: 0.5, pillow: -0.72, head: Math.atan2(-0.64, 0.36), len: 0.73, off: 0.45 };
 
 export class Acts {
-  constructor(g) { this.g = g; this.pose = null; this.eating = null; this.later = []; this.shoves = []; }
+  constructor(g) {
+    this.g = g; this.pose = null; this.eating = null; this.later = []; this.shoves = [];
+    // (the HUD comes back as soon as the pointer is let go: the pause menu, a panel opened)
+    document.addEventListener('pointerlockchange', () => { if (!document.pointerLockElement) this.bare(false); });
+  }
+  // Seated, F10 hides the HUD for a picture (everything over the game's canvas); it's back when you stand
+  bare(on) {
+    if (!!this.hudOff === on) return; this.hudOff = on;
+    if (!document.getElementById('bareStyle')) document.head.insertAdjacentHTML('beforeend', '<style id="bareStyle">body.bare > :not(canvas) { visibility: hidden !important; }</style>');
+    document.body.classList.toggle('bare', on);
+  }
   get P() { return this.g.player; }
   get H() { return this.g.player.hero; }
   // free to start something: alive, standing on something, not swimming, rolling or already posed
@@ -47,7 +100,7 @@ export class Acts {
   }
   // End whatever pose is held, at once (another takes its place, death, a teleport)
   endPose(fade = 0.3) {
-    const p = this.pose; if (!p) return; this.pose = null;
+    const p = this.pose; if (!p) return; this.pose = null; this.bare(false);
     p.h?.stop(fade); p.wake?.stop(fade); if (this.P.seat === p.seat) this.P.seat = null;
     if (p.kind === 'pray') this.g.hud.progress(null);
   }
@@ -112,16 +165,18 @@ export class Acts {
     this.g.hud.progress(null); p.kind = 'kneel'; p.end = p.t + PRAY.after; p.onDone?.();
   }
 
-  // ---- sitting on the ground (Z), facing a fire if one burns close by; any move stands you up
+  // ---- sitting cross-legged on the ground (X), facing a fire if one burns close by. Seated, the camera is free
+  // (seat.look: player.js updateCamera), for pictures: the mouse goes round, WASD and Q / E move what it looks at, F10
+  // hides the HUD. X again or Space stands you up
   sit() {
     const g = this.g, P = this.P; if (!this.free() || P.speed > 3 || !this.H.has('sit')) return;
     const f = g.build.nearFire(P.pos, 4), yaw = f ? Math.atan2(f.pos.x - P.pos.x, f.pos.z - P.pos.z) : P.yaw;
-    const p = this.seatIn('sit', 'sit', { upper: false, loop: true, lock: true, feet: false, blend: 0.6, fade: 0.3 }, { yaw }); p.rest = 0;
+    const p = this.seatIn('sit', 'sit', { upper: false, loop: true, lock: true, feet: false, blend: 0.6, fade: 0.3, pose: crossLegs }, { yaw, look: true }); p.rest = 0;
   }
   // from sitting to your feet: the second half of getting up off the ground, carried along by its own travel
   stand() {
     const p = this.pose; if (p?.kind !== 'sit') return;
-    p.kind = 'stand'; p.seat.ease = 20; p.h.stop(0.3);
+    p.kind = 'stand'; p.seat.ease = 20; p.seat.look = false; this.bare(false); p.h.stop(0.3);
     p.h = this.H.action('getUp', { upper: 'auto', layer: true, from: 4.05, to: 7.0, rate: 1.9, root: 'move', feet: false, lock: true, lockFor: 0.8, blend: 0.3, fade: 0.35 });
   }
   // sitting by a burning fire a while rests you, as a night in bed does (for less long)
@@ -228,9 +283,12 @@ export class Acts {
       else if (p.kind === 'sleep' && p.t > 15) this.wake(p);   // (the night should have passed long since)
     }
     this.eatStep(dt);
-    // the keys: Z sit or stand, G wave, H cheer, Q kick
+    // the keys: X sit or stand (with the hammer in hand X takes down what it's aimed at: build.js), G wave, H cheer,
+    // Q kick. Seated, X, Q and E are the sitting's own (stand up, the camera down and up): nothing else takes them
     if (input.uiOpen || g.owl?.open) return;
-    if (hit('KeyZ')) { if (this.pose?.kind === 'sit') this.stand(); else if (!this.pose) this.sit(); }
+    const sat = this.pose?.kind === 'sit';
+    if (hit('KeyX')) { if (sat) this.stand(); else if (!this.pose && !g.equippedTool?.('build')) this.sit(); }
+    if (sat) { if (hit('F10')) this.bare(!this.hudOff); for (const k of ['KeyX', 'KeyQ', 'KeyE']) input.pressed.delete(k); }
     if (hit('KeyG')) this.wave();
     if (hit('KeyH')) this.cheer();
     if (hit('KeyQ')) this.kick();

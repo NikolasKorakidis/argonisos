@@ -1,8 +1,9 @@
 // Where every tree and boulder stands. Pure and deterministic (seeded per 64 m cell), so the worker can lay out cells
 // and the main thread always agrees on what is where: a tree chopped down is remembered by its cell and index.
 //
-// Pedias: open meadows with groves (olive, oak, cypress, pomegranate, fig, the odd great plane tree) and lone trees.
-// Yleos:  dense dark forest (pines, firs, holm oaks, broadleaves, dead snags) with clearings.
+// Pedias: open meadows with woods and orchards of broad, round-crowned trees (olive, oak, holm oak, pomegranate, fig, the
+//         odd great plane tree): no cypresses or firs, whose tall, slim shapes belong to the hills (reviewer, Patch 20).
+// Yleos:  dense dark forest of firs and cypresses, with figs among them, and clearings.
 // Valtos: dead and drowned trees, cypresses, sparse.
 import { heightAt, biomeWeights, fbm, hash2, slopeGrade, isRock, rockLimit, ROCK_GRADE } from './gen.js';
 import { smooth } from '../util/math.js';
@@ -47,7 +48,7 @@ export const SPECIES = [
   { name: 'flowers', s: [1.0, 1.5], noShadow: true, natural: true, n: 8 },
   { name: 'tallgrass', s: [0.8, 1.25], noShadow: true, natural: true, n: 3 },
   { name: 'bush', s: [0.65, 1.0], natural: true, n: 4 },
-  { name: 'mushrooms', s: [0.8, 1.4], noShadow: true, natural: true, n: 5 },
+  { name: 'mushrooms', s: [0.8, 1.4], noShadow: true, natural: true, n: 5 },   // (no longer laid out, Patch 20: kept so the species after it keep their numbers)
   { name: 'pebbles', s: [0.8, 1.7], noShadow: true, natural: true, n: 2 },
   { name: 'stump', s: [0.8, 1.2], col: 0.4, h: 0.7, natural: true, n: 5 },
   { name: 'log', s: [0.7, 1.0], col: 0.5, h: 0.9, natural: true, n: 4 },
@@ -58,14 +59,20 @@ export const SPECIES = [
   { name: 'driftwood', s: [0.8, 1.2], natural: true, n: 3 },
   // (Patch 13) moss mounds in the forest's shade and on the marsh's banks
   { name: 'moss', s: [0.7, 1.2], noShadow: true, natural: true, n: 3 },
+  // (Patch 20) tomato bushes in the meadows: picked for tomatoes (harvest.js), when variant 1, the same bush without its
+  // fruit, stands in its place until they have grown back
+  { name: 'tomato', s: [0.85, 1.15], natural: true, n: 1 },
 ];
 export const SP = Object.fromEntries(SPECIES.map((s, i) => [s.name, i]));
+// (reviewer, Patch 20: the meadows' cypresses gave way to the broad trees about them, and the hills keep only firs,
+// cypresses and figs. The weights alone changed: each tree's dice are as before, so the woods stand where they stood)
 const MIX = {
-  grove: [['olive', 42], ['pomegranate', 30], ['fig', 12], ['cypress', 9], ['oak', 7]],                       // orchard islands
-  wood: [['oak', 32], ['plane', 14], ['cypress', 18], ['olive', 14], ['qtree', 12], ['holm', 10]],             // the woods of the meadows
-  forest: [['qpine', 26], ['fir', 22], ['holm', 16], ['qtree', 22], ['qdead', 6], ['oak', 8]],
+  grove: [['olive', 46], ['pomegranate', 32], ['fig', 13], ['oak', 9]],                                        // orchard islands
+  wood: [['oak', 38], ['plane', 18], ['olive', 14], ['holm', 15], ['qtree', 12], ['pomegranate', 3]],           // the woods of the meadows
+  forest: [['fir', 52], ['cypress', 30], ['fig', 18]],
   swamp: [['dead', 45], ['qdead', 30], ['cypress', 25]],
 };
+const WOOD_THIN = 0.18;   // (with the lone trees and pairs that then go as well, a fifth fewer in all)
 const pick = (mix, r) => { let t = 0; for (const [, w] of mix) t += w; let a = r * t; for (const [n, w] of mix) { a -= w; if (a <= 0) return SP[n]; } return SP[mix[0][0]]; };
 
 // Trees per square metre at a point (0 where nothing can grow)
@@ -114,8 +121,8 @@ const isMeadowTree = (it, o, w) => SPECIES[it[o]].res === 'tree' && biomeWeights
 const reach2 = (it, o) => (it[o] === SP.titan ? 484 : 121);   // (the giants stand ~13 m apart: their neighbours within 22 m)
 const KEPT = new Map(), _lw = { p: 0, y: 0, v: 0, r: 0 };
 function count(list, x, z, upTo, r2 = 121) { let n = 0; for (let k = 0; k < list.length && n < upTo; k += 2) { const dx = list[k] - x, dz = list[k + 1] - z; if (dx * dx + dz * dz < r2) n++; } return n; }
-function treesOf(cx, cz, pass) {   // [x, z, ...] of the trees around a cell: as first laid out (pass 0), or those the first pass keeps (pass 1)
-  const out = []; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { const it = pass ? kept1(cx + i, cz + j) : rawCell(cx + i, cz + j); for (let o = 0; o < it.length; o += STRIDE) if (SPECIES[it[o]].res === 'tree' && it[o + 6] > 0 && (pass || !isRock(it[o + 2], it[o + 4]))) out.push(it[o + 2], it[o + 4]); }   // (a tree on bare rock won't stand: it doesn't count)
+function treesOf(cx, cz, pass, others) {   // [x, z, ...] of the trees around a cell: as first laid out (pass 0), or those the first pass keeps (pass 1); others: only the neighbours'
+  const out = []; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { if (others && !i && !j) continue; const it = pass ? kept1(cx + i, cz + j) : rawCell(cx + i, cz + j); for (let o = 0; o < it.length; o += STRIDE) if (SPECIES[it[o]].res === 'tree' && it[o + 6] > 0 && (pass || !isRock(it[o + 2], it[o + 4]))) out.push(it[o + 2], it[o + 4]); }   // (a tree on bare rock won't stand: it doesn't count)
   return out;
 }
 function kept1(cx, cz) {
@@ -125,8 +132,11 @@ function kept1(cx, cz) {
   KEPT.set(k, r); if (KEPT.size > 160) KEPT.delete(KEPT.keys().next().value); return r;
 }
 export function layoutCell(cx, cz) {
-  const it = kept1(cx, cz).slice(), rocks = rocksAround(cx, cz), x0 = cx * CELL, z0 = cz * CELL, near = treesOf(cx, cz, 1);
-  for (let o = 0; o < it.length; o += STRIDE) if (it[o + 6] > 0 && isMeadowTree(it, o, _lw) && count(near, it[o + 2], it[o + 4], 3, reach2(it, o)) < 3) it[o + 6] = 0;   // (itself and two)
+  const it = kept1(cx, cz).slice(), rocks = rocksAround(cx, cz), x0 = cx * CELL, z0 = cz * CELL, near = treesOf(cx, cz, 1, true);
+  // (itself and two. Counted again until none goes: a tree that goes can leave another alone, which in thinner woods, a
+  // fifth fewer since Patch 20, left the odd tree standing on its own)
+  for (let again = true; again;) { again = false; const own = []; for (let o = 0; o < it.length; o += STRIDE) if (SPECIES[it[o]].res === 'tree' && it[o + 6] > 0) own.push(it[o + 2], it[o + 4]);
+    for (let o = 0; o < it.length; o += STRIDE) if (it[o + 6] > 0 && isMeadowTree(it, o, _lw) && count(near, it[o + 2], it[o + 4], 3, reach2(it, o)) + count(own, it[o + 2], it[o + 4], 3, reach2(it, o)) < 3) { it[o + 6] = 0; again = true; } }
   for (let i = 0; i < it.length; i += STRIDE) {
     const sp = SPECIES[it[i]]; if (sp.res !== 'tree' || it[i] === SP.titan) continue;
     if (titanBand(it[i + 2], it[i + 4]) > 0.35 && hash2(cx * 131 + i, cz * 977 - i) < 0.75) { it[i + 6] = 0; continue; }   // the giants' shade: the understory thins out
@@ -212,8 +222,11 @@ function layoutRaw(cx, cz) {
     if (slope > rockLimit(x, z)) continue;   // bare rock: nothing grows (the shared slope rule, see gen.js)
     const d = treeDensity(x, z, h, w); if (r2 >= d * STEP * STEP) continue;
     const mix = w.v > 0.5 ? MIX.swamp : w.y > w.p ? MIX.forest : pediasWood(x, z).orchard ? MIX.grove : MIX.wood;
-    const sp = pick(mix, r3), S = SPECIES[sp].s;
-    out.push(sp, Math.floor(r4 * 3), x, h - 0.05, z, rnd() * 6.283, S[0] + (S[1] - S[0]) * rnd());
+    const sp = pick(mix, r3), S = SPECIES[sp].s, rot = rnd() * 6.283, sc = S[0] + (S[1] - S[0]) * rnd();
+    // (a fifth fewer trees in the meadows' woods and orchards, reviewer, Patch 20: each goes by a die of its own, thrown
+    // for its place on the grid, after the shared dice have all been drawn, so every other tree keeps its place and look)
+    if ((mix === MIX.wood || mix === MIX.grove) && hash2(cx * 16 + i + 40503, cz * 16 + j - 27011) < WOOD_THIN) continue;
+    out.push(sp, Math.floor(r4 * 3), x, h - 0.05, z, rot, sc);
   }
   // the old world between the trees: Mediterranean shrubs, and here and there a ruin (a fallen column, a herm by the way,
   // a stub of wall, a cache of jars). Laid out last, with dice of their own, so nothing laid out before them moves.
@@ -243,12 +256,12 @@ function layoutRaw(cx, cz) {
 // of its own (k from 1000), so nothing laid out before it moves. Each thing goes by the land where it stands (its own
 // biome, how deep in a wood), not its cell's, and each land has its own: the meadows' wildflowers in drifts of one kind,
 // a stretch of a few hundred metres having its own (poppies here, lavender or anemones there), with tussocks of tall grass
-// and round bushes along the woods' edges; the forest's leafy undergrowth, stumps, fallen logs, branches, roots, moss
-// and mushrooms at the feet of the trees (fly agarics in the giant forest); the marsh's water lilies on the pools, moss
-// on the banks and drowned logs; driftwood on the shore; pebbles everywhere, and scree on bare rock (only stones lie on
-// rock). Big pieces keep clear of the rocks and trunks laid out before them.
+// and round bushes along the woods' edges, and now and then a tomato bush; the forest's leafy undergrowth, stumps, fallen
+// logs, branches, roots and moss at the feet of the trees (the mushrooms that grew there went in Patch 20); the marsh's
+// water lilies on the pools, moss on the banks and drowned logs; driftwood on the shore; pebbles everywhere, and scree on
+// bare rock (only stones lie on rock). Big pieces keep clear of the rocks and trunks laid out before them.
 const FLOWER_KINDS = [[0, 1], [2, 3], [4, 5], [6], [7]];   // (flowers' looks by kind: red and gold, anemones, lavender, crown daisies, poppies)
-const BUSH = { meadow: [0, 1, 0, 1, 2, 3], forest: [2, 3] }, MUSHROOM = { forest: [0, 1, 2, 4], giant: [3, 3, 2, 0] };
+const BUSH = { meadow: [0, 1, 0, 1, 2, 3], forest: [2, 3] };
 function groundCover(out, x0, z0, cw, bc, h2) {
   const lay = (sp, k, x, y, z, v) => { const S = SPECIES[sp].s; out.push(sp, v ?? Math.floor(h2(k + 0.11) * SPECIES[sp].n), x, y, z, h2(k + 0.37) * 6.283, S[0] + (S[1] - S[0]) * h2(k + 0.53)); };
   const at = (k, R, cx, cz) => { const a = h2(k) * 6.283, d = R * Math.sqrt(h2(k + 0.5)); return [cx + Math.cos(a) * d, cz + Math.sin(a) * d]; };   // (somewhere within R of a point)
@@ -275,7 +288,7 @@ function groundCover(out, x0, z0, cw, bc, h2) {
       if (w > 0.2 && w < 0.7 && clear(x, z, 1.6)) lay(SP.bush, k, x, h - 0.08, z, one(BUSH.meadow, h2(k + 0.2))); }
   }
   if (cw.y > 0.25 && cw.v < 0.4) {
-    const giant = bc > 0.3, n = (a, b2) => Math.round(cw.y * a + bc * b2);
+    const n = (a, b2) => Math.round(cw.y * a + bc * b2);
     const trees = []; for (let o = 0; o < out.length; o += STRIDE) if (SPECIES[out[o]].res === 'tree') trees.push(out[o + 2], out[o + 4]);
     const byTree = (k, R) => { if (!trees.length) return [NaN, NaN]; const t = Math.floor(h2(k + 0.9) * trees.length / 2) * 2; return at(k, R, trees[t], trees[t + 1]); };
     for (let b = 0; b < n(7, 3); b++) { const k = 1400 + b, [x, z] = h2(k + 0.3) < 0.6 ? byTree(k, 4) : spot(k), h = dry(x, z); if (h !== null && h < 150 && forest(x, z) && clear(x, z, 0.8)) lay(SP.bush, k + 0.1, x, h - 0.06, z, one(BUSH.forest, h2(k + 0.2))); }   // the undergrowth
@@ -284,10 +297,6 @@ function groundCover(out, x0, z0, cw, bc, h2) {
     for (let i = 0; i < n(9, 4); i++) { const k = 1600 + i, [x, z] = spot(k), h = dry(x, z); if (h !== null && forest(x, z)) lay(SP.branch, k, x, h - 0.03, z); }
     for (let i = 0; i < n(3, 6); i++) { const k = 1650 + i, [x, z] = byTree(k, 2.5), h = dry(x, z); if (h !== null && forest(x, z)) lay(SP.roots, k, x, h - 0.05, z); }
     for (let i = 0; i < n(4, 3); i++) { const k = 1680 + i, [x, z] = byTree(k, 3.5), h = dry(x, z); if (h !== null && h < 150 && forest(x, z)) lay(SP.moss, k, x, h - 0.12, z); }   // (moss in the trees' shade)
-    for (let i = 0; i < n(3, 4); i++) {   // mushrooms in little clusters at the trees' feet, all of one kind
-      const k = 1700 + i * 10, [cx, cz] = byTree(k, 2.5), kind = one(giant ? MUSHROOM.giant : MUSHROOM.forest, h2(k + 0.97));
-      for (let m = 0; m < 2 + Math.floor(h2(k + 0.95) * 5); m++) { const [x, z] = at(k + 1 + m, 0.9, cx, cz), h = dry(x, z); if (h !== null && forest(x, z)) lay(SP.mushrooms, k + 1.3 + m, x, h - 0.03, z, kind); }
-    }
   }
   if (cw.p > 0.2 && cw.y < 0.25) { const k = 1560, [x, z] = spot(k), h = dry(x, z); if (h !== null && wood(x, z) > 0.5 && clear(x, z, 0.6)) lay(SP.stump, k, x, h - 0.06, z); }   // (now and then a stump in the meadows' woods)
   for (let i = 0; i < 3 + (cw.y > 0.3 ? 2 : 0); i++) { const k = 1800 + i, [x, z] = spot(k), h = dry(x, z, true); if (h !== null) lay(SP.pebbles, k, x, h - 0.03, z); }
@@ -298,5 +307,9 @@ function groundCover(out, x0, z0, cw, bc, h2) {
     for (let i = 0; i < Math.round(cw.v * 6); i++) { const k = 1970 + i, [x, z] = spot(k), h = heightAt(x, z); if (h > 0.1 && h < 2.5 && land(x, z).v > 0.4 && !siteClear(x, z) && !isRock(x, z)) lay(SP.moss, k, x, h - 0.12, z); }   // (moss on the banks)
     for (let i = 0; i < 2; i++) { const k = 1990 + i, [x, z] = spot(k), h = heightAt(x, z); if (h > -0.6 && h < 1.2 && !siteClear(x, z) && clear(x, z, 3)) lay(SP.log, k, x, Math.max(h, -0.35) - 0.15, z); }   // (half drowned)
   } else for (let i = 0; i < 3; i++) { const k = 2000 + i, [x, z] = spot(k), h = heightAt(x, z); if (h > 0.1 && h < 1.2 && !siteClear(x, z) && !isRock(x, z)) lay(SP.driftwood, k, x, h - 0.05, z); }   // (the shore)
+  // (Patch 20) tomato bushes, few and far between, out in the meadows and along the woods' edges, never deep in a wood:
+  // dice of their own (k from 2100), last in the cell, so nothing laid out before them moves
+  if (cw.p > 0.2 && cw.v < 0.4) for (let b = 0; b < Math.round(cw.p * 2); b++) { const k = 2100 + b, [x, z] = spot(k), h = dry(x, z);
+    if (h !== null && h2(k + 0.3) < 0.6 && meadow(x, z, h) && wood(x, z) < 0.6 && clear(x, z, 1)) lay(SP.tomato, k, x, h - 0.05, z, 0); }
 }
 export const STRIDE = 7;

@@ -7,14 +7,15 @@ import * as THREE from 'three';
 import { renderer, bloom, sun, sunFar, SHADOW, shadowSoftness, camera, GFX, ADAPT, setScale, setSamples } from '../render/core.js';
 import { SETTINGS_KEY, BOOT_GFX, ULTRA } from '../render/quality.js';
 import { ATMO, AQ } from '../render/atmosphere.js';
-import { GRASS } from '../world/grass.js';
+import { GRASS, clumpShare } from '../world/grass.js';
 import { setVolume, setMusicVolume } from '../audio/sound.js';
 import { input } from '../input.js';
 import { LIGHTNING } from '../world/lightning.js';
 import { SHAKE } from '../render/fx.js';
+import { showPerf } from './perf.js';
 
 const KEY = SETTINGS_KEY;
-export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, music: 0.5, sens: 1, fullscreen: false, look: null, calmFlash: false, shake: 'on' };
+export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, music: 0.5, sens: 1, fullscreen: false, look: null, calmFlash: false, shake: 'on', perf: false };
 try { Object.assign(SETTINGS, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* defaults */ }
 SETTINGS.graphics = BOOT_GFX;   // (?gfx=… in the address picks one for this visit: quality.js)
 const store = () => { try { localStorage.setItem(KEY, JSON.stringify(SETTINGS)); } catch { /* private mode */ } };
@@ -47,6 +48,7 @@ export function applyGraphics() {
   setSamples(Q.msaa || 4); [ADAPT.min, ADAPT.max] = Q.adapt || [0.7, 1]; if (ADAPT.k > ADAPT.max || ADAPT.k < ADAPT.min) { ADAPT.k = Math.min(ADAPT.max, Math.max(ADAPT.min, ADAPT.k)); setScale(); }
   if (GRASS.mesh) GRASS.mesh.count = Math.floor(GRASS.mesh.instanceMatrix.count * Q.grass);
   for (const f of GRASS.flowers) f.count = Math.floor(f.userData.max * Q.flowers);
+  clumpShare(Q.grass);   // (the meadow's clumps, as its blades)
   camera.far = Q.far; camera.updateProjectionMatrix();
 }
 // (true when the choice needs a reload to take in full: to or from Ultra, whose view distances are built in at load)
@@ -61,6 +63,9 @@ export function setCalmFlash(on) { SETTINGS.calmFlash = on; store(); LIGHTNING.s
 export const SHAKES = [['on', 'On', 1], ['reduced', 'Reduced', 0.4], ['off', 'Off', 0]];
 const shakeK = (v) => SHAKES.find((q) => q[0] === v)?.[2] ?? 1;
 export function setShake(v) { SETTINGS.shake = v; store(); SHAKE.k = shakeK(v); }
+// The performance overlay (F3): frame rate, frame times, hitches and what caused the last one (ui/perf.js)
+export function setPerfOverlay(on) { SETTINGS.perf = on; store(); showPerf(on); }
+showPerf(SETTINGS.perf);
 // the look chosen in the creator (the game keeps its own with the save; this one is where the next creator starts)
 export function rememberLook(look) { SETTINGS.look = { ...look }; delete SETTINGS.hero; store(); }
 

@@ -47,13 +47,35 @@ export default {
       return (club.hit && dagger.hit && club.n === 1 && dagger.n === 1 && club.k > dagger.k && !miss && fx.shake.n === n0) || JSON.stringify({ club, dagger, miss, missN: fx.shake.n - n0 });`);
     await t.step('Camera shake: Off holds the view still, Reduced turns it down, On is back', `const S = await import('/src/ui/settings.js'), fx = await import('/src/render/fx.js');
       S.setShake('off'); const off = fx.SHAKE.k; S.setShake('reduced'); const red = fx.SHAKE.k; S.setShake('on'); return (off === 0 && red > 0 && red < 1 && fx.SHAKE.k === 1) || [off, red, fx.SHAKE.k].join(' ');`);
+    // Tomato bushes (Patch 20): E picks 8 to 12 tomatoes and leaves the bush bare until they grow back; an axe cuts one
+    // down for 6 to 8 wood. Off to the nearest two first (they grow in the meadows, few and far between)
+    await t.step('(to the nearest tomato bushes)', `const F = await import('/src/world/flora.js'); const pcx = Math.floor(P.pos.x / F.CELL), pcz = Math.floor(P.pos.z / F.CELL), found = [];
+      for (let r = 0; r < 16 && found.length < 2; r++) for (let cx = pcx - r; cx <= pcx + r; cx++) for (let cz = pcz - r; cz <= pcz + r; cz++) { if (Math.max(Math.abs(cx - pcx), Math.abs(cz - pcz)) !== r) continue;
+        const it = F.layoutCell(cx, cz); for (let o = 0; o < it.length; o += 7) if (it[o] === F.SP.tomato && it[o + 6] > 0) found.push([it[o + 2], it[o + 4], cx + ',' + cz]); }
+      if (!found.length) return 'no tomato bush within 16 cells'; P.spawn(found[0][0] + 3, found[0][1]); window._tomCell = found[0][2]; return true;`);
+    await t.page.waitForFunction(() => AG.veg.near.get(window._tomCell)?.items, null, { timeout: 90000 }); await t.wait(500);   // (its cell streamed in)
+    await t.step('E on a tomato bush picks 8 to 12 tomatoes and leaves it bare', `${nearest(['tomato'])} ${face} if (!best) return 'no tomato bush near'; const id = best.cx + ',' + best.cz + ',' + best.i;
+      const dir = approach(best, 1.0, () => g.harvest.tomatoBush()?.id === id); if (!dir) return 'no side to pick it from'; const tb = g.harvest.tomatoBush(); if (!tb.ready) return 'not ripe to begin with';
+      const n0 = inv.count('tomato'); g.harvest.pickTomatoes(tb); const got = inv.count('tomato') - n0, again = g.harvest.tomatoBush(); window._tom = { picked: id };
+      return (got >= 8 && got <= 12 && AG.veg.bare.has(id) && again && !again.ready && g.ITEMS.tomato.type === 'food' && g.ITEMS.tomato.food.stamina === 23) || JSON.stringify({ got, bare: AG.veg.bare.has(id), again });`);
+    await t.step('…it grows its fruit back after a day', `const id = window._tom.picked, t0 = g.harvest.bare.get(id), S0 = { day: g.S.day, time: g.S.time };
+      g.S.day += 1; g.S.time = Math.min(0.99, g.S.time + 0.01); g.harvest.bareT = 0; g.harvest.growBack(0.1); const ripe = !AG.veg.bare.has(id) && !g.harvest.bare.has(id);
+      Object.assign(g.S, S0); g.harvest.bare.set(id, t0); g.harvest.bareT = 0; g.harvest.growBack(0.1); return (ripe && AG.veg.bare.has(id)) || 'still bare a day later';`);
+    await t.step('an axe cuts a tomato bush down for 6 to 8 wood', `${nearest(['tomato'])} ${face} const pickId = window._tom.picked; let b = best; if (!b) return 'no tomato bush';
+      { let alt = null; for (const c of AG.veg.near.values()) { const it = c.items; if (!it) continue; for (let o = 0, i = 0; o < it.length; o += STRIDE, i++) { if (SPECIES[it[o]].name !== 'tomato' || !(it[o + 6] > 0) || c.cx + ',' + c.cz + ',' + i === pickId || AG.veg.removed.has(c.cx + ',' + c.cz + ',' + i)) continue; const d = Math.hypot(it[o + 2] - P.pos.x, it[o + 4] - P.pos.z); if (d < 90 && (!alt || d < alt.d)) alt = { cx: c.cx, cz: c.cz, i, x: it[o + 2], y: it[o + 3], z: it[o + 4], s: it[o + 6], d }; } } if (alt) b = alt; }   // (another bush than the one picked, if there is one: the picked one should stay bare through the save)
+      const id = b.cx + ',' + b.cz + ',' + b.i, r = g.harvest.woodySize(SPECIES.findIndex((s) => s.name === 'tomato'), 0, b.s).r;
+      const dir = approach(b, r + 0.7, (dir) => { const w = g.harvest.woodyAhead(P.pos, dir, 2.3); return w && w.cx + ',' + w.cz + ',' + w.i === id && !g.colliders.pick(P.pos.x, P.pos.z, dir.x, dir.z, w.t + 0.1, (c) => c.ref && (SPECIES[c.ref.sp]?.res || c.ref.log)); });
+      if (!dir) return 'no clear side to strike it from'; const w0 = inv.count('wood'); let hits = 0;
+      while (!AG.veg.removed.has(id) && hits < 8) { if (!g.harvest.strike(g.ITEMS.crudeAxe)) return 'the axe missed after ' + hits + ' blows'; hits++; }
+      const wood = inv.count('wood') - w0; window._tom.chopped = id; return (AG.veg.removed.has(id) && wood >= 6 && wood <= 8) || JSON.stringify({ hits, wood, removed: AG.veg.removed.has(id) });`);
     // save, then reload the page as a player would: the bush stays cut
-    const saved = await t.eval(`const { save } = await import('/src/game/save.js'); return save(g) ? window._bush : null;`);
+    const saved = await t.eval(`const { save } = await import('/src/game/save.js'); return save(g) ? { ...window._bush, tom: window._tom } : null;`);
     await t.page.reload(); await t.page.waitForFunction(() => window.AG?.player.hero.model && AG.terrain.pending === 0, null, { timeout: 120000 });
     await t.page.waitForFunction((id) => { const [cx, cz] = id.split(','); return AG.veg.near.get(cx + ',' + cz)?.items; }, saved?.id ?? '0,0,0', { timeout: 60000 }).catch(() => {});
     const after = await t.eval(`const b = ${JSON.stringify(saved)}; if (!b) return 'save failed'; const removed = AG.veg.removed.has(b.id); const [cx, cz, i] = b.id.split(',').map(Number);
       const hit = g.harvest.woodyAhead({ x: b.x, y: AG.heightAt(b.x, b.z), z: b.z }, { x: Math.sin(b.yaw), z: Math.cos(b.yaw) }, 2.3); const back = hit && hit.cx === cx && hit.cz === cz && hit.i === i;
-      g.save = () => false; localStorage.removeItem('argonisos.world.v1'); return removed && !back ? true : JSON.stringify({ removed, back });`);
-    t.check('save, reload: the chopped bush stays gone', after === true, String(after));
+      const tom = b.tom || {}, picked = !tom.picked || tom.picked === tom.chopped || (g.harvest.bare.has(tom.picked) && AG.veg.bare.has(tom.picked)), chopped = !tom.chopped || AG.veg.removed.has(tom.chopped);
+      g.save = () => false; localStorage.removeItem('argonisos.world.v1'); return removed && !back && picked && chopped ? true : JSON.stringify({ removed, back, picked, chopped });`);
+    t.check('save, reload: the chopped bush and tomato bush stay gone, the picked tomato bush stays bare', after === true, String(after));
   },
 };

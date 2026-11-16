@@ -46,7 +46,7 @@ export class Terrain {
     const nd = this.nodes.get(m.id); if (!nd) return;
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(m.pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(m.nor, 3));
-    g.setAttribute('color', new THREE.BufferAttribute(m.col, 3)); g.setAttribute('uv', new THREE.BufferAttribute(m.uv, 2)); g.setAttribute('rock', new THREE.BufferAttribute(m.rock, 1)); g.setIndex(INDEX);
+    g.setAttribute('color', new THREE.BufferAttribute(m.col, 3)); g.setAttribute('uv', new THREE.BufferAttribute(m.uv, 2)); g.setAttribute('rock', new THREE.BufferAttribute(m.rock, 1)); g.setAttribute('bio', new THREE.BufferAttribute(m.bio, 2)); g.setIndex(INDEX);
     g.boundingBox = new THREE.Box3(new THREE.Vector3(nd.x0, m.minH - 4, nd.z0), new THREE.Vector3(nd.x0 + nd.size, m.maxH, nd.z0 + nd.size));
     g.boundingSphere = g.boundingBox.getBoundingSphere(new THREE.Sphere());
     const mesh = new THREE.Mesh(g, this.material); mesh.receiveShadow = true; mesh.matrixAutoUpdate = false; mesh.visible = false;
@@ -128,15 +128,52 @@ const ROCK_TEX = (() => {
   const t = new THREE.DataTexture(d, N, N); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter;
   t.generateMipmaps = true; t.anisotropy = 8; t.needsUpdate = true; return t;
 })();
+// ---- Each biome's own floor (the reviewer, 16 Nov: the biomes must look different underfoot). The forest floor gets a
+// litter of needles and twigs, cushions of moss (with a little relief that catches the light) and roots snaking
+// across it; the marsh dark sodden hollows that shine where water stands; the meadows keep their plain painted
+// strokes (the grass covers them). How much of each from the 'bio' attribute (the forest's and the marsh's weights:
+// terrain-worker.js).
+// One tileable texture, made at start-up: R litter (0.5 bare, darker and lighter strokes), G moss, B roots, A wet hollows.
+const FLOOR_TEX = (() => {
+  const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N; const g = cv.getContext('2d'), r = seeded(53);
+  // the litter and the roots drawn on a canvas, nine times over so they wrap round the tile's edges
+  const strokes = (n, len, wid, tone, wander) => { for (let i = 0; i < n; i++) {
+    let x = r() * N, y = r() * N, a = r() * 6.283; const l = len[0] + r() * (len[1] - len[0]), segs = wander ? 14 : 1, pts = [[x, y]];
+    for (let k = 0; k < segs; k++) { a += wander ? (r() - 0.5) * 0.9 : 0; x += Math.cos(a) * l / segs; y += Math.sin(a) * l / segs; pts.push([x, y]); }
+    g.strokeStyle = tone(); g.lineWidth = wid[0] + r() * (wid[1] - wid[0]);
+    for (const ox of [-N, 0, N]) for (const oy of [-N, 0, N]) { g.beginPath(); g.moveTo(pts[0][0] + ox, pts[0][1] + oy); for (const [px, py] of pts) g.lineTo(px + ox, py + oy); g.stroke(); } } };
+  g.lineCap = 'round'; g.fillStyle = 'rgb(128,128,128)'; g.fillRect(0, 0, N, N);
+  strokes(2200, [3, 9], [0.6, 1.3], () => { const v = r() < 0.55 ? 40 + r() * 50 : 170 + r() * 70; return `rgb(${v},${v},${v})`; }, false);
+  const litter = g.getImageData(0, 0, N, N).data;
+  g.fillStyle = '#000'; g.fillRect(0, 0, N, N); g.filter = 'blur(1.2px)'; strokes(7, [140, 260], [2, 4.5], () => '#fff', true); strokes(16, [40, 90], [1, 2], () => '#bbb', true);
+  const roots = g.getImageData(0, 0, N, N).data; g.filter = 'none';   // (the roots soft-edged, so up close they don't step texel by texel)
+  const moss = tileNoise(N, 6, 4, (x, z) => hash21(x + 41, z - 17)), grain = tileNoise(N, 48, 2, (x, z) => hash21(x - 5, z + 23)), wet = tileNoise(N, 3, 3, (x, z) => hash21(x + 77, z + 3));
+  const d = new Uint8Array(N * N * 4);
+  for (let k = 0; k < N * N; k++) d.set([litter[k * 4], Math.min(255, (moss[k] * 0.85 + grain[k] * 0.15) * 255), roots[k * 4], wet[k] * 255], k * 4);
+  const t = new THREE.DataTexture(d, N, N); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true; t.anisotropy = 8; t.needsUpdate = true; return t;
+})();
+const FLOOR = `
+      // each biome's floor (FLOOR_TEX), not on bare rock, fading out with distance (where the mipmaps would only grey it)
+      float fy = vBio.x * (1.0 - vRock), fv = vBio.y * (1.0 - vRock), fd = 1.0 - smoothstep(25.0, 70.0, length(vViewPosition));
+      vec4 fl = texture2D(uFloorTex, vRockP.xz / 9.0), fs = texture2D(uFloorTex, vRockP.xz / 3.3 + 0.43);
+      float fmoss = smoothstep(0.56, 0.74, fl.g), froot = fl.b * (1.0 - fmoss) * fd, fpool = smoothstep(0.52, 0.68, fl.a + (fs.a - 0.5) * 0.15) * fv;
+      vec3 fc = diffuseColor.rgb;
+      fc *= mix(1.0, 0.62 + mix(fl.r, fs.r, 0.6) * 0.75, fy * fd * (1.0 - fmoss * 0.7));          // needles and twigs, light and dark
+      fc = mix(fc, fc * vec3(0.78, 1.22, 0.7), fmoss * fy * 0.75);                                  // the moss greener
+      fc *= 1.0 - froot * fy * 0.45;                                                               // the roots dark
+      fc *= mix(1.0, 0.82 + fs.a * 0.3, fv) * (1.0 - fpool * 0.45);                                // the marsh's mud, darker where it's sodden
+      diffuseColor.rgb = fc;
+      float floorRelief = fmoss * (0.4 + fl.g * 0.4) * fy * fd;   // (the moss cushions stand up; the roots only darken: thin lines in relief caught the firelight texel by texel)`;
 export function rockGround(mat) {
   const base = mat.onBeforeCompile;
   mat.onBeforeCompile = (sh, r) => {
     base?.call(mat, sh, r);
-    sh.uniforms.uRockTex = { value: ROCK_TEX };
-    sh.vertexShader = 'attribute float rock; varying float vRock; varying vec3 vRockP, vRockN;\n' + sh.vertexShader.replace('#include <project_vertex>', `
-      vRock = rock; vRockP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRockN = normalize(mat3(modelMatrix) * objectNormal);
+    sh.uniforms.uRockTex = { value: ROCK_TEX }; sh.uniforms.uFloorTex = { value: FLOOR_TEX };
+    sh.vertexShader = 'attribute float rock; attribute vec2 bio; varying float vRock; varying vec2 vBio; varying vec3 vRockP, vRockN;\n' + sh.vertexShader.replace('#include <project_vertex>', `
+      vRock = rock; vBio = bio; vRockP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRockN = normalize(mat3(modelMatrix) * objectNormal);
       #include <project_vertex>`);
-    sh.fragmentShader = 'uniform sampler2D uRockTex; varying float vRock; varying vec3 vRockP, vRockN;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+    sh.fragmentShader = 'uniform sampler2D uRockTex, uFloorTex; varying float vRock; varying vec2 vBio; varying vec3 vRockP, vRockN;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>${FLOOR}
       // (sampled everywhere, not only on rock: the relief's screen derivatives need every pixel of the quad)
       vec3 rbw = pow(abs(vRockN), vec3(4.0)); rbw /= rbw.x + rbw.y + rbw.z;
       vec3 rp = vRockP / 7.0;   // (a tile 7 m across: slabs of about 1.7 m)
@@ -151,7 +188,9 @@ export function rockGround(mat) {
       vec3 rcol = diffuseColor.rgb * rtone;
       rcol = mix(rcol, rcol * vec3(0.85, 1.0, 0.62), smoothstep(0.72, 0.85, rk.b) * 0.6);   // lichen
       diffuseColor.rgb = mix(diffuseColor.rgb, rcol, vRock);
-      float rockRelief = (rk.g + smoothstep(0.0, 0.12, rbed) * 0.35 * rbk) * vRock * (1.0 - smoothstep(25.0, 70.0, length(vViewPosition)));`)
+      float rockRelief = (rk.g + smoothstep(0.0, 0.12, rbed) * 0.35 * rbk) * vRock * (1.0 - smoothstep(25.0, 70.0, length(vViewPosition))) + floorRelief;`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+      roughnessFactor = min(roughnessFactor, mix(1.0, 0.35, fpool));   // (standing water in the marsh's hollows shines)`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       {   // the relief tilts the normal (bump mapping from screen-space derivatives)
         vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition), r1 = cross(sy, normal), r2 = cross(normal, sx);

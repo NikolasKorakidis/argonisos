@@ -14,9 +14,13 @@ import { Stats } from './stats.js';
 import { clamp, lerp } from '../util/math.js';
 
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+const _lv = new THREE.Vector3();
 const SWIM_DEPTH = 1.35, RADIUS = 0.38;
 // The dodge roll (Space with the guard up, as in Valheim): its stamina, and the stretch of it no blow lands (seconds in)
 const DODGE = { cost: 12, safe: [0.05, 0.55] };
+// The free camera while seated (seat.look: sitting on the ground, game/acts.js): how far from the hero it may go (m), how fast WASD and Q / E move that point (m/s, Shift three times as fast), how close to the
+// ground it may come (m), the pitch it may reach either way (radians) and the wheel's range (m)
+const LOOK = { r: 30, speed: 3, low: 0.15, pitch: 1.5, near: 0.8, far: 14 };
 
 export class Player {
   constructor(scene) {
@@ -24,6 +28,7 @@ export class Player {
     this.hero = new Hero(scene, SETTINGS.look || (SETTINGS.hero && { body: SETTINGS.hero })); this.root = this.hero.root;
     this.pos = this.root.position; this.vel = new THREE.Vector3(); this.hv = new THREE.Vector3();
     this.yaw = 0; this.camYaw = 0; this.camPitch = -0.25; this.camDist = 5.5; this.camT = new THREE.Vector3(); this.camInit = false;
+    this.lookK = 0; this.lookOff = new THREE.Vector3(); this.lookV = new THREE.Vector3(); this.home = null;   // (the free camera: updateCamera)
     this.onGround = true; this.swimming = false; this.sprinting = false; this.sneaking = false; this.jumped = false; this.jumpBuf = 0;
     this.speed = 0; this.winded = false; this.swing = 0; this.swingKind = 'punch'; this.swingHit = false; this.equip = null; this.bow = null;
     this.strikeMove = null; this.combo = 0; this.comboT = 0; this.dodge = null;
@@ -40,7 +45,7 @@ export class Player {
     // a footstep each time a foot comes down in the stride the legs are playing (hero.update), on the ground
     this.hero.onFootfall = () => { if (this.onGround && !this.swimming) this.onStep?.('step'); };
   }
-  spawn(x, z) { this.seat = null; this.pos.set(x, Math.max(groundAt(x, z), -SWIM_DEPTH), z); this.vel.set(0, 0, 0); this.hv.set(0, 0, 0); this.camInit = false; }
+  spawn(x, z) { this.seat = null; this.pos.set(x, Math.max(groundAt(x, z), -SWIM_DEPTH), z); this.vel.set(0, 0, 0); this.hv.set(0, 0, 0); this.camInit = false; this.lookK = 0; this.lookOff.set(0, 0, 0); this.home = null; }
   get camForward() { return new THREE.Vector3(-Math.sin(this.camYaw) * Math.cos(this.camPitch), Math.sin(this.camPitch), -Math.cos(this.camYaw) * Math.cos(this.camPitch)); }
   // Start a strike (LMB). kind: hero.js strikeKind ('punch', 'tool' or a weapon's skill). Costs stamina; the hit lands
   // partway through the swing (onStrike), where the move's weapon meets what's in front; blows that follow each other
@@ -61,9 +66,11 @@ export class Player {
   update(dt) {
     const S = this.stats;
     // ---- camera input
+    // (seated, lookK: the free camera reaches lower, higher and further, and the wheel's steps grow with the distance)
     if (input.locked && !input.uiOpen) {
-      this.camYaw -= input.dx * 0.0022 * input.sens; this.camPitch = clamp(this.camPitch - input.dy * 0.0022 * input.sens, -1.25, 1.0);
-      this.camDist = clamp(this.camDist + input.wheel * 0.6, 1.8, 11);
+      const L = this.lookK;
+      this.camYaw -= input.dx * 0.0022 * input.sens; this.camPitch = clamp(this.camPitch - input.dy * 0.0022 * input.sens, lerp(-1.25, -LOOK.pitch, L), lerp(1.0, LOOK.pitch, L));
+      this.camDist = clamp(this.camDist + input.wheel * (0.6 + this.camDist * 0.12 * L), lerp(1.8, LOOK.near, L), lerp(11, LOOK.far, L));
     }
     const ground = groundAt(this.pos.x, this.pos.z);
     this.swimming = ground < -SWIM_DEPTH && this.pos.y <= -SWIM_DEPTH + 0.15;
@@ -206,7 +213,7 @@ export class Player {
   // that put him there. Trying to move or jump asks the seat to let go (seat.leave)
   updateSeat(dt) {
     const s = this.seat, H = this.hero, k = Math.min(1, dt * (s.ease ?? 6)), ctl = !this.frozen && !this.stats.has('stunned');
-    const moving = ctl && ['KeyW', 'KeyA', 'KeyS', 'KeyD'].some(down), jump = ctl && hit('Space');
+    const moving = ctl && !s.look && ['KeyW', 'KeyA', 'KeyS', 'KeyD'].some(down), jump = ctl && hit('Space');   // (with the free camera WASD moves it)
     s.x += H.step.x; s.z += H.step.z; H.step.set(0, 0, 0);   // (the travel an action asks for: getting up)
     this.pos.x += (s.x - this.pos.x) * k; this.pos.z += (s.z - this.pos.z) * k;
     const fl = this.groundHere(this.pos.x, this.pos.z, this.pos.y + 0.3); this.pos.y += (fl - this.pos.y) * Math.min(1, dt * 12);
@@ -220,21 +227,47 @@ export class Player {
   }
   // ---- orbit camera over the right shoulder; pulls in close while aiming; never dips into the ground
   updateCamera(dt) {
-    const raw = this.pos.clone(); raw.y += this.swimming ? 1.2 : this.sneaking ? (this.hero.crouches ? 1.35 : 1.45) : 1.65;
+    // Seated (seat.look), the camera is free, for pictures: the mouse takes it anywhere round, low over the grass or high
+    // above, the wheel from close to far, and WASD (Q / E down and up) moves the point it looks at, all within LOOK.r of
+    // the hero; it eases in and out (lookK). Standing up, it comes back round behind him, as high and as far as before
+    const look = !!this.seat?.look && !this.dead, e = (r) => Math.min(1, dt * r);
+    this.lookK = lerp(this.lookK, look ? 1 : 0, e(4)); const L = this.lookK < 0.001 ? 0 : this.lookK;
+    if (look) {
+      this.home ||= { pitch: this.camPitch, dist: this.camDist };
+      const on = !this.frozen, ix = on ? (down('KeyD') ? 1 : 0) - (down('KeyA') ? 1 : 0) : 0, iz = on ? (down('KeyW') ? 1 : 0) - (down('KeyS') ? 1 : 0) : 0, iy = on ? (down('KeyE') ? 1 : 0) - (down('KeyQ') ? 1 : 0) : 0;
+      const fx = -Math.sin(this.camYaw), fz = -Math.cos(this.camYaw), sp = LOOK.speed * (down('ShiftLeft') || down('ShiftRight') ? 3 : 1), l = Math.hypot(ix, iz) || 1;
+      this.lookV.lerp(_lv.set(((fx * iz - fz * ix) / l) * sp, iy * sp, ((fz * iz + fx * ix) / l) * sp), e(6)); this.lookOff.addScaledVector(this.lookV, dt);
+      // (the point no further out than leaves the camera, behind it, within LOOK.r: drawn back in as the wheel takes it out)
+      const room = Math.max(0, LOOK.r - this.camDist - 1), o = this.lookOff.length(); if (o > room) this.lookOff.setLength(Math.max(room, o - Math.max(o - room, 1) * e(6)));
+    } else {
+      this.lookV.set(0, 0, 0); this.lookOff.multiplyScalar(1 - e(4));
+      if (this.home) { const k = e(4); this.camYaw += angDiff(this.yaw + Math.PI, this.camYaw) * k; this.camPitch = lerp(this.camPitch, this.home.pitch, k); this.camDist = lerp(this.camDist, this.home.dist, k); if (L < 0.02) this.home = null; }
+    }
+    const raw = this.pos.clone(); raw.y += (this.swimming ? 1.2 : this.sneaking ? (this.hero.crouches ? 1.35 : 1.45) : 1.65) - 0.8 * L;   // (seated, the body's middle)
     if (!this.camInit || this.camT.distanceTo(raw) > 8) { this.camT.copy(raw); this.camInit = true; }
     this.camT.x += (raw.x - this.camT.x) * Math.min(1, dt * 16); this.camT.z += (raw.z - this.camT.z) * Math.min(1, dt * 16); this.camT.y += (raw.y - this.camT.y) * Math.min(1, dt * 8);
     this.aimK = lerp(this.aimK || 0, this.aiming ? 1 : 0, Math.min(1, dt * 8));
     const k = this.aimK, dist = lerp(this.camDist, 2.3, k), pitch = this.camPitch;
     const right = new THREE.Vector3(Math.cos(this.camYaw), 0, -Math.sin(this.camYaw));
-    const target = this.camT.clone().addScaledVector(right, 0.45 + 0.35 * k); target.y -= 0.15 * k;
+    const target = this.camT.clone().addScaledVector(right, (0.45 + 0.35 * k) * (1 - L)); target.y -= 0.15 * k;
+    if (L) {
+      // the point looked at: moved off the hero, kept over the ground and out of walls (stopped where one stands between)
+      target.add(this.lookOff); target.y = Math.max(target.y, this.groundHere(target.x, target.z, target.y) + LOOK.low);
+      const b = target.distanceTo(this.camT) > 0.05 ? this.camBlock?.(this.camT, target) : null; if (b !== undefined && b !== null) { target.sub(this.camT).setLength(Math.max(0, b - 0.3)).add(this.camT); this.lookOff.copy(target).sub(this.camT); }
+    }
     const fov = lerp(60, 50, k); if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
     const off = new THREE.Vector3(Math.sin(this.camYaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(this.camYaw) * Math.cos(pitch)).multiplyScalar(dist);
-    const want = target.clone().add(off);
-    // keep the camera out of hills between it and the player
-    for (let i = 1; i <= 6; i++) { const p = target.clone().lerp(want, i / 6), g = groundAt(p.x, p.z) + 0.4; if (p.y < g) { want.y += g - p.y; } }
-    want.y = Math.max(want.y, groundAt(want.x, want.z) + 0.5, -0.6);
+    const want = target.clone().add(off), over = lerp(0.4, LOOK.low, L);
+    // keep the camera out of hills between it and the player (free, it may come down close over the grass)
+    for (let i = 1; i <= 6; i++) { const p = target.clone().lerp(want, i / 6), g = groundAt(p.x, p.z) + over; if (p.y < g) { want.y += g - p.y; } }
+    want.y = Math.max(want.y, groundAt(want.x, want.z) + lerp(0.5, LOOK.low, L), -0.6);
+    if (L) {
+      // (free: over floors too, and never further than LOOK.r from the hero)
+      const fromHero = want.clone().sub(raw); if (fromHero.length() > LOOK.r) want.copy(raw).add(fromHero.setLength(LOOK.r));
+      want.y = Math.max(want.y, this.groundHere(want.x, want.z, want.y) + LOOK.low);
+    }
     // ...and out of walls and roofs: pull in to just in front of whatever is between
-    const block = this.camBlock?.(target, want); if (block !== undefined && block !== null) { const dir = want.clone().sub(target); want.copy(target).add(dir.setLength(Math.max(0.6, block - 0.25))); }
-    camera.position.lerp(want, Math.min(1, dt * (14 + k * 10))); camera.lookAt(target);
+    const block = this.camBlock?.(target, want); if (block !== undefined && block !== null) { const dir = want.clone().sub(target); want.copy(target).add(dir.setLength(Math.max(0.6 * (1 - L) + 0.2 * L, block - 0.25))); }
+    camera.position.lerp(want, Math.min(1, dt * lerp(14 + k * 10, 6, L))); camera.lookAt(target);
   }
 }

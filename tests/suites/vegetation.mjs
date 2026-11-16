@@ -5,6 +5,10 @@ export default {
   name: 'Vegetation and occlusion',
   async run(t) {
     await t.page.waitForFunction(() => AG.veg.near.size > 4, null, { timeout: 60000 });
+    // (cypresses grow only in the hills since Patch 20: off to the nearest stand of them first)
+    await t.step('(to the nearest cypresses, in the hills)', `const F = await import('/src/world/flora.js'); for (let r = 0; r < 24; r++) for (let cx = -r; cx <= r; cx++) for (let cz = -r; cz <= r; cz++) { if (Math.max(Math.abs(cx), Math.abs(cz)) !== r) continue;
+      const it = F.layoutCell(cx, cz); let n = 0; for (let o = 0; o < it.length; o += 7) if (it[o] === F.SP.cypress && it[o + 6] > 0.8) n++; if (n > 3) { P.spawn((cx + 0.5) * F.CELL, (cz + 0.5) * F.CELL); return true; } } return 'no cypresses anywhere';`);
+    await t.page.waitForFunction(() => [...AG.veg.near.values()].filter((c) => c.items).length > 8 && AG.terrain.pending === 0, null, { timeout: 60000 }); await t.wait(500);
     // (a cypress: its trunk grows straight up, so the line of sight can be laid through it exactly; the other trees' crowns
     // start above head height and their trunks lean. One with clear ground where the hero will stand, or a rock there
     // would push him out of line.)

@@ -163,6 +163,38 @@ if job.get('plant'):
         lo = min((o.matrix_world @ Vector(c)).z for o in ms for c in o.bound_box); hi = max((o.matrix_world @ Vector(c)).z for o in ms for c in o.bound_box)
         for o in bpy.data.objects:
             if not o.parent: o.matrix_world = Matrix.Scale(job['height'] / (hi - lo), 4) @ o.matrix_world
+    # Fruit hung on a plant the packs have none of (manifest "fruit": { clusters, per: [least, most], r: [smallest,
+    # largest] radius in metres, colours: [[r, g, b], …] }; the tomato bush, Patch 20): little low-poly balls in bunches,
+    # each bunch where a ray from outside towards the stem first meets the leaves, spread round and up the plant by the
+    # golden angle, and a green cap on each. Vertex-coloured like the rest, so it joins the plant's one solid mesh.
+    if job.get('fruit'):
+        import bmesh, random, math
+        from mathutils import Matrix, Vector
+        from mathutils.bvhtree import BVHTree
+        F = job['fruit']; rnd = random.Random(F.get('seed', 7)); bpy.context.view_layer.update(); ms = [o for o in bpy.data.objects if o.type == 'MESH']
+        bm = bmesh.new()
+        for o in ms: t = bmesh.new(); t.from_mesh(o.data); t.transform(o.matrix_world); tm = bpy.data.meshes.new('t'); t.to_mesh(tm); bm.from_mesh(tm); bpy.data.meshes.remove(tm); t.free()
+        tree = BVHTree.FromBMesh(bm); pts = [v.co.copy() for v in bm.verts]; bm.free()
+        lo, hi = min(p.z for p in pts), max(p.z for p in pts); cx, cy = sum(p.x for p in pts) / len(pts), sum(p.y for p in pts) / len(pts)
+        R = max(Vector((p.x - cx, p.y - cy)).length for p in pts)
+        fb = bmesh.new(); cols = []
+        for k in range(F.get('clusters', 6)):
+            a, z = k * 2.39996 + rnd.uniform(-0.3, 0.3), lo + (hi - lo) * rnd.uniform(*F.get('band', [0.3, 0.8]))
+            o = Vector((cx + math.cos(a) * R * 1.6, cy + math.sin(a) * R * 1.6, z)); hit = tree.ray_cast(o, (Vector((cx, cy, z)) - o).normalized())
+            if hit[0] is None: continue
+            at = hit[0] + (o - hit[0]).normalized() * 0.04   # (just proud of the leaves it hangs among)
+            for f in range(rnd.randint(*F.get('per', [2, 3]))):
+                r = rnd.uniform(*F.get('r', [0.04, 0.06])); c = Vector((at.x + rnd.uniform(-1, 1) * r * 1.2, at.y + rnd.uniform(-1, 1) * r * 1.2, at.z - f * r * 1.1 + rnd.uniform(-0.3, 0.3) * r))
+                g = bmesh.ops.create_icosphere(fb, subdivisions=1, radius=r, matrix=Matrix.Translation(c) @ Matrix.Diagonal((1, 1, 0.85, 1)))
+                cols += [F['colours'][0] if rnd.random() < 0.75 else rnd.choice(F['colours'])] * len(g['verts'])
+                g = bmesh.ops.create_cone(fb, cap_ends=False, segments=5, radius1=r * 0.55, radius2=0.002, depth=r * 0.45, matrix=Matrix.Translation(c + Vector((0, 0, r * 0.95))))
+                cols += [F.get('cap', [0.12, 0.22, 0.06])] * len(g['verts'])
+        fm = bpy.data.meshes.new('fruit'); fb.to_mesh(fm); fb.free(); fo = bpy.data.objects.new('fruit', fm); bpy.context.scene.collection.objects.link(fo)
+        fm.materials.append(plain); n = len(fm.loops); vc = [0.0] * (n * 4); lv = [0] * n; fm.loops.foreach_get('vertex_index', lv)
+        for i, v in enumerate(lv): vc[i * 4:i * 4 + 4] = [*cols[v], 1]
+        ca = fm.color_attributes.new('Col', 'BYTE_COLOR', 'CORNER'); ca.data.foreach_set('color_srgb', vc)
+        fm.color_attributes.active_color = ca; fm.color_attributes.render_color_index = fm.color_attributes.find('Col')
+        print('FRUIT', len(fm.polygons), 'faces')
     print('PLANT cards', sorted(cards))
 
 # one mesh for the whole body (the Infinity PBR characters come in a hundred pieces: a draw call each in the game)

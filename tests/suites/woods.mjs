@@ -13,8 +13,10 @@ export default {
       const seen = new Set(), bad = []; let groups = 0;
       for (const t of all) { if (seen.has(t) || !meadow(t[0], t[1])) continue; const g = [t]; seen.add(t); for (let q = 0; q < g.length; q++) for (const u of around(g[q][0], g[q][1], g[q][2] === 'titan' ? 22 : 11)) if (!seen.has(u)) { seen.add(u); g.push(u); } groups++; if (g.length <= 2) bad.push(g.length + ' at ' + t[0].toFixed(0) + ',' + t[1].toFixed(0)); }
       return (groups > 15 && bad.length === 0) || bad.length + ' of ' + groups + ' groups are 1-2 trees: ' + bad.slice(0, 4).join(' | ');`);
+    // (wooded: a tree within 9 m. It was 8 m until the woods were thinned by a fifth in Patch 20, which spaced their trees
+    // about 1.12 times further apart, √(1 / 0.8): the woods themselves cover as much of the plain as before)
     await t.step('more wood than clearing: about 70% wooded, with real clearings between', `${LAYOUT} let land = 0, wooded = 0, open = 0;
-      for (let x = -740; x < 740; x += 9) for (let z = -740; z < 740; z += 9) { if (G.heightAt(x, z) < 1.6 || !meadow(x, z)) continue; land++; if (around(x, z, 8).length) wooded++; if (!around(x, z, 30).length) open++; }
+      for (let x = -740; x < 740; x += 9) for (let z = -740; z < 740; z += 9) { if (G.heightAt(x, z) < 1.6 || !meadow(x, z)) continue; land++; if (around(x, z, 9).length) wooded++; if (!around(x, z, 30).length) open++; }
       const wp = 100 * wooded / land, op = 100 * open / land; return (wp > 62 && wp < 85 && op > 4) || 'wooded ' + wp.toFixed(0) + '%, open ' + op.toFixed(0) + '%';`);
     await t.step('clearings of every size: small glades and wide open meadows', `${LAYOUT} const S = 9, open = new Map();
       for (let x = -740; x < 740; x += S) for (let z = -740; z < 740; z += S) if (G.heightAt(x, z) >= 1.6 && meadow(x, z) && !around(x, z, 12).length) open.set(x + ',' + z, [x, z]);

@@ -3,7 +3,7 @@ import { hasSave, clearSave } from '../game/save.js';
 import { input, lock, unlock } from '../input.js';
 import { PATCHES, notesPanel, notesUnread } from './patchnotes.js';
 import { characterCreator } from './creator.js';
-import { SETTINGS, PRESETS, ULTRA_NOTE, RES, applyGraphics, setGraphics, setRes, setVol, setMusic, setSens, setCalmFlash, SHAKES, setShake, toggleFullscreen, isFullscreen, onFullscreenChange } from './settings.js';
+import { SETTINGS, PRESETS, ULTRA_NOTE, RES, applyGraphics, setGraphics, setRes, setVol, setMusic, setSens, setCalmFlash, SHAKES, setShake, setPerfOverlay, toggleFullscreen, isFullscreen, onFullscreenChange } from './settings.js';
 // which build this is (the commit and date the deploy stamps into index.html), so we can tell what GitHub Pages is serving
 const BUILD = document.querySelector('meta[name=build]')?.content || '';
 
@@ -60,13 +60,14 @@ export function pauseMenu(g) {
     <div class="set"><span>Mouse sensitivity</span><input type="range" id="sSens" min="30" max="250"></div>
     <div class="set"><span>Reduce flashing</span><button class="btn small" id="sCalm"></button></div>
     <div class="set"><span>Camera shake</span><div class="seg" id="sShake">${SHAKES.map(([v, l]) => `<button data-v="${v}">${l}</button>`).join('')}</div></div>
+    <div class="set"><span>Performance overlay <small>(F3)</small></span><button class="btn small" id="sPerf"></button></div>
     <p class="hint">Esc or P pauses · in fullscreen, hold Esc to leave it · the world saves itself every minute</p></div></div>`;
   document.body.appendChild(pm);
   const sync = () => {
     pm.querySelector('#sFs').textContent = isFullscreen() ? 'On' : 'Off'; const tf = document.querySelector('#tFs b'); if (tf) tf.textContent = isFullscreen() ? 'Exit Fullscreen' : 'Fullscreen';
     pm.querySelectorAll('#sGfx button').forEach((b) => b.classList.toggle('on', b.dataset.v === SETTINGS.graphics)); pm.querySelector('.gfxNote').classList.toggle('hidden', SETTINGS.graphics !== 'ultra');
     pm.querySelectorAll('#sRes button').forEach((b) => b.classList.toggle('on', +b.dataset.v === SETTINGS.res));
-    pm.querySelector('#sCalm').textContent = SETTINGS.calmFlash ? 'On' : 'Off'; pm.querySelectorAll('#sShake button').forEach((b) => b.classList.toggle('on', b.dataset.v === SETTINGS.shake));
+    pm.querySelector('#sCalm').textContent = SETTINGS.calmFlash ? 'On' : 'Off'; pm.querySelector('#sPerf').textContent = SETTINGS.perf ? 'On' : 'Off'; pm.querySelectorAll('#sShake button').forEach((b) => b.classList.toggle('on', b.dataset.v === SETTINGS.shake));
     pm.querySelector('#sVol').value = Math.round(SETTINGS.volume * 100); pm.querySelector('#sMus').value = Math.round(SETTINGS.music * 100); pm.querySelector('#sSens').value = Math.round(SETTINGS.sens * 100);
   };
   pm.querySelector('#sFs').onclick = async () => { await toggleFullscreen((m) => g.hud.toast(m)); sync(); };
@@ -77,6 +78,7 @@ export function pauseMenu(g) {
   pm.querySelector('#sMus').oninput = (e) => setMusic(e.target.value / 100);
   pm.querySelector('#sSens').oninput = (e) => setSens(e.target.value / 100);
   pm.querySelector('#sCalm').onclick = () => { setCalmFlash(!SETTINGS.calmFlash); sync(); };
+  pm.querySelector('#sPerf').onclick = () => { setPerfOverlay(!SETTINGS.perf); sync(); };
   pm.querySelector('#sShake').onclick = (e) => { const b = e.target.closest('button'); if (b) { setShake(b.dataset.v); sync(); } };
   onFullscreenChange(sync); sync(); applyGraphics();
   pm.querySelector('#pDev').onclick = () => g.devMenu?.open();

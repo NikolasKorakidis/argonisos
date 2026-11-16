@@ -25,7 +25,7 @@ export function updateWetness(dt, rain, sun) {
 }
 
 // ---- Shelter
-const SIZE = 112, RES = 512, LIFT = 120, LAYER = 3;   // (layers 3 and 4: what the two shelter maps draw)
+const SIZE = 112, RES = 512, LIFT = 120, LAYER = 3, LIT = 9;   // (layers 3 and 4: what the two shelter maps draw; 9: the lights, for them)
 const depthTarget = () => { const t = new THREE.WebGLRenderTarget(RES, RES, { depthBuffer: true, depthTexture: new THREE.DepthTexture(RES, RES) }); t.texture.generateMipmaps = false; return t; };
 const solid = depthTarget(), canopy = depthTarget(), CANOPY = LAYER + 1;
 const cam = new THREE.OrthographicCamera(-SIZE / 2, SIZE / 2, SIZE / 2, -SIZE / 2, 1, 400); cam.up.set(0, 0, -1);
@@ -46,7 +46,11 @@ export function updateShelter(renderer, scene, pos, roots, dt, raining = true, f
   cam.position.set(cx, pos.y + LIFT, cz); cam.lookAt(cx, pos.y, cz); cam.updateMatrixWorld();
   const prev = { rt: renderer.getRenderTarget(), auto: renderer.shadowMap.autoUpdate, over: scene.overrideMaterial, bg: scene.background };
   renderer.shadowMap.autoUpdate = false; scene.overrideMaterial = depthMat; scene.background = null;
-  for (const [t, layer] of [[solid, LAYER], [canopy, CANOPY]]) { cam.layers.set(layer); renderer.setRenderTarget(t); renderer.clear(); renderer.render(scene, cam); }
+  // (the lights are made visible to this camera too, on a layer of their own: three keeps one set of lights per scene, and
+  // a draw of the scene that saw none of them changed it, so every lit material in the world looked its shader up
+  // again on the next frame, twice for each redraw of these maps. The depth they draw takes no light either way.)
+  for (const o of scene.children) if (o.isLight) o.layers.enable(LIT);
+  for (const [t, layer] of [[solid, LAYER], [canopy, CANOPY]]) { cam.layers.set(layer); cam.layers.enable(LIT); renderer.setRenderTarget(t); renderer.clear(); renderer.render(scene, cam); }
   renderer.setRenderTarget(prev.rt); renderer.shadowMap.autoUpdate = prev.auto; scene.overrideMaterial = prev.over; scene.background = prev.bg;
   WET_U.uShelterBox.value.set(cx - SIZE / 2, cz - SIZE / 2, SIZE, cam.position.y);
 }
