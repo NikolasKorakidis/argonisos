@@ -44,7 +44,7 @@ export const hemi = new THREE.HemisphereLight(0xbfdcff, 0x3f6a5a, 0.9); scene.ad
 export const SHADOW = { nearR: ULTRA ? 48 : 32, farR: ULTRA ? 260 : 110, ahead: 0.35, depth: ULTRA ? 520 : 400, soft: 0.05, far: true, sky: 0.4,
   farStep: ULTRA ? 8 : 6, farTurn: 0.2,   // (the far map is drawn again only when you are this many metres from where it was drawn, or the sun has turned this many degrees)
   nightR: 20, nightFade: 14,  // (by moonlight trees cast only this near you, their shadows fading out by this far from the camera: faint, and cheap)
-  night: false };
+  night: false, farDirty: false };   // (farDirty: what casts into the far map has changed, vegetation.js: draw it again)
 export const sun = new THREE.DirectionalLight(0xffdca0, 2.6);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -SHADOW.nearR, right: SHADOW.nearR, top: SHADOW.nearR, bottom: -SHADOW.nearR, near: 1, far: SHADOW.depth });
@@ -224,6 +224,10 @@ export function setScale() { const s = GFX.scale * ADAPT.k; renderer.setPixelRat
 // once you are SHADOW.farStep metres from where it was drawn or the sun has turned SHADOW.farTurn degrees: about once a
 // second walking, not at all standing still. Each map keeps the box it was drawn with, so the two never disagree, and
 // its texels stay put in the world, so a redraw changes nothing that was already in it.
+// It is drawn again too when the trees in it change (SHADOW.farDirty: cells and blocks streaming in or dropped, a tree
+// felled), at most four times a second: drawn at a teleport, a respawn or daybreak, before the cells round you had come
+// in, it held none of their trees until you had walked six metres, so the far land lay in full sun and the woods' haze,
+// lit through it, glowed eight times as bright as it should and then dimmed at once.
 // By the moon (farOn false) the far map is left empty, drawn once with nothing in it, and the trees cast into the near
 // map only close by (SHADOW.night: vegetation.js; the shaders fade the shadows out, setShadowSky): moonlit shadows
 // further off can't be seen in the dark. The switch comes as the sun hands over to the moon, when there's no light.
@@ -236,14 +240,14 @@ function boxAt(L, target, dir) {
   const centre = _d.copy(right).multiplyScalar(r).addScaledVector(up, u).addScaledVector(fwd, f);
   L.target.position.copy(centre); L.position.copy(centre).addScaledVector(dir, SHADOW.depth / 2);
 }
-const FAR_LAYERS = sunFar.shadow.camera.layers, farAt = new THREE.Vector3(1e9, 0, 0), farDir = new THREE.Vector3(); let farMask = null;
+const FAR_LAYERS = sunFar.shadow.camera.layers, farAt = new THREE.Vector3(1e9, 0, 0), farDir = new THREE.Vector3(); let farMask = null, farT = 0;
 export function followShadow(target, dir, farOn = true) {
   camera.getWorldDirection(_e); _e.y = 0; const l = _e.length();
   boxAt(sun, _e.multiplyScalar(l > 1e-3 ? SHADOW.nearR * SHADOW.ahead / l : 0).add(target), dir);
   SHADOW.night = !farOn; sunFar.visible = SHADOW.far; if (!SHADOW.far) return;
   farMask ??= FAR_LAYERS.mask; const mask = farOn ? farMask : 0, switched = FAR_LAYERS.mask !== mask; FAR_LAYERS.mask = mask;
-  const moved = Math.hypot(target.x - farAt.x, target.z - farAt.z) > SHADOW.farStep, turned = mask && dir.angleTo(farDir) > SHADOW.farTurn * Math.PI / 180;
-  if (switched || !sunFar.shadow.map || (mask && (moved || turned))) { boxAt(sunFar, target, dir); sunFar.shadow.needsUpdate = true; farAt.copy(target); farDir.copy(dir); }
+  const now = performance.now(), moved = Math.hypot(target.x - farAt.x, target.z - farAt.z) > SHADOW.farStep, turned = mask && dir.angleTo(farDir) > SHADOW.farTurn * Math.PI / 180, changed = SHADOW.farDirty && now - farT > 250;
+  if (switched || !sunFar.shadow.map || (mask && (moved || turned || changed))) { boxAt(sunFar, target, dir); sunFar.shadow.needsUpdate = true; farAt.copy(target); farDir.copy(dir); farT = now; SHADOW.farDirty = false; }
 }
 
 // ---- Procedural textures

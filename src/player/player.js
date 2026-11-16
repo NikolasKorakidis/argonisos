@@ -236,9 +236,11 @@ export class Player {
       this.home ||= { pitch: this.camPitch, dist: this.camDist };
       const on = !this.frozen, ix = on ? (down('KeyD') ? 1 : 0) - (down('KeyA') ? 1 : 0) : 0, iz = on ? (down('KeyW') ? 1 : 0) - (down('KeyS') ? 1 : 0) : 0, iy = on ? (down('KeyE') ? 1 : 0) - (down('KeyQ') ? 1 : 0) : 0;
       const fx = -Math.sin(this.camYaw), fz = -Math.cos(this.camYaw), sp = LOOK.speed * (down('ShiftLeft') || down('ShiftRight') ? 3 : 1), l = Math.hypot(ix, iz) || 1;
-      this.lookV.lerp(_lv.set(((fx * iz - fz * ix) / l) * sp, iy * sp, ((fz * iz + fx * ix) / l) * sp), e(6)); this.lookOff.addScaledVector(this.lookV, dt);
-      // (the point no further out than leaves the camera, behind it, within LOOK.r: drawn back in as the wheel takes it out)
-      const room = Math.max(0, LOOK.r - this.camDist - 1), o = this.lookOff.length(); if (o > room) this.lookOff.setLength(Math.max(room, o - Math.max(o - room, 1) * e(6)));
+      const o0 = this.lookOff.length(); this.lookV.lerp(_lv.set(((fx * iz - fz * ix) / l) * sp, iy * sp, ((fz * iz + fx * ix) / l) * sp), e(6)); this.lookOff.addScaledVector(this.lookV, dt);
+      // (the point no further out than leaves the camera, behind it, within LOOK.r: moving stops at that edge (eased back
+      // only, it ran on past it by up to 1.5 m at Shift's pace), and the wheel taking the camera out draws it back in eased)
+      const room = Math.max(0, LOOK.r - this.camDist - 1), cap = Math.max(room, o0); let o = this.lookOff.length(); if (o > cap) this.lookOff.setLength((o = cap));
+      if (o > room) this.lookOff.setLength(Math.max(room, o - Math.max(o - room, 1) * e(6)));
     } else {
       this.lookV.set(0, 0, 0); this.lookOff.multiplyScalar(1 - e(4));
       if (this.home) { const k = e(4); this.camYaw += angDiff(this.yaw + Math.PI, this.camYaw) * k; this.camPitch = lerp(this.camPitch, this.home.pitch, k); this.camDist = lerp(this.camDist, this.home.dist, k); if (L < 0.02) this.home = null; }

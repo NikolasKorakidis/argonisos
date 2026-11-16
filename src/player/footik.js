@@ -38,8 +38,11 @@ export class FootIK {
     let low = 0;
     for (const L of this.legs) {
       L.foot.getWorldPosition(_a);
+      // (eased, so a foot doesn't pop as its ground jumps at a step's edge; but rising ground is followed more than twice
+      // as fast as falling: up a hillside the ground under a foot swinging forward rises a metre a second and more, and
+      // eased as falling ground is the foot came down 5 to 10 cm short of it, into the slope)
       const g = this.ground(_a.x, _a.z, rootY), d = clamp(g - rootY, -MAX_DROP, MAX_LIFT);
-      L.d = lerp(L.d, d, Math.min(1, dt * 18)); low = Math.min(low, L.d);
+      L.d = lerp(L.d, d, Math.min(1, dt * (d > L.d ? 45 : 18))); low = Math.min(low, L.d);
     }
     this.pelvis = lerp(this.pelvis, low * this.w, Math.min(1, dt * 12));
     return this.pelvis;

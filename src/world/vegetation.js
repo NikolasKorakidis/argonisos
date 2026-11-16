@@ -357,7 +357,7 @@ export class Vegetation {
   // list is rebuilt when cells come and go or a tree falls; each frame the trees in view, and every tree within the
   // shadow box round you (so shadows still fall from behind the camera), are packed to the front and only those drawn.
   rebuildNear() {
-    this.nearDirty = false;
+    this.nearDirty = false; SHADOW.farDirty = true;   // (the far shadow map is drawn again with them: core.js followShadow)
     const groups = new Map(), rmCells = new Set(), bareCells = new Set(); for (const id of this.removed) rmCells.add(id.slice(0, id.lastIndexOf(','))); for (const id of this.bare) bareCells.add(id.slice(0, id.lastIndexOf(',')));
     for (const cell of this.near.values()) {
       const it = cell.items; if (!it) continue;
@@ -402,7 +402,7 @@ export class Vegetation {
   // The mid band (light versions, out to MID_R): every block in reach together, one batch per species (the variants share
   // the light mesh unless their leaves show that far), packed per frame like the near band
   rebuildMid() {
-    this.midDirty = false;
+    this.midDirty = false; SHADOW.farDirty = true;
     const groups = new Map();
     for (const blk of this.far.values()) {
       if (!blk.mid || !blk.items) continue; const it = blk.items;

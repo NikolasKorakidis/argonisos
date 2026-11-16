@@ -82,7 +82,7 @@ export const MARCH_FRAG = `${COMMON}
     float t = t0, T = 1.0; vec3 L = vec3(0.0), surf = vec3(0.0); bool first = true, lit0 = false;
     // the player's mist, laid as the atmosphere pass lays it on what lies past its far edge (by where the line of sight is
     // when it reaches that edge), but only over the storm's foot: its towers rise clear of it, however high you stand
-    float mist = mzAmt * (1.0 - smoothstep(mzTop - mzSoft, mzTop + mzSoft, camPos.y + rd.y * (mzR1 / max(length(rd.xz), 1e-3))));
+    float mist = mzAmt * (1.0 - smoothstep(mzTop - mzSoft, mzTop, camPos.y + rd.y * (mzR1 / max(length(rd.xz), 1e-3))));
     for (int i = 0; i < 64; i++) {
       if (t >= t1 || T < 0.04) break;
       vec3 p = camPos + rd * t; vec2 fg = fieldAt(p.xz); float h = p.y - fg.y;

@@ -24,11 +24,14 @@ export const PATCHES = [
         '<b>Moonlit nights:</b> night now falls because the sun\'s light goes, not because the screen is tinted blue. The moon lights the land in a dim, cool silver, casting soft shadows near you; the sky turns a deep blue-black full of stars, and a campfire\'s warm glow stands out against it. Under thick cloud the night is very dark.',
         '<b>Forest fog:</b> one spell in five in the Yleos forest brings a deep, pale fog that lies low among the trunks. You see only some thirty metres along the ground, while the dark crowns loom out of it overhead.',
         'The Yleos forest is darker and heavier than before, its shade a deep green-teal, and a thin mist always lies on its floor, thicker in the early morning.',
+        'The haze on the horizon no longer creeps up into the open sky above the treetops: the sky overhead stays clear.',
+        'After a long journey, or as the sun comes up, the shade of the trees in the distance and the sunlight in the woods\' air are right straight away, instead of glowing through crowns that weren\'t there until you had taken a few steps.',
       ] },
       { t: 'The Land', icon: 'stone', items: [
         'Each land now looks and feels different underfoot. The meadows of Pedias are flatter and gentler, sunny green and gold, with dry patches and worn earthen paths winding across them where the grass grows thin.',
         'The Yleos forest floor is dark loam strewn with needles and twigs, with cushions of moss and roots snaking across it, over rougher, hummocky ground.',
         'At the edge of the marsh the ground turns to dark, wet mud with water shining in its hollows.',
+        'Walking up a hillside, your feet now come down on the slope instead of dipping into it.',
         '<b>Life in the air:</b> butterflies flutter over the meadows by day; in the forest, tiny motes and spores glitter in the shafts of sun; at the marsh\'s edge low mist drifts over the ground and pale wisps of swamp gas rise and fade, glowing faintly at night.',
       ] },
       { t: 'Trees and Plants', icon: 'tomato', items: [

@@ -40,8 +40,9 @@ export const ATMO = {
   focus: { value: 3 }, aspect: { value: 16 / 9 },
   // the player's mist (tester feedback, 15 and 16 Oct): clear for MIST_R0 round the hero, thickening to mzAmt by MIST_R1
   // (hiding about two thirds of what lies behind) and staying there, half grown where the grass ends (GRASS_R); up to a
-  // ceiling (mzTop) a little over the tallest thing standing near, above which the sky stays clear. It hides how much
-  // less is drawn out there (see vegetation.js).
+  // ceiling (mzTop) a little over the tallest thing standing near, above which the sky stays clear: it thins out over
+  // the mzSoft metres below the ceiling, not across it (since Patch 20's taller trees lifted the ceiling, a fringe ten
+  // metres over it misted the sky well above the crowns). It hides how much less is drawn out there (see vegetation.js).
   mzC: { value: new THREE.Vector2() }, mzR0: { value: MIST_R0 }, mzR1: { value: MIST_R1 }, mzAmt: { value: ULTRA ? 0.42 : 0.68 }, mzTop: { value: 30 }, mzSoft: { value: 10 }, mzCol: { value: new THREE.Color(0.7, 0.75, 0.8) },
   // the grade (white balance, saturation, a tint in the shadows) and the cloud shadows drifting over the land
   gTint: { value: new THREE.Color(1, 1, 1) }, gSat: { value: 1 }, gShadow: { value: new THREE.Color(0, 0, 0) },
@@ -319,7 +320,7 @@ export class AtmospherePass extends Pass {
           // is covered and nothing far off (a giant tree on a ridge) stands out of the mist above its ceiling
           vec3 rd = normalize(P - camPos); float mpEdge = camPos.y + rd.y * (mzR1 / max(length(rd.xz), 1e-3)), mh = mzR1, mp = mpEdge;
           if (d < 0.99999) { mh = length(P.xz - mzC); mp = mix(P.y, mpEdge, smoothstep(mzR1 * 0.9, mzR1 * 1.1, mh)); }
-          col.rgb = mix(col.rgb, mzCol, mzAmt * smoothstep(mzR0, mzR1, mh) * (1.0 - smoothstep(mzTop - mzSoft, mzTop + mzSoft, mp)));
+          col.rgb = mix(col.rgb, mzCol, mzAmt * smoothstep(mzR0, mzR1, mh) * (1.0 - smoothstep(mzTop - mzSoft, mzTop, mp)));
           // the storm wall, over what lies behind it (with the player's mist on its foot already: stormwall.js)
           if (stormOn > 0.5) { vec4 s = stormAt(vUv, d); col.rgb = col.rgb * (1.0 - s.a) + s.rgb; }
           // shafts of sun (blurred outward from the sun at a quarter of the resolution: see MASK_FRAG and BLUR_FRAG); light
