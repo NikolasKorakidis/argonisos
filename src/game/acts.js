@@ -242,7 +242,7 @@ export class Acts {
     g.sound?.('jump');
     this.later.push({ t: KICK.at, fn: () => {
       if (P.dead) return; const c = g.creatures.inArc(P.pos, P.yaw, KICK.reach, 0.8)[0]; if (!c) return;
-      g.creatures.hurt(c, KICK.dmg, P.pos, { k: P.stats.damageK('unarmed') }); P.stats.train('unarmed', 6); punch(0.2, { x: Math.sin(P.yaw), z: Math.cos(P.yaw) }); g.sound?.('hit');
+      g.creatures.hurt(c, KICK.dmg, P.pos, { k: P.stats.damageK('unarmed') }); P.stats.train('unarmed', 6); punch(0.2, { x: Math.sin(P.yaw), z: Math.cos(P.yaw) }); g.sound?.('hit', { at: c.pos });
       if (!c.T.heavy && !c.boss && c.T.r <= 0.9 && !c.dead) { c.hitT = 0.7; const d = c.pos.clone().sub(P.pos).setY(0).normalize(); this.shoves.push({ c, d, left: KICK.shoveT }); }
     } });
   }

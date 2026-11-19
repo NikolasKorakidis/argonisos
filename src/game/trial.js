@@ -125,13 +125,13 @@ export class Trial {
   }
   summon(u) {
     const g = this.g, T = TRIBUTE[u.boss]; if (!g.inv.has(T)) { g.hud.toast('You don\'t have the tribute yet'); return; }
-    g.inv.takeMats(T); g.sound?.('summon'); g.acts?.kneel(u.center, 2.8);   // (kneeling while the beast is called) setWeather('thunder'); g.flashSky(0.5); addShake(0.6);
+    g.inv.takeMats(T); g.sound?.('summon'); this.calling = u.boss;   // (the beast is on its way: its music starts now, audio/music.js) g.acts?.kneel(u.center, 2.8);   // (kneeling while the beast is called) setWeather('thunder'); g.flashSky(0.5); addShake(0.6);
     dust(u.center.clone().setY(u.center.y + 1), 40, 0x6a5a48, 0.9);
     g.hud.region(u.boss === 'minotaur' ? 'The Minotaur' : 'The Chimera', u.boss === 'minotaur' ? 'Lord of the Labyrinth' : 'The beast of three natures');
     setTimeout(() => {
       const a = Math.random() * 6.28, p = u.center.clone().add(new THREE.Vector3(Math.cos(a) * 12, 0, Math.sin(a) * 12));
-      const c = g.creatures.spawn(u.boss, p.x, p.z, { level: 0, boss: true, aware: true }); c.state = 'chase'; c.arena = u.center.clone(); this.boss = c; this.helperT = 30; this.bossKind = u.boss;
-      g.flashSky(0.6); addShake(0.8); dust(p.clone().setY(p.y + 1), 50, 0x9a8a70, 1); g.sound?.('roar');
+      this.calling = null; const c = g.creatures.spawn(u.boss, p.x, p.z, { level: 0, boss: true, aware: true }); c.state = 'chase'; c.arena = u.center.clone(); this.boss = c; this.helperT = 30; this.bossKind = u.boss;
+      g.flashSky(0.6); addShake(0.8); dust(p.clone().setY(p.y + 1), 50, 0x9a8a70, 1); g.sound?.('roar', { boss: true, long: true, at: p });
       this.bar.classList.remove('hidden'); this.bar.querySelector('.bn').textContent = c.T.name;
     }, 3000);
   }
@@ -148,7 +148,7 @@ export class Trial {
     g.inv.take(head, 1); this.st.offered[u.boss] = true; this.mountHead(u); g.acts?.kneel(u.at, 2.6);   // (kneeling as Zeus answers)
     const tier = u.boss === 'minotaur' ? 1 : 2; g.S.tier = Math.max(g.S.tier || 0, tier);
     this.st.power = u.boss === 'minotaur' ? 'roar' : 'claw'; this.st.powerCd = 0;
-    g.flashSky(0.6); addShake(0.6); burst(u.at.clone().setY(u.at.y + 2), { color: 0xffe08a, n: 60, speed: 4, size: 0.08, grav: -2, life: 2 }); g.sound?.('thunder');
+    g.flashSky(0.6); addShake(0.6); burst(u.at.clone().setY(u.at.y + 2), { color: 0xffe08a, n: 60, speed: 4, size: 0.08, grav: -2, life: 2 }); g.sound?.('thunder'); setTimeout(() => g.sound?.('reveal'), 900);
     const P = POWERS[this.st.power];
     g.hud.region(P.name, 'Zeus grants you the power of the beast. Press F to use it.');
     setTimeout(() => g.hud.toast(tier === 1 ? 'You can now work <b>lightstone</b>: new weapons and Cretan armour at the workbench.' : 'You can now make the <b>Cretan bow</b>. Zeus\'s storm over Valtos still holds: that trial is yet to come.'), 4500);
@@ -230,22 +230,22 @@ export class Trial {
     switch (m.k) {
       case 'roar':   // war cry: stuns anyone close who isn't behind a raised guard, as the head thrusts out
         c.ctl = { want: 0, face: toP };
-        if (!m.done && m.e >= m.hit) { m.done = true; g.sound?.('roar'); addShake(m.enrage ? 0.9 : 0.6); dust(at(1), 40, 0xb8a684, 0.9); g.flashSky?.(m.enrage ? 0.4 : 0);
+        if (!m.done && m.e >= m.hit) { m.done = true; g.sound?.('roar', { boss: true, long: m.enrage, at: c.pos }); addShake(m.enrage ? 0.9 : 0.6); dust(at(1), 40, 0xb8a684, 0.9); g.flashSky?.(m.enrage ? 0.4 : 0);
           if (d < 9 && !P.blocking) { P.stats.add('stunned', m.enrage ? 1.6 : 1.2); g.hud.toast(`The roar <b>stuns</b> you!`); } else if (d < 9) g.hud.toast('You hold your guard against the roar'); }
         return m.e >= m.dur ? done() : 'roar';
       case 'slam':   // the labrys raised high, then brought down: a shockwave all round (from where the blade meets the ground)
         c.ctl = { want: 0, face: m.e < m.hit - 0.35 ? toP : undefined };
         if (!m.hit0 && m.e >= m.hit) { m.hit0 = true; const p = at(0.2).addScaledVector(fwd(), 2); for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; dust(p.clone().add(new THREE.Vector3(Math.cos(a) * 3, 0, Math.sin(a) * 3)), 6, 0x9a8a70, 0.8); }
-          addShake(0.9); g.sound?.('slam'); if (P.pos.distanceTo(p) < 6 && P.onGround !== false) g.combat.hitPlayer(c, [22, 28, 'blunt']); c.atkCd = Math.max(c.atkCd, 0.8); }
+          addShake(0.9); g.sound?.('slam', { at: p }); if (P.pos.distanceTo(p) < 6 && P.onGround !== false) g.combat.hitPlayer(c, [22, 28, 'blunt']); c.atkCd = Math.max(c.atkCd, 0.8); }
         return m.e >= m.dur ? done() : 'slam';
       case 'throw':  // tears up a block of the ruin and hurls it, from his free hand as the swing comes forward
         c.ctl = { want: 0, face: m.e < m.hit ? toP : undefined };
-        if (!m.hit0 && m.e >= m.hit) { m.hit0 = true; g.combat.throwAt(c, [18, 26, 'blunt'], { rock: true, from: c.body.point?.('LeftHand') }); g.sound?.('boulder'); }
+        if (!m.hit0 && m.e >= m.hit) { m.hit0 = true; g.combat.throwAt(c, [18, 26, 'blunt'], { rock: true, from: c.body.point?.('LeftHand') }); g.sound?.('boulder', { at: c.pos }); }
         return m.e >= m.dur ? done() : 'throw';
       case 'charge':
         if (m.ph === 0) {   // pawing the ground, head down
           c.ctl = { want: 0, face: toP }; m.dir = toP; if (Math.floor(m.e * 7) !== m.dust) { m.dust = Math.floor(m.e * 7); dust(at(0.1).addScaledVector(fwd(), -1), 6, 0x9a8a70, 0.5); }
-          if (!m.snd) { m.snd = true; g.sound?.('roar'); }
+          if (!m.snd) { m.snd = true; g.sound?.('roar', { boss: true, at: c.pos }); }
           if (m.t <= 0) { m.ph = 1; m.t = 1.8; } return 'paw';
         }
         if (m.ph === 1) {   // the charge: fast, turning only a little
@@ -253,7 +253,7 @@ export class Trial {
           if (!m.gored && d < T.r + 1.5) { m.gored = true; g.combat.hitPlayer(c, [26, 32, 'pierce']); }
           const ahead = g.colliders.pick(c.pos.x, c.pos.z, Math.sin(m.dir), Math.cos(m.dir), T.r + 1.1);
           if (m.e > 0.2 && (ahead || c.stuck > 0.15)) {   // straight into a wall: dazed
-            m.ph = 2; m.t = 2.4; c.hitT = 2.4; addShake(0.8); g.sound?.('slam'); dust(at(1.5).addScaledVector(fwd(), 1.4), 30, 0x8a7a64, 1);
+            m.ph = 2; m.t = 2.4; c.hitT = 2.4; addShake(0.8); g.sound?.('slam', { at: c.pos }); dust(at(1.5).addScaledVector(fwd(), 1.4), 30, 0x8a7a64, 1);
             if (!this.dazeTold) { this.dazeTold = true; g.hud.toast('The Minotaur is <b>dazed</b>: strike now!'); } return 'dazed';
           }
           if (m.t <= 0 || (m.gored && m.e > 0.9)) return done(); return 'run';
@@ -273,9 +273,9 @@ export class Trial {
           if (m.tick <= 0) { m.tick = 0.25; if (d < 12 && Math.abs(angDiff(toP, c.yaw)) < 0.45) { g.combat.hitPlayer(c, [7, 10, 'fire']); P.stats.add('burning', 3); } } }
         return m.t <= 0 ? done() : 'breath';
       case 'pounce':
-        if (m.ph === 0) { c.ctl = { want: 0, face: toP }; if (m.t <= 0) { m.ph = 1; m.t = 0.8; m.from = c.pos.clone(); m.to = P.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(toP), 0, Math.cos(toP)), -1.6); g.sound?.('roar'); } return 'crouch'; }
+        if (m.ph === 0) { c.ctl = { want: 0, face: toP }; if (m.t <= 0) { m.ph = 1; m.t = 0.8; m.from = c.pos.clone(); m.to = P.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(toP), 0, Math.cos(toP)), -1.6); g.sound?.('roar', { boss: true, at: c.pos }); } return 'crouch'; }
         if (m.ph === 1) { const k = 1 - Math.max(0, m.t) / 0.8; c.ctl = { want: 0, face: Math.atan2(m.to.x - m.from.x, m.to.z - m.from.z), snap: true, at: m.from.clone().lerp(m.to, k), air: Math.sin(k * Math.PI) * 3.2 };
-          if (m.t <= 0) { m.ph = 2; m.t = 0.5; addShake(0.8); g.sound?.('slam'); dust(at(0.2), 40, 0x8a7a64, 1); if (P.pos.distanceTo(c.pos) < T.r + 2) g.combat.hitPlayer(c, [30, 38, 'slash']); } return 'leap'; }
+          if (m.t <= 0) { m.ph = 2; m.t = 0.5; addShake(0.8); g.sound?.('slam', { at: c.pos }); dust(at(0.2), 40, 0x8a7a64, 1); if (P.pos.distanceTo(c.pos) < T.r + 2) g.combat.hitPlayer(c, [30, 38, 'slash']); } return 'leap'; }
         c.ctl = { want: 0 }; return m.t <= 0 ? done() : 'leap';
     }
     return done();

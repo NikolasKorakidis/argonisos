@@ -17,7 +17,8 @@ import { Guide } from './guide.js';
 import { BuildMenu } from '../ui/buildmenu.js';
 import { Occlusion } from '../render/occlusion.js';
 import { save, load, Graves } from './save.js';
-import { sound, updateAmbience } from '../audio/sound.js';
+import { sound, updateAmbience, listen, fires } from '../audio/sound.js';
+import { WIND } from '../world/wind.js';
 import { LIGHT } from '../world/sky.js';
 import { WEATHER, flashSky } from '../world/weather.js';
 import { heightAt, biomeWeights, isRock } from '../world/gen.js';
@@ -45,7 +46,7 @@ export function installGame(g) {
   g.guide = new Guide(g);
   g.buildMenu = new BuildMenu(g);
   g.occlusion = new Occlusion(g);
-  g.ITEMS = ITEMS; g.graves = new Graves(g); { const od = g.onDeath; g.onDeath = () => { g.graves.fall(); od?.(); }; }
+  g.ITEMS = ITEMS; g.graves = new Graves(g); { const od = g.onDeath; g.onDeath = () => { g.graves.fall(); g.sound('death', { voice: !womanVoice() }); od?.(); }; }
   g.combat = new Combat(g);
   g.acts = new Acts(g);
   g.pickups.landAt = (x, z, fy) => { const gy = Math.max(groundAt(x, z), -1.2); return fy === undefined ? gy : Math.max(gy, g.build.floorAt(x, z, fy + 0.3), g.structures.floorAt(x, z, fy + 0.3)); };   // (on what you built, or on the rock over a cave, before the ground below)
@@ -57,6 +58,8 @@ export function installGame(g) {
   g.flashSky = flashSky;
   g.nearMsg = (pos, m) => { if (pos.distanceTo(player.pos) < 25) hud.toast(m); };
   g.sound = sound;
+  // (the team's hurt and death cries are a man's: a woman hero takes her blows without them, sound.js)
+  const womanVoice = () => player.hero.look?.body === 'woman'; g.heroVoice = () => !womanVoice();
   // what the feet come down on, for the footsteps and landings: water (swimming or wading), a building's boards, a site's
   // paving or bare rock (the one slope rule), the sand along the shore (not the marsh), the forest's leaf litter, or the
   // meadows' grass and earth
@@ -99,7 +102,7 @@ export function installGame(g) {
   function unequip(i) { const s = inv.slots[i]; if (!s) return; delete s.worn; refreshLook(); }
   g.equip = (i) => {
     const s = inv.slots[i]; if (!s) return; const d = ITEMS[s.id];
-    if (s.worn) { player.equip = { kind: 'disarm', t: 0 }; unequip(i); g.sound('sheathe'); return; }
+    if (s.worn) { player.equip = { kind: 'disarm', t: 0 }; unequip(i); if (d.type !== 'armor') g.sound('sheathe'); return; }
     if (d.type === 'armor') { const o = inv.slots.findIndex((x) => x?.worn === d.slot); if (o >= 0) delete inv.slots[o].worn; s.worn = d.slot; refreshLook(); hud.toast(`Wearing ${d.name.toLowerCase()}`); return; }
     const slot = d.type === 'shield' || d.bow ? 'left' : 'hand';
     const clear = (w) => { const o = worn(w); if (o >= 0) delete inv.slots[o].worn; };
@@ -142,7 +145,9 @@ export function installGame(g) {
   };
 
   // ---- per frame
-  const _bw = { p: 0, y: 0, v: 0, r: 0 };
+  const _bw = { p: 0, y: 0, v: 0, r: 0 }, _look = new THREE.Vector3(), _a = new THREE.Vector3(), _b = new THREE.Vector3();
+  // walls round you: of eight ways out at head height, six or more meet a wall within 6 m (what you built, or a site's)
+  const walled = (P) => { let n = 0; _a.set(P.x, P.y + 1.5, P.z); for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; _b.set(P.x + Math.cos(a) * 6, P.y + 1.5, P.z + Math.sin(a) * 6); if (g.build.rayBlock(_a, _b) !== null || g.structures.rayBlock?.(_a, _b) != null) n++; } return n >= 6; };
   // reaching the top of Olympos
   const olympos = (P) => { const pk = SITES.peak; if (!pk) return; const d = Math.hypot(P.x - pk.x, P.z - pk.z);
     if (d < 40 && P.y > pk.y - 25 && !g.atPeak) { g.atPeak = true; hud.region('Olympos', 'The seat of Zeus. All Argonisos lies below you'); sound('reveal'); } else if (d > 140) g.atPeak = false; };
@@ -158,9 +163,16 @@ export function installGame(g) {
       // just where you stand (the same density the trees are laid out by: the meadows' woods count as much as the forest's)
       if (!(g.ambT > 0)) { g.ambT = 0.5; const P = player.pos, bw = biomeWeights(P.x, P.z), wood = (x, z) => Math.min(1, treeDensity(x, z, heightAt(x, z), biomeWeights(x, z, _bw)) * 36);
         let sea = 0, trees = 0; for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; if (heightAt(P.x + Math.cos(a) * 45, P.z + Math.sin(a) * 45) < -0.5) sea++; trees += wood(P.x + Math.cos(a) * 18, P.z + Math.sin(a) * 18); }
-        const deep = wood(P.x, P.z); g.amb = { forest: Math.max(bw.y, (trees / 8 + deep) / 2), deep, marsh: bw.v, sea: sea / 8 }; } g.ambT -= dt;
-      const roof = player.stats.has('underRoof');
-      updateAmbience(dt, { wind: WEATHER.k.overcast * 0.8 + 0.1, rain: WEATHER.k.rain, night: LIGHT.night, dusk: LIGHT.dusk, fire: fd, roof: roof ? 1 : 0, inside: roof ? 0.6 : 0, ...g.amb }); }
+        const deep = wood(P.x, P.z); g.amb = { forest: Math.max(bw.y, (trees / 8 + deep) / 2), deep, marsh: bw.v, sea: sea / 8, pedias: bw.p, yleos: bw.y, walled: player.stats.has('underRoof') && walled(P) };
+        // the fires burning near you, the nearest few, each heard where it stands (sound.js fires): your campfires and
+        // torches, and the sites' own (the temple's, the Giants' caves')
+        const near = []; for (const f of g.build.placed) if ((f.def.fire || f.def.torch) && f.state.lit && f.pos.distanceTo(P) < 25) near.push({ id: f.uid, x: f.pos.x, y: f.pos.y + 0.4, z: f.pos.z, k: f.def.fire ? 0.6 + Math.min(1, f.state.fuel / 3) * 0.4 : 0.3, d: f.pos.distanceTo(P) });
+        (g.structures.lights || []).forEach((l, i) => { const d = l.distanceTo(P); if (d < 25) near.push({ id: 'site' + i, x: l.x, y: l.y, z: l.z, k: 1, d }); });
+        g.fires = near.sort((a, b) => a.d - b.d).slice(0, 3); } g.ambT -= dt;
+      // (under a roof you hear the rain drum on it; with walls round you as well, you're inside: the world comes muffled)
+      const roof = player.stats.has('underRoof'), inside = (roof && g.amb.walled) || !!g.structures.inCave?.(player.pos);
+      listen(camera.position, camera.getWorldDirection(_look)); fires(g.fires || []);
+      updateAmbience(dt, { wind: Math.min(1, Math.max(0, (WIND.speed - 2.3) / 8)), gust: WIND.gust, windDir: { x: WIND.dir.x, z: WIND.dir.y }, rain: WEATHER.k.rain, night: LIGHT.night, dusk: LIGHT.dusk, fire: fd, roof: roof ? 1 : 0, inside: inside ? 1 : 0, ...g.amb }); }
     if (hit('KeyC') && !g.map.open && !g.buildMenu.open) hud.toggle(!hud.open);   // C opens and closes the pack and crafting, on whichever tab you left it
     if (input.uiOpen || player.dead) { hud.prompt(null); g.build.update(dt); g.creatures.update(dt); g.combat.update(dt); g.structures.update(dt); return; }
     const t = target();

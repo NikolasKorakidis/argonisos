@@ -144,7 +144,7 @@ export class Creatures {
     const at = c.pos.clone().setY(c.pos.y + 0.5);
     dust(at, c.T.thunder === 'big' ? 30 : 14, 0xe8e8ff, c.T.thunder === 'big' ? 0.8 : 0.4); burst(at, { color: 0xbfd0ff, n: 16, speed: 4, size: 0.05, grav: -2 });
     if (c.pos.distanceTo(this.g.player.pos) < 25) { addShake(c.T.thunder === 'big' ? 0.5 : 0.15); this.g.flashSky?.(c.T.thunder === 'big' ? 0.5 : 0.18); }
-    this.g.sound?.('thunder');
+    this.g.sound?.('thunder', c.T.thunder === 'big' ? 1.2 : 0.6, { at });
     // (what it leaves; the young less of each, but never none)
     if (!c.summoned) for (const [id, a, b, ch] of c.T.drops) if (Math.random() < ch) { const n0 = ri(a, b) * (1 + 0.25 * c.level), n = c.young ? Math.max(1, Math.round(n0 * c.dropK)) : Math.round(n0); if (n > 0) this.g.pickups.drop(id, n, c.pos.x + rr(-0.6, 0.6), c.pos.z + rr(-0.6, 0.6), { auto: true }, c.pos.y); }
     this.remove(c);
@@ -169,13 +169,13 @@ export class Creatures {
         if (d < range) {
           // a moment of alarm first: it freezes, lifts its head and turns to look at you, then bolts (or charges)
           if (c.boss) { c.state = 'chase'; c.aware = true; }
-          else { c.state = 'alert'; c.alertT = T.alert ?? (T.passive ? 1.2 : 0.7); c.alertD = d; c.aware = true; g.sound?.('alert'); this.rouse(c); }
+          else { c.state = 'alert'; c.alertT = T.alert ?? (T.passive ? 1.2 : 0.7); c.alertD = d; c.aware = true; g.sound?.('alert', { at: c.pos, hostile: !T.passive }); this.rouse(c); }   // (a hostile one cries out, an animal only starts: sound.js)
         }
       }
       if (c.state === 'alert') {
         c.alertT -= dt; const P2 = P.pos, close = d < c.alertD * 0.55 || d < 1.5;   // rushing it cuts the moment short
         if (P.dead) c.state = 'idle';
-        else if (c.alertT <= 0 || close || (P.sprinting && d < (T.flee || 8) * 1.2)) { if (T.passive) { c.state = 'flee'; c.t = rr(4, 7); } else { c.state = 'chase'; if (T.heavy) g.sound?.('roar'); } this.rouse(c); }
+        else if (c.alertT <= 0 || close || (P.sprinting && d < (T.flee || 8) * 1.2)) { if (T.passive) { c.state = 'flee'; c.t = rr(4, 7); } else { c.state = 'chase'; if (T.heavy) g.sound?.('roar', { at: c.pos, giant: true }); } this.rouse(c); }
         else if (d > (T.passive ? T.flee : (T.sight || T.aggro || 8)) * 1.6) { c.state = 'idle'; c.t = rr(2, 4); c.aware = false; }   // you backed off: it settles down
         void P2;
       }
@@ -217,7 +217,9 @@ export class Creatures {
         if (!c.hitDone && c.atkE >= c.hitAt) { c.hitDone = true;
           if (c.state === 'throw') this.throwThorn(c);
           else { const front = Math.abs(angDiff(toP, c.yaw)) < (T.heavy ? 1 : 0.75); c.blowAt = { e: c.atkE, hit: front && d < T.reach + T.r + 0.6 && !P.dead };
-            if (c.blowAt.hit) g.combat.hitPlayer(c, T.dmg); else if (T.heavy) { dust(c.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), 3), 18); addShake(0.3); } this.hitBuildings(c); } }
+            if (c.blowAt.hit) g.combat.hitPlayer(c, T.dmg); else if (T.heavy) { dust(c.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), 3), 18); addShake(0.3); }
+            if (T.heavy) g.sound?.('slam', { at: c.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), 2.5) });   // (a giant's or the Minotaur's blow comes down like a slam, hit or miss)
+            this.hitBuildings(c); } }
         if (c.atkE >= c.atkT) c.state = 'chase';
       }
       // a boss move in progress steers: its own speed and heading (snapped for a charge), or a leap through the air

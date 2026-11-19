@@ -422,7 +422,7 @@ export class Build {
   }
   breakPiece(p, recompute = true) {
     const c = p.boxes[0] ? p.boxes[0].getCenter(new THREE.Vector3()) : p.pos;
-    dust(c, 16, 0xa08060, 0.5); burst(c, { color: 0x8a6440, n: 14, speed: 3.5, size: 0.1 }); this.g.sound?.('break');
+    dust(c, 16, 0xa08060, 0.5); burst(c, { color: 0x8a6440, n: 14, speed: 3.5, size: 0.1 }); this.g.sound?.('break', { at: c });
     this.remove(p, false); if (recompute) this.recompute();
   }
   damage(p, n) { p.hp -= n; burst(p.pos.clone().setY(p.pos.y + 1), { color: 0x8a6440, n: 5, speed: 2.5 }); if (p.hp <= 0) this.breakPiece(p); }
@@ -457,11 +457,11 @@ export class Build {
       best = ready || (hearth.state.lit && raw && st.length < stand.def.cook) ? stand : hearth;
     }
     const p = best, d = p.def, inv = this.g.inv;
-    if (d.door) return { label: p.state.open ? 'Close' : 'Open', sub: d.name, use: () => { this.setDoor(p, !p.state.open); this.g.sound?.('door'); } };
+    if (d.door) return { label: p.state.open ? 'Close' : 'Open', sub: d.name, use: () => { this.setDoor(p, !p.state.open); this.g.sound?.('door', { open: p.state.open, at: p.pos }); } };
     if (d.fire) return { label: p.state.lit ? `Add wood (${Math.ceil(p.state.fuel)}/10)` : inv.count('wood') ? 'Light the fire' : 'Needs wood to light', sub: 'Campfire', alt: this.douseAction(p), use: () => {
       if (!inv.count('wood')) { this.g.hud.toast('You have no wood'); return; } if (p.state.fuel >= 10 && p.state.lit) { this.g.hud.toast('The fire is full'); return; }
-      inv.take('wood', 1); p.state.fuel = Math.min(10, (p.state.lit || p.state.doused ? p.state.fuel : 0) + 1);   /* a fire you put out keeps its wood */ p.state.lit = true; p.state.doused = false; p.state.rainT = 0; p.flame.visible = true; burst(p.pos.clone().setY(p.pos.y + 0.4), { color: 0xffa040, n: 10, speed: 1.5, grav: -2 }); } };
-    if (d.torch) return { label: p.state.lit ? 'Burning' : inv.count('resin') ? 'Light it (resin)' : 'Needs resin', sub: d.name, use: () => { if (!p.state.lit && inv.take('resin', 1)) { p.state.lit = true; p.state.fuel = 4; p.flame.visible = true; } } };
+      if (!p.state.lit) this.g.sound?.('fireStart', { at: p.pos }); inv.take('wood', 1); p.state.fuel = Math.min(10, (p.state.lit || p.state.doused ? p.state.fuel : 0) + 1);   /* a fire you put out keeps its wood */ p.state.lit = true; p.state.doused = false; p.state.rainT = 0; p.flame.visible = true; burst(p.pos.clone().setY(p.pos.y + 0.4), { color: 0xffa040, n: 10, speed: 1.5, grav: -2 }); } };
+    if (d.torch) return { label: p.state.lit ? 'Burning' : inv.count('resin') ? 'Light it (resin)' : 'Needs resin', sub: d.name, use: () => { if (!p.state.lit && inv.take('resin', 1)) { p.state.lit = true; p.state.fuel = 4; p.flame.visible = true; this.g.sound?.('fireStart', { at: p.pos }); } } };
     if (d.bed) return { label: 'Sleep', sub: 'Bed', use: () => this.sleep(p) };
     if (d.chest) return { label: 'Open', sub: 'Chest', use: () => this.openChest(p) };
     if (d.station) return { label: 'Craft', sub: d.name, use: () => { this.g.hud.toggle(true); this.g.crafting.open('craft'); } };
@@ -481,7 +481,7 @@ export class Build {
   // F at a lit campfire puts it out (its remaining wood stays for when you light it again)
   douseAction(p) {
     if (!p.state.lit) return null;
-    return { key: 'F', label: 'Put out fire', use: () => { p.state.lit = false; p.state.doused = true; p.state.rainT = 0; p.flame.visible = false; dust(p.pos.clone().setY(p.pos.y + 0.5), 14, 0x8a8a8a, 0.45); this.g.sound?.('douse'); } };
+    return { key: 'F', label: 'Put out fire', use: () => { p.state.lit = false; p.state.doused = true; p.state.rainT = 0; p.flame.visible = false; dust(p.pos.clone().setY(p.pos.y + 0.5), 14, 0x8a8a8a, 0.45); this.g.sound?.('douse', { at: p.pos }); } };
   }
   drawCook(p) {
     if (!p.meat) { p.meat = new THREE.Group(); p.obj.add(p.meat); } p.meat.clear();
@@ -503,7 +503,7 @@ export class Build {
     this.g.hud.onSlotClick = (i) => { if (!this.chest) return false; const it = this.g.inv.slots[i]; if (!it || it.worn) return true; const left = this.chest.inv.add(it.id, it.n, it.dur ? { dur: it.dur } : {}); if (left) it.n = left; else this.g.inv.slots[i] = null; this.g.inv.onChange?.(); this.drawChest(); return true; };
   }
   openChest(p) { this.chest = p; this.chestEl.classList.remove('hidden'); document.getElementById('craftPanel').classList.add('hidden'); this.g.hud.toggle(true); this.drawChest(); this.g.sound?.('chest'); }
-  closeChest() { this.chest = null; this.chestEl.classList.add('hidden'); document.getElementById('craftPanel').classList.remove('hidden'); }
+  closeChest() { if (this.chest) this.g.sound?.('chest', false); this.chest = null; this.chestEl.classList.add('hidden'); document.getElementById('craftPanel').classList.remove('hidden'); }
   drawChest() { if (!this.chest) return; const [c] = this.chest.def.chest; const el = document.getElementById('chestGrid'); el.style.gridTemplateColumns = `repeat(${c}, 56px)`; el.innerHTML = this.chest.inv.slots.map((s, i) => (s ? `<div class="slot" data-i="${i}" title="${ITEMS[s.id].name}">${icon(ITEMS[s.id].icon)}${s.n > 1 ? `<em>${s.n}</em>` : ''}</div>` : `<div class="slot empty" data-i="${i}"></div>`)).join(''); }
   // ---- per frame
   update(dt) {
@@ -520,7 +520,7 @@ export class Build {
       }
       const target = this.aim(), tp = target?.piece;
       // remove with MMB / X
-      if (tp && (input.clicks.includes(1) || hit('KeyX'))) { this.remove(tp, true); this.recompute(); g.sound?.('break'); }
+      if (tp && (input.clicks.includes(1) || hit('KeyX'))) { this.remove(tp, true); this.recompute(); g.sound?.('break', { at: tp.pos }); }
       if (this.sel === 'repair') {
         g.hud.prompt(tp ? 'LMB' : null, tp ? `Repair ${tp.def.name}` : '', tp ? `${Math.ceil(tp.hp)} / ${tp.def.hp}` : '');
         if (tp && input.clicks.includes(0)) { if (tp.hp < tp.def.hp) { tp.hp = tp.def.hp; burst(target.p, { color: 0xffe0a0, n: 8, speed: 1.5, grav: -1 }); g.sound?.('repair'); } else g.hud.toast('Not damaged'); }
@@ -529,7 +529,7 @@ export class Build {
         if (r) g.hud.prompt('LMB', r.why || `Place ${this.ghostDef.name}`, r.why ? '' : Object.entries(this.ghostDef.mats).map(([m, n]) => `${n} ${ITEMS[m].name.toLowerCase()}`).join(', '));
         if (r && !r.why && input.clicks.includes(0)) {
           if (!g.S.freeBuild) g.inv.takeMats(this.ghostDef.mats);
-          const p = this.place(this.ghostDef.id, r.pos, r.rot); dust(p.pos.clone().setY(p.pos.y + 0.2), 8, 0xb8a684, 0.3); addShake(0.08); g.sound?.('build'); g.acts?.hammer(p.pos);
+          const p = this.place(this.ghostDef.id, r.pos, r.rot); dust(p.pos.clone().setY(p.pos.y + 0.2), 8, 0xb8a684, 0.3); addShake(0.08); g.sound?.('build', { at: p.pos }); if (p.def.fire) g.sound?.('fireStart', { at: p.pos }); g.acts?.hammer(p.pos);   // (a campfire is lit as it's laid)
           if (!g.inv.has(this.ghostDef.mats) && !g.S.freeBuild) g.hud.toast(`Out of materials for ${this.ghostDef.name.toLowerCase()}`);
         }
       } else if (tp) g.hud.prompt('MMB', `Remove ${tp.def.name}`, `${Math.ceil(tp.hp)} / ${tp.def.hp}`);
@@ -542,7 +542,7 @@ export class Build {
         p.state.fuel -= dt / (p.def.fire ? 240 : 600);
         const wet = g.weatherRain?.() > 0.3 && !this.underRoof(p.pos.clone().setY(p.pos.y + 0.5), 0.8);
         p.state.rainT = wet ? (p.state.rainT || 0) + dt : 0;
-        if (p.state.fuel <= 0 || p.state.rainT > 8 + (p.uid.length % 5)) { p.state.lit = false; p.flame.visible = false; dust(p.pos.clone().setY(p.pos.y + 0.5), 10, 0x777777, 0.4); if (p.state.rainT > 8) g.nearMsg?.(p.pos, 'The rain put the fire out'); }
+        if (p.state.fuel <= 0 || p.state.rainT > 8 + (p.uid.length % 5)) { p.state.lit = false; p.flame.visible = false; dust(p.pos.clone().setY(p.pos.y + 0.5), 10, 0x777777, 0.4); if (p.state.rainT > 8) { g.nearMsg?.(p.pos, 'The rain put the fire out'); g.sound?.('douse', { at: p.pos }); } }
         const t = performance.now() * 0.001, k = 1 + Math.sin(t * 13 + p.pos.x) * 0.08 + Math.sin(t * 7.3) * 0.06;
         if (p.flame) { p.flame.scale.set(1, k * (0.6 + Math.min(1, p.state.fuel / 3) * 0.4), 1); p.flame.rotation.y = t * 0.7; }
         if (p.def.fire && Math.random() < dt * 3) dust(p.pos.clone().setY(p.pos.y + 0.9), 1, 0x8a8a8a, 0.25);

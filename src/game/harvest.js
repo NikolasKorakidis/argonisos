@@ -133,7 +133,7 @@ export class Harvest {
         f.w += (0.9 + 3.2 * Math.sin(f.th)) * dt; f.th += f.w * dt;
         if (f.th >= 1.45) { f.th = 1.45; f.landed = true; f.t = 0; f.w = 0;
           const L = (f.sp.name === 'cypress' ? 7 : 5) * f.s, tip = new THREE.Vector3(f.x + Math.sin(f.away) * L * 0.7, 0, f.z + Math.cos(f.away) * L * 0.7); tip.y = heightAt(tip.x, tip.z) + 0.3;
-          dust(tip, 22, 0xa89a78, 0.5); dust(new THREE.Vector3(f.x, f.y + 0.3, f.z), 10); this.g.sound?.('thud');
+          dust(tip, 22, 0xa89a78, 0.5); dust(new THREE.Vector3(f.x, f.y + 0.3, f.z), 10); this.g.sound?.('treeFall', { at: tip, big: clamp(f.s * (BIG.has(f.sp.name) || f.sp.name === 'titan' ? 1.2 : 1), 0.6, 1.6) });
           // (the ground takes it: a kick and a short rumble, less the further off you stand)
           const P = this.g.player.pos, near = clamp(1 - Math.hypot(tip.x - P.x, tip.z - P.z) / 30, 0, 1) * Math.min(1.3, f.s * (BIG.has(f.sp.name) || f.sp.name === 'titan' ? 1.2 : 1)); punch(0.6 * near, { x: Math.sin(f.away), z: Math.cos(f.away) }); addShake(0.25 * near);
         }
@@ -235,7 +235,7 @@ export class Harvest {
     }
     const hits = w.hits ?? (h < BUSH_H[0] ? 2 : h < BUSH_H[1] ? 3 : 4), left = (this.hp.get(id) ?? hits) - 1;
     player.stats.train('axe', 6);
-    if (w.leafy) { veg.shake(b.cx, b.cz, b.i, dir.x, dir.z, 5); impact(at, 'leaves', 0.5); this.g.sound?.('rustle'); this.g.sound?.('chop', 1.4); }   // (the whole bush thrashes: vegetation.js shake)
+    if (w.leafy) { veg.shake(b.cx, b.cz, b.i, dir.x, dir.z, 5); impact(at, 'leaves', 0.5); this.g.sound?.('rustle'); }   // (the whole bush thrashes: vegetation.js shake)
     else { impact(at, 'wood', 0.4); this.g.sound?.('chop', 1.1); player.hitStop(0.03); }
     punch(w.leafy ? 0.12 : 0.22, dir);
     if (left > 0) { this.hp.set(id, left); return true; }

@@ -54,7 +54,7 @@ export class Guide {
     const S = this.steps, done = this.st.done;
     // a step counts as done once its condition was met while it (or a later one) was current
     let i = 0; while (i < S.length && (done.includes(i) || S[i].done())) { if (!done.includes(i)) { done.push(i); if (i === this.cur) this.g.hud.toast(`Step done: <b>${S[i].t}</b>`); } i++; }
-    if (i !== this.cur) { this.cur = i; if (i < S.length && this.shown) this.g.sound?.('reveal'); this.shown = true; }
+    if (i !== this.cur) { this.cur = i; if (i < S.length && this.shown) this.g.sound?.('chime'); this.shown = true; }
     const s = S[i];
     this.g.map.guideTarget = s?.go ? { ...s.go(), label: s.t } : null;
     const P = this.g.player.pos, tgt = this.g.map.guideTarget, dist = tgt ? Math.round(Math.hypot(tgt.x - P.x, tgt.z - P.z)) : null;

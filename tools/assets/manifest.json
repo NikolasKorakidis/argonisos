@@ -3731,6 +3731,543 @@
     ],
     "foxCry": [
       "96 General Library (Free Sample)/Samples/ANMLDog_InsJ_Fox_Vocal-Cry_Distant_01-01.wav"
-    ]
+    ],
+    "swordHit": {
+      "group": "combat",
+      "files": [
+        "COMBAT/sword-hit-1.mp3",
+        "COMBAT/sword-hit-2.mp3",
+        "COMBAT/sword-hit-3.mp3",
+        "COMBAT/sword-hit-4.mp3",
+        "COMBAT/sword-hit-5.mp3"
+      ]
+    },
+    "axeHit": {
+      "group": "combat",
+      "files": [
+        "COMBAT/axe-hit-flesh-1.mp3",
+        "COMBAT/axe-hit-flesh-2.mp3"
+      ]
+    },
+    "hitPlant": {
+      "group": "combat",
+      "files": [
+        "COMBAT/hit-plant-1.mp3",
+        "COMBAT/hit-plant-2.mp3",
+        "COMBAT/hit-plant-3.mp3"
+      ]
+    },
+    "blockHit": {
+      "group": "combat",
+      "files": [
+        "COMBAT/block-1.mp3",
+        "COMBAT/block-2.mp3"
+      ]
+    },
+    "parryHit": {
+      "group": "combat",
+      "files": [
+        "COMBAT/parry-1.mp3",
+        "COMBAT/parry-2.mp3",
+        "COMBAT/parry-3.mp3"
+      ]
+    },
+    "drawWeapon": {
+      "group": "combat",
+      "files": [
+        "COMBAT/draw-weapon-1.mp3"
+      ]
+    },
+    "bowStretch": {
+      "group": "combat",
+      "files": [
+        "COMBAT/bow-stretch.mp3"
+      ]
+    },
+    "arrowRelease": {
+      "group": "combat",
+      "files": [
+        "COMBAT/arrow-release-1.mp3"
+      ]
+    },
+    "arrowFly": {
+      "group": "combat",
+      "files": [
+        {
+          "file": "COMBAT/arrow-fly-many.mp3",
+          "slice": true
+        }
+      ]
+    },
+    "arrowFlesh": {
+      "group": "combat",
+      "files": [
+        "COMBAT/arrow-hit-target-1.mp3",
+        "COMBAT/arrow-hit-target-2.mp3",
+        {
+          "file": "COMBAT/arrow-hit-target-many.mp3",
+          "slice": true
+        }
+      ]
+    },
+    "arrowWood": {
+      "group": "combat",
+      "files": [
+        "COMBAT/arrow-hit-wood-1.mp3"
+      ]
+    },
+    "slamHit": {
+      "group": "combat",
+      "files": [
+        "COMBAT/slam-1.mp3",
+        "COMBAT/slam-2.mp3"
+      ]
+    },
+    "enemyAlert": {
+      "group": "combat",
+      "files": [
+        "COMBAT/enemy-alert-1.mp3",
+        "COMBAT/enemy-alert-2.mp3"
+      ]
+    },
+    "hurtMale": {
+      "group": "voice",
+      "files": [
+        "COMBAT/hurt-1.mp3",
+        "COMBAT/hurt-2.mp3",
+        "COMBAT/hurt-3.mp3"
+      ]
+    },
+    "deathMale": {
+      "group": "voice",
+      "files": [
+        "COMBAT/male-death-1.mp3"
+      ]
+    },
+    "hitTree": {
+      "group": "gather",
+      "files": [
+        "GATHERING/hit-tree-01.mp3",
+        "GATHERING/hit-tree-02.mp3",
+        "GATHERING/hit-tree-03.mp3"
+      ]
+    },
+    "fallingTree": {
+      "group": "gather",
+      "files": [
+        "GATHERING/falling-tree.mp3"
+      ]
+    },
+    "mineHit": {
+      "group": "gather",
+      "files": [
+        {
+          "file": "GATHERING/pickaxe-stone-many.mp3",
+          "slice": true
+        }
+      ]
+    },
+    "pickupItem": {
+      "group": "pickup",
+      "files": [
+        "GATHERING/pickup-item.mp3"
+      ]
+    },
+    "buildPiece": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/build-1.mp3",
+        "BUILDING & CRAFTING/build-2.mp3"
+      ]
+    },
+    "breakPiece": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/break-1.mp3"
+      ]
+    },
+    "repairPiece": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/repair-1.mp3"
+      ]
+    },
+    "craftItem": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/craft-1.mp3"
+      ]
+    },
+    "doorOpen": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/door-1.mp3"
+      ]
+    },
+    "doorClose": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/door-2.mp3"
+      ]
+    },
+    "chestOpen": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/chest-2.mp3"
+      ]
+    },
+    "chestClose": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/chest-1.mp3"
+      ]
+    },
+    "fireStart": {
+      "group": "fire",
+      "files": [
+        "FIRE/campfire-start-1.mp3",
+        "FIRE/campfire-start-2.mp3"
+      ]
+    },
+    "fireDouse": {
+      "group": "fire",
+      "files": [
+        "FIRE/campfire-douse-1.mp3",
+        "FIRE/campfire-douse-2.mp3"
+      ]
+    },
+    "bossRoar": {
+      "group": "boss",
+      "files": [
+        {
+          "file": "BOSS & TRIAL/boss-roar-1.mp3",
+          "trim": 4.2,
+          "fade": 1.0
+        }
+      ]
+    },
+    "bossRoarLong": {
+      "group": "boss",
+      "files": [
+        "BOSS & TRIAL/boss-roar-1.mp3"
+      ]
+    },
+    "bossSummon": {
+      "group": "boss",
+      "files": [
+        "BOSS & TRIAL/boss-summon.mp3"
+      ]
+    },
+    "boulder": {
+      "group": "boss",
+      "files": [
+        "BOSS & TRIAL/boulder-2.mp3",
+        "BOSS & TRIAL/boulder-3.mp3"
+      ]
+    },
+    "revealChime": {
+      "group": "trial",
+      "files": [
+        "BOSS & TRIAL/reveal-1.mp3",
+        "BOSS & TRIAL/reveal-2.mp3"
+      ]
+    },
+    "owlHoot": {
+      "group": "owl",
+      "files": [
+        "BOSS & TRIAL/owl-hoot-1.mp3",
+        "BOSS & TRIAL/owl-hoot-2.mp3",
+        "BOSS & TRIAL/owl-hoot-3.mp3"
+      ]
+    },
+    "thunderNear": {
+      "group": "thunder",
+      "files": [
+        "WEATHER/thunder-1.mp3",
+        "WEATHER/thunder-2.mp3"
+      ]
+    },
+    "thunderFar": {
+      "group": "thunder",
+      "files": [
+        "WEATHER/thunder-3.mp3",
+        "WEATHER/thunder-5.mp3",
+        "WEATHER/thunder-6.mp3"
+      ]
+    },
+    "thunderClap": {
+      "group": "thunder",
+      "files": [
+        "WEATHER/thunder-clap-items-burst.mp3"
+      ]
+    },
+    "windGust": {
+      "group": "gust",
+      "files": [
+        "AMBIENCE/wind-gust-1.mp3",
+        "AMBIENCE/wind-gust-2.mp3"
+      ]
+    },
+    "leafRustle": {
+      "group": "gust",
+      "files": [
+        "AMBIENCE/leaves-rustle-2.mp3",
+        "AMBIENCE/leaves-rustle-3.mp3"
+      ]
+    },
+    "bedFire": {
+      "group": "fireBed",
+      "files": [
+        {
+          "file": "FIRE/campfire-ongoing-1.mp3",
+          "len": 40
+        },
+        {
+          "file": "FIRE/campfire-ongoing-2.mp3"
+        }
+      ]
+    },
+    "bedRain": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "WEATHER/rain-downpour.mp3",
+          "len": 40
+        }
+      ]
+    },
+    "bedDrops": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "WEATHER/rain-droplets.mp3",
+          "len": 40
+        }
+      ]
+    },
+    "bedRoof": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "WEATHER/rain-on-roof.mp3",
+          "len": 40
+        }
+      ]
+    },
+    "bedMuffled": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "WEATHER/rain-muffled.mp3",
+          "len": 40
+        }
+      ]
+    },
+    "bedWindSoft": {
+      "group": "bed",
+      "files": [
+        "AMBIENCE/wind-1.mp3",
+        "AMBIENCE/wind-2.mp3"
+      ]
+    },
+    "bedWindMid": {
+      "group": "bed",
+      "files": [
+        "AMBIENCE/wind-4.mp3"
+      ]
+    },
+    "bedWindStrong": {
+      "group": "bed",
+      "files": [
+        "AMBIENCE/wind-3.mp3",
+        "AMBIENCE/wind-5.mp3"
+      ]
+    },
+    "bedGrass": {
+      "group": "bed",
+      "files": [
+        "AMBIENCE/wind-soft-grass.mp3"
+      ]
+    },
+    "bedLeaves": {
+      "group": "bed",
+      "files": [
+        "AMBIENCE/leaves-rustle-1.mp3"
+      ]
+    },
+    "bedBirds": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "AMBIENCE/birdsong-1.mp3",
+          "len": 45
+        },
+        {
+          "file": "AMBIENCE/birdsong-2.mp3",
+          "len": 45
+        }
+      ]
+    },
+    "bedCricketsP": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "AMBIENCE/pedias-crickets-night-1.mp3",
+          "len": 45
+        },
+        {
+          "file": "AMBIENCE/pedias-crickets-night-2.mp3",
+          "len": 45
+        }
+      ]
+    },
+    "bedCricketsY": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "AMBIENCE/yleos-crickets-night-1.mp3",
+          "len": 40
+        },
+        {
+          "file": "AMBIENCE/yleos-crickets-night-2.mp3",
+          "len": 40
+        }
+      ]
+    },
+    "bedFrogs": {
+      "group": "bed",
+      "files": [
+        "AMBIENCE/swamps-ambience-frogs-1.mp3",
+        "AMBIENCE/swamps-ambience-frogs-2.mp3"
+      ]
+    },
+    "bedWaves": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "AMBIENCE/waves-shore-1.mp3",
+          "len": 45
+        },
+        {
+          "file": "AMBIENCE/waves-shore-2.mp3",
+          "len": 45
+        }
+      ]
+    }
+  },
+  "soundGroups": {
+    "combat": {
+      "level": -16
+    },
+    "voice": {
+      "level": -17
+    },
+    "gather": {
+      "level": -16
+    },
+    "pickup": {
+      "level": -20
+    },
+    "build": {
+      "level": -17
+    },
+    "fire": {
+      "level": -18
+    },
+    "boss": {
+      "level": -13
+    },
+    "trial": {
+      "level": -17
+    },
+    "owl": {
+      "level": -19
+    },
+    "thunder": {
+      "level": -14
+    },
+    "gust": {
+      "level": -20
+    },
+    "fireBed": {
+      "level": -24,
+      "loop": true
+    },
+    "bed": {
+      "level": -24,
+      "loop": true,
+      "stereo": true
+    }
+  },
+  "music": {
+    "level": -18,
+    "tracks": {
+      "menu": {
+        "file": "0-Track 5-Main-Menu.wav",
+        "use": "the title screen and the character creator (looped)"
+      },
+      "story": {
+        "file": "1-Track 1-Story-Telling.wav",
+        "use": "a new trial begins; the owl's first talk"
+      },
+      "pedias": {
+        "file": "2-Track 3-Pedias.wav",
+        "use": "Pedias: entering it, dawn, dusk"
+      },
+      "base": {
+        "file": "3-Track 4-Inside-Base.wav",
+        "use": "resting by your fire or inside your own shelter"
+      },
+      "yleos": {
+        "file": "4-Track 5-Yleos.wav",
+        "use": "Yleos: entering it, dawn, dusk"
+      },
+      "swamp": {
+        "file": "5-Track 1-Swamp.wav",
+        "use": "Valtos, behind the storm"
+      },
+      "oros": {
+        "file": "6-Track 2-Oros.wav",
+        "use": "not in the game yet",
+        "play": false
+      },
+      "sailing": {
+        "file": "7-Track 6-Sailing.wav",
+        "use": "not in the game yet",
+        "play": false
+      },
+      "nisia": {
+        "file": "8-Track 9-Nisia.wav",
+        "use": "not in the game yet",
+        "play": false
+      },
+      "sirenReef": {
+        "file": "9-Track 7-Siren-Reef.wav",
+        "use": "not in the game yet",
+        "play": false
+      },
+      "acheron": {
+        "file": "10-Track 1-Acheron.wav",
+        "use": "not in the game yet",
+        "play": false
+      },
+      "erebos": {
+        "file": "11-Track 11-Erebos.wav",
+        "use": "not in the game yet",
+        "play": false
+      },
+      "bossMinotaur": {
+        "file": "boss-minotaur-combat-music.mp3",
+        "use": "the Minotaur's fight (looped)"
+      },
+      "bossChimera": {
+        "file": "boss-chimera-combat-music.mp3",
+        "use": "the Chimera's fight (looped)"
+      }
+    }
+  },
+  "soundDirs": {
+    "finals": "incoming assets/audio/1. FINALS/9. SOUND",
+    "music": "incoming assets/audio/0. OLD/4. Music"
   }
 }

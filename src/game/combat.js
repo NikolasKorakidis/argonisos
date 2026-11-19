@@ -79,7 +79,8 @@ export class Combat {
       impact(c.pos.clone().setY(c.pos.y + c.T.h * 0.6).addScaledVector(new THREE.Vector3(Math.sin(P.yaw), 0, Math.cos(P.yaw)), -Math.min(0.5, c.T.r ?? 0.4)), 'hide', clamp(felt / 40, 0.2, 1)); }
     punch((HEFT[kind] ?? 0.15) + clamp(felt / 80, 0, 0.2) + (kill ? 0.12 : 0), { x: Math.sin(P.yaw), z: Math.cos(P.yaw) });
     if (kill || HEAVY.has(kind)) P.hitStop(kill ? 0.08 : 0.045);
-    P.stats.train(kind, 12.5); g.sound?.('hit');
+    // (its sound: an axe's, a blade's (a dagger, a spear, the Chimera's claws), or a blunt one's (a club, a fist))
+    P.stats.train(kind, 12.5); g.sound?.('hit', { at: targets[0].pos.clone().setY(targets[0].pos.y + targets[0].T.h * 0.6), kind: kind === 'axe' ? 'axe' : kind === 'dagger' || kind === 'spear' || (!item && P.stats.has('claws')) ? 'blade' : 'blunt' });
     return true;
   }
   // ---- a creature's blow lands on the player (from: where it came from, if not the creature: a thorn). Returns what
@@ -104,7 +105,7 @@ export class Combat {
     const final = armorReduce(dmg, g.armor?.() ?? 0);
     // (a blow taken kicks the view away from whoever struck it, by how much it hurt; a big one rumbles on a little; and the
     // edge of the screen it came from glows red, as the camera sees it: ahead is the top, behind the bottom)
-    S.damage(final); g.hud.hurt(final / Math.max(10, S.maxHealth) * 2); punch(clamp(final / 22, 0.2, 0.85), { x: P.pos.x - src.x, z: P.pos.z - src.z }); if (final > 20) addShake(clamp((final - 20) / 60, 0, 0.3)); g.sound?.('hurt');
+    S.damage(final); g.hud.hurt(final / Math.max(10, S.maxHealth) * 2); punch(clamp(final / 22, 0.2, 0.85), { x: P.pos.x - src.x, z: P.pos.z - src.z }); if (final > 20) addShake(clamp((final - 20) / 60, 0, 0.3)); g.sound?.('hurt', { voice: g.heroVoice?.() ?? true });
     { const f = camera.getWorldDirection(new THREE.Vector3()), dx = src.x - P.pos.x, dz = src.z - P.pos.z, fl = Math.hypot(f.x, f.z) || 1; g.hud.hurtFrom?.((dx * -f.z + dz * f.x) / fl, (dx * f.x + dz * f.z) / fl, clamp(final / 25, 0.25, 1)); }
     if (!S.dead) P.hero.hurt(final, S.maxHealth);   // (a flinch, or a stagger back from a big blow)
     g.acts?.hurt(final);   // (a hard enough blow breaks off eating, praying, sitting)
@@ -136,7 +137,7 @@ export class Combat {
   }
   // ---- the bow
   get bow() { return this.g.player.bow; }
-  setBow(st, extra) { this.g.player.bow = { st, t: 0, ph: 0, ...extra }; }
+  setBow(st, extra) { this.g.player.bow = { st, t: 0, ph: 0, ...extra }; if (st === 'draw') this.g.sound?.('bowDraw'); }   // (the string creaks as it's drawn)
   bowDrawn() { const b = this.bow; return !!b && (b.st === 'aim' || (b.st === 'draw' && b.ph > 0.62)); }
   bowPower() { const b = this.bow; return !b ? 0 : b.st === 'aim' ? 0.8 + 0.2 * Math.min(1, b.t / 0.45) : b.st === 'draw' ? clamp((b.ph - 0.62) / 0.38, 0, 1) * 0.8 : 0; }
   arrowsLeft() { return this.g.inv.count('crudeArrow'); }
@@ -200,10 +201,10 @@ export class Combat {
       const prev = a.m.position.clone(); a.m.position.addScaledVector(a.v, dt); a.m.lookAt(a.m.position.clone().add(a.v));
       const p = a.m.position;
       let hitC = null; for (const c of g.creatures.list) { if (c.dead) continue; const cc = c.pos.clone().setY(c.pos.y + c.T.h * 0.55); const seg = new THREE.Line3(prev, p), q = seg.closestPointToPoint(cc, true, new THREE.Vector3()); if (q.distanceTo(cc) < c.T.r + c.T.h * 0.25) { hitC = c; break; } }
-      if (hitC) { g.creatures.hurt(hitC, a.dmg, prev, { ranged: true, backstab: 3, knock: 0.1 }); P.stats.train('bow', 12.5); scene.remove(a.m); this.arrows.splice(i, 1); g.sound?.('arrowHit'); continue; }
+      if (hitC) { g.creatures.hurt(hitC, a.dmg, prev, { ranged: true, backstab: 3, knock: 0.1 }); P.stats.train('bow', 12.5); scene.remove(a.m); this.arrows.splice(i, 1); g.sound?.('arrowHit', { at: p.clone() }); continue; }
       const gh = heightAt(p.x, p.z);
       let tree = null; for (const c of g.colliders.near(p.x, p.z, 1)) if (Math.hypot(c.x - p.x, c.z - p.z) < c.r && (c.h === undefined || p.y < (c.y ?? 0) + c.h)) { tree = c; break; }
-      if (p.y < gh || tree || a.life > 6) { a.stuck = true; a.life = 0; if (p.y < gh) p.y = gh + 0.05; burst(p, { color: tree ? 0x8a6440 : 0x7a6a50, n: 4, speed: 1.5, size: 0.04 }); g.sound?.('arrowThud'); }
+      if (p.y < gh || tree || a.life > 6) { a.stuck = true; a.life = 0; if (p.y < gh) p.y = gh + 0.05; burst(p, { color: tree ? 0x8a6440 : 0x7a6a50, n: 4, speed: 1.5, size: 0.04 }); g.sound?.(tree ? 'arrowWood' : 'arrowThud', { at: p.clone() }); }   // (into a trunk, a log or a wall: wood)
     }
     // the glows in dryads' hands: out once not asked for
     for (const [c, h] of this.glows) { if (h.userData.asked) { h.userData.asked = false; continue; } scene.remove(h); this.glows.delete(c); this.glowSpare.push(h); }
@@ -222,7 +223,7 @@ export class Combat {
         this.drop(i); continue;
       }
       const landed = p.y < heightAt(p.x, p.z); let tree = false; if (!t.rock && !landed) for (const k of g.colliders.near(p.x, p.z, 1)) if (Math.hypot(k.x - p.x, k.z - p.z) < k.r && (k.h === undefined || p.y < (k.y ?? 0) + k.h)) { tree = true; break; }
-      if (t.life <= 0 || landed || tree) { if (t.rock) { dust(p.clone(), 24, 0x9a9080, 0.9); addShake(0.25); g.sound?.('thud'); } else if (t.life > 0) this.thornBurst(p, false, clamp(1 - P.pos.distanceTo(p) / 40, 0.2, 1)); this.drop(i); }
+      if (t.life <= 0 || landed || tree) { if (t.rock) { dust(p.clone(), 24, 0x9a9080, 0.9); addShake(0.25); g.sound?.('boulder', { at: p.clone(), land: true }); } else if (t.life > 0) this.thornBurst(p, false, clamp(1 - P.pos.distanceTo(p) / 40, 0.2, 1)); this.drop(i); }
     }
   }
   // where a thorn lands or strikes: a burst of leaves and green sparks (more when it struck you), and its crack

@@ -49,8 +49,10 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
   Asset Browser under "Kind/Group"). Manifest entries
   with `compose` or `house` are put together in Blender from Ancient Empire pieces (`compose.py`: each material slot keeps
   its prefab's texture as `tex:<key>`; houses from a recipe on the kit's 2.5 m grid); the game places them with
-  `site-pack.js` `piece()`. Sounds: `node tools/assets/sounds.mjs` →
-  `assets/sounds/pack/` (also git-ignored), played by `sound.js` where it has a recording. Without the pack files the
+  `site-pack.js` `piece()`. Sounds: `node tools/assets/sounds.mjs [key…]` → `assets/sounds/pack/` (also git-ignored),
+  from the manifest's `sounds` (the first packs' lists, and the team's `incoming assets/audio` by `soundGroups`: each
+  group's loudness, blows cut from a file of several, beds looped with a crossfaded seam) and `music` (`pack/music/`,
+  stereo MP3), described in `sounds.json`; played by `sound.js` where it has a recording (map: `docs/plans/audio.md`). Without the pack files the
   world, buildings, tools, hero and sound fall back to the carved look; the animals and the bosses need the pack.
 - **Fonts:** titles, names and labels use **Stoix** (Eireni Moutoussi, SIL OFL; `assets/fonts/stoix/` with its `OFL.txt`, which must stay
   beside it; its Latin letters are drawn the Greek way, S as Σ, D as Δ), falling back to Cinzel for the signs it lacks;
@@ -182,7 +184,13 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   `harvest.js` · `combat.js` · `trial.js` bosses, clues, offerings · `guide.js` the guided steps · `owl.js` · `save.js`.
 - `src/build`: `pieces.js` piece definitions · `build.js` placement, snapping, support. `src/creatures`: `creatures.js`
   AI and spawning · `models.js` bodies. `src/ui`: HUD, map, title, menus, patch notes, `perf.js` the performance overlay (F3), `icons.js` (+ the black-figure
-  `icon-set.js`, shared with the prototype). `src/audio/sound.js`: synthesised (its context opens while the world loads).
+  `icon-set.js`, shared with the prototype). `src/audio/sound.js`: the team's recordings, synthesis where there are none (its context opens while the world
+  loads): effects, ambience and music each on a bus (the settings' sliders); `play()` picks a variant (never the last),
+  varies pitch and volume, places a sound with `at` (pan and fall-off from the camera, `listen()`; muffled indoors) and
+  skips a repeat in the same instant; beds load when first wanted (`bed()`), fires crackle where they burn (`fires()`);
+  `AUDIO.log` and `AUDIO.meters()` for the tests (`tests/suites/audio.mjs`). `src/audio/music.js`: the music, Valheim's
+  way (a land's track on coming into it, at dawn and dusk, then minutes of quiet; home by your fire; the bosses' fights;
+  the title's and the story's), streamed from `<audio>` when it first plays.
 
 ## Style
 Comments are full sentences that say why, in plain British English, often on the line they explain; dense one-line

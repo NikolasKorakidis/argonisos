@@ -36,6 +36,8 @@ import { updateWindLines } from './world/wind.js';
 import { perfBegin, perfEnd, lap, PERF } from './ui/perf.js';
 import { SETTINGS, setPerfOverlay } from './ui/settings.js';
 import { fadeAhead } from './render/occlusion.js';
+import { updateMusic, MUSIC } from './audio/music.js';
+import { AUDIO } from './audio/sound.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -166,7 +168,7 @@ function loop() {
   if (S.debug !== PERF.on) { S.debug = GPU.on = PERF.on; $('dbg').classList.toggle('hidden', !S.debug); }   // (the overlay and the old debug line together)
   if (hit('F9') && !busy) game.setFly(!S.fly);
   if (S.debug && hit('KeyT')) S.timeScale = S.timeScale === 1 ? 60 : 1;
-  lap('input'); if (!busy) game.update?.(dt, t); lap('game');
+  lap('input'); if (!busy) game.update?.(dt, t); updateMusic(dt, game); lap('game');   // (the music on the title screen too: audio/music.js)
   player.frozen = S.fly || hud.open || busy; player.hero.still = S.still; if (!game.paused) player.update(dt);
   if (S.fly) updateFly(dt); lap('player');
   if (!busy) { updateConditions(); player.stats.update(dt); updateRegion(); }
@@ -215,6 +217,6 @@ function loop() {
   }
 }
 loop();
-window.AG = { game, player, inv, hud, STORM_WALL, setWeather, snapWeather, WEATHER, THREE, scene, camera, renderer, terrain, veg, pool, S, heightAt, biomeWeights, sun, render, fly,
+window.AG = { game, player, inv, hud, AUDIO, MUSIC, STORM_WALL, setWeather, snapWeather, WEATHER, THREE, scene, camera, renderer, terrain, veg, pool, S, heightAt, biomeWeights, sun, render, fly,
   teleport(x, z, yaw = player.camYaw, pitch = player.camPitch) { player.spawn(x, z); player.camYaw = yaw; player.yaw = yaw + Math.PI; player.camPitch = pitch; snapWeather(); },
   get fps() { return fps; } };

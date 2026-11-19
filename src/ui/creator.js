@@ -52,12 +52,12 @@ export function characterCreator(g) {
   el.querySelector('.crows').addEventListener('click', (e) => {
     const b = e.target.closest('button'), row = e.target.closest('.crow'); if (!b || !row) return;
     const key = row.dataset.k, def = ROWS.find((r) => r[0] === key);
-    if (b.dataset.v) { set({ [key]: b.dataset.v }); g.sound?.('pick'); return; }
+    if (b.dataset.v) { set({ [key]: b.dataset.v }); g.sound?.('ui'); return; }
     const list = key === 'hair' ? hairsFor(look.body) : def[3], i = list.findIndex((x) => x[0] === look[key]), d = b.classList.contains('next') ? 1 : -1;
-    set({ [key]: list[(i + d + list.length) % list.length][0] }); g.sound?.('pick');
+    set({ [key]: list[(i + d + list.length) % list.length][0] }); g.sound?.('ui');
   });
   for (const row of el.querySelectorAll('.crow')) row.addEventListener('pointerenter', () => { viewAim = ROWS.find((r) => r[0] === row.dataset.k)[4] === 'face' ? 1 : 0; });
-  el.querySelector('#cRandom').onclick = () => { set(randomLook(look.body)); g.sound?.('pick'); };
+  el.querySelector('#cRandom').onclick = () => { set(randomLook(look.body)); g.sound?.('ui'); };
   el.querySelector('#cDone').onclick = () => close(true);
   el.querySelector('#cBack').onclick = () => close(false);
 

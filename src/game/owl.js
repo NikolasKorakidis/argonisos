@@ -109,7 +109,7 @@ export class Owl {
   talk() {
     if (!this.hasNews) return;
     this.cards = this.st.queue.flatMap((t) => TOPICS[t]); this.talked = [...this.st.queue]; this.card = 0;
-    this.open = true; this.box.classList.remove('hidden'); input.uiOpen = true; unlock(); this.draw(); this.g.sound?.('owl');
+    this.open = true; this.box.classList.remove('hidden'); input.uiOpen = true; unlock(); this.draw(); this.g.sound?.('owl', { at: this.pos });
   }
   next() { this.card++; if (this.card >= this.cards.length) this.close(); else this.draw(); }
   close() {
@@ -122,7 +122,7 @@ export class Owl {
   faced() { const P = this.g.player, dx = this.pos.x - P.pos.x, dz = this.pos.z - P.pos.z; return Math.abs(Math.atan2(Math.sin(Math.atan2(dx, dz) - P.yaw), Math.cos(Math.atan2(dx, dz) - P.yaw))) < 1.25; }
   interactable(pos) { if (this.state !== 'escort' || !this.hasNews || this.pos.distanceTo(pos.clone().setY(pos.y + 1.5)) > 4.5) return null; return { label: 'Talk to the Owl', sub: 'She has something to tell you', use: () => this.talk() }; }
   // ---- flying
-  arrive() { const P = this.g.player.pos; this.state = 'escort'; this.o.g.visible = true; this.pos.copy(P).add(new THREE.Vector3(25, 22, -15)); this.vel.set(0, 0, 0); this.g.sound?.('owl'); this.g.hud.toast('The <b>Owl</b> has something to tell you <span class="kbd">E</span>'); }
+  arrive() { const P = this.g.player.pos; this.state = 'escort'; this.o.g.visible = true; this.pos.copy(P).add(new THREE.Vector3(25, 22, -15)); this.vel.set(0, 0, 0); this.g.sound?.('owl', { at: this.pos }); this.g.hud.toast('The <b>Owl</b> has something to tell you <span class="kbd">E</span>'); }
   leave() { this.state = 'leave'; this.t = 0; this.from = this.pos.clone(); }
   escortTarget(out) {
     const P = this.g.player, side = new THREE.Vector3(Math.cos(P.yaw), 0, -Math.sin(P.yaw)), fwd = new THREE.Vector3(Math.sin(P.yaw), 0, Math.cos(P.yaw));

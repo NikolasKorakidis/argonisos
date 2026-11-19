@@ -4,6 +4,40 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-21', name: 'Patch 21', title: 'The Island Speaks', date: '19 November 2026',
+    intro: 'The team\'s own sounds and music: every blow, cut and knock, the fire, the bosses, thunder and rain, the wind and the creatures of each land, and music that comes now and then, as it does in Valheim.',
+    sections: [
+      { t: 'Music', icon: 'temple', items: [
+        '<b>Music of its own:</b> the title screen and the character creator have their theme, and a new trial opens with the story\'s music as you wake on the shore. It plays again when the owl first speaks to you.',
+        'Each land has its track. It plays when you\'ve been in the land a little while after coming into it, and at dawn and at dusk, then leaves you a few quiet minutes with only the world\'s sounds before another can play. You won\'t hear the same track twice running.',
+        'Sit or stand by your own fire, or shelter under your own roof, and after a moment the home theme plays. It fades as you leave.',
+        'Each boss has its battle music, from the moment you lay the tribute until it dies or you flee its arena.',
+        'Music fades in and out over a few seconds, and dips a little under loud thunder.',
+        'The settings have four volume sliders now: <b>Volume</b> (everything), <b>Effects</b>, <b>Ambience</b> and <b>Music</b>.',
+      ] },
+      { t: 'Fighting', icon: 'bow', items: [
+        'Blades, axes and arrows each sound different when they hit, and you hear them from where they land. Blocks and parries ring, your weapon scrapes as you draw it and put it away, and your bowstring creaks as you pull it.',
+        'Hostile creatures cry out when they notice you. Animals only start.',
+        'The giants\' blows and the Minotaur\'s slam shake the ground, and his thrown rocks crash as they\'re torn up and as they land. The Minotaur and the Chimera roar for real now.',
+        'When you play a man, you hear him cry out when he\'s hurt and when he falls.',
+      ] },
+      { t: 'Gathering and Building', icon: 'hammer', items: [
+        'The axe bites into trees and logs, a felled tree crashes to the ground, the pickaxe rings on stone, bushes thrash, and picking something up has its own sound.',
+        'Building, breaking, repairing and crafting have new sounds. Doors creak open and bang shut, and chests open and close.',
+      ] },
+      { t: 'Fire', icon: 'fire', items: [
+        'A campfire roars up when you light it, crackles where it burns (you hear each fire near you from its own side), and hisses out when you douse it or the rain puts it out.',
+      ] },
+      { t: 'The World', icon: 'wet', items: [
+        '<b>Rain in layers:</b> a patter as it starts, a downpour when it\'s heavy, drumming on the roof over you, and only a muffled hush once you\'re inside walls.',
+        'Thunder sounds different by distance: a crack and burst right overhead, a peal a few hundred metres off, a low roll from far away.',
+        'The wind rises and falls with the weather and gusts with it. It whispers through the meadow grass and the leaves of the woods.',
+        'Waves break near the shore. Birds sing by day; by night Pedias and Yleos each have their own crickets, owls call, and frogs croak in the marsh.',
+        'Sounds out in the world come from their side and fade with distance, and they come muffled when you\'re indoors.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-20', name: 'Patch 20', title: 'Each Land Its Own', date: '16 November 2026',
     intro: 'Our reviewer\'s list: taller trees and thinner woods, a darker, foggier Yleos, moonlit nights, a meadow of new grass and tomato bushes, fights you can read, free repairs, a seat for screenshots, and a smoother game.',
     sections: [

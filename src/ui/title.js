@@ -3,7 +3,7 @@ import { hasSave, clearSave } from '../game/save.js';
 import { input, lock, unlock } from '../input.js';
 import { PATCHES, notesPanel, notesUnread } from './patchnotes.js';
 import { characterCreator } from './creator.js';
-import { SETTINGS, PRESETS, ULTRA_NOTE, RES, applyGraphics, setGraphics, setRes, setVol, setMusic, setSens, setCalmFlash, SHAKES, setShake, setPerfOverlay, toggleFullscreen, isFullscreen, onFullscreenChange } from './settings.js';
+import { SETTINGS, PRESETS, ULTRA_NOTE, RES, applyGraphics, setGraphics, setRes, setVol, setMusic, setSfx, setAmbience, setSens, setCalmFlash, SHAKES, setShake, setPerfOverlay, toggleFullscreen, isFullscreen, onFullscreenChange } from './settings.js';
 // which build this is (the commit and date the deploy stamps into index.html), so we can tell what GitHub Pages is serving
 const BUILD = document.querySelector('meta[name=build]')?.content || '';
 
@@ -56,6 +56,8 @@ export function pauseMenu(g) {
     <p class="hint gfxNote hidden">${ULTRA_NOTE}</p>
     <div class="set"><span>Resolution</span><div class="seg" id="sRes">${RES.map(([v, l]) => `<button data-v="${v}">${l}</button>`).join('')}</div></div>
     <div class="set"><span>Volume</span><input type="range" id="sVol" min="0" max="100"></div>
+    <div class="set"><span>Effects</span><input type="range" id="sSfx" min="0" max="100"></div>
+    <div class="set"><span>Ambience</span><input type="range" id="sAmb" min="0" max="100"></div>
     <div class="set"><span>Music</span><input type="range" id="sMus" min="0" max="100"></div>
     <div class="set"><span>Mouse sensitivity</span><input type="range" id="sSens" min="30" max="250"></div>
     <div class="set"><span>Reduce flashing</span><button class="btn small" id="sCalm"></button></div>
@@ -68,7 +70,7 @@ export function pauseMenu(g) {
     pm.querySelectorAll('#sGfx button').forEach((b) => b.classList.toggle('on', b.dataset.v === SETTINGS.graphics)); pm.querySelector('.gfxNote').classList.toggle('hidden', SETTINGS.graphics !== 'ultra');
     pm.querySelectorAll('#sRes button').forEach((b) => b.classList.toggle('on', +b.dataset.v === SETTINGS.res));
     pm.querySelector('#sCalm').textContent = SETTINGS.calmFlash ? 'On' : 'Off'; pm.querySelector('#sPerf').textContent = SETTINGS.perf ? 'On' : 'Off'; pm.querySelectorAll('#sShake button').forEach((b) => b.classList.toggle('on', b.dataset.v === SETTINGS.shake));
-    pm.querySelector('#sVol').value = Math.round(SETTINGS.volume * 100); pm.querySelector('#sMus').value = Math.round(SETTINGS.music * 100); pm.querySelector('#sSens').value = Math.round(SETTINGS.sens * 100);
+    pm.querySelector('#sVol').value = Math.round(SETTINGS.volume * 100); pm.querySelector('#sMus').value = Math.round(SETTINGS.music * 100); pm.querySelector('#sSfx').value = Math.round(SETTINGS.sfx * 100); pm.querySelector('#sAmb').value = Math.round(SETTINGS.ambience * 100); pm.querySelector('#sSens').value = Math.round(SETTINGS.sens * 100);
   };
   pm.querySelector('#sFs').onclick = async () => { await toggleFullscreen((m) => g.hud.toast(m)); sync(); };
   // (to or from Ultra, its view distances come only with a reload: settings.js)
@@ -76,6 +78,8 @@ export function pauseMenu(g) {
   pm.querySelector('#sRes').onclick = (e) => { const b = e.target.closest('button'); if (b) { setRes(+b.dataset.v); sync(); } };
   pm.querySelector('#sVol').oninput = (e) => setVol(e.target.value / 100);
   pm.querySelector('#sMus').oninput = (e) => setMusic(e.target.value / 100);
+  pm.querySelector('#sSfx').oninput = (e) => setSfx(e.target.value / 100);
+  pm.querySelector('#sAmb').oninput = (e) => setAmbience(e.target.value / 100);
   pm.querySelector('#sSens').oninput = (e) => setSens(e.target.value / 100);
   pm.querySelector('#sCalm').onclick = () => { setCalmFlash(!SETTINGS.calmFlash); sync(); };
   pm.querySelector('#sPerf').onclick = () => { setPerfOverlay(!SETTINGS.perf); sync(); };
