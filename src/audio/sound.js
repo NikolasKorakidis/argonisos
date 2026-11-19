@@ -388,7 +388,7 @@ export function updateAmbience(dt, w = {}) {
   // rain: droplets in a light rain, the rush of a downpour in a heavy one (2 dB under the other beds: a downpour is a bed,
   // not a roar); under a roof the drumming on it, and inside (walls round you too) only a muffled hush through them
   const out1 = (1 - inside * 0.92) * (roof && !inside ? 0.55 : 1), recRain = bed('bedDrops', sstep(0.02, 0.3, rain) * (1 - 0.5 * sstep(0.6, 1, rain)) * 0.6 * out1, dt);
-  bed('bedRain', sstep(0.45, 1, rain) * 0.6 * out1, dt); bed('bedRoof', roof ? rain * 0.6 * (1 - inside * 0.5) : 0, dt, { tc: 0.4 }); bed('bedMuffled', inside ? rain * 0.75 : 0, dt);
+  bed('bedRain', sstep(0.45, 1, rain) * 0.48 * out1, dt); bed('bedRoof', roof ? rain * 0.6 * (1 - inside * 0.5) : 0, dt, { tc: 0.4 }); bed('bedMuffled', inside ? rain * 0.75 : 0, dt);
   const L1 = (k, v) => bed(k, v, dt, { tc: 0.8, rate: k === 'loopCrickets' ? 0.32 : 1 });   // (the first pack's loops, where there's no recording of the team's)
   if (!recRain) L1('loopRain', rain * 0.45 * (1 - inside * 0.8) * (roof ? 0.6 : 1));
   L1('loopStorm', Math.max(recRain ? 0 : rain - 0.6, sk * 0.7) * 1.2 * (1 - inside * 0.7));   // (the storm wall's own)
