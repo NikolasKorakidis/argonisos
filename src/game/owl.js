@@ -50,7 +50,7 @@ function owlModel() {
   m(new THREE.BoxGeometry(0.12, 0.03, 0.14).translate(0, 0, -0.05), fe, 0, 0.08, -0.14).rotation.x = 0.4;
   // the "!" that says she has something to tell you
   const c = document.createElement('canvas'); c.width = 64; c.height = 128; const x = c.getContext('2d');
-  x.font = '900 112px Cinzel, Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 10; x.strokeStyle = '#211610'; x.strokeText('!', 32, 68); x.fillStyle = '#ffcf4a'; x.fillText('!', 32, 68);
+  x.font = '900 112px Stoix, Cinzel, Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 10; x.strokeStyle = '#211610'; x.strokeText('!', 32, 68); x.fillStyle = '#ffcf4a'; x.fillText('!', 32, 68);
   const mark = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true })); mark.scale.set(0.32, 0.64, 1); mark.position.y = 1.0; mark.renderOrder = 10; g.add(mark);
   g.scale.setScalar(1.25);
   const o = { g, head, wings, mark, mixer: null, acts: {}, cur: null };

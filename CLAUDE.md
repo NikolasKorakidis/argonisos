@@ -52,6 +52,9 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
   `site-pack.js` `piece()`. Sounds: `node tools/assets/sounds.mjs` →
   `assets/sounds/pack/` (also git-ignored), played by `sound.js` where it has a recording. Without the pack files the
   world, buildings, tools, hero and sound fall back to the carved look; the animals and the bosses need the pack.
+- **Fonts:** titles, names and labels use **Stoix** (Eireni Moutoussi, SIL OFL; `assets/fonts/stoix/` with its `OFL.txt`, which must stay
+  beside it; its Latin letters are drawn the Greek way, S as Σ, D as Δ), falling back to Cinzel for the signs it lacks;
+  running text stays in Alegreya Sans. The source files are in `incoming assets/fonts/stoix/`.
 - Player-facing changes go in the patch notes (`src/ui/patchnotes.js`, the `PATCHES` list) in plain player language.
 
 ## Run and test
