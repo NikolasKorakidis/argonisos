@@ -88,8 +88,27 @@ time they're wanted and are let go of after 25 s silent, so only what's audible 
 - Crossfades of 3 s (loops crossfade into a fresh start of themselves); the music dips under loud thunder.
 - Not played (places not in the game yet): oros, sailing, nisia, sirenReef, acheron, erebos.
 
+## Boss fights (the giants, Patch 21)
+The bosses are giants, and sound it. Every boss sound goes through the effects bus (its slider), layered with a synthesised
+sub boom (`sub` in sound.js: a sine falling from 50-80 Hz to 20-35 Hz with a brown-noise rumble, placed and faded like
+the recording it goes with):
+- Roars (`roar` with `boss`): `bossRoar`/`bossRoarLong` slowed to 0.78-0.85 and louder (heard to 240 m) over a 2-3.4 s boom.
+- Footsteps (`giantStep`, from each foot the body brings down: models.js `footfalls`): `landRock` at 0.4-0.48 over a short
+  thud; the camera trembles with each near you.
+- Slams, the charge into a wall, the pounce, the claws and sting landing (`slam` with `big`): `slamHit` at 0.7-0.78 over a
+  boom, grit pattering down after (`rattle`); the camera kicks hard.
+- A boss's blow landing on you (`bossHit`): `slamHit` sped up a little over a short, hard boom, under the hurt cry.
+- The Chimera's fire (`breath`): `fireBurst` at 0.6-0.68 with the lion's roar in it and the fire's own roar for its length.
+- The arrival: the ground's rumble rising for three seconds (`quake`), then the blast as it lands (`blast`: `thunderClap`
+  and `slamHit` slowed, the deepest boom, stones raining down), and each wall and column falling (`collapse`: `boulder`
+  slowed over a boom).
+- The fight's mix (`setFight`, on while a boss's track plays): the music 5.6 dB up and dipping under thunder only a
+  third as much, the ambience 3.7 dB down. A limiter after the compressor (-5 dB, 20:1) keeps the output from clipping.
+- Measured in a Minotaur fight (striking at him, 14 s): the output -16.1 LUFS before, -11.4 after (its peak held at
+  -3.5 dBFS by the limiter); the music -26.1 → -20.1, the ambience -26.9 → -29.9. The Chimera's: output -17.1 → -10.9.
+
 ## The mix (tests/suites/audio.mjs, K-weighted meters, LUFS)
-At the default sliders: a calm meadow's ambience about -29, a forest at night -29, a downpour about -27, a land's track
+At the default sliders: a calm meadow's ambience about -29, a forest at night -28, a downpour about -26 (its bed 2 dB under the others), a land's track
 about 3-4 LU over the ambience, the blows of a fight peaking about 10 LU over it, the output -22 to -29, never clipping.
 
 ## Odd files

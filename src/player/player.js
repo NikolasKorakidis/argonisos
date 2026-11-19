@@ -21,6 +21,10 @@ const DODGE = { cost: 12, safe: [0.05, 0.55] };
 // The free camera while seated (seat.look: sitting on the ground, game/acts.js): how far from the hero it may go (m), how fast WASD and Q / E move that point (m/s, Shift three times as fast), how close to the
 // ground it may come (m), the pitch it may reach either way (radians) and the wheel's range (m)
 const LOOK = { r: 30, speed: 3, low: 0.15, pitch: 1.5, near: 0.8, far: 14 };
+// The boss camera (Patch 21): in a fight with one of the giant bosses (bossCam, from trial.js) the follow camera eases back
+// and up so the beast fits in the view: at least dist metres back, the point it looks at lift metres higher, the view a
+// few degrees wider (fov); and while a boss arrives (focus: where it comes down) it turns to look that way
+const BOSS_CAM = { dist: 13, lift: 2.6, fov: 8, in: 0.9, out: 0.5 };
 
 export class Player {
   constructor(scene) {
@@ -29,6 +33,7 @@ export class Player {
     this.pos = this.root.position; this.vel = new THREE.Vector3(); this.hv = new THREE.Vector3();
     this.yaw = 0; this.camYaw = 0; this.camPitch = -0.25; this.camDist = 5.5; this.camT = new THREE.Vector3(); this.camInit = false;
     this.lookK = 0; this.lookOff = new THREE.Vector3(); this.lookV = new THREE.Vector3(); this.home = null;   // (the free camera: updateCamera)
+    this.bossCam = false; this.bossK = 0; this.focus = null;   // (the boss camera: BOSS_CAM)
     this.onGround = true; this.swimming = false; this.sprinting = false; this.sneaking = false; this.jumped = false; this.jumpBuf = 0;
     this.speed = 0; this.winded = false; this.swing = 0; this.swingKind = 'punch'; this.swingHit = false; this.equip = null; this.bow = null;
     this.strikeMove = null; this.combo = 0; this.comboT = 0; this.dodge = null;
@@ -243,21 +248,23 @@ export class Player {
       if (o > room) this.lookOff.setLength(Math.max(room, o - Math.max(o - room, 1) * e(6)));
     } else {
       this.lookV.set(0, 0, 0); this.lookOff.multiplyScalar(1 - e(4));
+      if (this.focus && !this.dead) { const f = this.focus; this.camYaw += angDiff(Math.atan2(this.pos.x - f.x, this.pos.z - f.z), this.camYaw) * e(2.2); this.camPitch = lerp(this.camPitch, -0.12, e(1.5)); }
       if (this.home) { const k = e(4); this.camYaw += angDiff(this.yaw + Math.PI, this.camYaw) * k; this.camPitch = lerp(this.camPitch, this.home.pitch, k); this.camDist = lerp(this.camDist, this.home.dist, k); if (L < 0.02) this.home = null; }
     }
     const raw = this.pos.clone(); raw.y += (this.swimming ? 1.2 : this.sneaking ? (this.hero.crouches ? 1.35 : 1.45) : 1.65) - 0.8 * L;   // (seated, the body's middle)
     if (!this.camInit || this.camT.distanceTo(raw) > 8) { this.camT.copy(raw); this.camInit = true; }
     this.camT.x += (raw.x - this.camT.x) * Math.min(1, dt * 16); this.camT.z += (raw.z - this.camT.z) * Math.min(1, dt * 16); this.camT.y += (raw.y - this.camT.y) * Math.min(1, dt * 8);
     this.aimK = lerp(this.aimK || 0, this.aiming ? 1 : 0, Math.min(1, dt * 8));
-    const k = this.aimK, dist = lerp(this.camDist, 2.3, k), pitch = this.camPitch;
+    const want0 = this.bossCam && !L ? 1 : 0; this.bossK = lerp(this.bossK, want0, e(want0 > this.bossK ? BOSS_CAM.in : BOSS_CAM.out)); const bk = this.bossK * (1 - this.aimK);
+    const k = this.aimK, dist = lerp(lerp(this.camDist, Math.max(this.camDist, BOSS_CAM.dist), bk), 2.3, k), pitch = this.camPitch;
     const right = new THREE.Vector3(Math.cos(this.camYaw), 0, -Math.sin(this.camYaw));
-    const target = this.camT.clone().addScaledVector(right, (0.45 + 0.35 * k) * (1 - L)); target.y -= 0.15 * k;
+    const target = this.camT.clone().addScaledVector(right, (0.45 + 0.35 * k) * (1 - L)); target.y -= 0.15 * k; target.y += BOSS_CAM.lift * bk;
     if (L) {
       // the point looked at: moved off the hero, kept over the ground and out of walls (stopped where one stands between)
       target.add(this.lookOff); target.y = Math.max(target.y, this.groundHere(target.x, target.z, target.y) + LOOK.low);
       const b = target.distanceTo(this.camT) > 0.05 ? this.camBlock?.(this.camT, target) : null; if (b !== undefined && b !== null) { target.sub(this.camT).setLength(Math.max(0, b - 0.3)).add(this.camT); this.lookOff.copy(target).sub(this.camT); }
     }
-    const fov = lerp(60, 50, k); if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    const fov = lerp(60 + BOSS_CAM.fov * bk, 50, k); if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
     const off = new THREE.Vector3(Math.sin(this.camYaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(this.camYaw) * Math.cos(pitch)).multiplyScalar(dist);
     const want = target.clone().add(off), over = lerp(0.4, LOOK.low, L);
     // keep the camera out of hills between it and the player (free, it may come down close over the grass)

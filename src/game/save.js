@@ -49,6 +49,7 @@ export function load(g) {
   } else { g.pickups.load({ taken: [], drops: d.pickups?.drops || [] }); setTimeout(() => g.hud.toast('The land has changed since you were last here: the trees and what lies on the ground have grown back'), 4000); }
   g.build.load(d.build || []);
   for (const u of g.structures.uses) { if (u.kind === 'scrap' && g.trial.st.scraps.includes(u.id)) u.taken = true; if (u.kind === 'carving' && g.trial.st.carvings.includes(u.id)) u.taken = true; if (u.kind === 'offering' && g.trial.st.offered[u.boss]) g.trial.mountHead(u); if (u.kind === 'loot' && g.trial.st.looted.includes(u.id) && u.lid) u.lid.rotation.x = -1.2; }
+  for (const k of Object.keys(g.trial.st.broken || {})) g.structures.ruin(k, { live: false });   // (a site a boss broke stays in ruins: trial.js stage)
   g.trial.drawPower();
   if (d.fog) { const im = new Image(); im.onload = () => { const c = g.map.fctx; c.clearRect(0, 0, g.map.fog.width, g.map.fog.height); c.drawImage(im, 0, 0); }; im.src = d.fog; }
   g.graves?.load(d.graves || []);

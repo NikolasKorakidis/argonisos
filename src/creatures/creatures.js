@@ -50,13 +50,18 @@ const FAMILY = { hog: { p: 0.25, young: [1, 3] }, deer: { p: 0.3, young: [1, 1] 
 const YOUNG_NAME = { hog: 'Piglet', deer: 'Fawn', rabbit: 'Leveret', fox: 'Fox Cub' }, YOUNG_K = 0.4, youngT = {};
 const youngOf = (type) => { const T = TYPES[type]; return (youngT[type] ||= { ...T, name: YOUNG_NAME[type] ?? T.name, r: T.r * 0.6, h: T.h * 0.6, reach: (T.reach ?? 1) * 0.7, speed: [T.speed[0], T.speed[1] * 0.85] }); };
 const calm = (c) => c.state === 'idle' || c.state === 'wander' || c.state === 'graze';
+// what stops a giant boss: walls, columns and buildings, not the rubble of a ruin (low) or the trees and rocks it tramples
+const BIG = (k) => !k.low && k.ref?.sp === undefined;
+// ...and when going round would take it far out of its way, the stub of a broken wall no higher than its knee, which it
+// strides over (steer)
+const STRIDE = (k) => BIG(k) && !(k.h !== undefined && k.h < 3.6);
 const alive = (c) => c && !c.dead && !c.gone;
 
 export class Creatures {
   constructor(g) { this.g = g; this.list = []; this.t = 0; this.plates = new Map(); preloadBodies(); this.box = document.createElement('div'); this.box.id = 'plates'; document.getElementById('hud').appendChild(this.box); }
   spawn(type, x, z, o = {}) {
     const T = TYPES[type], level = o.level ?? (Math.random() < 0.12 ? (Math.random() < 0.25 ? 2 : 1) : 0), k = 1 + 0.25 * level;
-    const body = makeBody(type, level, x, z, o.young), y = Math.max(heightAt(x, z), -0.3), young = !!body.young, yk = young ? YOUNG_K : 1;
+    const body = makeBody(type, level, x, z, o.young, T.size, T.pace), y = Math.max(heightAt(x, z), -0.3), young = !!body.young, yk = young ? YOUNG_K : 1;
     body.obj.position.set(x, y, z); body.obj.rotation.order = 'YXZ'; body.obj.userData.nearShadow = true; this.g.scene.add(body.obj);   // (it moves: it casts into the near shadow map only, render/core.js)
     const c = { type, T: young ? youngOf(type) : T, body, level, young, dropK: yk, hp: rr(...T.hp) * k * yk, max: 0, pos: body.obj.position, yaw: Math.random() * 6.28, speed: 0, state: 'idle', t: Math.random() * 4, target: null, home: new THREE.Vector3(x, y, z),
       atkCd: rr(0.5, 1.5), rangedCd: rr(2, 4), hitT: 0, flash: 0, aware: !!o.aware, dmgK: k * yk, deadT: 0, boss: o.boss, summoned: o.summoned, vy: 0, stuck: 0, lastP: new THREE.Vector3(x, y, z) };
@@ -188,8 +193,9 @@ export class Creatures {
         face = away + (T.hops ? (Math.sin(c.t * 3.3) > 0 ? 0.6 : -0.6) : Math.sin(c.t * 2) * 0.4); want = T.speed[1] * (brood ? 0.85 : 1);
         if (c.t <= 0 && d > 25) { c.state = 'idle'; c.t = rr(2, 5); }
       } else if (c.state === 'chase' || c.state === 'attack') {
-        const wp = g.structures?.navTarget?.(c.pos, pp) || pp;   // in the Labyrinth: round by the gaps in the rings
+        const wp = g.structures?.navTarget?.(c.pos, pp) || pp;   // in the Labyrinth: round by the gaps in the rings (until it's broken)
         face = Math.atan2(wp.x - c.pos.x, wp.z - c.pos.z); want = T.speed[1] * (T.heavy ? 0.75 : 0.85);
+        if (c.boss) face = this.steer(c, face, d, dt);   // (round what still stands between it and you)
         if (fire) { const away = Math.atan2(c.pos.x - fire.pos.x, c.pos.z - fire.pos.z); if (c.pos.distanceTo(fire.pos) < 6.5) { face = away; want = T.speed[0] * 1.5; } else if (d < 9) want = 0; }   // won't come into the firelight
         const stopAt = T.reach + T.r * 0.5; if (d < stopAt + (c.boss ? 0 : c.speed * 0.25)) want = 0;   // (easing off in time, not running on into you)
         if (d < stopAt) { want = 0; if (c.atkCd <= 0 && !c.move) this.strike(c); }
@@ -217,13 +223,16 @@ export class Creatures {
         if (!c.hitDone && c.atkE >= c.hitAt) { c.hitDone = true;
           if (c.state === 'throw') this.throwThorn(c);
           else { const front = Math.abs(angDiff(toP, c.yaw)) < (T.heavy ? 1 : 0.75); c.blowAt = { e: c.atkE, hit: front && d < T.reach + T.r + 0.6 && !P.dead };
-            if (c.blowAt.hit) g.combat.hitPlayer(c, T.dmg); else if (T.heavy) { dust(c.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), 3), 18); addShake(0.3); }
-            if (T.heavy) g.sound?.('slam', { at: c.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), 2.5) });   // (a giant's or the Minotaur's blow comes down like a slam, hit or miss)
+            const fall = c.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), c.boss ? T.reach * 0.8 : 3);
+            if (c.blowAt.hit) g.combat.hitPlayer(c, T.dmg); else if (T.heavy) { dust(fall, c.boss ? 12 : 18, undefined, c.boss ? 0.6 : 0.35); addShake(c.boss ? 0.7 * this.near(c) : 0.3); }
+            if (T.heavy) g.sound?.('slam', { at: fall, big: c.boss });   // (a giant's or the Minotaur's blow comes down like a slam, hit or miss)
             this.hitBuildings(c); } }
         if (c.atkE >= c.atkT) c.state = 'chase';
       }
       // a boss move in progress steers: its own speed and heading (snapped for a charge), or a leap through the air
       const ctl = c.ctl; if (ctl) { want = ctl.want; if (ctl.face !== undefined) face = ctl.face; if (ctl.snap) c.yaw = face; if (ctl.want === 0) c.speed *= 0.8; }
+      // (a boss that found itself stuck walks off the way that's open for a moment: unstick)
+      else if (c.free?.t > 0) { c.free.t -= dt; face = c.free.dir; want = Math.max(want, T.speed[1] * 0.55); }
       // move: turn towards the wanted heading, accelerate, follow the ground, avoid deep water and the storm
       c.yaw += angDiff(face, c.yaw) * Math.min(1, dt * (T.heavy ? 2.5 : 6));
       c.speed += (want - c.speed) * Math.min(1, dt * (T.hops ? 9 : 4));   // (a hare is off, or stopped, at once)
@@ -237,19 +246,72 @@ export class Creatures {
         const dx = c.pos.x - pp.x, dz = c.pos.z - pp.z, need = 0.4 + T.r * 0.7, dd = dx * dx + dz * dz;
         if (!P.dead && dd < need * need && dd > 1e-6 && Math.abs(c.pos.y - pp.y) < 1.5) { const q = need / Math.sqrt(dd) - 1; c.pos.x += dx * q; c.pos.z += dz * q; }
       }
-      g.colliders.resolve(c.pos, T.r * 0.8, c.pos.y);
+      g.colliders.resolve(c.pos, T.r * 0.8, c.pos.y, c.boss ? (c.stride ? STRIDE : BIG) : undefined);   // (a giant boss steps over rubble and through the undergrowth)
+      if (c.boss && !P.dead) this.shoulder(c, pp);
       const fl = Math.max(this.groundAt(c.pos.x, c.pos.z, c.pos.y), -0.4); if (ctl?.air !== undefined) c.pos.y = fl + ctl.air; else c.pos.y += (fl - c.pos.y) * Math.min(1, dt * 12);
-      // stuck against a wall while chasing: hit it
+      // stuck against a wall while chasing: hit it (a boss works its way free instead: unstick)
+      if (c.boss) this.unstick(c, want, dt);
       c.stuck = c.pos.distanceTo(c.lastP) < 0.05 * dt * 60 && want > 0.5 ? c.stuck + dt : 0; c.lastP.copy(c.pos);
-      if (c.stuck > 1.2 && (c.state === 'chase') && c.atkCd <= 0) { this.strike(c); c.stuck = 0; }
+      if (c.stuck > 1.2 && (c.state === 'chase') && c.atkCd <= 0 && !c.boss) { this.strike(c); c.stuck = 0; }
       c.body.obj.rotation.y = c.yaw;
       // four-footed creatures lie along the slope they stand on: nose up a hill, down it going down
       if (QUAD.has(c.type)) { const e = T.r * 1.3 + 0.3, fx = Math.sin(c.yaw) * e, fz = Math.cos(c.yaw) * e, rise = this.groundAt(c.pos.x + fx, c.pos.z + fz, c.pos.y) - this.groundAt(c.pos.x - fx, c.pos.z - fz, c.pos.y);
         c.pitch = (c.pitch || 0) + (-Math.atan2(rise, 2 * e) * (ctl?.air !== undefined ? 0 : 1) - (c.pitch || 0)) * Math.min(1, dt * 8); c.body.obj.rotation.x = c.pitch; }
       c.body.animate(special && special !== 'run' ? special : c.state === 'attack' || c.state === 'throw' ? c.state : c.hitT > 0 ? 'hit' : c.state, c.speed, dt);
       c.body.feet?.(dt, this.groundFn ||= (x, z, y) => this.groundAt(x, z, y), c.pos.y, ctl?.air === undefined && c.hitT <= 0);
+      if (c.boss && ctl?.air === undefined) for (const p of c.body.footfalls?.(dt) || []) this.stomp(c, p);
     }
     this.updatePlates();
+  }
+  // ---- a giant boss finding its way. Its body is a capsule along its heading (T.body: from how far behind its middle to
+  // how far in front) as thick as T.r; gap() is how far a point is from the line down its middle, and the nearest point on it.
+  gap(c, x, z) {
+    const [b0, b1] = c.T.body || [0, 0], fx = Math.sin(c.yaw), fz = Math.cos(c.yaw), t = Math.max(b0, Math.min(b1, (x - c.pos.x) * fx + (z - c.pos.z) * fz));
+    const px = c.pos.x + fx * t, pz = c.pos.z + fz * t; return { d: Math.hypot(x - px, z - pz), x: px, z: pz };
+  }
+  // how far it could go along heading a before something solid stands in its way (three rays: its middle and its flanks)
+  clearTo(c, a, look, filter = BIG) {
+    const dx = Math.sin(a), dz = Math.cos(a), w = c.T.r * 0.6; let best = look;
+    for (const o of [0, -w, w]) { const k = this.g.colliders.pick(c.pos.x + dz * o, c.pos.z - dx * o, dx, dz, look, filter); if (k) best = Math.min(best, Math.max(0, (k.x - c.pos.x) * dx + (k.z - c.pos.z) * dz - k.r)); }
+    return best;
+  }
+  // Round what still stands between it and where it's going (a wall's stub, a column, the altar): the heading nearest the
+  // one it wants whose way is open for a body's length, going round the same side as the last time for a couple of
+  // seconds after (sideT), so it doesn't dither from one side of a stub to the other
+  steer(c, face, d, dt) {
+    c.sideT = Math.max(0, (c.sideT || 0) - dt); if (!c.sideT) c.side = 0; c.stride = false;
+    const look = Math.min(d, c.T.r * 2 + 6), open = (a, f) => this.clearTo(c, a, look, f) >= look - 0.5; if (look < c.T.r + 1 || open(face)) return face;
+    const sides = c.side ? [c.side, -c.side] : Math.random() < 0.5 ? [1, -1] : [-1, 1];
+    for (const off of [0.35, 0.7, 1.05]) for (const s of sides) if (open(face + s * off)) { c.side = s; c.sideT = 2; return face + s * off; }
+    if (open(face, STRIDE)) { c.stride = true; return face; }   // (rather than a long way round: over the wall's stub)
+    for (const off of [1.4, 1.8, 2.3]) for (const s of sides) if (open(face + s * off)) { c.side = s; c.sideT = 2; return face + s * off; }
+    c.stride = true; return face;
+  }
+  // Stuck: it wants to go but has hardly moved for half a second (c.jam): it walks off a moment the way that's most open,
+  // leaning towards you; still stuck after a second and a half, it's put a couple of metres that way (a giant shouldering
+  // through), so it is never pinned for longer than that. Against a building of yours it strikes it instead.
+  unstick(c, want, dt) {
+    const moved = Math.hypot(c.pos.x - c.lastP.x, c.pos.z - c.lastP.z), busy = c.ctl || c.state !== 'chase';
+    c.jam = !busy && want > 1 && moved < Math.max(c.speed, 1) * dt * 0.3 ? (c.jam || 0) + dt : Math.max(0, (c.jam || 0) - dt * 2);
+    if (c.jam < 0.5) return;
+    const f = new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), wall = this.g.colliders.pick(c.pos.x, c.pos.z, f.x, f.z, c.T.r + 1.5, (k) => k.ref?.piece);
+    if (wall && c.atkCd <= 0) { this.strike(c); c.jam = 0; return; }
+    const pp = this.g.player.pos, toP = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z); let best = toP, bs = -1e9;
+    for (let i = 0; i < 16; i++) { const a = toP + (i / 16) * Math.PI * 2, sc = this.clearTo(c, a, 10) + 3 * Math.cos(angDiff(a, toP)); if (sc > bs) { bs = sc; best = a; } }
+    if (!(c.free?.t > 0)) c.free = { dir: best, t: 1.1 };
+    if (c.jam > 1.5) { c.pos.x += Math.sin(best) * 2; c.pos.z += Math.cos(best) * 2; c.jam = 0.5; }
+  }
+  // you don't stand inside a giant: it shoulders you aside
+  shoulder(c, pp) {
+    const T = c.T, q = this.gap(c, pp.x, pp.z), need = T.r * 0.75; if (q.d >= need || Math.abs(pp.y - c.pos.y) > T.h * 0.5) return;
+    const dx = pp.x - q.x, dz = pp.z - q.z, l = Math.hypot(dx, dz);
+    if (l > 1e-3) { pp.x = q.x + (dx / l) * need; pp.z = q.z + (dz / l) * need; } else { pp.x = q.x + Math.cos(c.yaw) * need; pp.z = q.z - Math.sin(c.yaw) * need; }
+  }
+  // A boss's foot coming down: a deep thud from where it lands, a puff of dust, and the ground trembling under you near it
+  stomp(c, p) {
+    const near = Math.max(0, 1 - c.pos.distanceTo(this.g.player.pos) / 50), k = c.T.size / 3.3;
+    this.g.sound?.('giantStep', { at: p, k }); if (near > 0) addShake(0.42 * near * near * k);
+    dust(p.setY(Math.max(p.y, c.pos.y) + 0.1), 2, 0x7a6c5c, 0.35 * k);
   }
   // what a creature stands on: the ground, or a floor or a site's steps within reach
   groundAt(x, z, y) { const g = this.g; return Math.max(groundAt(x, z), g.build?.floorAt(x, z, y) ?? -1e9, g.structures?.floorAt(x, z, y) ?? -1e9); }
@@ -272,7 +334,7 @@ export class Creatures {
   // creatures in an arc in front of a point (for melee)
   inArc(from, yaw, reach, arc = 1.1) {
     const out = [];
-    for (const c of this.list) { if (c.dead) continue; const dx = c.pos.x - from.x, dz = c.pos.z - from.z, d = Math.hypot(dx, dz) - c.T.r; if (d > reach) continue; if (Math.abs(angDiff(Math.atan2(dx, dz), yaw)) > arc && d > 0.5) continue; if (Math.abs(c.pos.y - from.y) > c.T.h + 1.5) continue; out.push(c); }
+    for (const c of this.list) { if (c.dead) continue; const q = c.T.body ? this.gap(c, from.x, from.z) : c.pos, dx = q.x - from.x, dz = q.z - from.z, d = Math.hypot(dx, dz) - c.T.r; if (d > reach) continue; if (Math.abs(angDiff(Math.atan2(dx, dz), yaw)) > arc && d > 0.5) continue; if (Math.abs(c.pos.y - from.y) > c.T.h + 1.5) continue; out.push(c); }
     return out;
   }
   // ---- health bars over creatures that are hurt or hunting you

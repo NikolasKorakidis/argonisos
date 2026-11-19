@@ -35,7 +35,8 @@ loadGLB('pack/arrow').then((gl) => { const w = new THREE.Group(); w.add(gl.scene
 // ---- thrown things. A dryad's thorn: a bramble bolt as long as a forearm with spines along it, glowing green, trailing
 // light and shedding leaves, slow enough to see coming and step aside from, block or roll under (v: m/s, a little drop,
 // grav), from her hand as her throw lets go (creatures.js); her hand glows as she winds up (charge). The Minotaur's
-// rubble: a block of masonry, slower and heavier, that bursts into dust where it lands and catches you within a metre.
+// rubble: a block of masonry, slower and heavier, that bursts into dust where it lands and catches you within a metre
+// (o.size: a giant's boulder, that much bigger, faster and harder to get out of the way of).
 // Made once and kept (a pool), the first parked out of sight from the start so its shaders are compiled with the
 // rest (main.js warmUp), never in the middle of a fight.
 const THORN = { v: 11, grav: 2.5, r: 0.45, trail: 18, life: 3 }, ROCK = { v: 14, grav: 9 }, LEAF = [0x5d8a34, 0x7aa83e, 0x3f6a26, 0x9cc45a], GLOW = 0x9cff5a;
@@ -105,11 +106,14 @@ export class Combat {
     const final = armorReduce(dmg, g.armor?.() ?? 0);
     // (a blow taken kicks the view away from whoever struck it, by how much it hurt; a big one rumbles on a little; and the
     // edge of the screen it came from glows red, as the camera sees it: ahead is the top, behind the bottom)
-    S.damage(final); g.hud.hurt(final / Math.max(10, S.maxHealth) * 2); punch(clamp(final / 22, 0.2, 0.85), { x: P.pos.x - src.x, z: P.pos.z - src.z }); if (final > 20) addShake(clamp((final - 20) / 60, 0, 0.3)); g.sound?.('hurt', { voice: g.heroVoice?.() ?? true });
+    // (a giant boss's blow lands harder still: a heavy impact under the cry, the view kicked hard and rumbling on)
+    S.damage(final); g.hud.hurt(final / Math.max(10, S.maxHealth) * 2); punch(c.boss ? clamp(0.55 + final / 40, 0.6, 1) : clamp(final / 22, 0.2, 0.85), { x: P.pos.x - src.x, z: P.pos.z - src.z }); if (final > 20 || c.boss) addShake(c.boss ? clamp(0.35 + final / 60, 0.35, 0.8) : clamp((final - 20) / 60, 0, 0.3)); g.sound?.('hurt', { voice: g.heroVoice?.() ?? true });
+    if (c.boss) g.sound?.('bossHit', { k: clamp(0.6 + final / 40, 0.6, 1.2) });
     { const f = camera.getWorldDirection(new THREE.Vector3()), dx = src.x - P.pos.x, dz = src.z - P.pos.z, fl = Math.hypot(f.x, f.z) || 1; g.hud.hurtFrom?.((dx * -f.z + dz * f.x) / fl, (dx * f.x + dz * f.z) / fl, clamp(final / 25, 0.25, 1)); }
     if (!S.dead) P.hero.hurt(final, S.maxHealth);   // (a flinch, or a stagger back from a big blow)
     g.acts?.hurt(final);   // (a hard enough blow breaks off eating, praying, sitting)
-    if (c.T.heavy) { const d = P.pos.clone().sub(c.pos).setY(0).normalize(); P.hv.addScaledVector(d, 9); P.vel.y = 4; P.onGround = false; }
+    // (a heavy blow knocks you back; a giant boss's sends you flying, the harder the further)
+    if (c.T.heavy) { const d = P.pos.clone().sub(c.pos).setY(0).normalize(); P.hv.addScaledVector(d, c.boss ? 13 + Math.min(9, final * 0.25) : 9); P.vel.y = c.boss ? 6.5 : 4; P.onGround = false; }
     // gear wears a little when you're hit
     for (const s of g.inv.slots) if (s?.worn && ITEMS[s.id].armor && s.dur !== undefined) s.dur = Math.max(0, s.dur - 0.5);
     return final;
@@ -118,13 +122,13 @@ export class Combat {
   parryBonus() { const l = this.g.inv.slots.find((s) => s?.worn === 'left' && ITEMS[s.id].type === 'shield'); return (l ? ITEMS[l.id].parry : this.g.held()?.parry) || 1.5; }
   // ---- thrown things (THORN): from o.from (the thrower's hand) at where you stand as it leaves the hand, so moving dodges it
   throwAt(c, dmg, o = {}) {
-    const from = o.from?.clone() || c.pos.clone().setY(c.pos.y + c.T.h * 0.75), to = this.g.player.pos.clone().setY(this.g.player.pos.y + 1.1), F = o.rock ? ROCK : THORN;
-    const t = from.distanceTo(to) / F.v, v = to.clone().sub(from).divideScalar(t); v.y += 0.5 * F.grav * t;
+    const from = o.from?.clone() || c.pos.clone().setY(c.pos.y + c.T.h * 0.75), to = this.g.player.pos.clone().setY(this.g.player.pos.y + 1.1), F = o.rock ? ROCK : THORN, size = o.size || 1;
+    const t = from.distanceTo(to) / (F.v * (o.rock ? Math.sqrt(size) : 1)), v = to.clone().sub(from).divideScalar(t); v.y += 0.5 * F.grav * t;
     let th = null, m;
-    if (o.rock) { m = new THREE.Mesh(rockGeo, rockMat); m.castShadow = true; m.userData.nearShadow = true; scene.add(m); }
+    if (o.rock) { m = new THREE.Mesh(rockGeo, rockMat); m.scale.setScalar(size); m.castShadow = true; m.userData.nearShadow = true; scene.add(m); }
     else { th = this.spare.pop() || makeThorn(); m = th.g; scene.add(m, th.trail); const p = th.trail.geometry.attributes.position; for (let i = 0; i < THORN.trail; i++) from.toArray(p.array, i * 3); p.needsUpdate = true;
       burst(from, { color: GLOW, n: 10, speed: 2.2, size: 0.06, grav: 1, life: 0.5, glow: true }); this.g.sound?.('thornThrow', this.g.creatures.near?.(c) ?? 1); }
-    m.position.copy(from); m.lookAt(from.clone().add(v)); this.thorns.push({ m, th, v, c, dmg, life: THORN.life, rock: o.rock, grav: F.grav, leafT: 0, e: 0 });
+    m.position.copy(from); m.lookAt(from.clone().add(v)); this.thorns.push({ m, th, v, c, dmg, life: THORN.life, rock: o.rock, size, grav: F.grav, leafT: 0, e: 0 });
     return this.thorns[this.thorns.length - 1];
   }
   park(th) { th.g.position.copy(PARK); th.trail.geometry.attributes.position.array.fill(-5000); th.trail.geometry.attributes.position.needsUpdate = true; scene.add(th.g, th.trail); this.spare.push(th); }
@@ -215,15 +219,15 @@ export class Combat {
         const a = t.th.trail.geometry.attributes.position; a.array.copyWithin(3, 0, (THORN.trail - 1) * 3); p.toArray(a.array, 0); a.needsUpdate = true;
         if ((t.leafT -= dt) <= 0) { t.leafT = 0.045; burst(p, { color: LEAF[Math.floor(Math.random() * LEAF.length)], n: 1, speed: 0.5, size: 0.07, grav: 2, life: 1, up: 0.2 }); } }
       let hit = false;
-      if (!P.dead && !t.passed) for (let k = 1; k <= 3 && !hit; k++) { const q = prev.clone().lerp(p, k / 3), y = clamp(q.y, P.pos.y + 0.35, P.pos.y + 1.75); hit = Math.hypot(q.x - P.pos.x, q.z - P.pos.z) < (t.rock ? 1.1 : THORN.r) && Math.abs(q.y - y) < (t.rock ? 0.8 : 0.3); }
+      if (!P.dead && !t.passed) for (let k = 1; k <= 3 && !hit; k++) { const q = prev.clone().lerp(p, k / 3), y = clamp(q.y, P.pos.y + 0.35, P.pos.y + 1.75); hit = Math.hypot(q.x - P.pos.x, q.z - P.pos.z) < (t.rock ? 0.65 + 0.45 * t.size : THORN.r) && Math.abs(q.y - y) < (t.rock ? 0.35 + 0.45 * t.size : 0.3); }
       if (hit) {
         const r = this.hitPlayer(t.c, t.dmg, { from: prev });
         if (r === 'dodged') { t.passed = true; continue; }   // (rolled under it: it flies on past)
-        if (t.rock) dust(p.clone(), 20, 0x9a9080, 0.8); else this.thornBurst(p, r !== 'blocked', 1);
+        if (t.rock) dust(p.clone(), Math.round(14 * Math.sqrt(t.size)), 0x9a9080, 0.6 * Math.sqrt(t.size)); else this.thornBurst(p, r !== 'blocked', 1);
         this.drop(i); continue;
       }
       const landed = p.y < heightAt(p.x, p.z); let tree = false; if (!t.rock && !landed) for (const k of g.colliders.near(p.x, p.z, 1)) if (Math.hypot(k.x - p.x, k.z - p.z) < k.r && (k.h === undefined || p.y < (k.y ?? 0) + k.h)) { tree = true; break; }
-      if (t.life <= 0 || landed || tree) { if (t.rock) { dust(p.clone(), 24, 0x9a9080, 0.9); addShake(0.25); g.sound?.('boulder', { at: p.clone(), land: true }); } else if (t.life > 0) this.thornBurst(p, false, clamp(1 - P.pos.distanceTo(p) / 40, 0.2, 1)); this.drop(i); }
+      if (t.life <= 0 || landed || tree) { if (t.rock) { const k = Math.sqrt(t.size); dust(p.clone(), Math.round(16 * k), 0x9a9080, 0.6 * k); burst(p.clone(), { color: 0x8f8678, n: Math.round(8 * k), speed: 4 * k, size: 0.12 * k }); addShake(0.25 * k); g.sound?.('boulder', { at: p.clone(), land: true }); if (t.size > 1.5) g.sound?.('slam', { at: p.clone(), big: true }); } else if (t.life > 0) this.thornBurst(p, false, clamp(1 - P.pos.distanceTo(p) / 40, 0.2, 1)); this.drop(i); }
     }
   }
   // where a thorn lands or strikes: a burst of leaves and green sparks (more when it struck you), and its crack

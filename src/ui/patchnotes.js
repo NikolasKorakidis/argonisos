@@ -21,6 +21,14 @@ export const PATCHES = [
         'The giants\' blows and the Minotaur\'s slam shake the ground, and his thrown rocks crash as they\'re torn up and as they land. The Minotaur and the Chimera roar for real now.',
         'When you play a man, you hear him cry out when he\'s hurt and when he falls.',
       ] },
+      { t: 'The Giants', icon: 'zeus', items: [
+        '<b>The bosses are giants now.</b> The Minotaur stands over ten metres tall, five and a half times your height, and the Chimera is over twenty metres long and nearly as tall as he is. They are much stronger too: more health, harder blows, and a heavy blow sends you flying.',
+        '<b>Their coming:</b> lay the tribute and the ground starts to shake. A pillar of light rises over the arena, the beast drops out of the sky inside it and lands with a blast that throws you off your feet, and for a moment everything slows.',
+        '<b>The Labyrinth breaks apart</b> as the Minotaur lands: walls topple and crash down in clouds of dust, the outer ring is breached in several places, the inner rings are mostly gone, columns fall across the corridors, and the floor cracks out from a crater. The Chimera\'s shrine breaks too: its columns topple into the forest, the beams come down, the stone Chimera on the altar bursts apart and the court splits in glowing fissures.',
+        'The ruins stay ruined: after the fight, after you reload, and if you call the boss again. In the open ruin the boss comes straight for you over the rubble and round what still stands, and no longer gets stuck.',
+        'In a boss fight the camera draws back and up so the beast fits in view, and eases back in afterwards.',
+        '<b>The fights sound huge:</b> the battle music is louder, the roars are deeper with a boom you feel, every footstep thuds and shakes the ground near you, slams and charges into walls crash, the Chimera\'s fire roars, and a boss\'s blow lands on you with a heavy thump.',
+      ] },
       { t: 'Gathering and Building', icon: 'hammer', items: [
         'The axe bites into trees and logs, a felled tree crashes to the ground, the pickaxe rings on stone, bushes thrash, and picking something up has its own sound.',
         'Building, breaking, repairing and crafting have new sounds. Doors creak open and bang shut, and chests open and close.',
@@ -30,6 +38,7 @@ export const PATCHES = [
       ] },
       { t: 'The World', icon: 'wet', items: [
         '<b>Rain in layers:</b> a patter as it starts, a downpour when it\'s heavy, drumming on the roof over you, and only a muffled hush once you\'re inside walls.',
+        'A downpour is a little quieter, so it no longer drowns out everything else.',
         'Thunder sounds different by distance: a crack and burst right overhead, a peal a few hundred metres off, a low roll from far away.',
         'The wind rises and falls with the weather and gusts with it. It whispers through the meadow grass and the leaves of the woods.',
         'Waves break near the shore. Birds sing by day; by night Pedias and Yleos each have their own crickets, owls call, and frogs croak in the marsh.',

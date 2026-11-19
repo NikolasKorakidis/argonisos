@@ -26,9 +26,10 @@ export function soleOf(foot, toe) {
 
 export class FootIK {
   // bones: the rig's bones by name (a foot's userData.sole, from soleOf, lets it be levelled across); ground(x, z, y) → the height of whatever you'd stand on there, reaching up to ~0.5 m
-  // above y; legs('Left' | 'Right') → the names of that leg's thigh, shin and foot bones (Mixamo's unless told)
-  constructor(bones, ground, legs = (s) => [`mixamorig${s}UpLeg`, `mixamorig${s}Leg`, `mixamorig${s}Foot`]) {
-    this.ground = ground; this.w = 0; this.pelvis = 0;
+  // above y; legs('Left' | 'Right') → the names of that leg's thigh, shin and foot bones (Mixamo's unless told); k: how
+  // much bigger than a man the body is (a giant boss's feet reach and lift as much further)
+  constructor(bones, ground, legs = (s) => [`mixamorig${s}UpLeg`, `mixamorig${s}Leg`, `mixamorig${s}Foot`], k = 1) {
+    this.ground = ground; this.w = 0; this.pelvis = 0; this.k = k;
     this.legs = ['Left', 'Right'].map((s) => { const [up, knee, foot] = legs(s).map((n) => bones[n]); return { up, knee, foot, d: 0, tilt: new THREE.Quaternion(), sole: foot?.userData.sole }; }).filter((l) => l.up && l.knee && l.foot);
   }
   // Before the pose is solved: where is the ground under each foot, relative to where the body stands (rootY)? Sets the
@@ -41,7 +42,7 @@ export class FootIK {
       // (eased, so a foot doesn't pop as its ground jumps at a step's edge; but rising ground is followed more than twice
       // as fast as falling: up a hillside the ground under a foot swinging forward rises a metre a second and more, and
       // eased as falling ground is the foot came down 5 to 10 cm short of it, into the slope)
-      const g = this.ground(_a.x, _a.z, rootY), d = clamp(g - rootY, -MAX_DROP, MAX_LIFT);
+      const g = this.ground(_a.x, _a.z, rootY), d = clamp(g - rootY, -MAX_DROP * this.k, MAX_LIFT * this.k);
       L.d = lerp(L.d, d, Math.min(1, dt * (d > L.d ? 45 : 18))); low = Math.min(low, L.d);
     }
     this.pelvis = lerp(this.pelvis, low * this.w, Math.min(1, dt * 12));
@@ -66,9 +67,9 @@ export class FootIK {
         rotateWorld(L.up, _q.setFromUnitVectors(_u, _v));
       }
       // a foot near the ground lies along the slope (a lifted one keeps the clip's angle)
-      L.foot.getWorldPosition(_a); const lift = _a.y - (rootY + L.d), plant = 1 - clamp((lift - 0.12) / 0.2, 0, 1);
+      L.foot.getWorldPosition(_a); const lift = _a.y - (rootY + L.d), plant = 1 - clamp((lift - 0.12 * this.k) / (0.2 * this.k), 0, 1);
       if (plant > 0.01) {
-        const e = 0.3, gx = this.ground(_a.x + e, _a.z, rootY) - this.ground(_a.x - e, _a.z, rootY), gz = this.ground(_a.x, _a.z + e, rootY) - this.ground(_a.x, _a.z - e, rootY);
+        const e = 0.3 * this.k, gx = this.ground(_a.x + e, _a.z, rootY) - this.ground(_a.x - e, _a.z, rootY), gz = this.ground(_a.x, _a.z + e, rootY) - this.ground(_a.x, _a.z - e, rootY);
         _g.set(-gx / (2 * e), 1, -gz / (2 * e)).normalize(); const ang = Math.min(UP.angleTo(_g), MAX_TILT);
         if (ang > 0.01) { _v.crossVectors(UP, _g).normalize(); _g.copy(UP).applyAxisAngle(_v, ang); rotateWorld(L.foot, _q.setFromAxisAngle(_v, ang * plant * this.w)); }
         // and level across it: turned about its own length until the sole lies on the ground from edge to edge, its heel

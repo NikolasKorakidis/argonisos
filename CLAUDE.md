@@ -133,6 +133,12 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   lining up more points only breaks ties. Gaps between pieces of the same kind are found by the line passing through
   them; doors only go into door frames; pieces must stand on the ground or share a snap point. Overlap and contact tests
   use the pieces' real, turned outlines. **Run `node tests/run.mjs placement build structures` after any change to `build.js` or `pieces.js`.** Stairs snap and are aimed by the middles of their ends (`aimAt`); fences on the ground follow it.
+- **The bosses are giants** (`size` in trial.js `TYPES`: the Minotaur 10.5 m, the Chimera 23 m long; models.js `KitBody`
+  scales the body, its stride and `FootIK`, `pace` slows their clips, `BLOWS` holds). Their moves' ranges are written for
+  that size. Their coming (`Trial.stage`) breaks their site for good (`structures.ruin`, `trial.st.broken`, restored by
+  save.js): the walls that fall are their own collider group (`ruin:<site>`), swapped for low rubble (`rubble:<site>`,
+  `low`); a boss ignores low colliders and flora (creatures.js `BIG`), steers round what stands and strides over knee-high
+  stubs (`steer`, `STRIDE`), and is put free if stuck (`unstick`). `tests/suites/creatures.mjs` chases it round the ruin.
 - **Building pieces need support.** One not held up from the ground collapses on the next recompute; tests that need a
   roof build walls under it.
 - Vertex-coloured site models come out several times brighter under the lighting than their palette suggests: keep

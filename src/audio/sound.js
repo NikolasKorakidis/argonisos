@@ -13,13 +13,23 @@
 //   crickets by night, frogs by the marsh, an owl now and then and a fox far off; each lit fire near you crackles where it
 //   burns (fires()). The beds load when first wanted and are let go of once they've long been silent.
 //   Music: the team's tracks (music.js); a sparse lyre in an old Greek mode stands in for them without the pack.
-let ctx = null, out = null, comp = null, sfxBus = null, ambBus = null, musicBus = null, recBus = null, duckG = null, verb = null, noiseBuf = null, brownBuf = null;
-let volume = 0.8, musicVol = 0.5, sfxVol = 1, ambVol = 1;
+//   A boss fight (setFight, from music.js while a boss's track plays): its music comes up nearly 6 dB and dips less under
+//   thunder, the world's ambience goes down a little under it, and the giants' roars, steps, slams and fire are layered
+//   with a deep synthesised boom (sub) you feel more than hear; a limiter after the compressor keeps the loudest of it
+//   from clipping.
+let ctx = null, out = null, comp = null, lim = null, sfxBus = null, ambBus = null, musicBus = null, recBus = null, duckG = null, fightG = null, verb = null, noiseBuf = null, brownBuf = null;
+let volume = 0.8, musicVol = 0.5, sfxVol = 1, ambVol = 1, fightK = 0;
+const FIGHT = { music: 1.9, amb: 0.65, duck: 0.3 };   // (in a boss fight: the music's gain, the ambience's, and how much of its usual dip under thunder the music keeps)
 const REC_MUSIC = 0.9;   // (the recorded music's level under the slider: music.js tracks are mastered louder than the beds)
 export function setVolume(v) { volume = v; if (out) out.gain.value = v; }
 export function setMusicVolume(v) { musicVol = v; if (musicBus) { musicBus.gain.value = 0.55 * v; recBus.gain.value = REC_MUSIC * v; } }
 export function setSfxVolume(v) { sfxVol = v; if (sfxBus) sfxBus.gain.value = 0.9 * v; }
-export function setAmbienceVolume(v) { ambVol = v; if (ambBus) ambBus.gain.value = v; }
+export function setAmbienceVolume(v) { ambVol = v; if (ambBus) ambBus.gain.value = v * (1 - (1 - FIGHT.amb) * fightK); }
+// a boss fight on (1) or off (0): eased over a second or two
+export function setFight(k) {
+  if (k === fightK || !ctx) { fightK = k; return; } fightK = k; const t = now();
+  fightG.gain.setTargetAtTime(1 + (FIGHT.music - 1) * k, t, k ? 0.6 : 1.5); ambBus.gain.setTargetAtTime(ambVol * (1 - (1 - FIGHT.amb) * k), t, 0.8);
+}
 const amb = {};
 const rnd = (a, b) => a + Math.random() * (b - a), sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -39,13 +49,15 @@ function init() {
   try {
     ctx = new AudioContext();
     comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.25;
-    out = ctx.createGain(); out.gain.value = volume; comp.connect(out).connect(ctx.destination);
+    // (and a limiter after it: nothing it lets through reaches 0 dBFS, however many booms land at once)
+    lim = ctx.createDynamicsCompressor(); lim.threshold.value = -5; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.15;
+    out = ctx.createGain(); out.gain.value = volume; comp.connect(lim).connect(out).connect(ctx.destination);
     verb = makeVerb(); const verbOut = ctx.createGain(); verbOut.gain.value = 0.5; verb.connect(verbOut).connect(comp);
     sfxBus = ctx.createGain(); sfxBus.gain.value = 0.9 * sfxVol; sfxBus.connect(comp);
     ambBus = ctx.createGain(); ambBus.gain.value = ambVol; ambBus.connect(comp);
     musicBus = ctx.createGain(); musicBus.gain.value = 0.55 * musicVol; musicBus.connect(comp); const mv = ctx.createGain(); mv.gain.value = 0.7; musicBus.connect(mv).connect(verb);
     // (the recorded music, dry, under the slider and the duck that lowers it under loud thunder)
-    recBus = ctx.createGain(); recBus.gain.value = REC_MUSIC * musicVol; duckG = ctx.createGain(); recBus.connect(duckG).connect(comp);
+    recBus = ctx.createGain(); recBus.gain.value = REC_MUSIC * musicVol; duckG = ctx.createGain(); fightG = ctx.createGain(); fightG.gain.value = 1 + (FIGHT.music - 1) * fightK; recBus.connect(duckG).connect(fightG).connect(comp);
     noiseBuf = makeNoise(4, false); brownBuf = makeNoise(4, true);
     // looping beds: noise → filter(s) → gain, faded by updateAmbience()
     const bed = (buf, chain, gain = 0) => { const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true; let node = s; const fs = []; for (const [type, f, q] of chain) { const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; node.connect(b); node = b; fs.push(b); } const g = ctx.createGain(); g.gain.value = gain; node.connect(g).connect(ambBus); s.start(0, Math.random() * 3); return { g, f: fs, s }; };
@@ -137,6 +149,20 @@ function tone(freq, dur, { type = 'sine', vol = 0.2, slide = 0, attack = 0.005, 
   const p = ctx.createStereoPanner(); p.pan.value = pan; o.connect(g).connect(p); p.connect(bus || sfxBus); if (wet) { const w = ctx.createGain(); w.gain.value = wet; p.connect(w).connect(verb); }
   o.start(t); o.stop(t + (release ?? dur) + 0.05);
 }
+// how loud and to which side a synthesised sound from at is (all of it, ahead, without at)
+const place = (at, near, far) => (at ? spatial(at, near, far) : { k: 1, pan: 0 });
+// A deep boom under a giant's sounds, more felt than heard: a sine falling from f0 to f1 over dur with a soft or a hard
+// attack, and a low rumble of brown noise with it (k: how loud; at, near, far: where, and how it falls away)
+function sub(dur, { f0 = 58, f1 = 26, k = 1, at, near = 15, far = 160, delay = 0, attack = 0.012, rumble = 0.6 } = {}) {
+  if (!init()) return; const s = place(at, near, far), v = k * s.k; if (v < 0.01) return;
+  tone(f0, dur, { type: 'sine', vol: 0.5 * v, slide: f1 - f0, attack, delay, wet: 0.12, pan: s.pan * 0.5 });
+  if (rumble) noise(dur * 1.15, { type: 'lowpass', freq: 150, q: 0.7, vol: 0.42 * v * rumble, attack: attack + 0.03, slide: -90, delay, brown: true, wet: 0.3, pan: s.pan * 0.5 });
+}
+// a giant's debris: stones and grit pattering down a while after a crash (n of them over dur)
+function rattle(n, dur, { k = 1, at, near = 12, far = 120, delay = 0.15 } = {}) {
+  const s = place(at, near, far); if (s.k * k < 0.02) return;
+  for (let i = 0; i < n; i++) noise(rnd(0.05, 0.18), { freq: rnd(1400, 3600), q: rnd(0.8, 2), vol: rnd(0.05, 0.13) * k * s.k, delay: delay + Math.random() * dur, pan: s.pan * 0.6 + rnd(-0.3, 0.3), wet: 0.25 });
+}
 // a plucked string: a bright attack that darkens as it rings (the lyre)
 function pluck(freq, { vol = 0.12, delay = 0, dur = 2.6, pan = 0 } = {}) {
   if (!init()) return; const t = now() + delay;
@@ -145,8 +171,8 @@ function pluck(freq, { vol = 0.12, delay = 0, dur = 2.6, pan = 0 } = {}) {
   const g = ctx.createGain(), g2 = ctx.createGain(); g2.gain.value = 0.25; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   const p = ctx.createStereoPanner(); p.pan.value = pan; o1.connect(f); o2.connect(g2).connect(f); f.connect(g).connect(p).connect(musicBus); o1.start(t); o2.start(t); o1.stop(t + dur + 0.1); o2.stop(t + dur + 0.1);
 }
-// The music dips under loud thunder (k: how loud, 0..1) and comes back over a few seconds
-export function duck(k, at = 0) { if (!duckG || k < 0.05) return; const t = now() + at, d = 1 - Math.min(0.55, k * 0.6); duckG.gain.cancelScheduledValues(t); duckG.gain.setTargetAtTime(d, t, 0.08); duckG.gain.setTargetAtTime(1, t + 1.2, 1.4); }
+// The music dips under loud thunder (k: how loud, 0..1) and comes back over a few seconds (in a boss fight it hardly dips)
+export function duck(k, at = 0) { if (!duckG || k < 0.05) return; const t = now() + at, d = 1 - Math.min(0.55, k * 0.6) * (1 - (1 - FIGHT.duck) * fightK); duckG.gain.cancelScheduledValues(t); duckG.gain.setTargetAtTime(d, t, 0.08); duckG.gain.setTargetAtTime(1, t + 1.2, 1.4); }
 
 // the recordings for each ground the feet can be on (game.js: the boards of a building, water, paving or bare rock, the
 // shore's sand, the forest's leaf litter; anything else is the meadows' grass and earth)
@@ -212,8 +238,30 @@ const SFX = {
   douse: ({ at } = {}) => { if (play('fireDouse', { vol: 0.5, at, near: 4, far: 40, wet: 0.1 })) return; noise(0.9, { freq: 3000, q: 0.6, vol: 0.18, slide: -2000, attack: 0.02 }); noise(0.5, { type: 'lowpass', freq: 400, vol: 0.12, brown: true }); },
   kill: () => tone(90, 0.5, { type: 'triangle', vol: 0.12, slide: -40, wet: 0.3 }),
   // the bosses: a ground-shaking slam, the Chimera's fire, a block of stone torn up and hurled, and landing
-  slam: ({ at } = {}) => { if (play('slamHit', { vol: 0.75, at, near: 8, far: 80, wet: 0.35, rate: [0.9, 1] })) return; noise(0.7, { type: 'lowpass', freq: 220, vol: 0.6, brown: true, wet: 0.5 }); tone(55, 0.8, { type: 'sine', vol: 0.3, slide: -25, wet: 0.4 }); noise(0.15, { freq: 900, q: 1, vol: 0.18, delay: 0.02 }); },
-  breath: () => { if (sample('fireBurst', { vol: 0.6, wet: 0.3, rate: [0.8, 0.9] })) return; noise(1.5, { type: 'lowpass', freq: 900, vol: 0.32, brown: true, attack: 0.15, wet: 0.4 }); noise(1.4, { freq: 1800, q: 0.7, vol: 0.12, attack: 0.2, slide: -600 }); },
+  // (big: a giant boss's: the recording slowed and louder over a boom and the rubble it shakes loose)
+  slam: ({ at, big } = {}) => {
+    if (big) { play('slamHit', { vol: 1.1, at, near: 18, far: 200, wet: 0.5, rate: [0.7, 0.78] }); sub(1.7, { f0: 56, f1: 24, k: 1.15, at, near: 18, far: 200, attack: 0.006 }); rattle(8, 1.2, { at, near: 18, far: 160 }); return; }
+    if (play('slamHit', { vol: 0.75, at, near: 8, far: 80, wet: 0.35, rate: [0.9, 1] })) return; noise(0.7, { type: 'lowpass', freq: 220, vol: 0.6, brown: true, wet: 0.5 }); tone(55, 0.8, { type: 'sine', vol: 0.3, slide: -25, wet: 0.4 }); noise(0.15, { freq: 900, q: 1, vol: 0.18, delay: 0.02 }); },
+  // the Chimera's fire: the burst slowed and loud, the lion's roar in it, and the fire's own roar all the while it pours
+  breath: ({ at } = {}) => {
+    const s = place(at, 20, 180); play('fireBurst', { vol: 1.25, at, near: 20, far: 180, wet: 0.35, rate: [0.6, 0.68] }); play('bossRoar', { vol: 0.6, at, near: 20, far: 180, wet: 0.45, rate: [0.9, 0.96], gap: 0.3 });
+    noise(1.9, { type: 'lowpass', freq: 750, vol: 0.55 * s.k, brown: true, attack: 0.18, wet: 0.4, slide: -320, pan: s.pan * 0.5 }); noise(1.8, { freq: 1500, q: 0.6, vol: 0.2 * s.k, attack: 0.25, slide: -600, pan: s.pan * 0.5 });
+    sub(1.9, { f0: 50, f1: 30, k: 0.7, at, near: 20, far: 180, attack: 0.3 }); },
+  // a giant boss's foot coming down (k: how big): a slowed landing on rock over a short deep thud
+  giantStep: ({ at, k = 1 } = {}) => { play('landRock', { vol: 0.7 * k, at, near: 12, far: 150, rate: [0.4, 0.48], wet: 0.25, gap: 0.08 }); sub(0.55, { f0: 50, f1: 28, k: 0.6 * k, at, near: 12, far: 150, attack: 0.006, rumble: 0.7 }); },
+  // a boss's blow landing on you: a heavy, close impact over the hurt
+  bossHit: ({ k = 1 } = {}) => { play('slamHit', { vol: 0.75 * k, wet: 0.2, rate: [1.05, 1.15], gap: 0.1 }); sub(0.8, { f0: 80, f1: 34, k: 0.95 * k, attack: 0.004, rumble: 0.5 }); noise(0.14, { type: 'lowpass', freq: 900, vol: 0.4 * k, brown: true }); },
+  // as a boss comes: the ground rumbling deeper and louder for dur seconds, grit falling, until the blast
+  quake: ({ dur = 3 } = {}) => { noise(dur, { type: 'lowpass', freq: 110, q: 0.8, vol: 0.6, attack: dur * 0.85, brown: true, wet: 0.4 }); tone(31, dur, { type: 'sine', vol: 0.32, attack: dur * 0.85, slide: 7, wet: 0.1 }); rattle(14, dur * 0.9, { k: 0.8, delay: 0.3 }); },
+  // the blast as a boss lands: a slowed thunderclap and slam over the deepest boom of all, its rumble rolling on, stones
+  // raining down after it; the music hardly dips (setFight)
+  blast: ({ at } = {}) => {
+    const s = place(at, 30, 320); play('thunderClap', { vol: 1.15, at, near: 30, far: 320, rate: [0.6, 0.68], wet: 0.5 }); play('slamHit', { vol: 1.25, at, near: 30, far: 320, rate: [0.52, 0.6], wet: 0.6, gap: 0 });
+    sub(3.4, { f0: 66, f1: 21, k: 1.5, at, near: 30, far: 320, attack: 0.005, rumble: 1 }); noise(2.8, { type: 'lowpass', freq: 400, vol: 0.6 * s.k, slide: -320, brown: true, wet: 0.7, pan: s.pan * 0.5 });
+    rattle(16, 2.6, { at, near: 30, far: 260, delay: 0.4 }); duck(0.4); },
+  // a length of wall or a column falling (k: how big), from where it lands
+  collapse: ({ at, k = 1 } = {}) => { play('boulder', { vol: 0.9 * k, at, near: 10, far: 140, wet: 0.4, rate: [0.58, 0.72], gap: 0.06 }); const s = place(at, 10, 140);
+    noise(1, { type: 'lowpass', freq: 520, vol: 0.45 * k * s.k, slide: -320, brown: true, wet: 0.45, pan: s.pan * 0.6 }); sub(0.9, { f0: 68, f1: 32, k: 0.6 * k, at, near: 10, far: 140 }); rattle(5, 0.9, { k, at, near: 10, far: 120 }); },
   // a dryad's thorn (k: how near): the rustle and rising shimmer as the glow gathers in her hand, the whoosh as it leaves
   // it, the crack and scatter of leaves where it strikes
   thornCast: (k = 1) => { if (k <= 0) return; noise(0.6, { freq: 2600, q: 0.7, vol: 0.12 * k, attack: 0.3, slide: 1400, wet: 0.3 }); tone(520, 0.6, { type: 'sine', vol: 0.05 * k, slide: 380, attack: 0.35, wet: 0.5 }); tone(780, 0.5, { type: 'triangle', vol: 0.025 * k, slide: 500, attack: 0.3, delay: 0.1, wet: 0.5 }); },
@@ -252,8 +300,10 @@ const SFX = {
   },
   // a roar (boss: the Minotaur's war cry, the Chimera's, long: the full one as a boss comes or is enraged; giant: a
   // giant's growl; neither: the Minotaur's roar the hero was given)
+  // (a boss's own: slowed for the giant it comes from, louder and further heard, over a long boom)
   roar: ({ at, boss, long, giant } = {}) => {
-    if (!giant && play(long ? 'bossRoarLong' : 'bossRoar', { vol: 0.75, at, near: 10, far: 120, wet: 0.4, rate: boss ? [0.95, 1.03] : [1.05, 1.12] })) { duck(0.4); return; }
+    if (!giant && boss && play(long ? 'bossRoarLong' : 'bossRoar', { vol: 1.15, at, near: 30, far: 240, wet: 0.5, rate: [0.78, 0.85] })) { sub(long ? 3.4 : 2.1, { f0: 64, f1: 30, k: 1.1, at, near: 30, far: 240, attack: 0.22 }); duck(0.4); return; }
+    if (!giant && play(long ? 'bossRoarLong' : 'bossRoar', { vol: 0.75, at, near: 10, far: 120, wet: 0.4, rate: [1.05, 1.12] })) { duck(0.4); return; }
     sample('growl', { vol: 0.7, wet: 0.4, rate: [0.7, 0.8], at });   // (the growl over the synthesised rumble, which gives it its size)
     tone(66, 1.5, { type: 'sawtooth', vol: 0.2, slide: -24, attack: 0.15, wet: 0.5 }); tone(99, 1.3, { type: 'square', vol: 0.06, slide: -38, attack: 0.15, wet: 0.5 }); noise(1.4, { type: 'lowpass', freq: 420, vol: 0.32, attack: 0.15, slide: -220, brown: true, wet: 0.5 }); },
   summon: () => { if (play('bossSummon', { vol: 0.8, wet: 0.45 })) { duck(0.5); return; } tone(55, 3.2, { type: 'sawtooth', vol: 0.12, slide: 30, attack: 1, wet: 0.6 }); SFX.thunder(1.2); },
@@ -335,10 +385,10 @@ export function updateAmbience(dt, w = {}) {
   const lw = recLeaves ? 0.35 : 1;
   sh(A.leaves, forest * (0.035 + gust * 0.09) * sway * open * lw, 1.2); sh(A.leavesLo, forest * (0.05 + gust * 0.1) * sway * open * lw, 1.2);
   A.leavesLo.f[0].frequency.setTargetAtTime(900 + gust * 500, t, 1.5);
-  // rain: droplets in a light rain, the rush of a downpour in a heavy one; under a roof the drumming on it, and inside
-  // (walls round you too) only a muffled hush through them
+  // rain: droplets in a light rain, the rush of a downpour in a heavy one (2 dB under the other beds: a downpour is a bed,
+  // not a roar); under a roof the drumming on it, and inside (walls round you too) only a muffled hush through them
   const out1 = (1 - inside * 0.92) * (roof && !inside ? 0.55 : 1), recRain = bed('bedDrops', sstep(0.02, 0.3, rain) * (1 - 0.5 * sstep(0.6, 1, rain)) * 0.6 * out1, dt);
-  bed('bedRain', sstep(0.45, 1, rain) * 0.75 * out1, dt); bed('bedRoof', roof ? rain * 0.6 * (1 - inside * 0.5) : 0, dt, { tc: 0.4 }); bed('bedMuffled', inside ? rain * 0.75 : 0, dt);
+  bed('bedRain', sstep(0.45, 1, rain) * 0.6 * out1, dt); bed('bedRoof', roof ? rain * 0.6 * (1 - inside * 0.5) : 0, dt, { tc: 0.4 }); bed('bedMuffled', inside ? rain * 0.75 : 0, dt);
   const L1 = (k, v) => bed(k, v, dt, { tc: 0.8, rate: k === 'loopCrickets' ? 0.32 : 1 });   // (the first pack's loops, where there's no recording of the team's)
   if (!recRain) L1('loopRain', rain * 0.45 * (1 - inside * 0.8) * (roof ? 0.6 : 1));
   L1('loopStorm', Math.max(recRain ? 0 : rain - 0.6, sk * 0.7) * 1.2 * (1 - inside * 0.7));   // (the storm wall's own)
@@ -410,7 +460,7 @@ function stopDrone() { if (!drone) return; const t = now(), d = drone; drone = n
 // last third of a second or so, both channels summed: near enough its momentary loudness) and its peak (dBFS)
 AUDIO.meters = () => {
   if (!ctx) return null; const N = 16384;
-  if (!AUDIO._m) { AUDIO._m = {}; for (const [k, n] of [['sfx', sfxBus], ['amb', ambBus], ['music', duckG], ['lyre', musicBus], ['out', out]]) {
+  if (!AUDIO._m) { AUDIO._m = {}; for (const [k, n] of [['sfx', sfxBus], ['amb', ambBus], ['music', fightG], ['lyre', musicBus], ['out', out]]) {
     const sh = ctx.createBiquadFilter(), hp = ctx.createBiquadFilter(), sp = ctx.createChannelSplitter(2); sh.type = 'highshelf'; sh.frequency.value = 1681; sh.gain.value = 4; hp.type = 'highpass'; hp.frequency.value = 38; hp.Q.value = 0.5;
     const raw = ctx.createAnalyser(), ch = [ctx.createAnalyser(), ctx.createAnalyser()]; raw.fftSize = N; n.connect(raw); n.connect(sh).connect(hp).connect(sp); ch.forEach((a, i) => { a.fftSize = N; sp.connect(a, i); }); AUDIO._m[k] = { raw, ch }; } }
   const r = {}, buf = new Float32Array(N);

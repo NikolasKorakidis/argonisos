@@ -176,7 +176,7 @@ export function installGame(g) {
       listen(camera.position, camera.getWorldDirection(_look)); fires(g.fires || []);
       updateAmbience(dt, { wind: Math.min(1, Math.max(0, (WIND.speed - 2.3) / 8)), gust: WIND.gust, windDir: { x: WIND.dir.x, z: WIND.dir.y }, rain: WEATHER.k.rain, night: LIGHT.night, dusk: LIGHT.dusk, fire: fd, roof: roof ? 1 : 0, inside: inside ? 1 : 0, ...g.amb }); }
     if (hit('KeyC') && !g.map.open && !g.buildMenu.open) hud.toggle(!hud.open);   // C opens and closes the pack and crafting, on whichever tab you left it
-    if (input.uiOpen || player.dead) { hud.prompt(null); g.build.update(dt); g.creatures.update(dt); g.combat.update(dt); g.structures.update(dt); return; }
+    if (input.uiOpen || player.dead) { hud.prompt(null); g.build.update(dt); g.creatures.update(dt); g.combat.update(dt); g.structures.update(dt); g.trial.stage(dt); return; }   // (a boss's coming goes on behind a menu)
     const t = target();
     if (!g.build.active && !(g.equippedTool('build') && g.build.aimPiece)) hud.prompt(t ? 'E' : null, t?.label, t?.sub, t?.alt);
     if (hit('KeyE')) g.interact();

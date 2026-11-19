@@ -35,6 +35,8 @@ export const SHAKE = { k: 1 };
 export const shake = { k: 0, kicks: [], n: 0, last: 0 };   // (n, last: how many punches so far and the last one's strength, for the tests)
 const PUNCH_T0 = 0.035, PUNCH_END = 0.28, PUNCH_A = 0.045, RUMBLE_A = 0.02;   // (seconds; radians at full strength: 2.6° and 1.1°)
 export function addShake(k) { shake.k = Math.min(1, shake.k + k); }
+// a rumble held at k for as long as it's asked for each frame (the ground shaking as a boss comes)
+export function rumble(k) { shake.k = Math.max(shake.k, Math.min(1, k)); }
 export function punch(k, dir) {
   k = Math.min(1, k); if (!(k > 0)) return; shake.n++; shake.last = k;
   if (shake.kicks.length > 6) shake.kicks.shift();
@@ -73,7 +75,43 @@ export function impact(at, kind, k = 0.5) {
 }
 // a few hot, quick sparks (they fly fast, fall and burn out within a third of a second)
 export function spark(at, n = 3) { burst(at, { color: 0xffc070, n, speed: 4.5, size: 0.045, grav: 9, life: 0.3, up: 2, glow: true }); }
+// ---- A boss's arrival (trial.js): a pillar of light rising where it will come down, then the blast as it lands, a white
+// flash and a shockwave racing out along the ground, the dust it raises following it out. One of each, made at load and kept
+// in the scene unseen (so their shaders are compiled with the rest: main.js warmUp), moved and faded here.
+const glowMat = (c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false, toneMapped: false });
+const flashM = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), glowMat(new THREE.Color(2, 1.8, 1.5))), waveM = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 72).rotateX(-Math.PI / 2), glowMat(new THREE.Color(1.8, 1.45, 1)));
+const pillarM = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.8, 1, 28, 1, true).translate(0, 0.5, 0), glowMat(new THREE.Color(2.4, 2, 1.4)));
+for (const m of [flashM, waveM, pillarM]) { m.visible = false; m.frustumCulled = false; m.renderOrder = 6; scene.add(m); }
+const ARRIVE = { pillar: null, blast: null };
+// the pillar over at (a Vector3 on the ground): it gathers for rise seconds, then shoots up as high as high, stands, and
+// fades as the blast comes (blast() ends it)
+export function pillar(at, { rise = 1.2, high = 70, r = 2.4 } = {}) { ARRIVE.pillar = { at: at.clone(), t: 0, rise, high, r }; }
+// the blast at at: the flash, the shockwave out to reach metres over a second, its dust ring
+export function blast(at, { reach = 38, dust: col = 0x6e6254 } = {}) { ARRIVE.blast = { at: at.clone(), t: 0, reach, col, last: 0 }; if (ARRIVE.pillar) ARRIVE.pillar.end = ARRIVE.pillar.t; }
+function updateArrival(dt) {
+  const A = ARRIVE.pillar;
+  if (A) { A.t += dt; const up = Math.min(1, A.t / A.rise), out = A.end !== undefined ? Math.min(1, (A.t - A.end) / 0.35) : 0, h = A.high * (0.08 + 0.92 * up * up);
+    pillarM.visible = out < 1; pillarM.position.copy(A.at); pillarM.scale.set(A.r * (1 + out * 0.6), h, A.r * (1 + out * 0.6)); pillarM.material.opacity = (0.15 + 0.6 * up) * (1 - out) * (0.85 + 0.15 * Math.sin(A.t * 37));
+    if (Math.random() < dt * 30 * (1 - out)) burst(A.at, { color: 0x6e6254, n: 1, speed: 1.2, up: 6 + up * 8, grav: -2, size: 0.5 + 0.5 * up, life: 2, spread: 1.2 });   // (the dust drawn up the column)
+    if (out >= 1) { ARRIVE.pillar = null; pillarM.visible = false; } }
+  const B = ARRIVE.blast;
+  if (B) { B.t += dt; const f = Math.min(1, B.t / 0.28), w = Math.min(1, B.t / 1.1), r = B.reach * (1 - (1 - w) ** 2.2);
+    flashM.visible = f < 1; flashM.position.copy(B.at).setY(B.at.y + 2); flashM.scale.setScalar(3 + 9 * Math.sqrt(f)); flashM.material.opacity = 0.8 * (1 - f) ** 2;
+    waveM.visible = w < 1; waveM.position.copy(B.at).setY(B.at.y + 0.25); waveM.scale.set(r, 1, r); waveM.material.opacity = 0.9 * (1 - w) ** 1.3;
+    // (the dust ring the wave throws up as it passes, thinning as it goes out)
+    if (w < 1) for (let i = 0, n = Math.round(4 * (1 - w)); i < n; i++) { const a = Math.random() * 6.283; burst(_c2.set(B.at.x + Math.cos(a) * r, B.at.y + 0.3, B.at.z + Math.sin(a) * r), { color: B.col, n: 1, speed: 2, up: 1.2, grav: -0.5, size: 0.55 + 0.55 * (1 - w), life: 1.6, spread: 1.5 }); }
+    if (w >= 1 && f >= 1) { ARRIVE.blast = null; flashM.visible = waveM.visible = false; } }
+}
+const _c2 = new THREE.Vector3();
+// ---- slow motion: a moment of it as a boss lands (main.js scales the frame's time by TIME.k, eased back to 1 over real time)
+const TIME = { k: 1, hold: 0, low: 1 };
+export function slowMo(secs, k = 0.3) { TIME.hold = Math.max(TIME.hold, secs); TIME.low = Math.min(TIME.low, k); }
+export function timeK(raw) {
+  if (TIME.hold > 0) { TIME.hold -= raw; TIME.k += (TIME.low - TIME.k) * Math.min(1, raw * 14); } else { TIME.low = 1; TIME.k += (1 - TIME.k) * Math.min(1, raw * 5); if (TIME.k > 0.995) TIME.k = 1; }
+  return TIME.k;
+}
 export function updateFx(dt, camera) {
+  updateArrival(dt);
   const n = [0, 0, 0];
   for (let i = P.length - 1; i >= 0; i--) {
     const b = P[i]; b.t += dt; if (b.t >= b.life) { P.splice(i, 1); continue; }

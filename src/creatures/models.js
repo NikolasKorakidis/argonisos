@@ -134,8 +134,8 @@ class PackBody {
 // Feet on the ground (see FootIK), after animate(), with the ground under the creature. The IK bends the legs it's
 // given: put back first to the clip's pose, which the mixer skips re-applying when nothing changed, and to rest for a
 // bone the clip doesn't move at all.
-function plantFeet(body, dt, ground, rootY, active, legs) {
-  if (!body.ik) { body.ik = new FootIK(body.bones, ground, legs); body.legRest = body.ik.legs.flatMap((L) => [L.up, L.knee, L.foot]).map((b) => [b, b.quaternion.clone()]); }
+function plantFeet(body, dt, ground, rootY, active, legs, k = 1) {
+  if (!body.ik) { body.ik = new FootIK(body.bones, ground, legs, k); body.legRest = body.ik.legs.flatMap((L) => [L.up, L.knee, L.foot]).map((b) => [b, b.quaternion.clone()]); }
   for (const [b, q] of body.legRest) b.quaternion.copy(q);
   const off = body.mixer._accuIndex + 1; for (const b of body.mixer._bindings) b.binding.setValue(b.buffer, off * b.valueSize);
   const m = body.obj.children[0]; m.position.y = body.ik.plan(dt, rootY, active); body.obj.updateMatrixWorld(true); body.ik.solve(rootY);
@@ -217,12 +217,12 @@ class RigBody {
 // landing)]: it's started early or played quicker to put that moment where the game wants it (WHEN). The blows, roars and
 // the fire are BLOWS's, played whole.
 const KIT = {
-  minotaur: { file: 'pack/minotaur', legs: (s) => [`${s}UpLeg`, `${s}Leg`, `${s}Foot`], h: 3.2, walk: 1.85, run: 5.75, clips: { idle: 'Idle', walk: 'Walk', run: 'RamRun', dead: 'Death',
+  minotaur: { file: 'pack/minotaur', legs: (s) => [`${s}UpLeg`, `${s}Leg`, `${s}Foot`], feet: ['LeftFoot', 'RightFoot'], h: 3.2, walk: 1.85, run: 5.75, clips: { idle: 'Idle', walk: 'Walk', run: 'RamRun', dead: 'Death',
     attack: [['Attack2', 1.53], ['Attack3', 0.53]], slam: [['Attack1', 1.17]], roar: [['Taunt', 0.93]], paw: [['RamStart', 1.3]], hit: [['GotHit', 0.2]], dazed: [['RamWall', 0.17]] } },
   skeleton: { file: 'pack/skeleton', legs: (s) => [`Base Human${s[0]}Thigh1`, `Base Human${s[0]}Calf`, `Base Human${s[0]}Foot`], h: 1.9, walk: 1.1, run: 1.1, clips: { idle: 'Idle', walk: 'Walk', run: 'Walk', dead: 'Death',
     attack: [['Attack1', 0.8], ['Attack2', 0.8], ['Attack3', 0.67]], roar: [['Taunt', 0.87]], hit: [['GotHit', 0.2]] } },
   // the Chimera: a great spined beast six metres long; its fire, claws and sting are the boss's moves (trial.js)
-  chimera: { file: 'pack/chimera', len: 6, walk: 2.4, run: 2.4, clips: { idle: 'Idle', walk: 'Walk', run: 'Walk', dead: 'Death',
+  chimera: { file: 'pack/chimera', len: 6, tall: 0.39, feet: ['Leg_L_F5', 'Leg_R_F5', 'Leg_L_B5', 'Leg_R_B5'], walk: 2.4, run: 2.4, clips: { idle: 'Idle', walk: 'Walk', run: 'Walk', dead: 'Death',
     attack: [['Attack1', 1.1]], roar: [['Roar', 1.3]], crouch: [['Block', 0.4]], leap: [['Attack1', 1.02]], hit: [['GotHit', 0.2]] } },
 };
 // when in the clip the game's moment falls (s after the state starts) for each one-shot state (leap: the paws come down
@@ -238,9 +238,12 @@ function kitTemplate(kind) {
     return { root, clips: Object.fromEntries(gl.animations.map((c) => [c.name, c])) };
   }));
 }
+// A boss is drawn giant (size: creatures.js TYPES), its walk and run as much faster as it is bigger so its feet keep to
+// the ground, and its blows and roars played a little slower (pace) for their weight: the blows' moments in the game's
+// seconds come out of cue() with the pace in them, so BLOWS holds as it is.
 class KitBody {
-  constructor(kind, scale = 1) {
-    this.kind = kind; this.K = KIT[kind]; this.obj = new THREE.Group(); this.mixer = null; this.acts = {}; this.mats = []; this.cur = null; this.once = null; this.onceT = 0;
+  constructor(kind, scale = 1, pace = 1) {
+    this.kind = kind; this.K = KIT[kind]; this.s = scale; this.pace = pace; this.obj = new THREE.Group(); this.mixer = null; this.acts = {}; this.mats = []; this.cur = null; this.once = null; this.onceT = 0;
     kitTemplate(kind).then((T) => {
       if (this.gone) return; const m = cloneSkinned(T.root); m.scale.multiplyScalar(scale);
       this.bones = {}; m.traverse((o) => { if (o.isBone) this.bones[o.name] = o; if (o.isMesh) { o.material = o.material.clone(); o.material.userData.shared = false; this.mats.push(o.material); } });
@@ -272,15 +275,26 @@ class KitBody {
     const m = this.move; if (m?.hold && this.once === m.st) { if (st === m.st && m.a.time >= m.hit) { m.a.timeScale = 0.05; this.onceT = Math.max(this.onceT, 0.3); } else if (st !== m.st) { m.a.timeScale = m.rate; m.hold = false; } }
     if (this.once && (this.onceT -= dt) > 0) { this.mixer.update(dt); return; }
     this.once = null;
-    // walking and running, drawn at the speed it's going
-    const v = speed;
+    // walking and running, drawn at the speed it's going (a giant's stride as long as it is big)
+    const v = speed / this.s;
     if (v > this.K.walk * 1.6 && C.run !== C.walk) this.play(C.run).timeScale = clamp(v / this.K.run, 0.6, 1.5);
     else if (v > 0.12) this.play(C.walk).timeScale = clamp(v / this.K.walk, 0.5, C.run === C.walk ? 2.4 : 1.6);
     else this.play(C.idle).timeScale = 1;
     this.mixer.update(dt);
   }
-  feet(dt, ground, rootY, active) { if (this.mixer) plantFeet(this, dt, ground, rootY, active, this.K.legs); }
-  cue(st) { return cueMove(this, BLOWS[this.kind]?.[st], st); }
+  feet(dt, ground, rootY, active) { if (this.mixer) plantFeet(this, dt, ground, rootY, active, this.K.legs, this.s); }
+  // Its feet coming down (a boss's footsteps: creatures.js): each foot's height over the lowest it has lately been, a foot
+  // that has lifted a little way (a thirtieth of its height) landing as it comes back to it. Returns where each foot that
+  // landed since the last call is in the world. (K.tall: a long body's height for its length)
+  footfalls(dt) {
+    const F = this.K.feet; if (!F || !this.bones) return null;
+    const h = (this.K.h ?? this.K.len * this.K.tall) * this.s, up = 0.03 * h, down = 0.01 * h, out = [];
+    this.ff ||= F.map(() => ({ lo: Infinity, up: false }));
+    F.forEach((n, i) => { const b = this.bones[n], f = this.ff[i]; if (!b) return; const p = b.getWorldPosition(new THREE.Vector3()), y = p.y - this.obj.position.y;
+      f.lo = Math.min(f.lo + dt * up * 0.5, y); const lift = y - f.lo; if (lift > up) f.up = true; else if (f.up && lift < down) { f.up = false; out.push(p); } });
+    return out;
+  }
+  cue(st) { return cueMove(this, BLOWS[this.kind]?.[st], st, this.pace); }
   point(name) { return at(this.bones?.[name]); }
   flash(k) { for (const m of this.mats) m.emissive?.setRGB(k * 0.6, 0, 0); }
   dispose() { this.gone = true; this.mixer?.stopAllAction(); free(this.obj); }
@@ -290,9 +304,8 @@ class KitBody {
 // unless the spawner says (young: a sow's piglets and a doe's fawn are young, the mothers and lone hogs and deer grown).
 // The body says which it is (body.young).
 const YOUNG = 0.25;
-export function makeBody(kind, level = 0, x = 0, z = 0, young) {
-  if (kind === 'chimera') return new KitBody('chimera');
-  if (kind === 'minotaur' || kind === 'skeleton') return new KitBody(kind);
+export function makeBody(kind, level = 0, x = 0, z = 0, young, size = 1, pace = 1) {
+  if (kind === 'chimera' || kind === 'minotaur' || kind === 'skeleton') return new KitBody(kind, size, pace);
   if (kind === 'dryadling') return new RigBody('dryadling', 1 + level * 0.1);
   if (kind === 'dryad' || kind === 'giant') return new RigBody(kind);
   const ages = AGES[kind] || AGES.rabbit, lv = clamp(level, 0, 2), small = young ?? (lv === 0 && hash21(Math.round(x * 10) + 0.5, Math.round(z * 10) - 0.5) < YOUNG);

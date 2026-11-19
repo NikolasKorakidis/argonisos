@@ -38,6 +38,7 @@ import { SETTINGS, setPerfOverlay } from './ui/settings.js';
 import { fadeAhead } from './render/occlusion.js';
 import { updateMusic, MUSIC } from './audio/music.js';
 import { AUDIO } from './audio/sound.js';
+import { timeK } from './render/fx.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -156,7 +157,7 @@ const clock = new THREE.Clock(); let fpsT = 0, frames = 0, fps = 60, atmo = { ov
 function loop() {
   requestAnimationFrame(loop); perfBegin(renderer);   // (the performance overlay, F3: ui/perf.js; nothing while it's off)
   if (!warmed && loaded() >= 1) warmUp();   // (also when the title screen is skipped)
-  const dt = Math.min(clock.getDelta(), 0.05), t = S.still ? 100 : clock.elapsedTime;
+  const raw = Math.min(clock.getDelta(), 0.05), dt = raw * timeK(raw), t = S.still ? 100 : clock.elapsedTime;   // (a moment of slow motion as a boss lands: render/fx.js slowMo)
   if (!game.paused) S.time += dt * S.timeScale / DAY_SECONDS; if (S.time >= 1) { S.time -= 1; S.day++; hud.toast(`<b>Day ${S.day}</b> dawns`); }
   // keys
   const busy = !game.started || game.paused;

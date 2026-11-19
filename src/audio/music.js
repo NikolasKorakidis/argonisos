@@ -7,11 +7,11 @@
 //   Main-Menu loops on the title screen and in the character creator; Story-Telling plays as a new trial begins (there is
 //   no opening scene: you wake on the shore) and for the owl's first talk.
 //   A boss's track starts when the tribute calls it and loops through the fight, fading out when the beast dies or you
-//   flee its arena.
+//   flee its arena, and through the fight it plays louder over a quieter world (sound.js setFight).
 //   Each track streams from its own <audio> element through the music bus (sound.js: the settings' music slider, and a
 //   dip under loud thunder), fetched only when it first plays; tracks crossfade over a few seconds, and a looped one
 //   crossfades into a fresh start of itself near its end.
-import { AUDIO, LYRE } from './sound.js';
+import { AUDIO, LYRE, setFight } from './sound.js';
 import { biomeWeights, biomeAt } from '../world/gen.js';
 import { LIGHT } from '../world/sky.js';
 
@@ -63,6 +63,7 @@ export function updateMusic(dt, g) {
   if (cur?.key === 'menu') stop(cur);
   // a boss fight
   const boss = g.trial?.boss, kind = boss && !boss.dead ? g.trial.bossKind : g.trial?.calling, bk = kind ? (kind === 'chimera' ? 'bossChimera' : 'bossMinotaur') : null;
+  setFight(bk ? 1 : 0);
   if (bk) { if (cur?.key !== bk) start(bk, { loop: true, fade: 2 }); return; }
   if (cur?.key.startsWith('boss')) { stop(cur, 4); MUSIC.quiet = rnd(...QUIET); return; }
   // the story: a new trial begins; the owl's first talk

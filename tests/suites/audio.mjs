@@ -55,10 +55,12 @@ export default {
       it().use(); await wait(100); it().use(); const door = [got('doorOpen').length, got('doorClose').length];
       P.spawn(x + 6, z - 1.4); P.yaw = 0; it().use(); g.hud.toggle(false); In.uiOpen = false; B.update(0.016); const chest = [got('chestOpen').length, got('chestClose').length];
       return (door.join() === '1,1' && chest.join() === '1,1') || JSON.stringify({ door, chest, log: A.log.map((e) => e.k) });`);
-    await t.step('rain: droplets as it starts, the downpour when heavy, the drumming under a roof, the hush inside', `${A} A.log = []; AG.setWeather('lightRain'); for (let i = 0; i < 60 && !A.log.some((e) => e.k === 'bedDrops'); i++) await wait(100); const drops = A.log.some((e) => e.k === 'bedDrops');
-      AG.setWeather('heavyRain'); AG.WEATHER.k.rain = 1; await wait(1500); const pour = A.log.some((e) => e.k === 'bedRain');
-      const ur = g.underRoof, rb = B.rayBlock; g.underRoof = () => true; await wait(1200); const roof = A.log.some((e) => e.k === 'bedRoof');
-      B.rayBlock = () => 1; await wait(1500); const inside = A.log.some((e) => e.k === 'bedMuffled'); g.underRoof = ur; B.rayBlock = rb;
+    // (each bed is fetched and decoded the first time it's wanted, which on a busy machine takes some seconds: waited for)
+    await t.step('rain: droplets as it starts, the downpour when heavy, the drumming under a roof, the hush inside', `${A} const came = async (k, s = 10) => { for (let i = 0; i < s * 10 && !A.log.some((e) => e.k === k); i++) await wait(100); return A.log.some((e) => e.k === k); };
+      A.log = []; AG.setWeather('lightRain'); const drops = await came('bedDrops');
+      AG.setWeather('heavyRain'); AG.WEATHER.k.rain = 1; const pour = await came('bedRain');
+      const ur = g.underRoof, rb = B.rayBlock; g.underRoof = () => true; const roof = await came('bedRoof');
+      B.rayBlock = () => 1; const inside = await came('bedMuffled'); g.underRoof = ur; B.rayBlock = rb;
       AG.setWeather('clear'); AG.WEATHER.k.rain = 0; return (drops && pour && roof && inside) || JSON.stringify({ drops, pour, roof, inside });`);
     await t.step('a lightning strike: a close one cracks and bursts, a far one rolls, each when its sound arrives', `${A} const Lg = await import('/src/world/lightning.js'), S2 = await import('/src/audio/sound.js'); A.log = [];
       const strike = (d) => { const x = P.pos.x + d, z = P.pos.z, gy = AG.heightAt(x, z); Lg.strike({ at: new V(x, gy + 220, z), ground: new V(x, gy, z) }); return { at: S2.THUNDER.at, now: S2.THUNDER.now(), delay: Lg.LIGHTNING.last.delay }; };
