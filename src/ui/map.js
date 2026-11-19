@@ -48,9 +48,9 @@ export class WorldMap {
     c.save(); c.globalAlpha = 0.96; c.drawImage(this.fog, (sx / N) * FOG, (sz / N) * FOG, (sw / N) * FOG, (sw / N) * FOG, 0, 0, W, W); c.restore();
     const P = (x, z) => [(x - x0) * k, (z - z0) * k];
     for (const s of this.sites()) { if (!this.isKnown(s)) continue; const [px, py] = P(s.x, s.z); const im = iconImg(ICON[s.kind]); const done = this.done(s); c.globalAlpha = done ? 0.55 : 1; c.fillStyle = 'rgba(244,230,196,.85)'; c.beginPath(); c.arc(px, py, 13, 0, 7); c.fill(); c.strokeStyle = '#211610'; c.lineWidth = 1.5; c.stroke(); if (im.complete) c.drawImage(im, px - 10, py - 10, 20, 20);
-      c.font = '600 13px Stoix, Cinzel, serif'; c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = 'rgba(244,230,196,.9)'; const lb = LABEL[s.kind] + (done ? (s.kind === 'olive' ? ' (copied)' : ' (taken)') : ''); c.strokeText(lb, px, py + 27); c.fillStyle = '#2b1c0f'; c.fillText(lb, px, py + 27); c.globalAlpha = 1; }
+      c.font = '600 13px Cinzel, serif'; c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = 'rgba(244,230,196,.9)'; const lb = LABEL[s.kind] + (done ? (s.kind === 'olive' ? ' (copied)' : ' (taken)') : ''); c.strokeText(lb, px, py + 27); c.fillStyle = '#2b1c0f'; c.fillText(lb, px, py + 27); c.globalAlpha = 1; }
     const gt = this.guideTarget; if (gt) { const [gx, gy] = P(gt.x, gt.z); c.strokeStyle = '#c9973a'; c.lineWidth = 3; c.setLineDash([6, 4]); c.beginPath(); c.arc(gx, gy, 22, 0, 7); c.stroke(); c.setLineDash([]); }
-    const b = this.g.S.bed; if (b) { const [px, py] = P(b.x, b.z); this.spawnMark(c, px, py, 1); c.font = '600 12px Stoix, Cinzel, serif'; c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = 'rgba(244,230,196,.9)'; c.strokeText('Spawn point', px, py + 24); c.fillStyle = '#7a2614'; c.fillText('Spawn point', px, py + 24); }
+    const b = this.g.S.bed; if (b) { const [px, py] = P(b.x, b.z); this.spawnMark(c, px, py, 1); c.font = '600 12px Cinzel, serif'; c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = 'rgba(244,230,196,.9)'; c.strokeText('Spawn point', px, py + 24); c.fillStyle = '#7a2614'; c.fillText('Spawn point', px, py + 24); }
     const pl = this.g.player, [px, py] = P(pl.pos.x, pl.pos.z); c.save(); c.translate(px, py); c.rotate(-pl.yaw + Math.PI); c.fillStyle = '#a8401f'; c.strokeStyle = '#fff4dc'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, -11); c.lineTo(8, 9); c.lineTo(0, 4); c.lineTo(-8, 9); c.closePath(); c.fill(); c.stroke(); c.restore();
     document.getElementById('mapLegend').innerHTML = `<span>${icon('you')} You</span>${b ? `<span>${icon('roof')} Spawn point</span>` : ''}<span class="dim">Wheel to zoom · drag to pan · <span class="kbd">M</span> close</span>`;
   }
@@ -69,7 +69,7 @@ export class WorldMap {
     const b = this.g.S.bed; if (b) { let q = at(b.x, b.z); if (!inside(q)) { const a = Math.atan2(q[1] - W / 2, q[0] - W / 2); q = [W / 2 + Math.cos(a) * (W / 2 - 12), W / 2 + Math.sin(a) * (W / 2 - 12)]; } this.spawnMark(c, q[0], q[1], 0.8); }   // kept on the rim when it's further away
     c.save(); c.translate(W / 2, W / 2); c.rotate(-this.g.player.yaw + Math.PI); c.fillStyle = '#a8401f'; c.strokeStyle = '#fff4dc'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, -9); c.lineTo(7, 8); c.lineTo(0, 4); c.lineTo(-7, 8); c.closePath(); c.fill(); c.stroke(); c.restore();
     c.restore();
-    c.fillStyle = '#211610'; c.font = '700 11px Stoix, Cinzel, serif'; c.textAlign = 'center'; c.fillText('N', W / 2, 13);
+    c.fillStyle = '#211610'; c.font = '700 11px Cinzel, serif'; c.textAlign = 'center'; c.fillText('N', W / 2, 13);
   }
   update(dt) {
     const P = this.g.player.pos; this.t = (this.t || 0) - dt;

@@ -1,11 +1,11 @@
 /* Argonisos UI: Attic pottery. Black-glaze bands and terracotta on papyrus; Stoix for titles, Alegreya Sans for text.
+   HUD laid out the Valheim way: hotbar top-left, conditions top-right, health and food bottom-left, stamina bottom-centre. */
 /* Stoix (Eireni Moutoussi, SIL Open Font License: assets/fonts/stoix/OFL.txt) for titles, names and labels, carved
    letters in a Greek hand; the few signs it lacks (· % ( ) — and accents) fall to Cinzel after it */
 @font-face { font-family:Stoix; src:url(../../assets/fonts/stoix/stoix-light.woff2) format('woff2'); font-weight:300 400; font-display:swap; }
 @font-face { font-family:Stoix; src:url(../../assets/fonts/stoix/stoix-regular.woff2) format('woff2'); font-weight:500 600; font-display:swap; }
 @font-face { font-family:Stoix; src:url(../../assets/fonts/stoix/stoix-heavy.woff2) format('woff2'); font-weight:700 900; font-display:swap; }
 @font-face { font-family:'Stoix Engraved'; src:url(../../assets/fonts/stoix/stoix-engraved.woff2) format('woff2'); font-display:swap; }
-   HUD laid out the Valheim way: hotbar top-left, conditions top-right, health and food bottom-left, stamina bottom-centre. */
 :root {
   --glaze:#1f1610; --glaze2:#2c2018; --clay:#d4844a; --clay2:#b8642f; --clay3:#e9a873; --red:#9a3420; --red2:#7a2614;
   --gold:#d9a94a; --cream:#f4e6c4; --parch:#efe0bb; --parch2:#dcc490; --ink:#2b1c0f; --ink2:#6b4f2c; --ok:#4f7a2a;
@@ -203,7 +203,7 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 #compass::after { content:""; position:absolute; left:10%; right:10%; bottom:0; height:2px; background:var(--clay); opacity:.8; }
 #compass > i { position:absolute; left:50%; bottom:2px; margin-left:-5px; border:5px solid transparent; border-bottom-color:var(--gold); }
 #compassStrip { position:absolute; inset:0; }
-#compassStrip span { position:absolute; top:9px; transform:translateX(-50%); font:700 15px Stoix,Cinzel,serif; color:var(--cream); white-space:nowrap; }
+#compassStrip span { position:absolute; top:9px; transform:translateX(-50%); font:700 15px Cinzel,serif; color:var(--cream); white-space:nowrap; }
 #compassStrip span.mid { top:8px; color:rgba(244,230,196,.5); }
 #compassStrip span.poi { top:2px; display:flex; flex-direction:column; align-items:center; color:var(--gold); font-size:18px; }
 #compassStrip span.poi small { font:700 9px 'Alegreya Sans',sans-serif; color:rgba(244,230,196,.75); }
@@ -395,7 +395,7 @@ body.titling > *:not(canvas):not(#title):not(#notes):not(#creator), body.creatin
 /* minimap and biome (bottom right) */
 #minimap { position:absolute; right:16px; bottom:18px; display:flex; flex-direction:column; align-items:center; gap:6px; }
 #minimap canvas { width:240px; height:240px; border-radius:50%; box-shadow:0 0 0 2px var(--glaze), 0 0 0 5px rgba(212,132,74,.55), 0 6px 18px rgba(0,0,0,.4); background:#d4c49a; }
-#biomeLabel { padding:3px 12px; border-radius:12px; font:700 12px Stoix,Cinzel,serif; letter-spacing:.08em; color:var(--cream); background:rgba(31,22,16,.72); box-shadow:0 0 0 1px rgba(0,0,0,.5); white-space:nowrap; }
+#biomeLabel { padding:3px 12px; border-radius:12px; font:700 12px Cinzel,serif; letter-spacing:.08em; color:var(--cream); background:rgba(31,22,16,.72); box-shadow:0 0 0 1px rgba(0,0,0,.5); white-space:nowrap; }
 #compassStrip span.poi.spawn { color:#ffb090; }
 
 .plate b i.lvl { font-size:15px; margin-left:3px; vertical-align:-2px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.8)); }

@@ -11,8 +11,9 @@
     "lint": "eslint .",
     "cycles": "madge --circular --extensions js src/main.js src/world/terrain-worker.js",
     "deadcode": "knip --include files,dependencies,unlisted,unresolved",
-    "check": "npm run lint && npm run cycles && npm run deadcode && npm run test:world",
-    "playtest": "node tests/bot/playtest.mjs"
+    "check": "npm run lint && npm run lint:css && npm run cycles && npm run deadcode && npm run test:world",
+    "playtest": "node tests/bot/playtest.mjs",
+    "lint:css": "node tools/check-css.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

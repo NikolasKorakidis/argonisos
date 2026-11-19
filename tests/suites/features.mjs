@@ -29,6 +29,11 @@ export default {
     await t.step('15 …and it lights again normally, keeping its wood', `const f = window._fire, fuel = f.state.fuel; const t = B.interactable(P.pos, new V(Math.sin(P.yaw), 0, Math.cos(P.yaw))); t.use(); return (f.state.lit && f.flame.visible && Math.abs(f.state.fuel - Math.min(10, fuel + 1)) < 0.01) || JSON.stringify({ lit: f.state.lit, fuel, now: f.state.fuel });`);
     await t.step('16 the biome label shows the current biome', `const t = document.getElementById('biomeLabel').textContent; return /^Biome: (Pedias|Yleos|Valtos)$/.test(t) || t;`);
     await t.step('17 the minimap is drawn', `const c = document.querySelector('#minimap canvas'), d = c.getContext('2d').getImageData(88, 40, 1, 1).data; return (d[3] > 0) || 'blank';`);
+    // the interface's colours are defined and its words aren't black on dark (a broken stylesheet once turned every menu's
+    // text black: tools/check-css.mjs guards the file, this the page)
+    await t.step('17b the interface reads: its palette is defined and no title, label or button text is black', `const cs = getComputedStyle(document.documentElement); if (!cs.getPropertyValue('--cream').trim()) return 'the palette (--cream) is undefined';
+      const dark = [...document.querySelectorAll('#hud *, .pnl > h2, .btn, #clock, #biomeLabel, #compassStrip span')].filter((e) => e.offsetParent && e.textContent.trim() && !e.children.length).filter((e) => { const m = getComputedStyle(e).color.match(/\\d+/g).map(Number); return m[0] + m[1] + m[2] < 60; });
+      return !dark.length || 'black text: ' + dark.slice(0, 4).map((e) => (e.id || e.className || e.tagName) + ' "' + e.textContent.trim().slice(0, 20) + '"').join(', ');`);
     await t.step('20 the spawn point shows on the compass', `AG.S.bed = { x: P.pos.x - Math.sin(P.camYaw) * 60, z: P.pos.z - Math.cos(P.camYaw) * 60 }; return true;`);
     await t.wait(600);
     await t.step('20 …(compass marker present)', `return !!document.querySelector('#compassStrip .poi.spawn') || document.getElementById('compassStrip').innerHTML.slice(0, 200);`);
