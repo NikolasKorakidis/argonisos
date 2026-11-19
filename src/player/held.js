@@ -1,6 +1,7 @@
 // Models for things held in the hand or slung on the back. Each comes out handle-down along +y with the grip at y=0,
 // so the hero's grip pose fits them all. The crude bow is an imported model; the rest come from the team's packs
-// (tools/assets: Greek warfare for the Cretan bow, shields and lightstone spear; the rustic kit and Synty for the tools),
+// (tools/assets: Greek warfare for the Cretan bow, shields and lightstone spear; the rustic kit and Synty for the tools;
+// the team's own delivery for the stone spear and the hoe),
 // with the carved ones below standing in while they load or if a pack file is missing.
 import * as THREE from 'three';
 import { loadFBX, loadPack, loadTex, fixMaterials, normalizeHandle } from '../assets.js';
@@ -70,8 +71,8 @@ const PACKED = {
   // tools: length, and how far below the grip the handle's end sits
   axe: () => prop('axeCrude', (o) => tool(o, 0.75, 0.09)), axeLight: () => prop('axeGood', (o) => tool(o, 0.85, 0.09)),
   club: () => prop('club', (o) => tool(o, 0.85, 0.08)), dagger: () => prop('knifeCrude', (o) => tool(o, 0.42, 0.02)), daggerLight: () => prop('knifeGood', (o) => tool(o, 0.38, 0.02, false, true)),   // (its guarded grip is wider than its blade: point the slim end out)
-  hammer: () => prop('mallet', (o) => tool(o, 0.55, 0.06)), pickaxe: () => prop('pickaxe', (o) => tool(o, 0.8, 0.08)), hoe: () => prop('spade', (o) => tool(o, 1.0, 0.15, true)),
-  spear: () => prop('stake', (o) => { const g = tool(o, 1.8, 0.35); g.scale.set(0.3, 1, 0.3); return grp(g); }),   // (a stake for a palisade, thinned to a shaft; the hand sets the outer group's scale)
+  hammer: () => prop('mallet', (o) => tool(o, 0.55, 0.06)), pickaxe: () => prop('pickaxe', (o) => tool(o, 0.8, 0.08)), hoe: () => prop('oldHoe', (o) => tool(o, 1.0, 0.15, true)),   // (the team's hoe: its blade wider than it is deep, so turned face on)
+  spear: () => prop('oldSpear', (o) => tool(o, 1.8, 0.35)),   // (the team's stone spear, its painted look flattened: manifest flatColors)
   torch: () => prop('torch', (o) => { const g = tool(o, 0.8, 0.05), top = new THREE.Box3().setFromObject(g).max.y;   // our flame and light on its head
     g.add(flame(top - 0.04)); const L = new THREE.Object3D(); L.name = 'torchLight'; L.position.y = top + 0.12; g.add(L); return g; }),
 };
@@ -79,7 +80,7 @@ function tool(o, len, below, flat, slim) { const h = headAlong(normalizeHandle(o
 // Each pack model comes out of normalizeHandle with its head pointing whichever way its maker turned it. The hand holds
 // them all one way (hero.holdRight: +x to the knuckles, the way the hand strikes), so each is turned about its handle until
 // its head (the top two fifths) lies widest along x, the longer side (an axe's blade, not its poll) to +x. flat: a blade
-// that strikes with its face (the spade used as a hoe) turns a quarter more, its face to the knuckles
+// that strikes with its face (a spade) turns a quarter more, its face to the knuckles
 function headAlong(h, flat) {
   h.updateMatrixWorld(true); const box = new THREE.Box3().setFromObject(h), top = box.min.y + (box.max.y - box.min.y) * 0.6, v = new THREE.Vector3(), pts = [];
   h.traverse((m) => { if (!m.isMesh) return; const a = m.geometry.attributes.position; for (let i = 0; i < a.count; i++) { v.fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld); if (v.y > top) pts.push(v.x, v.z); } });

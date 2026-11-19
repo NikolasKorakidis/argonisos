@@ -86,7 +86,7 @@ export class Combat {
   // ---- a creature's blow lands on the player (from: where it came from, if not the creature: a thorn). Returns what
   // came of it: 'dodged', 'blocked' (all of it soaked), or the damage taken
   hitPlayer(c, [lo, hi, kind], { from } = {}) {
-    const g = this.g, P = g.player, S = P.stats; let dmg = rr(lo, hi) * c.dmgK;
+    const g = this.g, P = g.player, S = P.stats; let dmg = rr(lo, hi) * c.dmgK * (g.resists?.(kind) ? 0.5 : 1);   // (armour that resists the kind: half of it)
     if (P.dodging) return 'dodged';   // (rolled clear: player.js)
     const src = from || c.pos;
     // blocking: facing the attacker with a weapon or shield raised

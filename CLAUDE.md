@@ -36,7 +36,11 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
   still meets the carved shape, kept invisible); the hero (Synty Generic, a man or a woman, made in the character creator at a new game: `src/ui/creator.js`; hair, beards and wreaths from `heroLooks.glb`, colours recoloured from the palette in `hero.js`; the look saved with the game), dryads, dryadlings and giants are pack bodies fitted onto the Mixamo rig
   in three.js (`refit` in `tools/assets/fbx-page.mjs`: the rig's bones keep their rest rotations, so the Mixamo clips play
   unchanged; Blender's import turns them), with the armour from the pack's Greek characters as parts of their own
-  (`wear_<item>` in `heroArmour.glb`, moved onto the hero's bones by `dress` in `hero.js`, shown by `hero.wear`);
+  (`wear_<item>` in `heroArmour.glb`, moved onto the hero's bones by `dress` in `hero.js`, shown by `hero.wear`); the team's
+  own armour pieces (`incoming assets/audio/0. OLD/2.Armor`, a file each: helmet, body, left and right leg) are `shell`
+  wear items, worn over the body instead of in its place (`overBody` in `hero.js` pushes the piece clear and draws the body
+  in under it, a morph target); the hero sets kept for later rewards are `armour<Name>.glb` (`like: "heroArmour"`,
+  `wearOnly`), not loaded by the game yet; `flatColors` turns a painted texture into one colour per face (the OLD spear and hoe);
   animals come young, grown and (deer) stag by level, each in one of the pack's looks (`*Looks.glb`, bound to the body's bones); a `proportions` entry lengthens limbs and scales hands as it fits (the pack's
   people are stylised: short legs, long arms, big hands). Held things: `GRIP` in `hero.js` (in the fist, hand-bone space;
   tools come out centred on their handle, `normalizeHandle`, and turned so the head's edge leads, `headAlong` in `held.js`), shields strapped on the left forearm (`STRAP`). `tools/assets/lineup.py` lays every converted model out in one Blender file; `library.py` (with

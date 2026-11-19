@@ -21,6 +21,9 @@ function metaSplits(fbx, names) {
   for (const m of meta.matchAll(/\n\s*name: (.+)\n(?:.*\n){0,6}?\s*firstFrame: ([-\d.]+)\n\s*lastFrame: ([-\d.]+)/g)) at[m[1].trim()] = [+m[2], +m[3]];
   return Object.fromEntries(Object.entries(names).map(([ours, theirs]) => { if (!at[theirs]) throw new Error(`no clip ${theirs} in ${fbx}.meta: ${Object.keys(at)}`); return [ours, at[theirs]]; }));
 }
+// A file named in the manifest: inside the pack's Assets folder, or (starting 'incoming assets/') anywhere in the team's
+// deliveries, such as the armour pieces cut from the Greek warriors in 'incoming assets/audio/0. OLD/2.Armor'
+const source = (f) => (f.startsWith('incoming assets/') ? path.join(ROOT, f) : path.join(PACK, f));
 // the same job done by three.js in a page (served from the project, which holds the pack in "incoming assets/")
 let page = null;
 async function viaThree(job) {
@@ -30,7 +33,7 @@ async function viaThree(job) {
   const rel = (f) => path.relative(ROOT, f);
   const r = await page.evaluate((j) => window[j.refit ? 'refit' : 'convert'](j), { ...job, srcRel: rel(job.src), textureRel: job.texture && rel(job.texture),
     mixamoRel: job.refit && rel(path.join(ROOT, 'assets/models', job.refit)), attachRel: job.attach?.map((f) => rel(path.join(PACK, f))),
-    wear: job.wear && Object.fromEntries(Object.entries(job.wear).map(([k, w]) => [k, { ...w, srcRel: rel(path.join(PACK, w.src)) }])),
+    wear: job.wear && Object.fromEntries(Object.entries(job.wear).map(([k, w]) => [k, { ...w, srcRel: [].concat(w.src).map((f) => rel(source(f))) }])),
     clipFilesRel: job.clipFiles && Object.fromEntries(Object.entries(job.clipFiles).map(([k, f]) => [k, path.relative(ROOT, path.join(PACK, f))])) });
   fs.writeFileSync(job.out, Buffer.from(r.glb, 'base64'));
   console.log(job.name.padEnd(10), (fs.statSync(job.out).size / 1024).toFixed(0).padStart(6), 'KB ', job.refit ? `(refit: ${r.parts.join(' ')}, ${r.joints} joints, ×${r.scale})` : `(three.js: ${r.parts} parts, ${r.bones} bones)`, r.clips?.join(' ') ?? '');
@@ -93,12 +96,12 @@ const versions = (n, e) => [[n, e],
   ...(e.mid ? [[n + '_mid', { ...e, decimate: e.mid.tris, solidMin: e.mid.solidMin ?? 1, cardShare: 0.8, mid: undefined, far: undefined }]] : []),
   ...(e.far ? [[n + '_far', { ...e, lod: e.far.lod, decimate: e.far.tris, cardShare: undefined, cardMin: 0.12, solidMin: e.far.solidMin, mid: undefined, far: undefined }]] : [])];
 for (const [name0, e0] of Object.entries(manifest.models).flatMap(([n, e]) => versions(n, e))) {
-  const name = name0, e = e0;
+  const name = name0, e = e0.like ? { ...manifest.models[e0.like], ...e0, like: undefined } : e0;   // (like: another entry's settings, these over them)
   if (want.length && !want.includes(name.replace(/_(far|mid)$/, ''))) continue;
   if (e.compose || e.house) { compose(name, e, path.join(ROOT, 'assets/models/pack', name + '.glb')); continue; }
   if (e.shared && !manifest.textures?.[e.shared]) throw new Error(`${name}: no texture ${e.shared} in the manifest`);
   // (a plant comes from the catalogue's export of its model, everything.mjs, which has the right texture on each part)
-  const job = { ...e, name, src: e.plant ? lodOf(e.plant, e.lod) : path.join(PACK, e.src), plant: e.plant && path.join(ROOT, 'assets/models/pack/tex'), texture: e.texture && path.join(PACK, e.texture), out: path.join(ROOT, 'assets/models/pack', name + '.glb'),
+  const job = { ...e, name, src: e.plant ? lodOf(e.plant, e.lod) : source(e.src), plant: e.plant && path.join(ROOT, 'assets/models/pack/tex'), texture: e.texture && source(e.texture), out: path.join(ROOT, 'assets/models/pack', name + '.glb'),
     clips: typeof e.clips === 'string' ? manifest.clipSets[e.clips] : e.clips, also: e.also?.map((f) => path.join(PACK, f)), bakeColors: e.bakeColors && path.join(PACK, e.bakeColors) };
   if (e.metaClips) job.splits = metaSplits(job.src, e.metaClips);
   fs.mkdirSync(path.dirname(job.out), { recursive: true });

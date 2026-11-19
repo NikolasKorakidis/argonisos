@@ -99,7 +99,7 @@ export class Crafting {
     const r = list.find((x) => x.key === this.sel), why = this.blocker(r), d = r.kind === 'item' ? ITEMS[r.id] : this.g.build.piece(r.id);
     const stats = [];
     if (d.dmg) stats.push('Damage ' + d.dmg.map(([n, k]) => `${n} ${k}`).join(' + ')); if (d.block) stats.push(`Block ${d.block}`); if (d.armor) stats.push(`Armour ${d.armor}`);
-    if (d.food) stats.push(`+${d.food.health} health · +${d.food.stamina} stamina`); if (d.hp) stats.push(`${d.hp} hit points`); if (d.speed) stats.push(`${d.speed > 0 ? '+' : ''}${Math.round(d.speed * 100)}% speed`);
+    if (d.food) stats.push(`+${d.food.health} health · +${d.food.stamina} stamina`); if (d.hp) stats.push(`${d.hp} hit points`); if (d.speed) stats.push(`${d.speed > 0 ? '+' : ''}${Math.round(d.speed * 100)}% speed`); if (d.resist) stats.push(`Resists ${d.resist.join(', ')}`); if (d.regen) stats.push(`+${Math.round(d.regen * 100)}% health regeneration`);
     $('craftDetail').innerHTML = `<div class="big">${icon(r.icon)}</div><h3>${r.name}</h3><p class="desc">${d.desc || d.note || ''}${stats.length ? `<br>${stats.join(' · ')}` : ''}</p>
       <div class="cost">${Object.entries(r.mats).map(([m, n]) => { const have = this.g.inv.count(m); return `<div class="slot${have < n ? ' no' : ''}" title="${ITEMS[m].name}">${icon(ITEMS[m].icon)}<em>${have}/${n}</em></div>`; }).join('')}</div>
       ${r.at ? `<p class="where">${icon('anvil')} At a workbench</p>` : ''}<button class="btn" id="craftGo" ${why ? 'disabled' : ''}>${why || (r.kind === 'piece' ? 'Build' : 'Craft')}</button>`;

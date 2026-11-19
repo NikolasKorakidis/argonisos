@@ -86,6 +86,7 @@ export function installGame(g) {
   g.heldSlot = () => { const i = worn('hand'); return i >= 0 ? inv.slots[i] : null; };
   g.equippedTool = (tool) => g.held()?.tool === tool;
   g.warmArmor = () => inv.slots.some((s) => s?.worn && ITEMS[s.id].warm);
+  g.resists = (kind) => inv.slots.some((s) => s?.worn && ITEMS[s.id].resist?.includes(kind));   // (combat.js: a blow of that kind halved)
   g.armor = () => { let a = 0; const sets = {}; for (const s of inv.slots) if (s?.worn && ITEMS[s.id].armor) { a += ITEMS[s.id].armor; const st = ITEMS[s.id].set; sets[st] = (sets[st] || 0) + 1; } if (Object.values(sets).some((n) => n >= 3)) a *= 1.05; return Math.round(a); };
   hud.armor = g.armor;
   function refreshLook() {
@@ -96,6 +97,7 @@ export function installGame(g) {
     const id = (slot) => { const i = worn(slot); return i >= 0 ? inv.slots[i].id : null; };
     player.hero.wear({ head: id('head'), body: id('body'), legs: id('legs'), cape: id('cape') });
     let sp = 0; for (const s of inv.slots) if (s?.worn && ITEMS[s.id].speed) sp += ITEMS[s.id].speed; player.speedMod = sp;
+    let rg = 0; for (const s of inv.slots) if (s?.worn && ITEMS[s.id].regen) rg += ITEMS[s.id].regen; player.stats.gearRegen = rg;   // (stats.js healthRegenK)
     player.overweight = inv.overweight;
     hud.dirtyInv = true;
   }

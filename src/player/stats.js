@@ -71,7 +71,7 @@ export class Stats {
   // speed and stamina-use multipliers from conditions and skills
   get speedK() { return 1 + (this.has('rested') ? 0.05 : 0) + (this.has('zeusBuff') ? 0.75 : 0) + (this.has('zeusBlessing') ? 0.1 : 0) + (this.has('swift') ? 0.1 : 0); }
   get drainK() { return (1 - (this.has('rested') ? 0.05 : 0)) * (1 - (this.has('zeusBuff') ? 0.75 : 0)); }
-  get healthRegenK() { if (this.has('freezing')) return 0; return (1 - (this.has('wet') ? 0.25 : 0)) * (1 - (this.has('cold') ? 0.15 : 0)); }
+  get healthRegenK() { if (this.has('freezing')) return 0; return (1 - (this.has('wet') ? 0.25 : 0)) * (1 - (this.has('cold') ? 0.15 : 0)) * (1 + (this.gearRegen || 0)); }   // (gearRegen: what the armour worn adds, game.js)
   get staminaRegenK() { return (1 - (this.has('wet') ? 0.25 : 0)) * (1 - (this.has('cold') ? 0.15 : 0)) * (this.has('freezing') ? 0.4 : 1); }
   // ---- stamina
   // Spend stamina for an action (skill makes it cheaper). Returns false if there isn't enough

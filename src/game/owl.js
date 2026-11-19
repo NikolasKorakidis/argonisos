@@ -32,7 +32,7 @@ export const TOPICS = {
   chimera: [{ title: 'The Chimera\'s Shrine', body: 'The carvings fit. The <b>Chimera\'s Shrine</b> is on your map.<br><br>Its altar asks for <b>3 dryad hearts and 10 pomegranates</b>. Some dryads carry a heart; pomegranate trees grow in the meadow groves.' }],
   chimeraAltar: [{ title: 'The Altar of the Chimera', body: 'Lion, goat and serpent in one body. It bites, it claws, and its tail stings whoever stands behind it, with venom. The forest answers its call every half minute.<br><br>It is the strongest thing on Nisos. Be ready.' }],
   chimeraDown: [{ title: 'The Chimera Is Dead', body: 'I did not think anyone could. Take its <b>head</b> to the Ancient Temple.' }],
-  offered2: [{ title: 'The Trial So Far', body: `The Chimera's claws are yours (${K('F')}), and the Cretan bow.<br><br>Beyond Zeus's storm lies the marsh of <b>Valtos</b>. The storm will not part for you yet: that trial is still to come. Until then, Nisos is yours.` }],
+  offered2: [{ title: 'The Trial So Far', body: `The Chimera's claws are yours (${K('F')}), with the Cretan bow and the Corinthian armour.<br><br>Beyond Zeus's storm lies the marsh of <b>Valtos</b>. The storm will not part for you yet: that trial is still to come. Until then, Nisos is yours.` }],
   death: [{ title: 'You Fell', body: 'Zeus lifted you up again, as he will. Everything you carried lies in your <b>grave</b> where you fell: go back and take it (' + K('E') + '). A bed under a roof decides where you wake.' }],
 };
 const ORDER = Object.keys(TOPICS);

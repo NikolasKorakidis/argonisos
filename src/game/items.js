@@ -76,6 +76,11 @@ export const ITEMS = {
   cretanArmor: { name: 'Cretan Body Armour', type: 'armor', slot: 'body', set: 'cretan', armor: 16, stack: 1, weight: 12, dur: 800, warm: true, icon: 'cretanArmor' },
   cretanLegs: { name: 'Cretan Leg Armour', type: 'armor', slot: 'legs', set: 'cretan', armor: 12, stack: 1, weight: 9, dur: 650, speed: 0.05, icon: 'cretanLegs' },
   cretanCape: { name: 'Cretan Cape', type: 'armor', slot: 'cape', set: 'cretan', armor: 4, stack: 1, weight: 2, dur: 200, noFreeze: true, icon: 'cape' },
+  // (the Corinthian set: bronze over the tunic, the strongest yet; resist: damage of those kinds halved, regen: health
+  // regeneration raised by that share)
+  corinthianHelmet: { name: 'Corinthian Helmet', type: 'armor', slot: 'head', set: 'corinthian', armor: 8, stack: 1, weight: 4, dur: 300, resist: ['fire'], regen: 0.05, icon: 'corinthianHelmet' },
+  corinthianArmor: { name: 'Corinthian Body Armour', type: 'armor', slot: 'body', set: 'corinthian', armor: 32, stack: 1, weight: 16, dur: 1000, resist: ['fire'], warm: true, speed: -0.05, icon: 'corinthianArmor' },
+  corinthianLegs: { name: 'Corinthian Leg Armour', type: 'armor', slot: 'legs', set: 'corinthian', armor: 24, stack: 1, weight: 12, dur: 800, resist: ['fire'], speed: -0.05, icon: 'corinthianLegs' },
 };
 for (const [id, it] of Object.entries(ITEMS)) it.id = id;
 export const SET_BONUS = 1.05;    // full set: armour ×1.05
@@ -109,5 +114,9 @@ export const RECIPES = [
   { id: 'cretanArmor', mats: { deerHide: 10, rope: 2 }, at: 'workbench', tier: 1 },
   { id: 'cretanLegs', mats: { deerHide: 8, rope: 2 }, at: 'workbench', tier: 1 },
   { id: 'cretanCape', mats: { foxHide: 20, rope: 2 }, at: 'workbench', tier: 1 },
+  // (lightstone stands in for electrum plate, which there is no way to make yet)
+  { id: 'corinthianHelmet', mats: { lightstone: 4, deerHide: 2, rope: 1 }, at: 'workbench', tier: 2 },
+  { id: 'corinthianArmor', mats: { lightstone: 10, deerHide: 10, rope: 2 }, at: 'workbench', tier: 2 },
+  { id: 'corinthianLegs', mats: { lightstone: 8, deerHide: 6, rope: 1 }, at: 'workbench', tier: 2 },
 ];
 // Placeable things made from the crafting menu go into the build menu (hammer) instead: see build/pieces.js

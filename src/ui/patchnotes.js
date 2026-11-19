@@ -5,7 +5,7 @@ import { glyph } from './icons.js';
 export const PATCHES = [
   {
     id: 'patch-21', name: 'Patch 21', title: 'The Island Speaks', date: '19 November 2026',
-    intro: 'The team\'s own sounds and music: every blow, cut and knock, the fire, the bosses, thunder and rain, the wind and the creatures of each land, and music that comes now and then, as it does in Valheim.',
+    intro: 'The team\'s own sounds and music: every blow, cut and knock, the fire, the bosses, thunder and rain, the wind and the creatures of each land, and music that comes now and then, as it does in Valheim. And bronze Corinthian armour for those who have beaten the Chimera.',
     sections: [
       { t: 'Music', icon: 'temple', items: [
         '<b>Music of its own:</b> the title screen and the character creator have their theme, and a new trial opens with the story\'s music as you wake on the shore. It plays again when the owl first speaks to you.',
@@ -34,6 +34,16 @@ export const PATCHES = [
         'The wind rises and falls with the weather and gusts with it. It whispers through the meadow grass and the leaves of the woods.',
         'Waves break near the shore. Birds sing by day; by night Pedias and Yleos each have their own crickets, owls call, and frogs croak in the marsh.',
         'Sounds out in the world come from their side and fade with distance, and they come muffled when you\'re indoors.',
+      ] },
+      { t: 'Corinthian Armour', icon: 'helmet', items: [
+        '<b>A new set of armour:</b> a bronze Corinthian helmet with a red crest, a muscled bronze corslet over a pleated skirt with bracers, and bronze greaves. Make it at the workbench once you have offered the Chimera\'s head, from lightstone, deer hide and rope.',
+        'It is the strongest armour yet: 8 for the helmet, 32 for the corslet and 24 for the greaves, and a little more for wearing all three. Each piece halves the harm fire does to you, the corslet keeps out the cold, and the helmet makes you heal a little faster. The corslet and the greaves are heavy: each slows you a little.',
+        'It goes on over your own body, so your arms and legs still show beneath it, on a man or a woman.',
+      ] },
+      { t: 'Tools and Food', icon: 'pomegranate', items: [
+        'The <b>crude spear</b> is a real spear now, a stone head bound to a long shaft, instead of a sharpened stake.',
+        'The <b>hoe</b> is a real hoe, its blade across the handle, instead of a spade.',
+        'Olives, acorns and pomegranates have pictures of their own in your pack: an olive on its twig, an acorn in its cup and a pomegranate with its crown.',
       ] },
     ],
   },

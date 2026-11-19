@@ -180,7 +180,7 @@ export class HUD {
     if (d.food) bits.push(d.food.health >= 0 ? `+${d.food.health} health, +${d.food.stamina} stamina, ${d.food.regen} hp/s for ${fmtT(d.food.duration)}` : `Inedible like this (${d.food.health} health)`);
     if (d.dmg) bits.push('Damage ' + d.dmg.map(([n, k]) => `${n} ${k}`).join(' + '));
     if (d.block) bits.push(`Block ${d.block}`); if (d.armor) bits.push(`Armour ${d.armor}`);
-    if (d.speed) bits.push(`${d.speed > 0 ? '+' : ''}${Math.round(d.speed * 100)}% speed`);
+    if (d.speed) bits.push(`${d.speed > 0 ? '+' : ''}${Math.round(d.speed * 100)}% speed`); if (d.resist) bits.push(`Resists ${d.resist.join(', ')}`); if (d.regen) bits.push(`+${Math.round(d.regen * 100)}% health regeneration`);
     if (d.dur) bits.push(`Durability ${Math.ceil(s.dur)} / ${d.dur}`);
     bits.push(`Weight ${(d.weight * s.n).toFixed(1)}`);
     box.innerHTML = `<b>${d.name}</b>${s.n > 1 ? ` ×${s.n}` : ''}<br>${d.note ? d.note + '<br>' : ''}${bits.join(' · ')}`;

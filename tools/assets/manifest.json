@@ -250,6 +250,38 @@
       "static": true,
       "join": true
     },
+    "oldSpear": {
+      "src": "incoming assets/audio/0. OLD/1.Weapons-Shields-Ammo/Stone_Spear/Stone_Spear.fbx",
+      "texture": "incoming assets/audio/0. OLD/1.Weapons-Shields-Ammo/Stone_Spear/StoneSpear1_T.png",
+      "flatColors": true,
+      "static": true,
+      "join": true
+    },
+    "oldHoe": {
+      "src": "incoming assets/audio/0. OLD/3.Tools/Hoe/Hoe1.fbx",
+      "texture": "incoming assets/audio/0. OLD/3.Tools/Hoe/Hoe1_T.png",
+      "flatColors": true,
+      "static": true,
+      "join": true
+    },
+    "foodOlive": {
+      "src": "incoming assets/audio/0. OLD/8.Materials/Green Olive .fbx",
+      "flatColors": true,
+      "static": true,
+      "join": true
+    },
+    "foodAcorn": {
+      "src": "incoming assets/audio/0. OLD/8.Materials/Acorn Flat.fbx",
+      "flatColors": true,
+      "static": true,
+      "join": true
+    },
+    "foodPomegranate": {
+      "src": "incoming assets/audio/0. OLD/8.Materials/Pomegranate Flat.fbx",
+      "flatColors": true,
+      "static": true,
+      "join": true
+    },
     "kWall": {
       "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_wall_01_3x3_a.fbx",
       "shared": "rpgpp",
@@ -936,6 +968,279 @@
           "src": "GreekWarfare/Meshes/Character_AthenianHoplite.fbx",
           "mesh": "Character_AthenianHoplite",
           "region": "legs"
+        },
+        "corinthianHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Corinthian.fbx"
+          ],
+          "shell": true
+        },
+        "corinthianArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Corinthian.fbx"
+          ],
+          "shell": true
+        },
+        "corinthianLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Corinthian.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Corinthian.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourAchilles": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "achillesHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Achilles.fbx"
+          ],
+          "shell": true
+        },
+        "achillesArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Achilles.fbx"
+          ],
+          "shell": true
+        },
+        "achillesLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Achilles.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Achilles.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourHercules": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "herculesHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Hercules.fbx"
+          ],
+          "shell": true
+        },
+        "herculesArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Hercules.fbx"
+          ],
+          "shell": true
+        },
+        "herculesLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Hercules.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Hercules.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourJason": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "jasonHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Jason.fbx"
+          ],
+          "shell": true
+        },
+        "jasonArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Jason.fbx"
+          ],
+          "shell": true
+        },
+        "jasonLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Jason.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Jason.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourOdysseus": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "odysseusHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Odyssey.fbx"
+          ],
+          "shell": true
+        },
+        "odysseusArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Odyssey.fbx"
+          ],
+          "shell": true
+        },
+        "odysseusLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Odyssey.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Odyssey.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourPerseus": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "perseusHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Perseus.fbx"
+          ],
+          "shell": true
+        },
+        "perseusArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Perseus.fbx"
+          ],
+          "shell": true
+        },
+        "perseusLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Perseus.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Perseus.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourBellerophon": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "bellerophonHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Bellerofont.fbx"
+          ],
+          "shell": true
+        },
+        "bellerophonArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Bellerofont.fbx"
+          ],
+          "shell": true
+        },
+        "bellerophonLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Bellerofont.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Bellerofont.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourTheseus": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "theseusArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Theseus.fbx"
+          ],
+          "shell": true
+        },
+        "theseusLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Theseus.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Theseus.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourAthenian": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "athenianHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Athenian.fbx"
+          ],
+          "shell": true
+        },
+        "athenianArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Athenian.fbx"
+          ],
+          "shell": true
+        },
+        "athenianLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Athenian.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Athenian.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourSpartan": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "spartanHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Spartan.fbx"
+          ],
+          "shell": true
+        },
+        "spartanArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Spartan.fbx"
+          ],
+          "shell": true
+        },
+        "spartanLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Spartan.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Spartan.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourTheban": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "thebanHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Theban.fbx"
+          ],
+          "shell": true
+        },
+        "thebanArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Theban.fbx"
+          ],
+          "shell": true
+        },
+        "thebanLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Theban.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Theban.fbx"
+          ],
+          "shell": true
         }
       }
     },

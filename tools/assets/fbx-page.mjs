@@ -92,10 +92,16 @@ const ALIGN = ['Shoulder', 'Arm', 'ForeArm', 'UpLeg', 'Leg'].flatMap((k) => ['Le
 const V = () => new THREE.Vector3(), wpos = (o) => o.getWorldPosition(V());
 
 // The skinned vertices as the skeleton now holds them, in world space: { pos, nrm, uv, bones: [[bone, weight]...] } per vertex
-// (pose: the bones of the same names to pose them with instead, from another character on the same skeleton)
-function posed(m, pose) {
+// (pose: the bones of the same names to pose them with instead, from another character on the same skeleton. rest: where
+// those bones stood before they were posed, for pieces whose own bones are turned differently (the team's armour, through
+// Blender: same joints, other axes): each bone then moves its points as its namesake moved from rest, and a bone with no
+// namesake (their fingers, Finger_01_L, and _end bones) as its nearest ancestor that has one)
+const namesake = (b, pose) => { let a = b; while (a && !pose.has(a.name)) a = a.parent?.isBone ? a.parent : null; return a; };
+function posed(m, pose, rest) {
   const g = m.geometry, P = g.attributes.position, N = g.attributes.normal, UV = g.attributes.uv, SI = g.attributes.skinIndex, SW = g.attributes.skinWeight;
-  const mats = m.skeleton.bones.map((b, i) => new THREE.Matrix4().multiplyMatrices((pose?.get(b.name) ?? b).matrixWorld, m.skeleton.boneInverses[i]).multiply(m.bindMatrix));
+  const world = (b) => { if (!pose) return b.matrixWorld; if (!rest) return (pose.get(b.name) ?? b).matrixWorld;
+    const a = namesake(b, pose); return a ? new THREE.Matrix4().copy(pose.get(a.name).matrixWorld).multiply(rest.get(a.name).clone().invert()).multiply(b.matrixWorld) : b.matrixWorld; };
+  const mats = m.skeleton.bones.map((b, i) => new THREE.Matrix4().multiplyMatrices(world(b), m.skeleton.boneInverses[i]).multiply(m.bindMatrix));
   const out = [], M = new THREE.Matrix4(), nm = new THREE.Matrix3();
   for (let i = 0; i < P.count; i++) {
     M.set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0); const bones = [];
@@ -138,9 +144,11 @@ function proportions(root, S, prop) {
   return E;
 }
 // A posed vertex moved by the edits of the bones that hold it (blended by weight, as skinning blends)
-function reshape(E, v, head) {
+// (follow: a bone with no edit of its own takes its nearest ancestor's, as the delivered armour's renamed fingers do)
+function reshape(E, v, head, follow) {
   if (!E) return; const M = new THREE.Matrix4().set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-  for (const [b, w] of v.bones) { const e = E.get(boneKey(b || head)) || new THREE.Matrix4(); for (let c = 0; c < 16; c++) M.elements[c] += e.elements[c] * w; }
+  const edit = (b) => { if (!follow) return E.get(boneKey(b)); for (let p = b; p?.isBone; p = p.parent) if (E.has(boneKey(p))) return E.get(boneKey(p)); };
+  for (const [b, w] of v.bones) { const e = edit(b || head) || new THREE.Matrix4(); for (let c = 0; c < 16; c++) M.elements[c] += e.elements[c] * w; }
   v.pos.applyMatrix4(M); v.nrm.applyMatrix3(new THREE.Matrix3().getNormalMatrix(M)).normalize();
 }
 
@@ -161,6 +169,7 @@ window.refit = async (job) => {
   const S = {}; for (const b of parts[0].skeleton.bones) { const n = mixamoName(b); if (n && !S[n]) S[n] = b; }
   const map = (b) => { for (let p = b; p; p = p.parent) { const n = mixamoName(p); if (n) return n; } return 'mixamorigHips'; };
   // pose: each limb turned (in world space, parents first) so it points from its joint to its child's as the rig's does
+  const rest = new Map(parts[0].skeleton.bones.map((b) => [b.name, b.matrixWorld.clone()]));   // (as they stood: posed, shells)
   const childOf = (n) => Object.keys(S).find((k) => R[k]?.parent === R[n]);
   for (const n of ALIGN) {
     const c = childOf(n); if (!S[n] || !c) continue;
@@ -184,14 +193,24 @@ window.refit = async (job) => {
   const at = job.attachAt && parts[0].skeleton.bones.find((b) => b.name === job.attachAt); if (job.attachAt && !at) throw new Error('no bone ' + job.attachAt);
   for (const f of job.attachRel || []) { const a = await load(f); a.updateMatrixWorld(true); a.traverse((o) => { if (o.isMesh && !o.isSkinnedMesh) { const v = rigid(o, at?.matrixWorld); for (const x of v) { reshape(E, x, head); place(x.pos); } verts.push({ name: job.wear && !at ? 'hair' : o.name, v }); } }); }
   // clothes and armour from the pack's other characters (on this very skeleton): each posed as the body is, cut to the
-  // part of the body it covers, and named wear_<item> for the game to show when that item is worn
+  // part of the body it covers, and named wear_<item> for the game to show when that item is worn. Or (shell) bare pieces
+  // made to go over a body (the team's armour cut from the same characters, a file a piece: a helmet, a corslet and
+  // skirt, a greave and sandal for each leg): every skinned mesh in its files, whole, worn over the hero's own body
+  // rather than in its place (hero.js show), and pushed out along its normals by inflate (centimetres) to clear it
   const files = {}, pose = new Map(parts[0].skeleton.bones.map((b) => [b.name, b]));
   for (const [item, w] of Object.entries(job.wear || {})) {
-    const o = files[w.src] ||= await load(w.srcRel); o.updateMatrixWorld(true);
-    let m = null; o.traverse((x) => { if (x.isSkinnedMesh && x.name === w.mesh) m = x; }); if (!m) throw new Error(`no ${w.mesh} in ${w.src}`);
-    const v = posed(m, pose); for (const x of v) { reshape(E, x, head); place(x.pos); } verts.push({ name: 'wear_' + item, v, region: w.region });
+    const v = [];
+    for (const f of [].concat(w.srcRel)) {
+      const o = files[f] ||= await load(f); o.updateMatrixWorld(true); const ms = [];
+      o.traverse((x) => { if (x.isSkinnedMesh && (w.shell && !w.mesh ? true : x.name === w.mesh)) ms.push(x); }); if (!ms.length) throw new Error(`no ${w.mesh || 'skinned mesh'} in ${f}`);
+      for (const m of ms) for (const x of posed(m, pose, w.shell && rest)) { reshape(E, x, head, w.shell); place(x.pos); v.push(x); }
+    }
+    if (w.inflate) for (const x of v) x.pos.addScaledVector(x.nrm, w.inflate);
+    verts.push({ name: 'wear_' + item, v, region: w.region, shell: w.shell });
   }
   if (job.wear) { const base = verts.shift(); for (const r of ['head', 'body', 'legs']) verts.unshift({ name: 'base_' + r, v: base.v, region: r }); }
+  // (wearOnly: a file of armour alone, for sets the game loads only when worn; the head is kept, to fit helmets by)
+  if (job.wearOnly) for (let i = verts.length - 1; i >= 0; i--) if (!/^wear_|^base_head$/.test(verts[i].name)) verts.splice(i, 1);
   // the rig's bones moved onto the body's joints (parents first: each keeps its rest rotation; unmatched ones ride along)
   const joints = Object.fromEntries(Object.entries(S).map(([n, b]) => [n, place(E?.has(boneKey(b)) ? wpos(b).applyMatrix4(E.get(boneKey(b))) : wpos(b))]));
   rig.traverse((o) => { if (o.isBone && joints[o.name]) { o.parent.updateMatrixWorld(true); o.position.copy(o.parent.worldToLocal(joints[o.name].clone())); o.updateMatrixWorld(true); } });
@@ -217,7 +236,7 @@ window.refit = async (job) => {
     if (!n) throw new Error(`${part.name}: nothing in its region`);
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
     g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
-    const mesh = new THREE.SkinnedMesh(mergeVertices(g), material); mesh.name = part.name; rig.add(mesh); mesh.updateMatrixWorld(true); mesh.bind(skeleton, mesh.matrixWorld);
+    const mesh = new THREE.SkinnedMesh(mergeVertices(g), material); mesh.name = part.name; if (part.shell) mesh.userData.shell = true; rig.add(mesh); mesh.updateMatrixWorld(true); mesh.bind(skeleton, mesh.matrixWorld);
     out.push(`${part.name}:${tris.length}`);
   }
   rig.animations = [];

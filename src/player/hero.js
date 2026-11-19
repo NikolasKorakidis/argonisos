@@ -74,6 +74,53 @@ function armourSkin(m, U) {
   };
   m.customProgramCacheKey = () => 'heroArmourSkin'; return m;
 }
+// The bare pieces worn over the body (shells: the Corinthian set) were made on the Greek warriors' slimmer body, and a
+// low-poly shell over a low-poly body lets the body's corners through its faces. Two passes, in the rest pose, once per
+// body: the piece's points that lie less than GAP clear of the body's nearest face are moved out to GAP; then the body's
+// points that lie under one of the piece's faces (straight under it, facing the same way) but less than GAP below it are
+// drawn in to GAP below, by at most DEEP, as a morph target of the body's that show() turns on while the piece is worn.
+// (Only facing points count: the inside of an arm is not pushed off the corslet's side.) Distances go by the body's height.
+const facesOf = (m, out) => {
+  const g = m.geometry, n = g.attributes.position.count, at = []; for (let i = 0; i < n; i++) at.push(m.getVertexPosition(i, new THREE.Vector3()).applyMatrix4(m.matrix));
+  const I = g.index ? g.index.array : [...Array(n).keys()]; for (let i = 0; i < I.length; i += 3) out.push(new THREE.Triangle(at[I[i]], at[I[i + 1]], at[I[i + 2]])); return at;
+};
+function overBody(shells, body) {
+  if (!shells.length || !body.length) return;
+  const box = new THREE.Box3(), skin = [], pts = new Map(); for (const m of body) { const at = facesOf(m, skin); pts.set(m, at); for (const p of at) box.expandByPoint(p); }
+  const H = box.max.y - box.min.y, GAP = H * 0.006, DEEP = H * 0.03, C = H * 0.04, cell = (a) => Math.floor(a / C);
+  const gridOf = (tris) => { const g = new Map(), c = new THREE.Vector3(); for (const t of tris) { t.getMidpoint(c); const k = `${cell(c.x)},${cell(c.y)},${cell(c.z)}`; (g.get(k) || g.set(k, []).get(k)).push(t); } return g; };
+  // the face of grid nearest v, facing the way of nrm (if given): { t, p (the nearest point on it), n (its normal), d (v's height over it) }
+  const nearest = (grid, v, nrm) => {
+    let best = Infinity, out = null; const p = new THREE.Vector3(), n = new THREE.Vector3(), x = cell(v.x), y = cell(v.y), z = cell(v.z);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) for (const t of grid.get(`${x + a},${y + b},${z + c}`) || []) {
+      t.closestPointToPoint(v, p); const d2 = p.distanceToSquared(v); if (d2 >= best) continue; t.getNormal(n); if (nrm && n.dot(nrm) < 0.4) continue;
+      best = d2; out = { t, p: p.clone(), n: n.clone(), d: v.clone().sub(p).dot(n) };
+    }
+    return out;
+  };
+  const skinGrid = gridOf(skin), v = new THREE.Vector3(), nm = new THREE.Vector3(), q = new THREE.Vector3();
+  for (const m of shells) {
+    const P = m.geometry.attributes.position, N = m.geometry.attributes.normal, inv = new THREE.Matrix3().setFromMatrix4(m.matrix).invert(), rot = new THREE.Matrix3().setFromMatrix4(m.matrix);
+    for (let i = 0; i < P.count; i++) {
+      m.getVertexPosition(i, v).applyMatrix4(m.matrix); const f = nearest(skinGrid, v, nm.fromBufferAttribute(N, i).applyMatrix3(rot).normalize()); if (!f || f.d >= GAP) continue;
+      q.copy(f.n).multiplyScalar(GAP - f.d).applyMatrix3(inv); P.setXYZ(i, P.getX(i) + q.x, P.getY(i) + q.y, P.getZ(i) + q.z);
+    }
+    P.needsUpdate = true; m.geometry.computeBoundingBox(); m.geometry.computeBoundingSphere();
+    const shell = []; facesOf(m, shell); const shellGrid = gridOf(shell);
+    for (const b of body) {
+      const at = pts.get(b), N2 = b.geometry.attributes.normal, d = new Float32Array(at.length * 3), inv2 = new THREE.Matrix3().setFromMatrix4(b.matrix).invert(), rot2 = new THREE.Matrix3().setFromMatrix4(b.matrix); let moved = 0;
+      at.forEach((x, i) => {
+        const f = nearest(shellGrid, x, nm.fromBufferAttribute(N2, i).applyMatrix3(rot2).normalize()); if (!f || f.d <= -GAP) return;
+        if (f.p.distanceTo(x) > Math.abs(f.d) + 1e-3 * H) return;   // (not straight under the face: past the piece's edge)
+        q.copy(f.n).multiplyScalar(-Math.min(DEEP, f.d + GAP)).applyMatrix3(inv2); q.toArray(d, i * 3); moved++;
+      });
+      if (!moved) continue;
+      const g = b.geometry; g.morphTargetsRelative = true; (g.morphAttributes.position ||= []).push(new THREE.Float32BufferAttribute(d, 3));
+      (b.userData.under ||= []).push(m.name);
+    }
+  }
+  for (const b of body) if (b.userData.under) { b.updateMorphTargets(); b.morphTargetInfluences.fill(0); }
+}
 // The man's brows. The model draws them as one heavy band laid straight across the face, its lower edge down over the
 // tops of the eyes: from any way off, band and eyes read as a pair of dark glasses, and the band has too few points to be
 // reshaped. So it's folded away (its points drawn together into nothing) and a pair of our own is laid on the face: each
@@ -385,10 +432,11 @@ export class Hero {
       host.add(m); m.bind(new THREE.Skeleton(list, m.skeleton.boneInverses), m.bindMatrix);
       m.material = m.name === 'hair' ? this.curlsMat : /Crown/.test(m.name) ? this.wreathMat : mat; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
     }
+    if (host && !looks) overBody(wear.filter((m) => m.userData.shell && m.parent === host), host.children.filter((m) => /^base_/.test(m.name)));
   }
   // Show the armour worn ({ head, body, legs }: item ids). The pack's hero carries each piece as a part of its own
   // (wear_<id>, from dress) and its own body in three (base_head, base_body, base_legs): armour takes the place of the
-  // body under it, and a helmet the hair's. The old model has none: nothing changes on it.
+  // body under it (a shell goes over it instead), and a helmet the hair's. The old model has none: nothing changes on it.
   wear(ids = {}) { this.wearing = ids; this.show(); }
   // Show the armour worn and the look chosen: the chosen hair, beard and wreath (hair and wreath go under a helmet, the
   // beard stays), the body's colours
@@ -396,7 +444,10 @@ export class Hero {
     const P = this.parts; if (!P) return; const ids = this.wearing || {}, L = this.look; this.skin = null;
     const on = (slot) => !!(ids[slot] && P['wear_' + ids[slot]]), part = (list, id) => list.find((x) => x[0] === id)?.[2];
     for (const [n, m] of Object.entries(P)) if (n.startsWith('wear_')) m.visible = Object.values(ids).includes(n.slice(5)); else if (LOOK_PARTS.has(n)) m.visible = false;
-    if (P.base_body) P.base_body.visible = !on('body'); if (P.base_legs) P.base_legs.visible = !on('legs');
+    // (a shell, the Corinthian set's bare corslet and greaves, goes over the body and its tunic rather than in their place)
+    const hides = (slot) => on(slot) && !P['wear_' + ids[slot]].userData.shell;
+    if (P.base_body) P.base_body.visible = !hides('body'); if (P.base_legs) P.base_legs.visible = !hides('legs');
+    for (const n of ['base_head', 'base_body', 'base_legs']) P[n]?.userData.under?.forEach((w, k) => { P[n].morphTargetInfluences[k] = P[w].visible ? 1 : 0; });   // (the body drawn in under the shells worn: overBody)
     this.cape?.show(!!ids.cape, on('body'));
     const want = [part(BEARDS, L.beard), ...(on('head') ? [] : [part(HAIRS, L.hair), part(WREATHS, L.wreath)])].flat();
     for (const n of want) if (n && P[n]) P[n].visible = true;

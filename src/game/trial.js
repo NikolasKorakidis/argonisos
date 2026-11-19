@@ -151,7 +151,7 @@ export class Trial {
     g.flashSky(0.6); addShake(0.6); burst(u.at.clone().setY(u.at.y + 2), { color: 0xffe08a, n: 60, speed: 4, size: 0.08, grav: -2, life: 2 }); g.sound?.('thunder'); setTimeout(() => g.sound?.('reveal'), 900);
     const P = POWERS[this.st.power];
     g.hud.region(P.name, 'Zeus grants you the power of the beast. Press F to use it.');
-    setTimeout(() => g.hud.toast(tier === 1 ? 'You can now work <b>lightstone</b>: new weapons and Cretan armour at the workbench.' : 'You can now make the <b>Cretan bow</b>. Zeus\'s storm over Valtos still holds: that trial is yet to come.'), 4500);
+    setTimeout(() => g.hud.toast(tier === 1 ? 'You can now work <b>lightstone</b>: new weapons and Cretan armour at the workbench.' : 'You can now make the <b>Cretan bow</b> and bronze <b>Corinthian armour</b>. Zeus\'s storm over Valtos still holds: that trial is yet to come.'), 4500);
     g.crafting.discover(); this.drawPower();
   }
   choosePower(boss) { this.st.power = boss === 'minotaur' ? 'roar' : 'claw'; this.g.hud.toast(`Power set: <b>${POWERS[this.st.power].name}</b>`); this.drawPower(); }
