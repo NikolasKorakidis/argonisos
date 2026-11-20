@@ -94,8 +94,9 @@ const envCopy = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: { src: {
   vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }', fragmentShader: 'uniform sampler2D src; uniform float k; void main() { gl_FragColor = texelFetch(src, ivec2(gl_FragCoord.xy), 0) * vec4(vec3(k), 1.0); }' }));
 // (and three's bake draws a background box with a material it makes and throws away each time, which took its shader
 // program with it: compiled again at every bake, the worst hitch of a walk. A box like it, drawn once the same way and
-// kept, holds that program)
-const keepBg = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false })), keepRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false });
+// kept, holds that program. It must never be culled: drawn with the game's camera, which since Patch 22 starts at the hero
+// rather than the origin, it fell out of view, was never drawn, and every bake linked the program afresh: a freeze each time)
+const keepBg = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false })), { frustumCulled: false }), keepRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false });
 function refreshEnvironment() {
   const fresh = pmrem.fromScene(envScene, 0.04);
   if (!envRT) { envRT = fresh; scene.environment = envRT.texture; const prev = renderer.getRenderTarget(); renderer.setRenderTarget(keepRT); renderer.render(keepBg, camera); renderer.setRenderTarget(prev); envRaw = pmrem.fromScene(envScene, 0.04); }
