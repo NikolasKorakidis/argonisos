@@ -1,0 +1,45 @@
+# Checks every pull request before it can be merged into main.
+# GitHub's runners have no GPU (WebGL falls back to slow software rendering), so the game's own suites, which time
+# frames and compare pictures, run on a real machine (npm test). Here runs everything that needs no GPU, as
+# `npm run check` does locally: the repository guard (nothing private or licensed tracked, every JSON file parses), lint,
+# the stylesheet, the tests' in-page imports, import cycles, unused files and dependencies, and the world's fingerprint
+# (the generated land, sites and trees must come out exactly as recorded). The licensed pack files are not in this
+# repo, so none of it may need them.
+name: Checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  base:
+    name: Pull request goes to main
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse pull requests into other branches (a stacked PR never reaches the live site)
+        env:
+          BASE: ${{ github.base_ref }}
+        run: |
+          if [ "$BASE" != "main" ]; then
+            echo "::error::This pull request targets '$BASE'. Open it against main instead, or it will never reach GitHub Pages."
+            exit 1
+          fi
+  checks:
+    name: Guard, lint, imports, unused code, world fingerprint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      - run: npm run check

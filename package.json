@@ -9,11 +9,13 @@
     "test:update": "node tests/run.mjs visual --update",
     "test:world": "node tests/run.mjs world",
     "lint": "eslint .",
-    "cycles": "madge --circular --extensions js src/main.js src/world/terrain-worker.js",
+    "cycles": "madge --circular --extensions js src/main.js src/world/terrain-worker.js src/dev/browser.js src/dev/anim/main.js",
     "deadcode": "knip --include files,dependencies,unlisted,unresolved",
-    "check": "npm run lint && npm run lint:css && npm run cycles && npm run deadcode && npm run test:world",
+    "check": "npm run guard && npm run lint && npm run lint:css && npm run snippets && npm run cycles && npm run deadcode && npm run test:world",
     "playtest": "node tests/bot/playtest.mjs",
-    "lint:css": "node tools/check-css.mjs"
+    "lint:css": "node tools/check-css.mjs",
+    "guard": "node tools/check-repo.mjs",
+    "snippets": "node tools/check-snippets.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

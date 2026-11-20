@@ -15,12 +15,13 @@ if (!fs.existsSync(DIR)) { execFileSync('git', ['init', '-q', '--bare', '-b', 'm
 git('add', '-f', '--all', '--', ...PATHS, ':(exclude)incoming assets/catalogue/*.blend*', ':(exclude)assets/models/pack/all', ':(exclude)assets/models/pack/all-lod*');   // (-f: this repo's .gitignore names them; every model on its own is made again by everything.mjs)
 // ...except the few of pack/all the game itself loads (the cape, the chests, bones, the temple's furnishings): the public
 // site is built from this backup (.github/workflows/pages.yml), so those must be in it. Found in the code: whole names
-// ('all/<pack>/<model>') and lists spelled out for a prefix ([...].map((k) => 'all/<pack>/<prefix>' + k)).
+// ('all/<pack>/<model>') and lists spelled out for a prefix ([...].map((k) => 'all/<pack>/<prefix>' + k)), the prefix
+// perhaps empty (site-pack.js's temple goblets, plate, crown and pillar were missed, so the live site lacked them).
 const used = new Set();
 for (const f of fs.readdirSync(path.join(ROOT, 'src'), { recursive: true }).filter((f) => f.endsWith('.js') && !f.startsWith('dev'))) {
   const src = fs.readFileSync(path.join(ROOT, 'src', f), 'utf8');
   for (const m of src.matchAll(/'(all\/[\w-]+\/[\w-]+[a-z0-9])'/g)) used.add(m[1]);
-  for (const m of src.matchAll(/\[([^[\]]*)\]\.map\(\(k\) => '(all\/[\w-]+\/[\w-]+)' \+ k\)/g)) for (const k of m[1].matchAll(/'([\w-]+)'/g)) used.add(m[2] + k[1]);
+  for (const m of src.matchAll(/\[([^[\]]*)\]\.map\(\(k\) => '(all\/[\w-]+\/[\w-]*)' \+ k\)/g)) for (const k of m[1].matchAll(/'([\w-]+)'/g)) used.add(m[2] + k[1]);
 }
 // (and any quoted '<pack>/<model>' that names a file there, for lists spelled without the 'all/' they're loaded with)
 for (const f of fs.readdirSync(path.join(ROOT, 'src'), { recursive: true }).filter((f) => f.endsWith('.js') && !f.startsWith('dev'))) {
