@@ -16,7 +16,8 @@ import { clamp, lerp } from '../util/math.js';
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const _lv = new THREE.Vector3();
 const SWIM_DEPTH = 1.35, RADIUS = 0.38;
-// The dodge roll (Space with the guard up, as in Valheim): its stamina, and the stretch of it no blow lands (seconds in)
+// The dodge roll (Space with RMB held, as in Valheim: with any weapon, the bow or bare hands): its stamina, and the
+// stretch of it no blow lands (seconds in)
 const DODGE = { cost: 12, safe: [0.05, 0.55] };
 // The free camera while seated (seat.look: sitting on the ground, game/acts.js): how far from the hero it may go (m), how fast WASD and Q / E move that point (m/s, Shift three times as fast), how close to the
 // ground it may come (m), the pitch it may reach either way (radians) and the wheel's range (m)
@@ -40,7 +41,7 @@ export class Player {
     this.bossCam = false; this.bossK = 0; this.focus = null;   // (the boss camera: BOSS_CAM)
     this.onGround = true; this.swimming = false; this.sprinting = false; this.sneaking = false; this.jumped = false; this.jumpBuf = 0;
     this.speed = 0; this.winded = false; this.swing = 0; this.swingKind = 'punch'; this.swingHit = false; this.equip = null; this.bow = null;
-    this.strikeMove = null; this.combo = 0; this.comboT = 0; this.dodge = null;
+    this.strikeMove = null; this.combo = 0; this.comboT = 0; this.dodge = null; this.guardUp = false;
     this.stats = new Stats(); this.dead = false; this.deadT = 0; this.lean = 0; this.bank = 0; this.lastYaw = 0; this.swimD = 0; this.sprintD = 0;
     this.speedMod = 0;            // from equipment (-0.05 per heavy item etc.)
     this.overweight = false; this.frozen = false;  // frozen: no control (menus, cutscenes)
@@ -157,8 +158,9 @@ export class Player {
     // ---- jump and gravity
     if (ctl && hit('Space')) this.jumpBuf = 0.15;
     if (this.jumpBuf > 0) this.jumpBuf -= dt;
-    // ...or, with the guard up, a dodge roll the way you're going (straight back with no direction held)
-    if (this.jumpBuf > 0 && this.blocking && this.onGround && !this.swimming && !this.dodge && held > 0.9 && H.has('roll')) {
+    // ...or, with RMB held (the guard up, the bow drawn, or bare hands: guardUp, combat.js), a dodge roll the way you're
+    // going (straight back with no direction held)
+    if (this.jumpBuf > 0 && (this.blocking || this.guardUp) && this.onGround && !this.swimming && !this.dodge && held > 0.9 && H.has('roll')) {
       this.jumpBuf = 0;
       const yaw = want.lengthSq() ? Math.atan2(want.x, want.z) : this.yaw + Math.PI;
       if (!S.use(DODGE.cost, 'jumping')) this.onToast?.('Too tired to roll');

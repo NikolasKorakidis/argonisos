@@ -62,7 +62,7 @@ export const ITEMS = {
   crudeBow: { name: 'Crude Bow', type: 'weapon', skill: 'bow', bow: true, hands: 2, stack: 1, weight: 1.5, dur: 100, dmg: [[18, 'pierce']], block: 5, backstab: 3, speed: -0.05, icon: 'bow' },
   crudeSpear: { name: 'Crude Spear', type: 'weapon', skill: 'spear', hands: 2, stack: 1, weight: 1.5, dur: 100, dmg: [[20, 'pierce']], block: 6, parry: 2, backstab: 3, knock: 0.1, speed: -0.05, icon: 'spear', throwable: true },
   crudeShield: { name: 'Crude Shield', type: 'shield', skill: 'blocking', hands: 1, stack: 1, weight: 4, dur: 200, block: 20, parry: 1.5, speed: -0.05, icon: 'shield' },
-  crudeTowerShield: { name: 'Crude Tower Shield', type: 'shield', skill: 'blocking', hands: 1, stack: 1, weight: 4, dur: 250, block: 35, speed: -0.2, icon: 'towerShield' },
+  crudeTowerShield: { name: 'Crude Tower Shield', type: 'shield', skill: 'blocking', hands: 1, stack: 1, weight: 4, dur: 250, block: 35, parry: 0, speed: -0.2, icon: 'towerShield' },
   lightstoneSpear: { name: 'Lightstone Spear', type: 'weapon', skill: 'spear', hands: 2, stack: 1, weight: 1.5, dur: 150, dmg: [[26, 'pierce']], block: 10, parry: 2, backstab: 3, knock: 0.2, speed: -0.05, icon: 'spearLight', throwable: true },
   lightstoneAxe: { name: 'Lightstone Axe', type: 'weapon', skill: 'axe', chop: 2, hands: 1, stack: 1, weight: 1.5, dur: 100, dmg: [[20, 'slash']], block: 10, parry: 2, backstab: 3, knock: 0.15, speed: -0.05, icon: 'axeLight' },
   lightstoneDagger: { name: 'Lightstone Dagger', type: 'weapon', skill: 'dagger', hands: 1, stack: 1, weight: 0.3, dur: 100, dmg: [[6, 'slash'], [6, 'pierce']], block: 5, parry: 4, backstab: 10, knock: 0.1, speed: 0.05, icon: 'daggerLight' },

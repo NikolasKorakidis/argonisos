@@ -28,13 +28,14 @@ const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 // how long before a blow lands the attacker stops turning after you (a heavy one a little sooner): long enough to see it
 // coming and step out of the way
 const COMMIT = 0.3;
-// drops: [item, min, max, chance]. fearFire: keeps out of the firelight (a lit fire within 7 m, or your lit torch);
+// flee: how far an animal notices you and bolts, in metres (a deer from 18 m, as in Valheim, so that the bow and
+// sneaking are how you get one: senseK). drops: [item, min, max, chance]. fearFire: keeps out of the firelight (a lit fire within 7 m, or your lit torch);
 // fury: once you hurt it, or its family, it fights through fire until the fight is over (c.angered); torchShy: your torch
 // is no fire to it, but at its first sight of it in a fight it backs off that many seconds (c.torchSeen)
 export const TYPES = {
-  rabbit: { name: 'Rabbit', hp: [3, 5], speed: [3 * FT, 15 * FT], passive: true, flee: 10 * FT, r: 0.3, h: 0.6, hops: true, mob: [1, 3], drops: [['rawMeat', 1, 1, 1], ['leather', 1, 1, 0.5], ['sharpBone', 1, 1, 0.2]] },
-  fox: { name: 'Fox', hp: [7, 9], speed: [8 * FT, 20 * FT], passive: true, flee: 15 * FT, r: 0.4, h: 0.6, mob: [1, 2], drops: [['rawMeat', 1, 2, 1], ['foxHide', 1, 2, 0.5], ['sharpBone', 1, 1, 0.2]] },
-  deer: { name: 'Deer', hp: [10, 14], speed: [5 * FT, 25 * FT], passive: true, flee: 20 * FT, r: 0.6, h: 1.4, mob: [1, 2], drops: [['rawMeat', 3, 4, 1], ['leather', 4, 4, 1], ['sharpBone', 1, 2, 0.2], ['deerHide', 1, 2, 1]] },
+  rabbit: { name: 'Rabbit', hp: [3, 5], speed: [3 * FT, 15 * FT], passive: true, flee: 8, r: 0.3, h: 0.6, hops: true, mob: [1, 3], drops: [['rawMeat', 1, 1, 1], ['leather', 1, 1, 0.5], ['sharpBone', 1, 1, 0.2]] },
+  fox: { name: 'Fox', hp: [7, 9], speed: [8 * FT, 20 * FT], passive: true, flee: 10, r: 0.4, h: 0.6, mob: [1, 2], drops: [['rawMeat', 1, 2, 1], ['foxHide', 1, 2, 0.5], ['sharpBone', 1, 1, 0.2]] },
+  deer: { name: 'Deer', hp: [10, 14], speed: [5 * FT, 25 * FT], passive: true, flee: 18, r: 0.6, h: 1.4, mob: [1, 2], drops: [['rawMeat', 3, 4, 1], ['leather', 4, 4, 1], ['sharpBone', 1, 2, 0.2], ['deerHide', 1, 2, 1]] },
   hog: { name: 'Hog', hp: [50, 65], speed: [8 * FT, 25 * FT], aggro: 10 * FT, retaliate: true, dmg: [8, 12, 'pierce'], reach: 1.6, fearFire: true, fury: true, r: 0.6, h: 0.9, mob: [1, 3], drops: [['rawMeat', 1, 3, 1], ['leather', 3, 3, 1], ['sharpBone', 1, 1, 0.2]] },
   dryadling: { name: 'Dryadling', hp: [15, 25], speed: [3 * FT, 15 * FT], sight: 18, dmg: [4, 6, 'slash'], reach: 1.4, fearFire: true, torchShy: 2, r: 0.35, h: 1.1, mob: [1, 3], weak: ['fire'], resist: ['poison'], drops: [['resin', 1, 2, 1], ['wood', 2, 4, 0.5]], blood: 0x6a8a3a },
   dryad: { name: 'Dryad', hp: [36, 44], block: 14, speed: [5 * FT, 12 * FT], sight: 24, dmg: [6, 8, 'slash'], ranged: { dmg: [4, 6, 'pierce'], range: 16, every: 4.5 }, reach: 1.7, r: 0.45, h: 2, mob: [2, 4], weak: ['fire'], resist: ['poison'], drops: [['resin', 1, 4, 1], ['wood', 2, 4, 1], ['dryadHeart', 1, 1, 0.2]], blood: 0x6a8a3a },
@@ -127,12 +128,13 @@ export class Creatures {
     }
   }
   // How far it notices you, as a share of its normal range: full in its field of view (about 220° in front), a third
-  // behind where it can only hear you; less while grazing; half when you sneak; more when you sprint
+  // behind where it can only hear you; less while grazing; half when you sneak, and less again the better you sneak (the
+  // Sneaking skill: about 0.3 at its height) and with a bow made for hunting in your hands (its sneak); more when you sprint
   senseK(c, pp, P) {
     const toP = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z), off = Math.abs(Math.atan2(Math.sin(toP - c.yaw), Math.cos(toP - c.yaw)));
     let k = off < 1.9 ? 1 : 0.33;
     if (c.state === 'graze') k *= 0.7;
-    if (P.sneaking) k *= 0.5; else if (P.sprinting) k *= off < 1.9 ? 1.2 : 2;
+    if (P.sneaking) k *= 0.5 * (1 - 0.004 * ((P.stats.skills.sneaking?.level ?? 1) - 1)) * (1 - (this.g.bow?.()?.sneak || 0)); else if (P.sprinting) k *= off < 1.9 ? 1.2 : 2;
     return k;
   }
   // ---- damage dealt to a creature. Returns the damage done
@@ -188,7 +190,7 @@ export class Creatures {
       if (d > 140 && !c.boss) { this.remove(c); continue; }
       c.t -= dt; c.atkCd -= dt; c.rangedCd -= dt; c.hitT -= dt; if (c.poise) c.poise = Math.max(0, c.poise - dt * c.max * 0.03); c.flash = Math.max(0, c.flash - dt * 4); c.body.flash(c.flash, c.glow);
       // decide
-      if (P.dead && c.state === 'chase') c.state = 'idle';
+      if (P.dead && c.state === 'chase') { c.state = 'idle'; c.aware = false; }   // (a fight over, it is caught unawares again: a sneak attack works on it)
       if (P.dead || calm(c)) c.angered = c.torchSeen = false;   // (the fight is over: it calmed down or lost you)
       // the fire it keeps away from: a lit one near it, or the torch in your hand (no fire to a dryadling, torchShy), and
       // none once it's angered (fury)
@@ -220,7 +222,7 @@ export class Creatures {
         let away = Math.atan2(c.pos.x - pp.x, c.pos.z - pp.z); if (M?.state === 'flee' && c.pos.distanceTo(M.pos) > 3) away = Math.atan2(M.pos.x - c.pos.x, M.pos.z - c.pos.z);
         face = away + (T.hops ? (Math.sin(c.t * 3.3) > 0 ? 0.6 : -0.6) : Math.sin(c.t * 2) * 0.4); want = T.speed[1] * (brood ? 0.85 : 1);
         if (c.retreat) { if (c.t <= 0) { c.state = 'chase'; c.retreat = false; } }   // (only backing off from your torch: then back at you)
-        else if (c.t <= 0 && d > 25) { c.state = 'idle'; c.t = rr(2, 5); }
+        else if (c.t <= 0 && d > 25) { c.state = 'idle'; c.t = rr(2, 5); c.aware = false; }
       } else if (c.state === 'chase' || c.state === 'attack') {
         const wp = g.structures?.navTarget?.(c.pos, pp) || pp;   // in the Labyrinth: round by the gaps in the rings (until it's broken)
         face = Math.atan2(wp.x - c.pos.x, wp.z - c.pos.z); want = T.speed[1] * (T.heavy ? 0.75 : 0.85) * (c.pace ?? 1);
@@ -231,7 +233,7 @@ export class Creatures {
         const stopAt = T.reach + T.r * 0.5; if (!shy && !wait && d < stopAt + (c.boss ? 0 : c.speed * 0.25)) want = 0;   // (easing off in time, not running on into you)
         if (d < stopAt && !shy) { want = 0; if (c.atkCd <= 0 && !c.move && !(T.moves && c.boss) && !wait && !(c.rise > 0)) this.strike(c); }   // (a boss with moves of its own makes them: trial.js)
         if (T.ranged && c.state === 'chase' && d > 5 && d < T.ranged.range && c.rangedCd <= 0 && !c.move) { c.rangedCd = T.ranged.every + rr(-1, 1); this.strike(c, 'throw'); }
-        if (d > 60 || (c.t < -30 && d > 30)) { c.state = 'idle'; c.t = rr(2, 4); }
+        if (d > 60 || (c.t < -30 && d > 30)) { c.state = 'idle'; c.t = rr(2, 4); c.aware = false; }
       } else if (c.state === 'alert' || c.state === 'throw') {
         face = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z); want = 0;   // freeze and stare (or stand and throw)
       } else if (M) {   // a young one beside its mother: it keeps to its place by her, trotting to catch up when she moves off
@@ -253,7 +255,7 @@ export class Creatures {
         if (c.state === 'throw' && !c.hitDone) g.combat.charge?.(c, c.atkE / c.hitAt);   // (the glow gathering in her hand)
         if (!c.hitDone && c.atkE >= c.hitAt) { c.hitDone = true;
           if (c.state === 'throw') this.throwThorn(c);
-          else { const front = Math.abs(angDiff(toP, c.yaw)) < (T.heavy ? 1 : 0.75); c.blowAt = { e: c.atkE, hit: front && d < T.reach + T.r + 0.6 && !P.dead };
+          else { const front = Math.abs(angDiff(toP, c.yaw)) < (T.heavy ? 1 : 0.75), walled = !P.dead && front && this.walled(c, pp, d); c.blowAt = { e: c.atkE, hit: front && d < T.reach + T.r + 0.6 && !P.dead && !walled, walled };
             const fall = c.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), c.boss ? T.reach * 0.8 : 3);
             if (c.blowAt.hit) g.combat.hitPlayer(c, T.dmg); else if (T.heavy) { dust(fall, c.boss ? 12 : 18, undefined, c.boss ? 0.6 : 0.35); addShake(c.boss ? 0.7 * this.near(c) : 0.3); }
             if (T.heavy) g.sound?.('slam', { at: fall, big: c.boss });   // (a giant's or the Minotaur's blow comes down like a slam, hit or miss)
@@ -377,6 +379,12 @@ export class Creatures {
   }
   // what a creature stands on: the ground, or a floor or a site's steps within reach
   groundAt(x, z, y) { const g = this.g; return Math.max(groundAt(x, z), g.build?.floorAt(x, z, y) ?? -1e9, g.structures?.floorAt(x, z, y) ?? -1e9); }
+  // A wall (one you built, or a site's) between it and you, standing taller than your waist and its own: a blow struck
+  // at you through it goes into the wall instead (hitBuildings), so inside your house you're safe from what's outside
+  walled(c, pp, d) {
+    const dx = (pp.x - c.pos.x) / Math.max(d, 0.01), dz = (pp.z - c.pos.z) / Math.max(d, 0.01), top = Math.max(c.pos.y, pp.y) + 0.8, low = Math.min(c.pos.y, pp.y) + 1.5;
+    return !!this.g.colliders.pick(c.pos.x, c.pos.z, dx, dz, Math.max(0.1, d - 0.25), (k) => !k.low && (k.ref?.piece || k.ref?.site) && (k.h === undefined || ((k.y ?? 0) + k.h > top && (k.y ?? 0) < low)));
+  }
   hitBuildings(c) {
     const B = this.g.build; if (!B) return; const f = new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw));
     const hit = this.g.colliders.pick(c.pos.x, c.pos.z, f.x, f.z, c.T.reach + c.T.r, (k) => k.ref?.piece); if (hit) B.damage(hit.ref.piece, rr(c.T.dmg[0], c.T.dmg[1]) * c.dmgK * (c.T.heavy ? 2 : 1));
