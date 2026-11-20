@@ -18,6 +18,7 @@ import { GMAT, amphora, pithos, bowl, jug, tripod, acroterion, antefixes, cartWh
 import { wettable } from './wetness.js';
 import { siteProp, sitePropAt, piece, pieceAt, hasPiece, chestParts } from './site-pack.js';
 import { buildTown, buildSpot } from './town.js';
+import { mergeGeometries } from '../../vendor/three/jsm/utils/BufferGeometryUtils.js';
 import { ULTRA } from '../render/quality.js';
 
 const rnd = (() => { let s = 77; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; })(), rr = (a, b) => a + rnd() * (b - a);
@@ -198,6 +199,56 @@ function mergeByMat(P) {
   return out;
 }
 
+// ---- Far versions of the big sites (perf review, 20 Nov: from inside the forest the temple and the labyrinth, a kilometre
+// off behind the woods and the mist, were 172 draws and half a million triangles). Past FAR_SITE a site's standing parts
+// are drawn merged, one mesh for each look (material, or materials alike in every way that shows) and shadow, from what
+// stood when it was made: the same shapes, so it looks the same and casts the same shadow, in a dozen draws or so where
+// there were up to a hundred. Pieces too small to cover a pixel or two there (under PX_R across) are left out; the fires,
+// the glows and whatever moves (the statues, the instanced columns, already one draw each) stay as they are. Its
+// shapes are only on the card: nothing aims at or walks on it (the near meshes stay for that, hidden), so its copies in
+// memory are let go once sent.
+const FAR_SITE = ULTRA ? 450 : 350, PX_R = 0.4, PX_K = 1 / 600, FAR_MIN = 8;   // (PX_K: a merged part whose radius is under this share of its distance is about two pixels across at 720p, four at 1440p)
+const plainMat = (m) => m.onBeforeCompile === THREE.Material.prototype.onBeforeCompile;
+const matKey = (m) => (plainMat(m) ? [m.type, m.map?.uuid, m.normalMap?.uuid, m.color?.getHex(), m.emissive?.getHex(), m.emissiveIntensity, m.roughness, m.metalness, m.vertexColors, m.side, m.alphaTest, m.flatShading, m.fog].join('|') : m.uuid);
+function farVersion(grp) {
+  const by = new Map(), from = [], todo = [], inv = new THREE.Matrix4().copy(grp.matrixWorld).invert(), seen = (o) => { for (let p = o; p && p !== grp; p = p.parent) if (!p.visible) return false; return true; };
+  grp.updateMatrixWorld(true);
+  // (first what goes in and how it groups: a site whose every piece has a look of its own, the temple's each with its own
+  // picture, would gain nothing for the copy, and is left as it is)
+  grp.traverse((m) => {
+    if (!m.isMesh || m.isInstancedMesh || m.isSkinnedMesh || !seen(m) || m.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender) return;
+    const mats = [].concat(m.material), geo = m.geometry; if (mats.some((x) => x.transparent || x.userData.decal)) return;
+    geo.boundingSphere || geo.computeBoundingSphere(); if (geo.boundingSphere.radius * m.matrixWorld.getMaxScaleOnAxis() < PX_R) { from.push(m); return; }   // (too small to see there: just hidden)
+    // (one part for each material it has: one with several is taken apart by its groups)
+    const parts = (Array.isArray(m.material) ? geo.groups.map((gr) => [gr, mats[gr.materialIndex]]) : [[null, m.material]]).map(([gr, mt]) => ({ gr, mt, want: ['position', 'normal', ...(mt.map || mt.normalMap ? ['uv'] : []), ...(mt.vertexColors ? ['color'] : [])] }));
+    if (!parts.every((q) => q.want.every((n) => geo.attributes[n]))) return;   // (something unlike the rest: left as it is)
+    for (const q of parts) q.key = matKey(q.mt) + '|' + q.want.join() + '|' + m.castShadow + m.receiveShadow;
+    from.push(m); todo.push([m, parts]); for (const q of parts) by.set(q.key, null);
+  });
+  if (from.length < FAR_MIN || by.size > todo.length * 0.6) { grp.userData.far = null; return; }
+  const mm = new THREE.Matrix4();
+  for (const [m, parts] of todo) {
+    const geo = m.geometry, flat = parts[0].gr ? geo.toNonIndexed() : null, src = flat || geo; mm.multiplyMatrices(inv, m.matrixWorld);
+    for (const { gr, mt, want, key } of parts) {
+      const g = new THREE.BufferGeometry(), i0 = gr ? gr.start : 0, cnt = gr ? gr.count : src.attributes.position.count;
+      for (const n of want) { const a = src.attributes[n], k = a.itemSize; let f;
+        if (!a.isInterleavedBufferAttribute && !a.normalized && a.array instanceof Float32Array) f = a.array.slice(i0 * k, (i0 + cnt) * k);   // (most: a plain copy)
+        else { f = new Float32Array(cnt * k); for (let i = 0; i < cnt; i++) for (let c = 0; c < k; c++) f[i * k + c] = a.getComponent(i0 + i, c); }
+        g.setAttribute(n, new THREE.BufferAttribute(f, k)); }
+      const ix = !gr && geo.index ? Uint32Array.from(geo.index.array) : new Uint32Array(cnt); if (gr || !geo.index) for (let i = 0; i < cnt; i++) ix[i] = i;
+      g.setIndex(new THREE.BufferAttribute(ix, 1)); g.applyMatrix4(mm);
+      (by.get(key) || by.set(key, { mt, cast: m.castShadow, recv: m.receiveShadow, gs: [] }).get(key)).gs.push(g);
+    }
+  }
+  const group = new THREE.Group(); group.visible = false;
+  for (const { mt, cast, recv, gs } of by.values()) {
+    const g = mergeGeometries(gs); for (const x of gs) x.dispose(); if (!g) continue; g.computeBoundingSphere(); g.computeBoundingBox();
+    for (const a of [...Object.values(g.attributes), g.index]) a.onUpload(function () { this.array = null; });   // (on the card only, see above)
+    const mesh = new THREE.Mesh(g, mt); mesh.castShadow = cast; mesh.receiveShadow = recv; mesh.raycast = () => {}; mesh.userData.r = g.boundingSphere.radius; group.add(mesh);
+  }
+  grp.add(group); grp.userData.far = { group, from, on: false };
+}
+
 // ---- a marble statue of Zeus: the hero's rigged figure, posed and dressed in marble, a gilded bolt in hand
 async function statue(group, x, y, z, s, rot, o = {}) {
   const obj = await loadFBX('hero_rig'); const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3()); obj.scale.setScalar((1.95 / size.y) * s);
@@ -281,8 +332,18 @@ export class Structures {
   }
   // register helpers (site-local → world, sites only rotate about y)
   site(s, rot = 0) { const grp = new THREE.Group(); grp.position.set(s.x, s.y, s.z); grp.rotation.y = rot; grp.userData.viewR = VIEW_R[s.kind] ?? 800; this.g.scene.add(grp); this.groups.push(grp); return { grp, s, rot, P: [] }; }
-  // sites far off are not drawn at all (the haze has them long before): checked twice a second
-  cull(cam, dt) { this.cam = cam; this.cullT = (this.cullT || 0) - dt; if (this.cullT > 0) return; this.cullT = 0.5; for (const g of this.groups) g.visible = g.position.distanceTo(cam) < g.userData.viewR * (1 + Math.max(0, cam.y - 60) / 200); }
+  // sites far off are not drawn at all (the haze has them long before): checked twice a second. A big one further off than
+  // FAR_SITE is drawn as its far version (farVersion), made once, a site a check, from the first time it is wanted.
+  cull(cam, dt) {
+    this.cam = cam; this.cullT = (this.cullT || 0) - dt; if (this.cullT > 0) return; this.cullT = 0.5; let made = false;
+    for (const g of this.groups) { const d = g.position.distanceTo(cam); g.visible = d < g.userData.viewR * (1 + Math.max(0, cam.y - 60) / 200);
+      const F = g.userData.far; if (F === null || !g.visible) continue;   // (null: too small a site for one)
+      if (!F && d > FAR_SITE - 60 && !made) { made = true; farVersion(g); continue; }
+      if (F && F.on !== d > FAR_SITE) { F.on = d > FAR_SITE; F.group.visible = F.on; for (const m of F.from) m.visible = !F.on; }
+      if (F?.on) for (const m of F.group.children) m.visible = m.userData.r > d * PX_K; }   // (and what is under a couple of pixels across from here left out)
+  }
+  // a site broken (or put back) drops its far version, made again when next wanted from what stands then
+  dropFar(g) { const F = g.userData.far; if (!F) return; for (const m of F.from) m.visible = true; F.group.removeFromParent(); F.group.traverse((m) => m.geometry?.dispose()); g.userData.far = undefined; }
   // the top of the tallest site building within r of pos (for the mist's ceiling), or -Infinity
   tallestNear(pos, r) {
     let top = -Infinity;
@@ -324,7 +385,7 @@ export class Structures {
   }
   // Break a site (live: as the boss lands, everything falling in turn; else at once, as a save loads into a broken one)
   ruin(key, { live = true } = {}) {
-    const R = this.ruins?.[key]; if (!R || R.broken) return false; R.broken = true; const C = this.g.colliders;
+    const R = this.ruins?.[key]; if (!R || R.broken) return false; R.broken = true; const C = this.g.colliders; this.dropFar(R.ctx.grp);
     for (const m of R.wholeMeshes) { m.removeFromParent(); m.geometry.dispose(); } R.wholeMeshes = [];
     C.removeGroup('ruin:' + key); C.addGroup('rubble:' + key, R.rubble.map((c) => ({ ...c, low: true, ref: { site: true } })));
     R.debrisG.visible = true; if (key === 'labyrinth' && this.lab) this.lab.broken = true;
@@ -332,7 +393,7 @@ export class Structures {
     else this.settle(R);
     SHADOW.farDirty = true; return true;
   }
-  settle(R) { for (const f of R.falls) { f.g.removeFromParent(); f.g.traverse((o) => o.geometry?.dispose()); } R.falls = []; R.fallenG.visible = true; SHADOW.farDirty = true; }
+  settle(R) { this.dropFar(R.ctx.grp); for (const f of R.falls) { f.g.removeFromParent(); f.g.traverse((o) => o.geometry?.dispose()); } R.falls = []; R.fallenG.visible = true; SHADOW.farDirty = true; }
   // Where a boss came down (at, site-local [x, z]): the cracked floor (crackSheet, over the site's floor of radius r), the
   // flagstones round the crater heaved up on edge and broken, lumps of earth thrown up between them (glow: the Chimera's,
   // fissures lit from below)
