@@ -597,7 +597,9 @@ export class Build {
         for (const q of this.near(p.pos.x, p.pos.z, 1.5)) if (q.def.cook && q.state.cook.length) heated.add(q);
       }
     }
-    for (const q of heated) { let ch = false; for (const c of q.state.cook) { const was = c.t >= c.need; c.t += dt; if (!was && c.t >= c.need) ch = true; } if (ch) this.drawCook(q); }
+    // (a piece done lets go a puff of steam, and the stand sizzles once however many came done together, sound.js cooked:
+    // you hear it's ready from across the camp)
+    for (const q of heated) { let ch = false; q.state.cook.forEach((c, i) => { const was = c.t >= c.need; c.t += dt; if (!was && c.t >= c.need) { ch = true; dust(q.obj.localToWorld(new THREE.Vector3(-0.4 + i * 0.4, 1.02, 0)), 7, 0xe8e4dc, 0.22); } }); if (ch) { this.drawCook(q); g.sound?.('cooked', { at: q.obj.localToWorld(new THREE.Vector3(0, 0.95, 0)) }); } }
     // light from the shared pool (the nearest fires get it)
     for (const p of lights) { const fl = 1 + Math.sin(performance.now() * 0.013 + p.pos.x) * 0.1 + Math.random() * 0.06; askLight(p.lightPos ||= p.pos.clone().setY(p.pos.y + (p.def.fire ? 1 : 1.8)), (p.def.fire ? 26 : 9) * fl * Math.min(1, 0.4 + p.state.fuel / 3), p.def.fire ? 22 : 12); }
     if (this.chest && !input.uiOpen) this.closeChest();

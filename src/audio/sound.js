@@ -311,6 +311,24 @@ const SFX = {
   // the lyre's rising notes)
   reveal: () => { if (play('revealChime', { vol: 0.55, wet: 0.3, rate: [0.99, 1.01], gap: 1 })) return; SFX.chime(); },
   chime: () => [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => pluck(f, { vol: 0.1, delay: i * 0.14, pan: -0.3 + i * 0.2 })),
+  // a skill found or up a level (hud.js): a small bell, soft and a little to the right where its banner shows; two notes
+  // rising for a level, three for a skill found (each a sine and its bell's quiet, inharmonic partial). No recording yet
+  skill: ({ learned } = {}) => (learned ? [659.25, 783.99, 1046.5] : [783.99, 1046.5]).forEach((f, i) => {
+    tone(f, 1.3, { vol: 0.055, attack: 0.004, delay: i * 0.12, wet: 0.35, pan: 0.25 }); tone(f * 2.76, 0.45, { vol: 0.011, attack: 0.002, delay: i * 0.12, wet: 0.35, pan: 0.25 }); }),
+  // food done on a cooking stand (at: where it hangs): fat spitting on the coals, crackling up for half a second over a
+  // hot sizzle, then the soft "pss" of steam let go as it settles. The team has no recording for it (docs/plans/audio.md);
+  // synthesised from filtered noise, no tones, so it stays a natural sound
+  cooked: ({ at } = {}) => {
+    const s = place(at, 3, 30), k = s.k, pan = s.pan; if (k < 0.01) return;
+    noise(1.0, { type: 'highpass', freq: 3800, q: 0.5, vol: 0.22 * k, attack: 0.32, slide: 900, wet: 0.04, pan });   // (the sizzle, rising)
+    noise(0.8, { type: 'bandpass', freq: 1700, q: 0.8, vol: 0.09 * k, attack: 0.25, wet: 0.03, pan });
+    for (let i = 0; i < 34; i++) { const d = 0.7 * Math.sqrt(Math.random());   // (the crackle: grains thickening as it heats)
+      noise(rnd(0.006, 0.022), { freq: rnd(2200, 7000), q: rnd(1.2, 4), vol: rnd(0.12, 0.36) * k * (0.5 + d), attack: 0.001, delay: d, wet: 0.03, pan: pan + rnd(-0.15, 0.15) }); }
+    noise(0.05, { type: 'lowpass', freq: 700, vol: 0.15 * k, attack: 0.003, delay: 0.45, brown: true, pan });   // (a fat drop popping)
+    noise(1.1, { type: 'bandpass', freq: 3300, q: 0.7, vol: 0.19 * k, attack: 0.07, slide: -1500, delay: 0.62, wet: 0.08, pan });   // (pss: steam let go, falling away)
+    noise(0.9, { type: 'highpass', freq: 5200, q: 0.4, vol: 0.075 * k, attack: 0.05, slide: -1800, delay: 0.66, wet: 0.06, pan });
+    AUDIO.log?.push({ k: 'cooked', i: -1, t: now(), vol: +k.toFixed(3), bus: 'sfx' });   // (synthesised: noted for the tests all the same)
+  },
   owl: ({ at } = {}) => { if (play('owlHoot', { vol: 0.5, at, near: 6, far: 70, wet: 0.35, rate: [0.97, 1.03] })) return; tone(400, 0.4, { vol: 0.11, slide: -30, attack: 0.06, wet: 0.5 }); tone(380, 0.7, { vol: 0.11, slide: -50, attack: 0.06, delay: 0.5, wet: 0.5 }); },
 };
 export function sound(name, ...a) { if (!ctx) return; try { SFX[name]?.(...a); } catch { /* audio is optional */ } }
