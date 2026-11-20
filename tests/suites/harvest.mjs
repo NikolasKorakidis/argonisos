@@ -10,6 +10,27 @@ const nearest = (names) => `${WOODY} const W = new Set(${JSON.stringify(names)})
 const face = `const yawTo = (a) => { P.yaw = a; return { x: Math.sin(a), z: Math.cos(a) }; };
   const approach = (b, gap, ok) => { for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8; P.spawn(b.x - Math.sin(a) * gap, b.z - Math.cos(a) * gap); const dir = yawTo(a); if (ok(dir)) return dir; } return null; };`;
 
+// Timber (tester, 20 Nov): felled trees fall with their weight and their logs roll. A log dropped across a slope, on flat
+// ground, or above a post; trees felled at a smaller and at a bigger neighbour
+const TIMBER = `const F = await import('/src/world/flora.js'); const { groundAt } = await import('/src/world/groundcut.js'); const H = g.harvest;
+  const grad = (x, z) => { const gx = (groundAt(x + 1, z) - groundAt(x - 1, z)) / 2, gz = (groundAt(x, z + 1) - groundAt(x, z - 1)) / 2; return { gx, gz, g: Math.hypot(gx, gz) }; };
+  const free = (x, z, r) => { for (const c of g.colliders.near(x, z, r)) if (Math.hypot(c.x - x, c.z - z) < r + c.r) return false; return !H.stumps.some((s) => Math.hypot(s.x - x, s.z - z) < r + 1) && !H.logs.some((l) => Math.hypot(l.mesh.position.x - x, l.mesh.position.z - z) < r + l.L / 2 + 1); };
+  const drop = (x, z, ax, az, L = 5, R = 0.3) => { const a = new V(x - ax * L / 2, 0, z - az * L / 2), b = new V(x + ax * L / 2, 0, z + az * L / 2); a.y = groundAt(a.x, a.z) + R + 0.02; b.y = groundAt(b.x, b.z) + R + 0.02; return H.addLog({ a, b, R, L, sp: 'oak', s: 1, look: 0, hp: 30, wood: 6, awake: true }); };
+  const settle = async (ok, secs = 30) => { for (let i = 0; i < secs * 10 && !ok(); i++) await new Promise((r) => setTimeout(r, 100)); return ok(); };
+  const rid = (l) => { g.scene.remove(l.mesh); g.colliders.removeGroup(l.id); H.logs.splice(H.logs.indexOf(l), 1); };
+  const live = (x, z, R) => { const out = []; for (const c of g.colliders.near(x, z, R)) { const r = c.ref; if (r?.cx === undefined || Math.hypot(c.x - x, c.z - z) > R) continue; const sp = F.SPECIES[r.sp]; if (sp.res === 'tree' && sp.name !== 'titan') out.push({ c, x: c.x, z: c.z, y: c.y, ref: r, id: r.cx + ',' + r.cz + ',' + r.i, T: H.treeSize(r) }); } return out; };
+  const vol = (T) => T.girth * T.girth * T.tall;
+  const firstHit = (A, dx, dz) => { const f = { x: A.x, z: A.z, y: A.y, dx, dz, ...A.T }; f.obs = H.fallObstacles(f); for (let th = 0; th < 1.7; th += 0.01) { const h = H.fallHit(f, th); if (h) return h; } return null; };`;
+// places to look: from the layout, far apart, trees (or open ground) on the ground wanted
+const areas = (test) => `${TIMBER} const out = []; for (let r = 0; r < 900 && out.length < 6; r += 24) for (let a = 0; a < 6.28 && out.length < 6; a += 24 / Math.max(r, 24)) { const x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r; if (groundAt(x, z) < 3 || !(${test})(x, z) || out.some((o) => Math.hypot(o[0] - x, o[1] - z) < 150)) continue; out.push([x, z]); } return out;`;
+async function goFind(t, name, where, find) {
+  for (const [x, z] of await t.eval(areas(where))) {
+    await t.eval(`P.spawn(${x}, ${z}); return true;`); await t.page.waitForFunction(() => AG.terrain.pending === 0 && [...AG.veg.near.values()].filter((c) => c.items).length > 8, null, { timeout: 90000 }); await t.wait(1500);
+    if (await t.eval(`${TIMBER} window._at = (() => { ${find} })(); return !!window._at;`)) return true;
+  }
+  return t.check(name, false, 'found no place for it');
+}
+
 export default {
   name: 'Gathering by the blow',
   async run(t) {
@@ -68,8 +89,37 @@ export default {
       if (!dir) return 'no clear side to strike it from'; const w0 = inv.count('wood'); let hits = 0;
       while (!AG.veg.removed.has(id) && hits < 8) { if (!g.harvest.strike(g.ITEMS.crudeAxe)) return 'the axe missed after ' + hits + ' blows'; hits++; }
       const wood = inv.count('wood') - w0; window._tom.chopped = id; return (AG.veg.removed.has(id) && wood >= 6 && wood <= 8) || JSON.stringify({ hits, wood, removed: AG.veg.removed.has(id) });`);
+
+    // ---- Timber: logs roll down slopes, rest on the flat, stop at what's in their way; felled trees knock down smaller ones
+    if (await goFind(t, 'a log on a slope rolls downhill and comes to rest', `(x, z) => { const q = grad(x, z); return q.g > 0.3 && q.g < 0.5; }`,
+      `for (let gx = -40; gx <= 40; gx += 3) for (let gz = -40; gz <= 40; gz += 3) { const x = P.pos.x + gx, z = P.pos.z + gz, q = grad(x, z); if (q.g < 0.3 || q.g > 0.5) continue; const ux = -q.gx / q.g, uz = -q.gz / q.g; let ok = true;
+        for (let s = -1; s <= 14 && ok; s += 1.5) { const px = x + ux * s, pz = z + uz * s; ok = free(px, pz, 3.5) && grad(px, pz).g > 0.2; } if (ok) return { x, z, ux, uz }; } return null;`)) {
+      await t.step('a log on a slope rolls downhill and comes to rest', `${TIMBER} const s = window._at, l = drop(s.x, s.z, -s.uz, s.ux), y0 = l.mesh.position.y;
+        if (!await settle(() => l.asleep)) return 'still rolling after 30 s'; const m = l.mesh.position, down = (m.x - s.x) * s.ux + (m.z - s.z) * s.uz, lift = m.y - groundAt(m.x, m.z); rid(l);
+        return (down > 3 && m.y < y0 - 1 && lift > 0.15 && lift < 0.5) || JSON.stringify({ down, drop: y0 - m.y, lift });`);
+      await t.step('a log stops at a trunk in its way, lying against it', `${TIMBER} const s = window._at, px = s.x + s.ux * 6, pz = s.z + s.uz * 6; g.colliders.addGroup('test:post', [{ x: px, z: pz, r: 0.35, y: groundAt(px, pz) - 1, ref: { test: true } }]);
+        const l = drop(s.x, s.z, -s.uz, s.ux); const ok = await settle(() => l.asleep), m = l.mesh.position.clone(), gap = (px - m.x) * s.ux + (pz - m.z) * s.uz; window._post = { gap, ok }; rid(l); g.colliders.removeGroup('test:post');
+        return (ok && gap > 0.3 && gap < 0.3 + 0.35 + 0.15) || JSON.stringify(window._post);`);
+    }
+    if (await goFind(t, 'a log on flat ground stays put', `(x, z) => grad(x, z).g < 0.03`,
+      `for (let gx = -40; gx <= 40; gx += 3) for (let gz = -40; gz <= 40; gz += 3) { const x = P.pos.x + gx, z = P.pos.z + gz; let ok = free(x, z, 4); for (const [a, b] of [[0, 0], [3, 0], [-3, 0], [0, 3], [0, -3]]) ok = ok && grad(x + a, z + b).g < 0.04; if (ok) return { x, z }; } return null;`)) {
+      await t.step('a log on flat ground stays put', `${TIMBER} const s = window._at, l = drop(s.x, s.z, 1, 0), p0 = l.mesh.position.clone(); const ok = await settle(() => l.asleep, 5);
+        await new Promise((r) => setTimeout(r, 1000)); const moved = l.mesh.position.distanceTo(p0); rid(l); return (ok && moved < 0.08) || JSON.stringify({ ok, moved });`);
+    }
+    const pair = (bigger) => `for (const A of live(P.pos.x, P.pos.z, 60)) { if (grad(A.x, A.z).g > 0.2) continue; for (const B of live(A.x, A.z, 9)) { if (B.c === A.c) continue; const d = Math.hypot(B.x - A.x, B.z - A.z); if (d < 3 || A.T.tall < d + 2 || ${bigger ? 'vol(A.T) < 1.5 * vol(B.T)' : 'vol(B.T) < 1.1 * vol(A.T)'}) continue;
+        const dx = (B.x - A.x) / d, dz = (B.z - A.z) / d; if (firstHit(A, dx, dz)?.c !== B.c) continue;
+        const third = ${bigger ? `live(B.x, B.z, B.T.tall + 2).find((o) => o.c !== A.c && o.c !== B.c && (o.x - B.x) * dx + (o.z - B.z) * dz > 1 && Math.abs((o.x - B.x) * dz - (o.z - B.z) * dx) < 2)` : 'null'}; ${bigger ? 'if (!third) continue;' : ''} return { A: A.id, B: B.id, C: third?.id, dx, dz, a: A.c }; } } return null;`;
+    const fellAt = `${TIMBER} const s = window._at, n0 = AG.veg.removed.size; H.fell(s.a, F.SPECIES[s.a.ref.sp], { x: s.dx, z: s.dz });
+      const done = await settle(() => !H.falling.length && H.logs.every((l) => l.asleep), 40), gone = (id) => AG.veg.removed.has(id), f = H.falling[0];`;
+    if (await goFind(t, 'a big tree falling on a smaller one brings it down too, and no third', `(x, z) => grad(x, z).g < 0.15`, pair(true))) {
+      await t.step('a big tree falling on a smaller one brings it down too, and no third', `${fellAt} window._timber = { ids: [s.A, s.B] };
+        return (done && gone(s.A) && gone(s.B) && !gone(s.C) && AG.veg.removed.size - n0 === 2) || JSON.stringify({ done, A: gone(s.A), B: gone(s.B), C: gone(s.C), n: AG.veg.removed.size - n0, f: f && [f.state, f.th] });`);
+    }
+    if (await goFind(t, 'a small tree falling on a bigger one leans on it and leaves it standing', `(x, z) => grad(x, z).g < 0.15`, pair(false))) {
+      await t.step('a small tree falling on a bigger one leans on it and leaves it standing', `${fellAt} return (done && gone(s.A) && !gone(s.B) && AG.veg.removed.size - n0 === 1) || JSON.stringify({ done, A: gone(s.A), B: gone(s.B), n: AG.veg.removed.size - n0 });`);
+    }
     // save, then reload the page as a player would: the bush stays cut
-    const saved = await t.eval(`const { save } = await import('/src/game/save.js'); return save(g) ? { ...window._bush, tom: window._tom } : null;`);
+    const saved = await t.eval(`const { save } = await import('/src/game/save.js'); return save(g) ? { ...window._bush, tom: window._tom, timber: { ...window._timber, logs: g.harvest.logs.map((l) => [...l.P[0].toArray(), ...l.P[1].toArray()]) } } : null;`);
     await t.page.reload(); await t.page.waitForFunction(() => window.AG?.player.hero.model && AG.terrain.pending === 0, null, { timeout: 120000 });
     await t.page.waitForFunction((id) => { const [cx, cz] = id.split(','); return AG.veg.near.get(cx + ',' + cz)?.items; }, saved?.id ?? '0,0,0', { timeout: 60000 }).catch(() => {});
     const after = await t.eval(`const b = ${JSON.stringify(saved)}; if (!b) return 'save failed'; const removed = AG.veg.removed.has(b.id); const [cx, cz, i] = b.id.split(',').map(Number);
@@ -77,5 +127,9 @@ export default {
       const tom = b.tom || {}, picked = !tom.picked || tom.picked === tom.chopped || (g.harvest.bare.has(tom.picked) && AG.veg.bare.has(tom.picked)), chopped = !tom.chopped || AG.veg.removed.has(tom.chopped);
       g.save = () => false; localStorage.removeItem('argonisos.world.v1'); return removed && !back && picked && chopped ? true : JSON.stringify({ removed, back, picked, chopped });`);
     t.check('save, reload: the chopped bush and tomato bush stay gone, the picked tomato bush stays bare', after === true, String(after));
+    const logs = await t.eval(`const T = ${JSON.stringify(saved?.timber ?? null)}; if (!T) return 'nothing saved'; const L = g.harvest.logs;
+      const placed = T.logs.every((p) => L.some((l) => Math.hypot(l.P[0].x - p[0], l.P[0].y - p[1], l.P[0].z - p[2]) < 0.01 && Math.hypot(l.P[1].x - p[3], l.P[1].y - p[4], l.P[1].z - p[5]) < 0.01));
+      const felled = (T.ids || []).every((id) => AG.veg.removed.has(id)); return (T.logs.length > 0 && L.length === T.logs.length && placed && felled) || JSON.stringify({ saved: T.logs.length, now: L.length, placed, felled });`);
+    t.check('save, reload: the logs lie where they came to rest and both trees knocked down stay gone', logs === true, String(logs));
   },
 };

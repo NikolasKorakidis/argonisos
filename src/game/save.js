@@ -45,6 +45,7 @@ export function load(g) {
     for (const id of d.harvest.removed || []) g.veg.removed.add(id);
     g.harvest.hp = new Map(d.harvest.hp || []); g.harvest.picked = new Map(d.harvest.picked || []); g.harvest.bare = new Map(d.harvest.bare || []);   // (bare: the tomato bushes picked, drawn so once loaded: harvest.js growBack)
     for (const s of d.harvest.stumps || []) g.harvest.addStump(s.x, s.y, s.z, s.r);
+    g.harvest.loadLogs(d.harvest.logs || []);   // (the felled trees' logs, where they came to rest: harvest.js)
     g.pickups.load(d.pickups);
   } else { g.pickups.load({ taken: [], drops: d.pickups?.drops || [] }); setTimeout(() => g.hud.toast('The land has changed since you were last here: the trees and what lies on the ground have grown back'), 4000); }
   g.build.load(d.build || []);
