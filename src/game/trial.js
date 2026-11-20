@@ -80,7 +80,7 @@ export const POWERS = {
 function skyBeam(scene, at) {
   const grp = new THREE.Group(), t0 = performance.now(); grp.position.copy(at);
   for (const [r0, r1, k] of [[0.5, 6, 0.35], [0.18, 2.2, 0.7]]) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, 320, 24, 1, true).translate(0, 160, 0), new THREE.MeshBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, 320, 24, 1, true).translate(0, 160, 0), new THREE.MeshBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true, fog: false }));   // (one pass: added light needs no order)
     m.frustumCulled = false; m.onBeforeRender = () => { const t = (performance.now() - t0) / 1000; m.material.opacity = k * Math.min(1, t * 4) * (1 - Math.min(1, Math.max(0, (t - 1.8) / 2.6))); }; grp.add(m);
   }
   scene.add(grp); setTimeout(() => { scene.remove(grp); grp.traverse((o) => { o.geometry?.dispose(); o.material?.dispose(); }); }, 4800);

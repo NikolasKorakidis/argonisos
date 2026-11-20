@@ -78,7 +78,7 @@ export function spark(at, n = 3) { burst(at, { color: 0xffc070, n, speed: 4.5, s
 // ---- A boss's arrival (trial.js): a pillar of light rising where it will come down, then the blast as it lands, a white
 // flash and a shockwave racing out along the ground, the dust it raises following it out. One of each, made at load and kept
 // in the scene unseen (so their shaders are compiled with the rest: main.js warmUp), moved and faded here.
-const glowMat = (c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false, toneMapped: false });
+const glowMat = (c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true, fog: false, toneMapped: false });   // (one pass: added light needs no back-then-front order)
 const flashM = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), glowMat(new THREE.Color(2, 1.8, 1.5))), waveM = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 72).rotateX(-Math.PI / 2), glowMat(new THREE.Color(1.8, 1.45, 1)));
 const pillarM = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.8, 1, 28, 1, true).translate(0, 0.5, 0), glowMat(new THREE.Color(2.4, 2, 1.4)));
 for (const m of [flashM, waveM, pillarM]) { m.visible = false; m.frustumCulled = false; m.renderOrder = 6; scene.add(m); }

@@ -101,7 +101,7 @@ export const SMAT = {
   rock: new THREE.MeshStandardMaterial({ color: 0x7a7164, roughness: 0.95, flatShading: true, envMapIntensity: 0.5 }),
   wood: new THREE.MeshStandardMaterial({ color: 0x6e5238, roughness: 0.9 }),
   plaster: new THREE.MeshStandardMaterial({ color: 0xd8cbb0, roughness: 0.95, map: mossTex }),
-  flame: new THREE.MeshBasicMaterial({ map: flameTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),   // (on fire()'s crossed cards)
+  flame: new THREE.MeshBasicMaterial({ map: flameTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true }),   // (on fire()'s crossed cards; one pass, as light added up needs no back-then-front order: three draws a see-through two-sided mesh twice, and looked its program up again for each)
   glyph: new THREE.MeshStandardMaterial({ color: 0xffe7a0, emissive: 0xffc860, emissiveIntensity: 1.6, transparent: true, opacity: 0.9 }),
   flags: new THREE.MeshStandardMaterial({ map: flagTex, roughness: 0.95, color: 0xb9ab96 }),
   bone: new THREE.MeshStandardMaterial({ color: 0xd9cfb4, roughness: 0.75 }),
@@ -216,7 +216,7 @@ async function statue(group, x, y, z, s, rot, o = {}) {
 const beamTex = (() => { const W = 32, H = 256, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'), im = g.createImageData(W, H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const up = 1 - y / H, a = Math.exp(-((x / (W - 1) - 0.5) ** 2) / 0.045) * (up < 0.14 ? 0.35 + 0.65 * (up / 0.14) : Math.pow((1 - up) / 0.86, 1.3)) * Math.min(1, up / 0.02), i = (y * W + x) * 4; im.data.set([255, 236, 170, Math.round(a * 255)], i); }   // (gentler at its foot, brightest a few metres up)
   g.putImageData(im, 0, 0); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
-const glow = (o) => ({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, ...o });
+const glow = (o) => ({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true, fog: false, ...o });   // (one pass: added light needs no order)
 const sparkMat = new THREE.PointsMaterial(glow({ color: 0xffe9a0, size: 0.16, side: THREE.FrontSide }));
 const SPARKS = 40;
 function beacon(scene, p, rot) {

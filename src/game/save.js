@@ -79,7 +79,7 @@ export class Graves {
   make(x, y, z, slots) {
     const grp = new THREE.Group(); grp.position.set(x, y, z);
     const stone = new THREE.Group(); grp.add(stone);
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.25, 40, 8, 1, true).translate(0, 20, 0), new THREE.MeshBasicMaterial({ color: 0xffe0a0, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.25, 40, 8, 1, true).translate(0, 20, 0), new THREE.MeshBasicMaterial({ color: 0xffe0a0, transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true }));   // (one pass: added light needs no order)
     grp.add(beam); this.g.scene.add(grp);
     const gr = { grp, stone, beam, x, y, z, slots }; this.dress(gr); this.list.push(gr); return gr;
   }
