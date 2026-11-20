@@ -30,7 +30,7 @@ import { updateAtmosphere, setWoodsTexture } from './render/atmosphere.js';
 import { HUD } from './ui/hud.js';
 import { installGame } from './game/game.js';
 import { titleScreen, pauseMenu } from './ui/title.js';
-import { devMenu } from './ui/dev.js';
+import { devMenu } from './ui/devmenu.js';
 import { wettable, updateShelter, WET } from './world/wetness.js';
 import { updateWindLines } from './world/wind.js';
 import { perfBegin, perfEnd, lap, PERF } from './ui/perf.js';
