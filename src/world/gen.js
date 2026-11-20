@@ -38,9 +38,11 @@ export function noise(x, z) {
 export function fbm(x, z, oct = 4) { let a = 0.5, f = 1, s = 0, n = 0; for (let i = 0; i < oct; i++) { s += a * noise(x * f + i * 17.3, z * f - i * 9.1); n += a; f *= 2.03; a *= 0.5; } return s / n; }
 export function ridged(x, z, oct = 4) { let a = 0.5, f = 1, s = 0, n = 0; for (let i = 0; i < oct; i++) { const r = 1 - Math.abs(noise(x * f + i * 31.7, z * f + i * 5.3) * 2 - 1); s += a * r * r; n += a; f *= 2.07; a *= 0.5; } return s / n; }
 
-// ---- Biomes: weights (sum to 1) from warped polar position
-const _w = { p: 1, y: 0, v: 0 };
-export function biomeWeights(x, z, out = _w) {
+// ---- Biomes: weights (sum to 1) from warped polar position. Without an `out` it returns a new object, so a caller
+// may keep it; the hot paths below pass scratch objects of their own (one each, so a nested call never overwrites the
+// weights its caller is still reading).
+const _hw = { p: 1, y: 0, v: 0, r: 0 }, _mw = { p: 1, y: 0, v: 0, r: 0 }, _gw = { p: 1, y: 0, v: 0, r: 0 }, _aw = { p: 1, y: 0, v: 0, r: 0 };
+export function biomeWeights(x, z, out = { p: 1, y: 0, v: 0, r: 0 }) {
   // two layers of domain warp: broad lobes and bays, then wiggles along the border
   let wx = x + (fbm(x * 0.0009 + 11, z * 0.0009, 3) - 0.5) * 1100, wz = z + (fbm(x * 0.0009, z * 0.0009 - 7, 3) - 0.5) * 1100;
   wx += (fbm(wx * 0.004 + 2, wz * 0.004, 2) - 0.5) * 160; wz += (fbm(wx * 0.004, wz * 0.004 + 9, 2) - 0.5) * 160;
@@ -51,7 +53,7 @@ export function biomeWeights(x, z, out = _w) {
   out.p = p; out.v = v; out.y = Math.max(0, 1 - p - v); out.r = r;
   return out;
 }
-export function biomeAt(x, z) { const w = biomeWeights(x, z); return w.v > 0.5 ? BIOME.VALTOS : w.p >= w.y ? BIOME.PEDIAS : BIOME.YLEOS; }
+export function biomeAt(x, z) { const w = biomeWeights(x, z, _aw); return w.v > 0.5 ? BIOME.VALTOS : w.p >= w.y ? BIOME.PEDIAS : BIOME.YLEOS; }
 
 // How far inland a point is: 1 well inland, 0 at the waterline, negative out at sea (bays and headlands from noise)
 export function landness(x, z) {
@@ -211,7 +213,7 @@ function detail(x, z, w) {
 const MEADOW_SMOOTH = 0.6;   // (how much of the meadows' smaller swells goes once the sites are laid out)
 
 // ---- Height (metres above sea level)
-export function rawHeight(x, z, w = biomeWeights(x, z)) {
+export function rawHeight(x, z, w = biomeWeights(x, z, _hw)) {
   // (once the sites are laid out, DETAIL, the meadows' smaller swells are mostly smoothed away: open, gentle land)
   const hp = 2.2 + fbm(x * 0.0032, z * 0.0032, 4) * 24 + ((fbm(x * 0.017, z * 0.017, 2) - 0.5) * 3.5          // meadows,
     + (fbm(x * 0.06 + 13, z * 0.06 - 7, 2) - 0.5) * 0.7) * (DETAIL.on ? 1 - MEADOW_SMOOTH : 1);                       // with a gentle unevenness underfoot
@@ -337,7 +339,7 @@ export const isRock = (x, z) => heightAt(x, z) > 0.3 && slopeGrade(x, z) > rockL
 // Worn paths across the meadows: thin winding lines of bare earth (where a warped noise crosses its middle), some 2-3 m
 // wide, broken into stretches so they wander off and fade rather than net the whole plain; only on gentle ground in
 // Pedias. 0 off a path, 1 on one. (The grass grows thin on them too: terrain-worker.js grassTex.)
-export function meadowPath(x, z, w = biomeWeights(x, z)) {
+export function meadowPath(x, z, w = biomeWeights(x, z, _mw)) {
   if (w.p < 0.3) return 0;
   const wx = x + (noise(x * 0.01 + 5, z * 0.01) - 0.5) * 60, wz = z + (noise(x * 0.01, z * 0.01 - 9) - 0.5) * 60;
   const n = Math.abs(noise(wx * 0.0045 + 17, wz * 0.0045 - 3) - 0.5), line = smooth(0.0085, 0.004, n);
@@ -357,7 +359,7 @@ const PAL = {
 // the mouth falls off (the sky's light on everything else isn't shadowed, so the darkness has to be in the colour)
 export const caveShade = (d) => 1 - 0.74 * d;
 const mix3 = (o, a, t) => { o[0] += (a[0] - o[0]) * t; o[1] += (a[1] - o[1]) * t; o[2] += (a[2] - o[2]) * t; return o; };
-export function groundColor(x, z, h, slope, w = biomeWeights(x, z), out = [0, 0, 0]) {
+export function groundColor(x, z, h, slope, w = biomeWeights(x, z, _gw), out = [0, 0, 0]) {
   // Each biome its own ground (the reviewer, 16 Nov: the biomes must look different underfoot; the terrain shader adds
   // each one's own texture over these, terrain.js floorGround).
   // Pedias: sunny green meadow with golden fields, brighter sunlit swards, dry patches and worn paths of bare earth
