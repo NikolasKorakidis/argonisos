@@ -3535,55 +3535,61 @@
         }
       ]
     },
-    "plFarmhouse": {
-      "house": {
-        "w": 3,
-        "d": 2,
-        "door": 1,
-        "windows": [
-          [
-            0,
-            0
-          ],
-          [
-            0,
-            2
-          ],
-          [
-            2,
-            0
-          ],
-          [
-            3,
-            1
-          ]
-        ],
-        "fallen": [
-          [
-            1,
-            1
-          ]
-        ],
-        "roof": "half",
-        "plaster": "white"
-      },
+    "plKitWall": {
       "compose": [
         {
-          "src": "SM_Bld_Roof_Base_Straight_01",
-          "at": [
-            2.5,
-            0,
-            3
-          ]
-        },
+          "src": "SM_Bld_Wall_01"
+        }
+      ]
+    },
+    "plKitDoor": {
+      "plaster": "white",
+      "compose": [
         {
-          "src": "SM_Bld_Roof_Base_Straight_01",
-          "at": [
-            5,
-            5,
-            3
-          ],
-          "rot": 180
+          "src": "SM_Bld_Wall_Door_04"
+        }
+      ]
+    },
+    "plKitWindow": {
+      "plaster": "white",
+      "compose": [
+        {
+          "src": "SM_Bld_Wall_Window_06"
+        }
+      ]
+    },
+    "plKitEnd": {
+      "compose": [
+        {
+          "src": "SM_Bld_Wall_End_01"
+        }
+      ]
+    },
+    "plKitHalf": {
+      "compose": [
+        {
+          "src": "Synty/PolygonAncientEmpire/Models/Base_Building/SM_Bld_Base_Wall_Half_01.fbx"
+        }
+      ]
+    },
+    "plKitRoof": {
+      "compose": [
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01"
+        }
+      ]
+    },
+    "plKitRoofSide": {
+      "compose": [
+        {
+          "src": "SM_Bld_Roof_Base_Straight_Side_01"
+        }
+      ]
+    },
+    "plKitPier": {
+      "compose": [
+        {
+          "src": "Synty/PolygonAncientEmpire/Models/Base_Building/SM_Bld_Base_Pillar_01.fbx"
         }
       ]
     },

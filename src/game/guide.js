@@ -25,7 +25,7 @@ export function steps(g) {
     { t: 'Make a crude axe', h: `${K('C')} → <b>Crude Axe</b>: 5 wood, 4 stone, 2 rope. Out of rope? Gather <b>fiber bushes</b> (3 fiber → 2 rope by hand), or 1 leather → 10 rope at the workbench.`, done: () => seen('crudeAxe') },
     { t: 'Fell a tree', h: 'Axe in hand, strike a tree until it falls, then split the log for wood.', done: () => g.harvest.stumps.length > 0 },
     { t: 'Build a campfire', h: `Build → <b>Campfire</b> (10 stone, 10 wood). It keeps you warm and cooks meat on a cooking stand.`, done: () => placed('campfire') },
-    { t: 'Put a roof over your workbench', h: 'Walls and thatch roofs need rope. Most workbench recipes need a roof over the bench.', done: () => g.build.placed.some((p) => p.id === 'workbench' && g.build.underRoof(p.pos, 1.2)) },
+    { t: 'Put a roof over your workbench', h: 'Walls and thatch roofs need rope. Most workbench recipes need a roof over the bench.', done: () => g.build.placed.some((p) => p.id === 'workbench' && g.build.sheltered(p.pos, 1.2)) },
     { t: 'Make a bed and sleep', h: 'Build → <b>Bed</b> (8 wood, 2 leather) under a roof. Use it (E) to set your spawn; at night you can sleep.', done: () => !!g.S.bed },
     { t: 'Make a bow and arrows', h: 'At the roofed workbench: <b>Crude Bow</b> (10 wood, 4 rope, 1 leather) and <b>Crude Arrows</b> (5 wood, 1 feather → 10). The Minotaur is weak to piercing.', done: () => seen('crudeBow') && seen('crudeArrow') },
     { t: 'Find the Ancient Temple and pray', h: 'It stands on a rise out in the meadows. The altar before its steps gives Zeus\'s Blessing, once a day.', done: () => tr().prayDay >= 1, go: () => SITES.temple },

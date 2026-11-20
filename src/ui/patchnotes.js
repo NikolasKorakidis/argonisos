@@ -21,6 +21,14 @@ export const PATCHES = [
       { t: 'Cooking', icon: 'fire', items: [
         'When meat or fish is done on the cooking stand it sizzles and lets out a soft hiss and a puff of steam, so you know it\'s ready without watching it.',
       ] },
+      { t: 'The abandoned house', icon: 'roof', items: [
+        'The abandoned house is a farmstead now: the house under a porch on square piers that stand either side of the door, never in front of it, a roofless storeroom along the yard, and a dry-stone wall round the yard with the well, the bread oven and a vine. Part of the porch has come down, and the old hearth, the loom, the couch, the shelves and the chest are still inside.',
+        '<b>Old houses are shelter.</b> Inside the farmhouse and the town\'s houses that still have their roofs you can build a bed and sleep in it, set up a workbench that works, and keep a fire going through the rain, just as under a roof of your own.',
+        '<b>No house is ever perfect.</b> Each one has a hole in its roof where a few tiles have fallen in: the rain comes in there, and nothing right under it counts as covered. Build a <b>Roof Patch</b> (3 wood, under Roofs) and aim into the hole: it snaps in, and the house is whole. The patch is kept with your buildings when you save.',
+      ] },
+      { t: 'Building', icon: 'hammer', items: [
+        'Nothing grows through your floors any more. Building a floor, stairs, a wall or anything on the ground clears away the flowers, tall grass, bushes, mushrooms, tomato bushes and stones under it, with a little room round it, for good. On a slope and on stilts too, wherever the boards come near the ground.',
+      ] },
     ],
   },
   {

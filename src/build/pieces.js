@@ -142,6 +142,13 @@ export const PIECES = [
     snaps: [[-2, 0, 0], [2, 0, 0], [-2, 4, 0], [2, 4, 0]], solids: [[0, 2, 0, 4, 4, 0.4]] },
   { id: 'awning', name: 'Wooden Awning', cat: 'Roofs', icon: 'roof', mats: { wood: 2, rope: 1 }, hp: 400,
     parts: () => [slab(W, 1.5, 0.55, 0.12, MAT.plank, 0.2)], snaps: [[-1.5, 0.55, -1.5], [1.5, 0.55, -1.5], [0, 0.55, -1.5]], solids: [], tops: [{ x0: -1.5, x1: 1.5, z0: 0, z1: -1.5, y0: 0.12, y1: 0.67 }], roof: true },
+  // Boards for the hole in an old house's tiled roof (structures.js leaves a panel out of each: no house is ever perfect).
+  // The old roofs are the Ancient Empire kit's, on its 2.5 m grid and a low pitch (0.75 m up over 2.5 m), so this is one
+  // of their panels in size and slope, its boards a little wider so they lap the tiles each side, with two battens across.
+  // It snaps to the hole's edges (patch: build.js placeGhost) and is held up by the house (build.js onSite).
+  { id: 'roofPatch', name: 'Roof Patch', cat: 'Roofs', icon: 'roof', mats: { wood: 3 }, hp: 300, patch: true, desc: 'Boards to close the hole in an old house\'s roof: aim into the hole.',
+    parts: () => [slab(2.64, 2.5, 0.75, 0.07, MAT.plank, 0.14), ...[0.6, 1.8].map((d) => part(box(2.7, 0.07, 0.12).rotateX(Math.atan2(0.75, 2.5)).translate(0, 0.11 + d * 0.3, -d), MAT.beam))],
+    snaps: [[-1.25, 0, 0], [1.25, 0, 0], [0, 0, 0], [-1.25, 0.75, -2.5], [1.25, 0.75, -2.5], [0, 0.75, -2.5]], solids: [], tops: [{ x0: -1.25, x1: 1.25, z0: 0, z1: -2.5, y0: 0.07, y1: 0.82 }], roof: true },
   ...['gateL', 'gateR'].map((id, k) => ({ id, name: k ? 'Wooden Gate Right' : 'Wooden Gate Left', cat: 'Fences', icon: 'gate', mats: { wood: 6, rope: 4 }, hp: 800, door: { w: 2, hinge: k ? 1 : -1 },
     parts: () => { const s = k ? -1 : 1, P = []; for (let i = 0; i < 6; i++) P.push(part(box(0.3, 2.4, 0.1, s * (0.17 + i * 0.33), 1.2, 0), MAT.plank)); P.push(part(box(2, 0.16, 0.12, s * 1, 0.5, 0.08), MAT.dark), part(box(2, 0.16, 0.12, s * 1, 1.9, 0.08), MAT.dark)); return P; },
     snaps: [[0, 0, 0], [k ? -2 : 2, 0, 0]], solids: [[k ? -1 : 1, 1.2, 0, 2, 2.4, 0.15]], pivot: [k ? 1 : -1, 0, 0] })),

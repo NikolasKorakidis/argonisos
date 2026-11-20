@@ -18,6 +18,7 @@ import { icon } from '../ui/icons.js';
 import { Inventory } from '../game/inventory.js';
 import { askLight } from '../render/lights.js';
 import { wetLike } from '../world/wetness.js';
+import { SPECIES, STRIDE, CELL } from '../world/flora.js';
 
 const V_LOSS = 0.125, H_LOSS = 0.2, MIN_SUPPORT = 0.1, REACH = 12, G = 8;
 const _v = new THREE.Vector3(), _ray = new THREE.Raycaster();
@@ -59,6 +60,9 @@ function rectsMeet(a, b) {
   }
   return true;
 }
+// Is a point inside a turned rectangle (from rects)?
+const inRect = (r, x, z) => { const dx = x - r.x, dz = z - r.z, c = Math.cos(r.rot), s = Math.sin(r.rot); return Math.abs(dx * c - dz * s) <= r.hx && Math.abs(dx * s + dz * c) <= r.hz; };
+const CLEAR_M = 0.5, CLEAR_H = 2.2;   // (the room round a piece kept bare of what grows, and how high over the ground it still clears)
 // How far a point is from a piece placed at pos, rot: for a flat piece (a floor, a beam laid level) from the nearest point
 // of its surface, so aiming anywhere on or just past where a tile would lie counts; for anything else from its reference
 // point (a wall's foot, a roof panel's lower edge), which is what you aim with
@@ -89,6 +93,9 @@ export class Build {
     this.flameMat2 = new THREE.MeshBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
     this.tint = false; this.chest = null;
     this.buildChestPanel();
+    // (a vegetation cell streaming in loses what grows under your buildings before its colliders are made: bareCell)
+    const veg = g.veg, was = veg?.onCell; if (veg) veg.onCell = (key, items, cx, cz) => { if (items) this.bareCell(items, cx, cz, this.clearsNear(cx, cz)); was?.(key, items, cx, cz); };
+    if (g.pickups) g.pickups.under = (x, z, y) => this.covers(x, z, y);
   }
   piece(id) { return id === 'repair' ? this.pieces[0] : PIECE[id]; }
   get active() { return !!this.sel && this.g.equippedTool('build'); }
@@ -114,6 +121,10 @@ export class Build {
     for (const p of this.near(pos.x, pos.z, 8)) { if (!p.def.roof) continue; const [lx, lz] = toLocal(p, pos.x, pos.z); for (const t of p.def.tops) { const ty = this.topY(p, t, lx, lz); if (ty !== null && ty > pos.y + above) return true; } }
     return false;
   }
+  // Sheltered: under a roof you built or one of the island's old ones (a house in the town, the farmhouse, a cave's rock:
+  // structures.js), which is what a bed, a workbench and a fire in the rain need (tester, 20 Nov: a workbench in the
+  // abandoned house wouldn't work, as only roofs you'd built counted). An old roof's hole doesn't shelter until patched.
+  sheltered(pos, above = 1.0) { return this.underRoof(pos, above) || !!this.g.structures?.underRoof(pos, above); }
   nearStation(type, pos, r) { let best = null, bd = r; for (const p of this.near(pos.x, pos.z, r)) if (p.def.station === type) { const d = p.pos.distanceTo(pos); if (d < bd) { bd = d; best = p; } } return best; }
   nearFire(pos, r = 6) { for (const p of this.near(pos.x, pos.z, r)) if ((p.def.fire || p.def.torch) && p.state.lit && p.pos.distanceTo(pos) < (p.def.fire ? r : 3)) return p; return null; }
   // Distance from a to b to the first building surface in between (null if clear): keeps the camera inside rooms
@@ -174,11 +185,15 @@ export class Build {
     if (snapping && !anchor) { let bd2 = 4; const P = this.g.player.pos; for (const p of this.near(P.x, P.z, REACH + 4)) { if (!structural(p)) continue; const d = Math.min(p.pos.distanceTo(pos), onLine(p.pos).off); if (d < bd2) { bd2 = d; anchor = p; } } }
     if (anchor) rot = anchor.rot + Math.round((this.rot - anchor.rot) / (Math.PI / 2)) * (Math.PI / 2);
     this.aligned = !!anchor;
+    // (a roof patch near a hole in an old house's roof lies the way that roof's slope runs: the hole's edges, by the one nearest the aim)
+    const holes = def.patch ? (this.g.structures?.anchorsNear(this.g.player.pos.x, this.g.player.pos.z, REACH + 4) || []).filter((s) => onLine(s).off < 6).sort((a, b) => onLine(a).off - onLine(b).off) : [];
+    if (holes.length) { rot = holes[0].rot; this.aligned = true; }
     // snap: try putting each of the ghost's points on each point of what's built nearby, and score each placement by how
     // near its own reference point (a wall's foot, a roof panel's lower edge, a floor's middle) comes to where you aim,
     // lining up more points only breaking near-ties; then take the best one that's actually allowed
     const local = snapping ? def.snaps : [], targets = [], kin = new Set();   // (kin: points on pieces of this same kind)
     if (snapping) { const P = this.g.player.pos; for (const p of this.near(P.x, P.z, REACH + 4)) if (structural(p)) for (const s of p.snaps) if (onLine(s).off < 6) { targets.push(s); if (p.id === def.id) kin.add(s); } }
+    for (const s of holes) { targets.push(s); kin.add(s); }   // (and snaps to their edges, as if into a gap between its own kind)
     // a flat piece aimed at the face of a wall or post (a floor laid off the top of a wall) comes out toward you, half a
     // tile back along your aim, rather than straddling the wall
     const flatAim = a.n && Math.abs(a.n.y) < 0.5 ? pos.clone().addScaledVector(_v.set(dir.x, 0, dir.z).normalize(), -0.75) : pos;
@@ -264,6 +279,29 @@ export class Build {
     setCut('ghost', { x: f.c.x, z: f.c.z, hw: f.hw, hd: f.hd, rot, y: f.y, fill: this.onGround(def, pos, rot), shape: SHAPE.floor, look: true });
     clearGrass('ghost', { x: f.c.x, z: f.c.z, hw: f.hw + 1.2, hd: f.hd + 1.2, rot });   // (a metre wider than the tile: the tall grass round it would lean over it)
   }
+  // ---- Nothing grows through what you build (tester, 20 Nov: flowers poking up through new floors). The grass map is
+  // cleared above; the flowers, tall grass, bushes, stumps, logs, pebbles and the rest of the ground cover (the vegetation's
+  // own, flora.js groundCover) under a piece, with CLEAR_M round it, are taken away for good with veg.remove, as a felled
+  // tree is, so the save keeps them gone. Only where the piece comes within CLEAR_H of the ground under each one: a floor
+  // on stilts high over a meadow leaves it be. Trees and rocks stay (building over them is your choice); the pickups
+  // under it are hidden while it stands (covers: pickups.js asks).
+  clearsOf(p) { return (p.clears ||= [...rects(p.def.tops, p.pos, p.rot, -CLEAR_M, 'top'), ...rects(p.def.solids, p.pos, p.rot, -CLEAR_M, 'solid')]); }
+  clearsNear(cx, cz) { const R = []; for (const p of this.near((cx + 0.5) * CELL, (cz + 0.5) * CELL, CELL * 0.75)) R.push(...this.clearsOf(p)); return R; }
+  // whether a point (on the ground at y) lies under something built
+  covers(x, z, y) { for (const p of this.near(x, z, 4)) for (const r of this.clearsOf(p)) if (r.y0 < y + CLEAR_H && inRect(r, x, z)) return true; return false; }
+  bareUnder(p) {
+    const veg = this.g.veg, R = this.clearsOf(p), cx = Math.floor(p.pos.x / CELL), cz = Math.floor(p.pos.z / CELL); if (!veg) return;
+    for (let j = cz - 1; j <= cz + 1; j++) for (let i = cx - 1; i <= cx + 1; i++) { const c = veg.near.get(i + ',' + j); if (c?.items) this.bareCell(c.items, i, j, R, true); }
+  }
+  // (live: the cell's colliders are already made, so a stump's or log's goes with it)
+  bareCell(items, cx, cz, R, live = false) {
+    if (!R.length) return; const veg = this.g.veg, C = this.g.colliders;
+    for (let i = 0; i < items.length / STRIDE; i++) {
+      const o = i * STRIDE, res = SPECIES[items[o]].res; if (res === 'tree' || res === 'rock' || items[o + 6] <= 0) continue;
+      const x = items[o + 2], y = items[o + 3], z = items[o + 4]; if (!R.some((r) => r.y0 < y + CLEAR_H && inRect(r, x, z)) || veg.removed.has(`${cx},${cz},${i}`)) continue;
+      veg.remove(cx, cz, i); if (live && C) for (const c of [...C.near(x, z, 1)]) if (c.ref?.cx === cx && c.ref.cz === cz && c.ref.i === i) C.removeOne(c);
+    }
+  }
   // ---- Pieces on the ground (tester feedback, 19-20 Oct). A wall or flat floor that doesn't rest on another piece stands
   // on the ground: the earth is raised under it (and cut where it's higher: groundcut.js), so on a slope nothing hangs
   // in the air and it counts as grounded, however far along a row it is. Where the land falls more than FILL_MAX below
@@ -289,7 +327,12 @@ export class Build {
   }
   // a piece standing on the ground (the earth is shaped to it): not resting on another piece, never too high over the land
   onGround(def, pos, rot, self) { const f = this.foot(def, pos, rot); if (!f) return false; const g = this.gapUnder(f, rot); return g.hi <= FILL_MAX && !this.restsOn(def, pos, rot, self); }
-  grounded(def, pos, rot, self) { for (const s of def.snaps) { const w = toWorld(pos, rot, s, _v); if (w.y - heightAt(w.x, w.z) < 0.35) return true; } return this.onGround(def, pos, rot, self); }
+  grounded(def, pos, rot, self) { for (const s of def.snaps) { const w = toWorld(pos, rot, s, _v); if (w.y - heightAt(w.x, w.z) < 0.35) return true; } return this.onSite(def, pos, rot) || this.onGround(def, pos, rot, self); }
+  // a roof patch in a hole of an old roof (two or more of its points on the hole's edges) is held up by that house's walls
+  onSite(def, pos, rot) {
+    if (!def.patch) return false; const A = this.g.structures?.anchorsNear(pos.x, pos.z, 4); if (!A?.length) return false;
+    let n = 0; for (const s of def.snaps) { const w = toWorld(pos, rot, s); if (A.some((q) => q.distanceTo(w) < 0.05)) n++; } return n >= 2;
+  }
   // neighbours: pieces sharing a snap point, or touching
   neighbours(def, pos, rot, self) {
     const mine = this.snapsOf(def, pos, rot), out = [];
@@ -386,6 +429,7 @@ export class Build {
     // grass doesn't grow through floors and furniture
     // (always under a floor or wall standing on the ground: the earth raised to it would otherwise grow grass through the boards)
     const bb = p.boxes.reduce((a, b) => a.union(b), new THREE.Box3()); if (bb.min.y < heightAt(pos.x, pos.z) + 1.2 || on) clearGrass(p.uid, { x: pos.x, z: pos.z, hw: (def.tops?.[0] ? Math.abs(def.tops[0].x1 - def.tops[0].x0) / 2 : (def.solids?.[0]?.[3] ?? 1) / 2) + 0.35, hd: (def.tops?.[0] ? Math.abs(def.tops[0].z1 - def.tops[0].z0) / 2 : (def.solids?.[0]?.[5] ?? 1) / 2) + 0.35, rot });
+    this.bareUnder(p); if (this.g.pickups) this.g.pickups.dirty = true;   // (and the flowers, bushes and stones under it go)
     if (def.fire || def.torch) { p.state.fuel ??= def.fire ? 3 : 4; p.state.lit ??= true; this.addFlame(p); }
     if (def.chest) { p.inv = new Inventory(); p.inv.slots = new Array(def.chest[0] * def.chest[1]).fill(null); if (opts.state?.slots) p.inv.slots = opts.state.slots; }
     if (def.cook) p.state.cook ??= [];
@@ -403,7 +447,7 @@ export class Build {
   }
   remove(p, refund) {
     this.g.scene.remove(p.obj); this.meshes = this.meshes.filter((m) => m.userData.piece !== p); this.index(p, false); this.placed.splice(this.placed.indexOf(p), 1);
-    this.g.colliders.removeGroup(p.uid); clearGrass(p.uid, null); setCut(p.uid, null);
+    this.g.colliders.removeGroup(p.uid); clearGrass(p.uid, null); setCut(p.uid, null); if (this.g.pickups) this.g.pickups.dirty = true;
     if (refund) for (const [id, n] of Object.entries(p.def.mats)) this.g.give(id, n);
     if (p.inv) for (const s of p.inv.slots) if (s) this.g.pickups.drop(s.id, s.n, p.pos.x + Math.random() - 0.5, p.pos.z + Math.random() - 0.5, s.dur ? { dur: s.dur } : undefined, p.pos.y);
     if (p.flame) p.flame = null;
@@ -489,7 +533,7 @@ export class Build {
   }
   sleep(p) {
     const g = this.g, S = g.S; S.bed = { x: p.pos.x + Math.sin(p.rot) * 1.4, z: p.pos.z + Math.cos(p.rot) * 1.4 };
-    if (!this.underRoof(p.pos.clone().setY(p.pos.y + 0.3))) { g.hud.toast('Your spawn point is set. You need a roof over the bed to sleep.'); return; }
+    if (!this.sheltered(p.pos.clone().setY(p.pos.y + 0.3))) { g.hud.toast('Your spawn point is set. You need a roof over the bed to sleep.'); return; }
     if (S.time < 0.68) { g.hud.toast('Your spawn point is set. You can only sleep once evening comes.'); return; }
     const night = () => { S.time = 0.01; S.day++; g.player.stats.add('rested'); g.player.stats.heal(99); g.hud.toast(`You wake <b>rested</b>. Day ${S.day}.`); };
     if (g.acts) g.acts.sleep(p, night); else g.hud.sleep?.(night);   // (lying down on it, getting up again: game/acts.js)
@@ -540,7 +584,7 @@ export class Build {
       if (p.def.door && p.targetA !== undefined) p.inner.rotation.y += (p.targetA - p.inner.rotation.y) * Math.min(1, dt * 8);
       if ((p.def.fire || p.def.torch) && p.state.lit) {
         p.state.fuel -= dt / (p.def.fire ? 240 : 600);
-        const wet = g.weatherRain?.() > 0.3 && !this.underRoof(p.pos.clone().setY(p.pos.y + 0.5), 0.8);
+        const wet = g.weatherRain?.() > 0.3 && !this.sheltered(p.pos.clone().setY(p.pos.y + 0.5), 0.8);
         p.state.rainT = wet ? (p.state.rainT || 0) + dt : 0;
         if (p.state.fuel <= 0 || p.state.rainT > 8 + (p.uid.length % 5)) { p.state.lit = false; p.flame.visible = false; dust(p.pos.clone().setY(p.pos.y + 0.5), 10, 0x777777, 0.4); if (p.state.rainT > 8) { g.nearMsg?.(p.pos, 'The rain put the fire out'); g.sound?.('douse', { at: p.pos }); } }
         const t = performance.now() * 0.001, k = 1 + Math.sin(t * 13 + p.pos.x) * 0.08 + Math.sin(t * 7.3) * 0.06;

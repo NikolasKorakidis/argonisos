@@ -195,8 +195,9 @@ export class Pickups {
           gp.setXYZ(ng, p.x + Math.cos(a) * r, p.y + 0.25 + 0.5 * rnd(p.x + i, p.z - i * 5.3), p.z + Math.sin(a) * r); gd.setXYZW(ng++, rnd(p.x * 1.3 + i, p.z * 0.7 - i), 0, G.k, G.cold ? 1 : 0); }
       }
     };
-    // (natural ones where a building has reshaped the ground stay hidden: pressed down under the boards, or buried)
-    for (const list of this.cells.values()) for (const p of list) if (!this.isTaken(p.id) && Math.abs(shapeGround(p.y, p.x, p.z) - p.y) < 0.05) put(p.kind, p);
+    // (natural ones where a building has reshaped the ground stay hidden: pressed down under the boards, or buried; and any
+    // under something built, under: build.js covers)
+    for (const list of this.cells.values()) for (const p of list) if (!this.isTaken(p.id) && Math.abs(shapeGround(p.y, p.x, p.z) - p.y) < 0.05 && !this.under?.(p.x, p.z, p.y)) put(p.kind, p);
     for (const d of this.drops) put('drop', d);
     // keep the grass short round everything lying about, so it can be found
     const keep = new Set(this.visible.map((p) => 'pk' + p.id));

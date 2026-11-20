@@ -40,11 +40,14 @@ export const PIECE_NAMES = ['twHouseA', 'twHouseB', 'twHouseC', 'twHouseD', 'twH
   'twRubbleB', 'twRubbleC', 'twStack', 'twColumn', 'twColumnBase', 'twBrazier', 'twStraw', 'twStrawBundle', 'twFence', 'twBanner', 'twAnvil', 'twForge', 'twKiln', 'twPlinth', 'twRoad', 'twGrind',
   'twFirepit', 'twCenser', 'twBowl', 'twLogs', 'twPergola',
   // the trial's places (structures.js), whole or in parts: the temple out of the pack's demo scene; the Labyrinth's ashlar
-  // walls and posts, its gate, columns, braziers and the stepped altar; the farmhouse and its furniture; the shrine's steps,
+  // walls and posts, its gate, columns, braziers and the stepped altar; the farmhouse's furniture; the shrine's steps,
   // the reliefs of the Chimera and the Minotaur, the summit's altar and fire bowl; the bones of the beasts' meals (other
   // packs' own models)
   'plTemple', 'plWall', 'plWallPost', 'plGatePost', 'plBeam', 'plBrazier', 'plColumn', 'plColumnHalf', 'plPile', 'plBlock', 'plDais',
-  'plFarmhouse', 'plLoom', 'plBed', 'plTable', 'plStool', 'plSteps', 'plSymChimera', 'plSymMinotaur', 'plBomos', 'plFireBowl',
+  'plLoom', 'plBed', 'plTable', 'plStool', 'plSteps', 'plSymChimera', 'plSymMinotaur', 'plBomos', 'plFireBowl',
+  // (the farmhouse itself from the kit's pieces, one at a time, structures.js kitHouse: walls plain, with a doorway or a
+  // window, a stump of fallen wall, the corner, a tiled roof panel and its end, a square pier)
+  'plKitWall', 'plKitDoor', 'plKitWindow', 'plKitHalf', 'plKitEnd', 'plKitRoof', 'plKitRoofSide', 'plKitPier',
   // (and the offerings at the summit's altar, the broken column its bronze eagle stands on, the eagle itself)
   ...['sm-prop-goblet-01', 'sm-prop-goblet-02', 'sm-prop-plate-01', 'sm-chr-attach-crown-leaf-01', 'sm-bld-pillar-monument-01-damaged-01'].map((k) => 'all/polygonancientempire/' + k), 'all/polygongeneric/sm-gen-prop-coin-pile-01', 'all/pnb-alpine-mountain/fx-hawk-01',
   'all/pnb-swamp-marshland/sm-prop-bone-pile-01', 'all/pnb-swamp-marshland/sm-prop-bone-pile-02', 'all/pnb-swamp-marshland/sm-prop-bone-ribcage-01', 'all/pnb-swamp-marshland/sm-prop-bone-skull-01',

@@ -50,7 +50,7 @@ export class Crafting {
     if (r.at === 'workbench') {
       const wb = g.build?.nearStation?.('workbench', g.player.pos, 6);
       if (!wb) return 'Needs a workbench nearby';
-      if (r.id !== 'rope' && !g.build.underRoof(wb.pos, 1.2)) return 'The workbench needs a roof over it';
+      if (r.id !== 'rope' && !g.build.sheltered(wb.pos, 1.2)) return 'The workbench needs a roof over it';
     }
     if (!g.inv.has(r.mats)) return 'Missing materials';
     if (r.kind === 'item' && g.inv.room(r.id) < r.n) return 'No room in your pack';

@@ -12,7 +12,7 @@ import { caveRock, densityAt, rayRock, surfaceFrom, roofAt, STEP } from './cave.
 import { rockGround } from './terrain.js';
 import { groundDetail, SHADOW } from '../render/core.js';
 import { dust, burst, addShake } from '../render/fx.js';
-import { clamp } from '../util/math.js';
+import { clamp, seeded } from '../util/math.js';
 import { propGeo, propMat, leafMat } from './trees.js';
 import { GMAT, amphora, pithos, bowl, jug, tripod, acroterion, antefixes, cartWheel, firewood, leaves, mist, dice } from './greek.js';
 import { wettable } from './wetness.js';
@@ -127,6 +127,8 @@ const BONES = ['all/pnb-swamp-marshland/sm-prop-bone-pile-01', 'all/pnb-swamp-ma
 // the pieces a Giant's cave takes from the packs (site-pack.js loads them): his fire, the bones of big beasts, skulls
 const CAVE_PK = { fire: 'all/polygonnature/sm-prop-campfire-01', bones: 'all/pnb-arid-desert/sm-prop-bones-01', bones2: 'all/pnb-arid-desert/sm-prop-bones-04', skull: 'all/polygonnature/sm-prop-skull-01', skull2: 'all/polygongeneric/sm-gen-prop-skull-01' };
 const MOSSY = new Map(), mossy = (m) => { if (!MOSSY.has(m)) MOSSY.set(m, wettable(new THREE.MeshStandardMaterial({ map: m.map, color: 0x7d8a6a, roughness: 0.95 }), { dark: 0.7, gloss: 0.4 })); return MOSSY.get(m); };
+// the Ancient Empire kit's grid, its storey, and how far one of its tiled roof panels rises over a bay (the old houses)
+const BAY = 2.5, STOREY = 3, PITCH = 0.75;
 // how far off each kind of site is drawn: the landmarks you find your way by far out under the mist, the minor sites
 // (the farmhouse, the olive markers, the caves) only a little way beyond it. On Ultra (render/quality.js) the mist lies
 // twice as far out, and so does where the minor sites go; the landmarks a little further than they already were.
@@ -159,9 +161,9 @@ function gableRoof(P, w, len, rise, y, mat = SMAT.tile) {   // two sloped slabs 
   for (const s of [-1, 1]) { const g = uvBox(sl + 0.5, 0.25, len, 1 / 3).translate(s * (sl / 2 + 0.05), 0, 0).rotateZ(-s * a).translate(0, y + rise + 0.12, 0); P.push([g, mat]); }   // from the ridge down past the eaves
   P.push([new THREE.CylinderGeometry(0.22, 0.22, len + 0.2, 8).rotateX(Math.PI / 2).translate(0, y + rise + 0.2, 0), mat]);
 }
-function rubble(P, x0, z0, x1, z1, h, mat = SMAT.stone, ruin = 0) {   // a dry-stone wall from block courses, optionally broken
+function rubble(P, x0, z0, x1, z1, h, mat = SMAT.stone, ruin = 0, r2 = rr) {   // a dry-stone wall from block courses, optionally broken (r2: dice)
   const len = Math.hypot(x1 - x0, z1 - z0), a = Math.atan2(z1 - z0, x1 - x0), n = Math.ceil(len / 0.9);
-  for (let i = 0; i < n; i++) { const t = (i + 0.5) / n, hh = ruin ? h * (1 - ruin * Math.abs(Math.sin(t * 7 + x0))) * rr(0.6, 1) : h; if (hh < 0.3) continue;
+  for (let i = 0; i < n; i++) { const t = (i + 0.5) / n, hh = ruin ? h * (1 - ruin * Math.abs(Math.sin(t * 7 + x0))) * r2(0.6, 1) : h; if (hh < 0.3) continue;
     const g = uvBox(len / n + 0.02, hh, 0.75, 1 / 2).rotateY(-a).translate(x0 + (x1 - x0) * t, hh / 2, z0 + (z1 - z0) * t); P.push([g, mat]); }
 }
 // a farmhouse wall: a dry-stone footing, whitewashed plaster above (ruin: a broken, uneven top)
@@ -274,6 +276,7 @@ function crackSheet(r, at, seed, glow) {
 export class Structures {
   constructor(g) {
     this.g = g; this.groups = []; this.solids = []; this.tops = []; this.roofs = []; this.uses = []; this.lights = []; this.flames = [];
+    this.anchors = [];   // (the edges of the holes in the old houses' roofs, where a roof patch snaps: anchorsNear)
     this.build();
   }
   // register helpers (site-local → world, sites only rotate about y)
@@ -595,7 +598,7 @@ export class Structures {
   // well, a clay oven, storage jars and an olive, a vine over the door. Inside: the hearth, a loom, shelves, a bed and the
   // chest someone left behind.
   house(s) {
-    if (hasPiece('plFarmhouse')) { this.farmhouse(s); return; }
+    if (hasPiece('plKitWall')) { this.farmhouse(s); return; }
     const ctx = this.site(s, 0.4), P = ctx.P, W = 8, D = 6, H = 2.8, t = 0.31;
     plasterWall(P, -W / 2, -D / 2, W / 2, -D / 2, H, 0, 1); plasterWall(P, -W / 2, -D / 2 + t, -W / 2, D / 2 - t, H, 0, 2); plasterWall(P, W / 2, -D / 2 + t, W / 2, D / 2 - t, H, 0.55, 3);
     plasterWall(P, -W / 2, D / 2, -0.8, D / 2, H, 0, 4); plasterWall(P, 0.8, D / 2, W / 2, D / 2, H, 0.25, 5);
@@ -669,47 +672,113 @@ export class Structures {
     this.solid(ctx, x, z, 0.55, 0.75, y);
     this.uses.push({ kind: 'loot', at: this.w(ctx, x, z, y), r: 1.8, lid, ...use });
   }
-  // The farmhouse from the pack (tools/assets/manifest.json plFarmhouse: the kit's whitewashed walls, three bays by two,
-  // 7.5 × 5 m), the roof still on over the western two bays and bare rafters over the third, its back corner fallen to
-  // a stump. Inside: the hearth, the loom, a couch for a bed, shelves, the chest; a table and the fallen tiles under the
-  // open sky. The yard: dry-stone walls with a gate, a vine over the door, the well, the bread oven, jars and firewood.
+  // ---- A house from the Ancient Empire kit's pieces (site-pack.js: one model each), laid out on the kit's 2.5 m grid the
+  // way compose.py lays out the town's whole, but piece by piece so a site can leave out what it likes. o: { x, z (its
+  // middle, site-local), rot (a quarter turn: its front, with the doorway, faces +z turned so), w, d (bays across and
+  // deep), door (the front's doorway bay), windows, fallen (a stump of wall), gone (nothing): [[side, bay]...] with the
+  // sides 0 front, 1 right, 2 back, 3 left, each running anticlockwise; roof: false, or { holes: [bay...] }: panels left
+  // out of its front slope }. Registers its walls (the doorway clear), its roof bay by bay less the holes, and each hole's
+  // edges, which a roof patch snaps to (anchorsNear; build.js).
+  kitHouse(ctx, o) {
+    const W = o.w * BAY, D = o.d * BAY, c = Math.cos(o.rot), s = Math.sin(o.rot), P = ctx.P, has = (k, sd, i) => (o[k] || []).some(([a, b]) => a === sd && b === i);
+    const at = (hx, hz) => { const u = hx - W / 2, v = hz + D / 2; return [o.x + u * c + v * s, o.z - u * s + v * c]; };
+    const put = (k, hx, y, hz, r) => { const [x, z] = at(hx, hz); P.push(...pieceAt(k, x, y, z, o.rot + r)); };
+    const wall = (a, b, h) => { const [x0, z0] = at(...a), [x1, z1] = at(...b); this.wall(ctx, x0, z0, x1, z1, h, 0.25); };
+    const box = (hx0, hx1, hz0, hz1, y) => { const [ax, az] = at(hx0, hz0), [bx, bz] = at(hx1, hz1); this.top(ctx, Math.min(ax, bx), Math.max(ax, bx), Math.min(az, bz), Math.max(az, bz), y, true); };
+    for (const [sd, n] of [[0, o.w], [1, o.d], [2, o.w], [3, o.d]]) for (let i = 0; i < n; i++) {
+      if (has('gone', sd, i)) continue;
+      // (where bay i of side sd starts and which way it runs: compose.py's, its y turned to our -z)
+      const [hx, hz, r] = [[i * BAY, 0, 0], [W, -i * BAY, Math.PI / 2], [W - i * BAY, -D, Math.PI], [0, -D + i * BAY, -Math.PI / 2]][sd], e = (t) => [hx + Math.cos(r) * t, hz - Math.sin(r) * t];
+      const fallen = has('fallen', sd, i), door = sd === 0 && i === o.door;
+      put(fallen ? 'plKitHalf' : door ? 'plKitDoor' : has('windows', sd, i) ? 'plKitWindow' : 'plKitWall', hx, 0, hz, r);
+      if (door) { wall(e(0), e(0.5), STOREY); wall(e(BAY - 0.5), e(BAY), STOREY); } else wall(e(0), e(BAY), fallen ? 1.5 : STOREY);   // (the doorway a metre clear)
+    }
+    for (const [hx, hz, r] of [[0, 0, Math.PI], [W, 0, -Math.PI / 2], [W, -D, 0], [0, -D, Math.PI / 2]]) put('plKitEnd', hx, 0, hz, r);
+    if (o.roof) {
+      const holes = o.roof.holes || [], up = STOREY + PITCH;
+      for (let j = 0; j < o.d; j++) { const front = j < o.d / 2, z0 = front ? -j * BAY : -(j + 1) * BAY;
+        for (let i = 0; i < o.w; i++) {
+          if (front && holes.includes(i)) { for (const t of [0, 0.5, 1]) for (const [y, hz] of [[STOREY, z0], [up, z0 - BAY]]) { const [x, z] = at((i + t) * BAY, hz), q = this.w(ctx, x, z, y); q.rot = ctx.rot + o.rot; this.anchors.push(q); } continue; }
+          put('plKitRoof', front ? i * BAY : (i + 1) * BAY, STOREY, z0, front ? 0 : Math.PI); box(i * BAY, (i + 1) * BAY, -j * BAY, -(j + 1) * BAY, STOREY);
+        }
+        for (const hx of [0, W]) put('plKitRoofSide', hx, STOREY, z0, front ? 0 : Math.PI);
+      }
+    }
+  }
+  // The farmhouse (tester, 20 Nov: "the pillars are in the middle of the house door... restructure it to be like an
+  // abandoned house, but also looking good, realistic"): a Greek farmstead from the kit's pieces. The house, three bays by
+  // two, its doorway in the middle of the front, under a porch (a pastas) of the same tiles on square piers that stand
+  // either side of the door, never in front of it; the porch's eastern bay has come down with its pier, the panel slid to
+  // lean on the wall under the window. The roof is whole but for one panel over the eastern end: a hole the rain comes in
+  // by, for you to patch (no house is ever perfect). Along the yard's west side the storeroom, roofless, its yard wall down
+  // to a stump and its back broken through; round the yard a dry-stone wall with a gateway, broken in the south-east. Inside:
+  // the old hearth, the loom by the west wall, a couch, shelves, the chest someone left behind, a table; tiles and a rafter
+  // fallen under the hole. In the yard: the well, the bread oven, a vine on its pergola, jars, firewood, an olive.
   farmhouse(s) {
-    const ctx = this.site(s, 0.4), P = ctx.P, W = 7.5, D = 5, H = 3, put = (k, x, z, rot = 0, sc = 1, y = 0) => P.push(...piece(k, x, y, z, rot, sc));
-    P.push(...pieceAt('plFarmhouse', -W / 2, 0, D / 2));
-    // its walls (the doorway a metre and a half in the middle of the front; the fallen back corner a stump too high to climb)
-    this.wall(ctx, -W / 2, -D / 2, W / 2, -D / 2, H, 0.25); this.wall(ctx, -W / 2, -D / 2, -W / 2, D / 2, H, 0.25); this.wall(ctx, W / 2, D / 2, W / 2, 0, H, 0.25); this.wall(ctx, W / 2, 0, W / 2, -D / 2, 1.5, 0.25);
-    this.wall(ctx, -W / 2, D / 2, -0.75, D / 2, H, 0.25); this.wall(ctx, 0.75, D / 2, W / 2, D / 2, H, 0.25);
-    this.top(ctx, -W / 2, 1.25, -D / 2, D / 2, H, true);   // (under the roof)
-    { const g = new THREE.PlaneGeometry(W - 0.3, D - 0.3), uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (W - 0.3) / 2.4, uv.getY(i) * (D - 0.3) / 2.4); P.push([g.rotateX(-Math.PI / 2).translate(0, 0.03, 0), SMAT.flags]); }   // its floor of worn flags
-    // the rafters left over the third bay, a broken one hanging, the ridge beam
-    const a = Math.atan2(0.75, D / 2), L = (D / 2 + 0.3) / Math.cos(a), slope = (g, sd, x) => g.translate(0, 0, sd * L / 2).rotateX(sd * a).translate(x, H + 0.06, 0);
-    for (const sd of [-1, 1]) for (let x = 1.6, k = 0; x < W / 2; x += 0.75, k++) { const broken = (k % 2 === 1) === (sd > 0); P.push([slope(uvBox(0.12, 0.14, broken ? L * 0.5 : L).translate(0, 0, broken ? -sd * L * 0.25 : 0), sd, x), GMAT.oldWood]); }
-    P.push([new THREE.CylinderGeometry(0.1, 0.1, W / 2 - 1.1, 8).rotateZ(Math.PI / 2).translate((W / 2 + 1.25) / 2, H + 0.72, 0), GMAT.oldWood]);
-    // inside: the hearth, the loom by the west wall, the couch, the shelves, the chest; the table, fallen tiles and a beam in the open
-    put('twFirepit', -1.0, 0.1, 0, 0.42); this.solid(ctx, -1.0, 0.1, 0.55, 0.4);
-    P.push([new THREE.CylinderGeometry(0.42, 0.45, 0.04, 14).translate(-1.0, 0.03, 0.1), GMAT.ash]); for (let k = 0; k < 3; k++) P.push([new THREE.CylinderGeometry(0.05, 0.06, 0.6, 6).rotateZ(Math.PI / 2).rotateY(k * 1.1).translate(-1.0, 0.08, 0.1), GMAT.ash]); for (let k = 0; k < 5; k++) P.push([new THREE.IcosahedronGeometry(0.05, 0).translate(-1.0 + Math.cos(k * 2.3) * 0.18, 0.06, 0.1 + Math.sin(k * 2.3) * 0.18), GMAT.ember]);
-    put('plLoom', -W / 2 + 0.55, -0.4, Math.PI / 2); this.solid(ctx, -W / 2 + 0.55, -0.9, 0.4, 2); this.solid(ctx, -W / 2 + 0.55, 0.1, 0.4, 2);
-    put('plBed', -2.3, D / 2 - 0.6, Math.PI); this.solid(ctx, -2.9, D / 2 - 0.6, 0.5, 0.9); this.solid(ctx, -1.8, D / 2 - 0.6, 0.5, 0.9);
-    P.push([uvBox(0.6, 0.1, 0.32).translate(-3.1, 0.62, D / 2 - 0.6), GMAT.linen]);
-    for (const y of [1.15, 1.7]) { P.push([uvBox(1.7, 0.05, 0.3).translate(-0.4, y, -D / 2 + 0.3), GMAT.wood]); for (let k = 0; k < 4; k++) (k % 2 ? jug : bowl)(P, -1.0 + k * 0.4, y + 0.025, -D / 2 + 0.3, 0.9); }   // shelves
-    this.oldChest(ctx, -2.7, -D / 2 + 0.6, 0);
-    put('plTable', 2.2, -1.3, 0.1); this.solid(ctx, 1.8, -1.3, 0.45, 0.8); this.solid(ctx, 2.6, -1.3, 0.45, 0.8);
-    put('plStool', 2.0, -0.55, 0.4); put('plStool', 3.0, -1.9, 2.2, 1, 0); jug(P, 2.0, 0.78, -1.25, 1.1); bowl(P, 2.5, 0.78, -1.4); bowl(P, 2.7, 0.78, -1.15, 0.8);
-    for (let k = 0; k < 12; k++) P.push([uvBox(0.32, 0.03, 0.4).rotateX(rr(-0.4, 0.4)).rotateY(rr(0, 3)).translate(rr(1.6, 3.4), 0.03 + rr(0, 0.1), rr(-0.4, 1.9)), SMAT.tile]);
-    P.push([uvBox(0.14, 0.14, 2.6).rotateX(0.35).rotateY(0.6).translate(2.7, 0.5, 0.9), GMAT.oldWood]);
-    pithos(P, 3.0, -0.25, 1.8, 0.7); P.push([new THREE.CylinderGeometry(0.5, 0.6, 0.03, 12).translate(2.5, 0.015, 1.9), new THREE.MeshStandardMaterial({ color: 0xc9a85a, roughness: 1 })]);   // a cracked jar, its grain spilt
-    // the yard: a low dry-stone wall with a gate, the vine on its pergola over the door, the well, the oven, jars, firewood
-    const yz = D / 2 + 6;
-    for (const [x0, z0, x1, z1] of [[-W / 2, D / 2 + 0.2, -W / 2, yz], [-W / 2, yz, -1.2, yz], [1.2, yz, W / 2, yz], [W / 2, yz, W / 2, D / 2 + 0.2]]) { rubble(P, x0, z0, x1, z1, 1.0, SMAT.stone, 0.25); this.wall(ctx, x0, z0, x1, z1, 1.0, 0.4); }
+    const ctx = this.site(s, 0.4), P = ctx.P, r = seeded(31), rr2 = (a, b) => a + r() * (b - a), put = (k, x, z, rot = 0, sc = 1, y = 0) => P.push(...piece(k, x, y, z, rot, sc));
+    for (let k = 0; k < 92; k++) rnd();   // (as many draws on the shared dice as the farmhouse before this one made, so every site after it comes out as it did)
+    this.kitHouse(ctx, { x: 0, z: -2, rot: 0, w: 3, d: 2, door: 1, windows: [[0, 0], [0, 2], [1, 0], [2, 2], [3, 1]], roof: { holes: [2] } });
+    this.kitHouse(ctx, { x: -5, z: 3, rot: Math.PI / 2, w: 2, d: 1, door: 1, fallen: [[0, 0], [2, 1], [3, 0]], roof: false });
+    { const flags = (x0, x1, z0, z1) => { const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0), uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (x1 - x0) / 2.4, uv.getY(i) * (z1 - z0) / 2.4); P.push([g.rotateX(-Math.PI / 2).translate((x0 + x1) / 2, 0.03, (z0 + z1) / 2), SMAT.flags]); };
+      flags(-3.65, 3.65, -4.4, 0.4); flags(-3.65, 3.75, 0.62, 3.0); flags(-6.15, -3.85, 0.6, 5.4); }   // (worn flags: the house, the porch, the storeroom)
+    // the porch: two piers either side of the doorway, a beam over them, its roof of two bays; the third bay fallen
+    const PZ = 2.8, PY = 2.25;
+    for (const x of [-1.25, 1.25]) { put('plKitPier', x, PZ, 0, [0.82, PY / 3, 0.82]); this.solid(ctx, x, PZ, 0.3, PY); }
+    P.push([uvBox(5.2, 0.2, 0.22).translate(-1.15, PY - 0.1, PZ), GMAT.oldWood]);
+    for (const x of [-3.75, -1.25]) P.push(...pieceAt('plKitRoof', x, PY, PZ + 0.2, 0));
+    P.push(...pieceAt('plKitRoofSide', -3.75, PY, PZ + 0.2, 0));
+    this.top(ctx, -3.75, 1.25, 0.5, PZ + 0.2, PY, true);
+    {   // (the fallen bay: its panel slid off the wall to lean against it under the window, its pier broken off at the knee and the rest lying where it fell)
+      for (const [g, m] of pieceAt('plKitRoof', 0, 0, 0, 0)) P.push([g.rotateX(0.52).rotateZ(0.05).rotateY(-0.06).translate(1.3, 0.05, 2.45), m]);
+      this.wall(ctx, 1.5, 1.6, 3.7, 1.6, 1.6, 0.6);
+      put('plKitPier', 3.55, PZ, 0, [0.82, 0.24, 0.82]); this.solid(ctx, 3.55, PZ, 0.3, 0.8);
+      for (const [g, m] of piece('plKitPier', 0, 0, 0, 0, [0.82, 0.5, 0.82])) P.push([g.rotateZ(-Math.PI / 2 + 0.08).rotateY(-0.12).translate(3.85, 0.2, 3.1), m]);
+      this.wall(ctx, 4.0, 3.1, 5.2, 3.25, 0.5, 0.3);
+      P.push([uvBox(0.2, 0.2, 2.2).rotateX(0.35).rotateY(1.2).translate(2.6, 0.35, 3.5), GMAT.oldWood]);   // (its stretch of beam)
+      for (let k = 0; k < 14; k++) P.push([uvBox(0.32, 0.03, 0.4).rotateX(rr2(-0.4, 0.4)).rotateY(rr2(0, 3)).translate(rr2(1.6, 4.6), 0.03 + rr2(0, 0.12), rr2(2.8, 4.6)), SMAT.tile]);
+      for (let k = 0; k < 6; k++) boulder(P, rr2(1.8, 4.8), 0.02, rr2(3.0, 4.4), rr2(0.12, 0.22), SMAT.stone, 1.3, 0.6, 1); }
+    // the hole: three old rafters across it under where the tiles were, one broken off and hanging, and what fell in
+    { const a = Math.atan2(PITCH, BAY), L = Math.hypot(PITCH, BAY);
+      for (const [x, k] of [[1.65, 1], [2.5, 0.42], [3.35, 1]]) P.push([uvBox(0.13, 0.13, L * k).translate(0, 0, -L * k / 2).rotateX(a).translate(x, STOREY - 0.09, 0.5), GMAT.oldWood]);
+      P.push([uvBox(0.13, 0.13, 1.4).rotateX(-1.1).translate(2.5, STOREY - 0.75, 0.0), GMAT.oldWood]);
+      for (let k = 0; k < 16; k++) P.push([uvBox(0.32, 0.03, 0.4).rotateX(rr2(-0.4, 0.4)).rotateY(rr2(0, 3)).translate(rr2(1.5, 3.5), 0.04 + rr2(0, 0.1), rr2(-1.8, 0.2)), SMAT.tile]);
+      P.push([uvBox(0.14, 0.14, 2.4).rotateX(0.32).rotateY(0.7).translate(2.3, 0.42, -0.9), GMAT.oldWood]); }
+    // inside: the cold hearth (a fire can be built on it again), the loom, the couch, the shelves, the chest, the table, a jar
+    { const hx = -0.5, hz = -2.1; P.push([new THREE.CylinderGeometry(0.55, 0.6, 0.04, 14).translate(hx, 0.04, hz), GMAT.ash]);
+      for (let k = 0; k < 3; k++) P.push([new THREE.CylinderGeometry(0.05, 0.06, 0.6, 6).rotateZ(Math.PI / 2).rotateY(k * 1.1).translate(hx, 0.09, hz), GMAT.ash]);
+      for (let k = 0; k < 8; k++) { const q = (k / 8) * Math.PI * 2; boulder(P, hx + Math.cos(q) * 0.72, 0.06, hz + Math.sin(q) * 0.72, 0.12, SMAT.rock); } }
+    put('plLoom', -3.2, -3.1, Math.PI / 2); this.solid(ctx, -3.2, -3.6, 0.4, 2); this.solid(ctx, -3.2, -2.6, 0.4, 2);
+    put('plBed', -2.15, -3.85, 0); this.solid(ctx, -2.75, -3.85, 0.5, 0.9); this.solid(ctx, -1.55, -3.85, 0.5, 0.9); P.push([uvBox(0.6, 0.1, 0.32).translate(-2.95, 0.62, -3.85), GMAT.linen]);
+    for (const y of [1.15, 1.7]) { P.push([uvBox(1.7, 0.05, 0.3).translate(0.2, y, -4.22), GMAT.wood]); for (let k = 0; k < 4; k++) (k % 2 ? jug : bowl)(P, -0.4 + k * 0.4, y + 0.025, -4.22, 0.9); }
+    this.oldChest(ctx, 2.95, -3.85, 0);
+    put('plTable', 2.95, -2.35, Math.PI / 2); this.solid(ctx, 2.95, -2.75, 0.45, 0.8); this.solid(ctx, 2.95, -1.95, 0.45, 0.8);
+    put('plStool', 2.2, -2.6, 0.4); jug(P, 2.9, 0.78, -2.6, 1.1); bowl(P, 3.0, 0.78, -2.1);
+    pithos(P, -3.05, -0.25, -0.2, 0.7); P.push([new THREE.CylinderGeometry(0.5, 0.6, 0.03, 12).translate(-2.5, 0.035, -0.4), new THREE.MeshStandardMaterial({ color: 0xc9a85a, roughness: 1 })]);   // a cracked jar, its grain spilt
+    // the storeroom: its jars, a heap of the roof that fell in, a beam across the breach, straw
+    for (const [x, z, sc] of [[-5.7, 1.2, 0.9], [-5.6, 2.1, 0.8], [-4.4, 1.0, 0.75]]) { pithos(P, x, -0.3, z, sc); this.solid(ctx, x, z, 0.5 * sc); }
+    amphora(P, -5.8, 0, 3.2, 1.0, 1.4, 0.4); amphora(P, -5.5, 0, 4.6, 0.9); put('twStrawBundle', -4.5, 4.7, 0.6);
+    for (let k = 0; k < 10; k++) boulder(P, rr2(-5.9, -4.2), 0.02, rr2(2.6, 4.2), rr2(0.15, 0.32), SMAT.stone, 1.3, 0.6, 1);
+    for (let k = 0; k < 12; k++) P.push([uvBox(0.32, 0.03, 0.4).rotateX(rr2(-0.5, 0.5)).rotateY(rr2(0, 3)).translate(rr2(-6.0, -4.0), 0.05 + rr2(0, 0.2), rr2(2.4, 4.8)), SMAT.tile]);
+    P.push([uvBox(0.16, 0.16, 3.0).rotateX(0.5).rotateY(0.15).translate(-5.0, 0.8, 3.4), GMAT.oldWood]); this.solid(ctx, -5.2, 3.6, 0.6, 1.2);
+    for (const [z, k] of [[1.3, 1], [2.4, 0.55]]) P.push([uvBox(2.7 * k, 0.16, 0.16).translate(-3.75 - 1.35 * k, STOREY - 0.12, z), GMAT.oldWood]);   // (the last of its roof beams, one broken off)
+    for (let k = 0; k < 14; k++) { const t = r(), [x, z] = t < 0.5 ? [-3.75 + rr2(-0.5, 0.6), rr2(3.1, 5.4)] : [rr2(-6.1, -3.9), 5.5 + rr2(-0.5, 0.6)]; boulder(P, x, 0.05, z, rr2(0.14, 0.3), SMAT.stone, 1.3, 0.7, 1); }   // (the fallen walls' stones)
+    // the porch: firewood stacked against the storeroom, a basket
+    put('twLogs', -3.2, 1.5, Math.PI / 2, 0.9); this.solid(ctx, -3.2, 1.5, 0.4, 1); put('twBasket', -2.2, 0.9, 0.5, 0.9);
+    // the yard's walls: dry stone, a gateway on the south, the south-east fallen half down
+    const yz = 9, wall = (a, b, c, d, h, ruin = 0) => { rubble(P, a, b, c, d, h, SMAT.stone, ruin, rr2); this.wall(ctx, a, b, c, d, h * (ruin ? 0.7 : 1), 0.4); };
+    wall(-6.25, 5.6, -6.25, yz, 1.0); wall(-6.25, yz, -1.2, yz, 1.0); wall(1.2, yz, 5.5, yz, 1.0, 0.55); wall(5.5, yz, 5.5, 0.6, 1.0); wall(5.5, 0.6, 3.95, 0.6, 1.0);
     for (const sx of [-1, 1]) { P.push([uvBox(0.55, 1.5, 0.55).translate(sx * 1.45, 0.75, yz), GMAT.ashlar], [uvBox(0.68, 0.14, 0.68).translate(sx * 1.45, 1.55, yz), GMAT.ashlar]); this.solid(ctx, sx * 1.45, yz, 0.4); }
-    put('twPergola', 0, D / 2 + 1.35, 0, 0.95); for (const sx of [-1, 1]) for (const dz of [0.25, 2.35]) this.solid(ctx, sx * 1.05, D / 2 + dz, 0.15);
-    leaves(P, 0, 2.95, D / 2 + 1.35, 2.8, 2.6, 0.35, 16, 5); for (let k = 0; k < 6; k++) P.push([new THREE.SphereGeometry(0.07, 6, 4).translate(rr(-1.1, 1.1), 2.86, D / 2 + rr(0.4, 2.3)), new THREE.MeshStandardMaterial({ color: 0x4a2a52, roughness: 0.6 })]);   // grapes
-    put('twWell', 2.3, D / 2 + 3.7, 0.3, 0.75); this.solid(ctx, 2.3, D / 2 + 3.7, 1.25);
-    put('twKiln', -2.4, D / 2 + 2.3, 1.2, 0.72); this.solid(ctx, -2.4, D / 2 + 2.3, 0.85, 1.3);
-    for (const [k, x, z, r, sc] of [['twJars', -2.7, yz - 1.2, 0.6, 0.9], ['twVase', 3.1, D / 2 + 0.7, 0.3, 0.9], ['twJar', 3.25, D / 2 + 1.4, 0.3, 1], ['twLogs', -1.4, D / 2 + 0.5, 0.3, 0.9], ['twBasket', 1.5, D / 2 + 0.5, 0.25, 0.9], ['twStrawBundle', 3.0, yz - 1.0, 0.35, 1]]) { put(k, x, z, (x * 7 + z) % 6.3, sc); this.solid(ctx, x, z, r, 1.2); }
-    cartWheel(P, W / 2 - 0.25, 0, D / 2 + 5.0, Math.PI / 2, 0.18);
-    this.plant(ctx, 'olive', 1, 2.7, 0, yz + 1.6, 1.15); this.solid(ctx, 2.7, yz + 1.6, 0.6);
-    this.finish(ctx, { w: W + 1.5, d: D + 1.5 });
+    // the yard: the vine on its pergola in the north-east corner with a table under it, the well, the oven, the jars
+    put('twPergola', 4.3, 4.9, 0, 0.95); for (const sx of [-1, 1]) for (const sz of [-1, 1]) this.solid(ctx, 4.3 + sx * 1.05, 4.9 + sz * 1.05, 0.15);
+    leaves(P, 4.3, 2.95, 4.9, 2.8, 2.6, 0.35, 16, 5); for (let k = 0; k < 6; k++) P.push([new THREE.SphereGeometry(0.07, 6, 4).translate(4.3 + rr2(-1.1, 1.1), 2.86, 4.9 + rr2(-1, 1)), new THREE.MeshStandardMaterial({ color: 0x4a2a52, roughness: 0.6 })]);   // grapes
+    put('twBench', 4.75, 4.9, Math.PI / 2, 0.9); this.solid(ctx, 4.75, 4.9, 0.5, 0.6);
+    put('twWell', 2.3, 7.6, 0.3, 0.75); this.solid(ctx, 2.3, 7.6, 1.2);
+    put('twKiln', -4.7, 7.5, 1.2, 0.72); this.solid(ctx, -4.7, 7.5, 0.85, 1.3);
+    for (const [k, x, z, rad, sc] of [['twJars', -2.6, 8.2, 0.6, 0.9], ['twVase', -5.6, 6.1, 0.3, 0.9], ['twJar', -5.0, 6.0, 0.3, 1]]) { put(k, x, z, (x * 7 + z) % 6.3, sc); this.solid(ctx, x, z, rad, 1.2); }
+    cartWheel(P, 5.2, 0, 1.6, Math.PI / 2, 0.18);
+    this.plant(ctx, 'olive', 1, 8.6, 0, 5.2, 0.85); this.solid(ctx, 8.6, 5.2, 0.5);   // (outside the yard's east wall)
+    { const c = this.w(ctx, -5, 3); clearGrass('farmWing', { x: c.x, z: c.z, hw: 1.35, hd: 2.65, rot: ctx.rot }); }   // (no grass in the storeroom)
+    this.finish(ctx, { x: 0, z: -0.8, w: 7.8, d: 7.9 });
   }
   // ---- the Labyrinth: the Minotaur's ruined arena. Three broken rings of wall with offset gaps, a ring of columns, a
   // raised altar in the middle; braziers, bones and fallen statues about the corridors. With the pack: ashlar walls between
@@ -1135,7 +1204,9 @@ export class Structures {
   floorAt(x, z, y, step = 0.6) { let best = -Infinity; for (const t of this.tops) { if (Math.abs(x - t.ctx.s.x) > 75 || Math.abs(z - t.ctx.s.z) > 75) continue; const [lx, lz] = this.local(t, x, z); if (lx >= t.x0 && lx <= t.x1 && lz >= t.z0 && lz <= t.z1) { const ty = t.ctx.s.y + t.y; if (ty <= y + step && ty > best) best = ty; } }
     for (const k of this.caveRocks || []) { if (Math.abs(x - k.ctx.s.x) > 70 || Math.abs(z - k.ctx.s.z) > 70) continue; const [u, v] = this.local(k, x, z), ty = k.ctx.s.y + roofAt(k.R, u, v); if (ty <= y + step && ty > best) best = ty; }   // (the hill's rock over a cave)
     return best; }
-  underRoof(p) { if (this.inCave(p)) return true; for (const t of this.roofs) { if (Math.abs(p.x - t.ctx.s.x) > 75 || Math.abs(p.z - t.ctx.s.z) > 75) continue; const [lx, lz] = this.local(t, p.x, p.z); if (lx >= t.x0 && lx <= t.x1 && lz >= t.z0 && lz <= t.z1 && t.ctx.s.y + t.y > p.y + 1) return true; } return false; }
+  // (above: how far over p a roof must be; the old houses' roofs are registered bay by bay, less the holes in them)
+  underRoof(p, above = 1) { if (this.inCave(p)) return true; for (const t of this.roofs) { if (Math.abs(p.x - t.ctx.s.x) > 75 || Math.abs(p.z - t.ctx.s.z) > 75) continue; const [lx, lz] = this.local(t, p.x, p.z); if (lx >= t.x0 && lx <= t.x1 && lz >= t.z0 && lz <= t.z1 && t.ctx.s.y + t.y > p.y + above) return true; } return false; }
+  anchorsNear(x, z, r) { return this.anchors.filter((a) => Math.abs(a.x - x) < r && Math.abs(a.z - z) < r); }
   // in a cave, under its rock (out of the rain, the wind and the sky)
   inCave(p) { for (const k of this.caveRocks || []) { if (Math.abs(p.x - k.ctx.s.x) > 40 || Math.abs(p.z - k.ctx.s.z) > 40) continue; const [u, v] = this.local(k, p.x, p.z), y = p.y - k.ctx.s.y; if (densityAt(k.R, u, y + 1, v) <= 0 && surfaceFrom(k.R, [u, y + 1, v], [0, 1, 0], 16)) return true; } return false; }
   // how far along a → b the rock of a cave first lies (to keep the camera inside the cave with the hero), or null

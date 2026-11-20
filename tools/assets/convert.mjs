@@ -56,7 +56,7 @@ const slotsOf = () => (slots ||= Object.fromEntries(Object.entries(JSON.parse(fs
   .filter(([, v]) => v.textures).map(([k, v]) => [k, v.textures.map((t) => (Array.isArray(t) ? t : path.join(EMPIRE, t)))])));
 const part = (src) => (src.includes('/') ? path.join(PACK, src) : path.join(EMPIRE, 'Models', src + '.fbx'));   // (a bare name is an Ancient Empire model)
 function compose(name, e, out) {
-  const job = { name, out, kit: path.join(EMPIRE, 'Models'), slots: slotsOf(), fallback: path.join(EMPIRE, 'Textures/Alts/PolygonAncientEmpire_01_A.png'), house: e.house,
+  const job = { name, out, kit: path.join(EMPIRE, 'Models'), slots: slotsOf(), fallback: path.join(EMPIRE, 'Textures/Alts/PolygonAncientEmpire_01_A.png'), house: e.house, plaster: e.plaster,
     compose: (e.compose || []).map((p) => ({ ...p, src: part(p.src) })) };
   const jf = path.join(tmp, name + '.json'); fs.writeFileSync(jf, JSON.stringify(job));
   const log = execFileSync(BLENDER, ['-b', '--factory-startup', '-P', path.join(HERE, 'compose.py'), '--', jf], { encoding: 'utf8', maxBuffer: 64e6 });
