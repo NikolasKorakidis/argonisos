@@ -54,6 +54,14 @@ export const PATCHES = [
         'The <b>hoe</b> is a real hoe, its blade across the handle, instead of a spade.',
         'Olives, acorns and pomegranates have pictures of their own in your pack: an olive on its twig, an acorn in its cup and a pomegranate with its crown.',
       ] },
+      { t: 'Balance', icon: 'bull', items: [
+        '<b>Hogs are much tougher:</b> a grown hog now takes four or five blows of the crude axe.',
+        '<b>Hogs fear fire, until you hit one.</b> A hog keeps away from a lit fire and from the torch in your hand. Hit it, or one of its family, and the whole family turns on you and keeps fighting, torch or no torch, until the fight is over.',
+        '<b>Dryadlings</b> back away for a moment the first time they see your lit torch in a fight, then come at you regardless.',
+        '<b>Dryads</b> no longer fear fire at all: a torch won\'t keep one off. Fire still hurts them more than other blows.',
+        '<b>The Minotaur\'s charge</b> hits harder when his horns catch you.',
+        '<b>The dead of the Labyrinth</b> now rise in waves 30 seconds apart. The first comes 30 seconds into the fight, or sooner if you bring the Minotaur down to a third of his health first.',
+      ] },
     ],
   },
   {

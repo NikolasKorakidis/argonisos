@@ -3,7 +3,9 @@
 // behind. Levels 0-2 (shown as owls over the name) add 25% health, damage and drops each.
 //   passive: wander and graze, bolt when you come close or hurt them
 //   aggressive: attack when you come close (hogs) or as soon as they see you (dryads, giants, skeletons)
-//   Most of them won't come near a fire.
+//   Hogs and dryadlings won't come near a fire, and a hog keeps clear of the torch in your hand too, until you hit it (or
+//   one of its family): then it fights on through fire and torch until the fight is over. A dryadling backs away from
+//   your torch the first time it sees it in a fight, then pays it no mind; a dryad isn't afraid of fire at all.
 //   Every blow is the attacker's clip played whole: it lands when the clip's strike does (models.js BLOWS), and only if
 //   you're still within reach and in front of it then; the last moments of a swing go where it was aimed, so stepping
 //   aside, backing off or rolling out of a wind-up you've read works. A dryad's thorns likewise leave her hand as her throw
@@ -26,14 +28,16 @@ const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 // how long before a blow lands the attacker stops turning after you (a heavy one a little sooner): long enough to see it
 // coming and step out of the way
 const COMMIT = 0.3;
-// drops: [item, min, max, chance]
+// drops: [item, min, max, chance]. fearFire: keeps out of the firelight (a lit fire within 7 m, or your lit torch);
+// fury: once you hurt it, or its family, it fights through fire until the fight is over (c.angered); torchShy: your torch
+// is no fire to it, but at its first sight of it in a fight it backs off that many seconds (c.torchSeen)
 export const TYPES = {
   rabbit: { name: 'Rabbit', hp: [3, 5], speed: [3 * FT, 15 * FT], passive: true, flee: 10 * FT, r: 0.3, h: 0.6, hops: true, mob: [1, 3], drops: [['rawMeat', 1, 1, 1], ['leather', 1, 1, 0.5], ['sharpBone', 1, 1, 0.2]] },
   fox: { name: 'Fox', hp: [7, 9], speed: [8 * FT, 20 * FT], passive: true, flee: 15 * FT, r: 0.4, h: 0.6, mob: [1, 2], drops: [['rawMeat', 1, 2, 1], ['foxHide', 1, 2, 0.5], ['sharpBone', 1, 1, 0.2]] },
   deer: { name: 'Deer', hp: [10, 14], speed: [5 * FT, 25 * FT], passive: true, flee: 20 * FT, r: 0.6, h: 1.4, mob: [1, 2], drops: [['rawMeat', 3, 4, 1], ['leather', 4, 4, 1], ['sharpBone', 1, 2, 0.2], ['deerHide', 1, 2, 1]] },
-  hog: { name: 'Hog', hp: [10, 14], speed: [8 * FT, 25 * FT], aggro: 10 * FT, retaliate: true, dmg: [8, 12, 'pierce'], reach: 1.6, fearFire: true, r: 0.6, h: 0.9, mob: [1, 3], drops: [['rawMeat', 1, 3, 1], ['leather', 3, 3, 1], ['sharpBone', 1, 1, 0.2]] },
-  dryadling: { name: 'Dryadling', hp: [15, 25], speed: [3 * FT, 15 * FT], sight: 18, dmg: [4, 6, 'slash'], reach: 1.4, fearFire: true, r: 0.35, h: 1.1, mob: [1, 3], weak: ['fire'], resist: ['poison'], drops: [['resin', 1, 2, 1], ['wood', 2, 4, 0.5]], blood: 0x6a8a3a },
-  dryad: { name: 'Dryad', hp: [36, 44], block: 14, speed: [5 * FT, 12 * FT], sight: 24, dmg: [6, 8, 'slash'], ranged: { dmg: [4, 6, 'pierce'], range: 16, every: 4.5 }, reach: 1.7, fearFire: true, r: 0.45, h: 2, mob: [2, 4], weak: ['fire'], resist: ['poison'], drops: [['resin', 1, 4, 1], ['wood', 2, 4, 1], ['dryadHeart', 1, 1, 0.2]], blood: 0x6a8a3a },
+  hog: { name: 'Hog', hp: [50, 65], speed: [8 * FT, 25 * FT], aggro: 10 * FT, retaliate: true, dmg: [8, 12, 'pierce'], reach: 1.6, fearFire: true, fury: true, r: 0.6, h: 0.9, mob: [1, 3], drops: [['rawMeat', 1, 3, 1], ['leather', 3, 3, 1], ['sharpBone', 1, 1, 0.2]] },
+  dryadling: { name: 'Dryadling', hp: [15, 25], speed: [3 * FT, 15 * FT], sight: 18, dmg: [4, 6, 'slash'], reach: 1.4, fearFire: true, torchShy: 2, r: 0.35, h: 1.1, mob: [1, 3], weak: ['fire'], resist: ['poison'], drops: [['resin', 1, 2, 1], ['wood', 2, 4, 0.5]], blood: 0x6a8a3a },
+  dryad: { name: 'Dryad', hp: [36, 44], block: 14, speed: [5 * FT, 12 * FT], sight: 24, dmg: [6, 8, 'slash'], ranged: { dmg: [4, 6, 'pierce'], range: 16, every: 4.5 }, reach: 1.7, r: 0.45, h: 2, mob: [2, 4], weak: ['fire'], resist: ['poison'], drops: [['resin', 1, 4, 1], ['wood', 2, 4, 1], ['dryadHeart', 1, 1, 0.2]], blood: 0x6a8a3a },
   giant: { name: 'Giant', hp: [550, 650], speed: [4 * FT, 18 * FT], sight: 30, dmg: [50, 70, 'blunt'], reach: 3.6, r: 1.2, h: 6, mob: [1, 1], weak: ['pierce'], resist: ['blunt'], heavy: true, drops: [['log', 1, 2, 1], ['stone', 2, 4, 1], ['giantHide', 1, 2, 1]], thunder: 'big' },
   skeleton: { name: 'Skeleton', hp: [35, 55], block: 20, speed: [6 * FT, 15 * FT], sight: 26, dmg: [20, 30, 'slash'], reach: 1.8, r: 0.4, h: 1.9, mob: [1, 3], weak: ['blunt'], resist: ['pierce', 'poison'], drops: [['sharpBone', 3, 5, 1]], blood: 0xd9cdb0 },
 };
@@ -135,7 +139,8 @@ export class Creatures {
     this.g.hud.damageNumber?.(at, total);
     if (opts.knock && from && Math.random() < opts.knock && !c.T.heavy) { const d = c.pos.clone().sub(from).setY(0).normalize(); c.pos.addScaledVector(d, 0.8); }
     if (c.T.passive) { c.state = 'flee'; c.t = rr(5, 8); }
-    else if (c.state !== 'attack') { c.state = 'chase'; }
+    else if (c.state !== 'attack') { c.state = 'chase'; c.retreat = false; }
+    if (c.T.fury) for (const k of [c, ...this.kin(c)]) k.angered = true;   // (hurt one and the whole family stops minding the fire)
     this.rouse(c);   // (its family joins in)
     if (c.hp <= 0) this.kill(c);
     return total;
@@ -165,9 +170,12 @@ export class Creatures {
       const d = c.pos.distanceTo(pp);
       if (d > 140 && !c.boss) { this.remove(c); continue; }
       c.t -= dt; c.atkCd -= dt; c.rangedCd -= dt; c.hitT -= dt; c.flash = Math.max(0, c.flash - dt * 4); c.body.flash(c.flash);
-      const fire = T.fearFire ? g.build?.nearFire(c.pos, 7) : null;
       // decide
       if (P.dead && c.state === 'chase') c.state = 'idle';
+      if (P.dead || calm(c)) c.angered = c.torchSeen = false;   // (the fight is over: it calmed down or lost you)
+      // the fire it keeps away from: a lit one near it, or the torch in your hand (no fire to a dryadling, torchShy), and
+      // none once it's angered (fury)
+      const lit = !!g.torchLit?.(), fire = T.fearFire && !c.angered ? g.build?.nearFire(c.pos, 7) || (lit && !T.torchShy && d < 7 ? { pos: pp } : null) : null;
       // noticing you: a field of view in front, only hearing behind; sneaking halves it, sprinting is heard further
       if (!P.dead && calm(c)) {
         const base = T.passive ? T.flee : (T.sight || T.aggro || 0), range = base * this.senseK(c, pp, P) * (g.S.time > 0.75 && !T.passive ? 0.75 : 1);
@@ -184,6 +192,8 @@ export class Creatures {
         else if (d > (T.passive ? T.flee : (T.sight || T.aggro || 8)) * 1.6) { c.state = 'idle'; c.t = rr(2, 4); c.aware = false; }   // you backed off: it settles down
         void P2;
       }
+      // a dryadling's first sight of your torch in a fight: it backs off a moment (torchShy), then comes on regardless
+      if (T.torchShy && lit && !c.torchSeen && (c.state === 'chase' || c.state === 'alert') && d < (T.sight || 8)) { c.torchSeen = true; c.state = 'flee'; c.t = T.torchShy; c.retreat = true; }
       let want = 0, face = c.yaw, special = null;
       if (c.boss && !P.dead) special = g.trial?.bossThink(c, dt, d);
       const M = alive(c.mother) ? c.mother : null, brood = c.brood?.some(alive);
@@ -191,14 +201,16 @@ export class Creatures {
         // away from you, weaving (a hare jinks hard from side to side); the young after their mother, and she no faster than they can run
         let away = Math.atan2(c.pos.x - pp.x, c.pos.z - pp.z); if (M?.state === 'flee' && c.pos.distanceTo(M.pos) > 3) away = Math.atan2(M.pos.x - c.pos.x, M.pos.z - c.pos.z);
         face = away + (T.hops ? (Math.sin(c.t * 3.3) > 0 ? 0.6 : -0.6) : Math.sin(c.t * 2) * 0.4); want = T.speed[1] * (brood ? 0.85 : 1);
-        if (c.t <= 0 && d > 25) { c.state = 'idle'; c.t = rr(2, 5); }
+        if (c.retreat) { if (c.t <= 0) { c.state = 'chase'; c.retreat = false; } }   // (only backing off from your torch: then back at you)
+        else if (c.t <= 0 && d > 25) { c.state = 'idle'; c.t = rr(2, 5); }
       } else if (c.state === 'chase' || c.state === 'attack') {
         const wp = g.structures?.navTarget?.(c.pos, pp) || pp;   // in the Labyrinth: round by the gaps in the rings (until it's broken)
         face = Math.atan2(wp.x - c.pos.x, wp.z - c.pos.z); want = T.speed[1] * (T.heavy ? 0.75 : 0.85);
         if (c.boss) face = this.steer(c, face, d, dt);   // (round what still stands between it and you)
-        if (fire) { const away = Math.atan2(c.pos.x - fire.pos.x, c.pos.z - fire.pos.z); if (c.pos.distanceTo(fire.pos) < 6.5) { face = away; want = T.speed[0] * 1.5; } else if (d < 9) want = 0; }   // won't come into the firelight
-        const stopAt = T.reach + T.r * 0.5; if (d < stopAt + (c.boss ? 0 : c.speed * 0.25)) want = 0;   // (easing off in time, not running on into you)
-        if (d < stopAt) { want = 0; if (c.atkCd <= 0 && !c.move) this.strike(c); }
+        // won't come into the firelight (backing out of it, and striking nothing on the way)
+        let shy = false; if (fire) { const away = Math.atan2(c.pos.x - fire.pos.x, c.pos.z - fire.pos.z); if (c.pos.distanceTo(fire.pos) < 6.5) { face = away; want = T.speed[0] * 1.5; shy = true; } else if (d < 9) want = 0; }
+        const stopAt = T.reach + T.r * 0.5; if (!shy && d < stopAt + (c.boss ? 0 : c.speed * 0.25)) want = 0;   // (easing off in time, not running on into you)
+        if (d < stopAt && !shy) { want = 0; if (c.atkCd <= 0 && !c.move) this.strike(c); }
         if (T.ranged && c.state === 'chase' && d > 5 && d < T.ranged.range && c.rangedCd <= 0 && !c.move) { c.rangedCd = T.ranged.every + rr(-1, 1); this.strike(c, 'throw'); }
         if (d > 60 || (c.t < -30 && d > 30)) { c.state = 'idle'; c.t = rr(2, 4); }
       } else if (c.state === 'alert' || c.state === 'throw') {

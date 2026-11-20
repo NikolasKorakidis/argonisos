@@ -85,6 +85,7 @@ export function installGame(g) {
   g.bow = () => { const i = worn('left'); return i >= 0 && ITEMS[inv.slots[i].id].bow ? ITEMS[inv.slots[i].id] : null; };
   g.heldSlot = () => { const i = worn('hand'); return i >= 0 ? inv.slots[i] : null; };
   g.equippedTool = (tool) => g.held()?.tool === tool;
+  g.torchLit = () => g.equippedTool('light') && !player.swimming && !player.dead;   // (a torch in your hand burns, out of the water: a fire the creatures that fear fire keep clear of, creatures.js)
   g.warmArmor = () => inv.slots.some((s) => s?.worn && ITEMS[s.id].warm);
   g.resists = (kind) => inv.slots.some((s) => s?.worn && ITEMS[s.id].resist?.includes(kind));   // (combat.js: a blow of that kind halved)
   g.armor = () => { let a = 0; const sets = {}; for (const s of inv.slots) if (s?.worn && ITEMS[s.id].armor) { a += ITEMS[s.id].armor; const st = ITEMS[s.id].set; sets[st] = (sets[st] || 0) + 1; } if (Object.values(sets).some((n) => n >= 3)) a *= 1.05; return Math.round(a); };

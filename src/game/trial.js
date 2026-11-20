@@ -2,7 +2,8 @@
 //   Clues: three of the five marked olive trees in Pedias piece together the way to the Minotaur's Labyrinth; three of
 //   the four Giant caves in Yleos (each guarded) show where the Chimera sleeps.
 //   Tribute: lay it on the boss's altar to call it: 5 deer hides and 10 olives for the Minotaur, 3 dryad hearts and
-//   10 pomegranates for the Chimera. Mid-fight, the dead (or the forest) come to the boss's aid every 30 seconds.
+//   10 pomegranates for the Chimera. Mid-fight, the dead (or the forest) come to the boss's aid in waves 30 seconds
+//   apart; the Minotaur's first comes sooner if he's brought down to 300 health first (helpAt).
 //   Offering: bring the head to the Ancient Temple. Zeus grants its power (F) and the next tier of crafting.
 //   Prayer: once a day at the temple altar, Zeus's Blessing. (And once ever at the old altar on the top of Olympos,
 //   which nothing points the way to: the whole island opens on your map.)
@@ -28,8 +29,9 @@ const FT = 0.3048, angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - 
 // front, creatures.js gap). Stronger to match: nearly twice the Minotaur's health and a third more for the Chimera, their
 // blows a third harder than before, so a fight takes a while and a blow taken really hurts, but the gear of the time
 // (the first weapons and thrower's armour for the Minotaur, lightstone and Cretan armour for the Chimera) still wins it.
+// helpAt: the health at which the first wave of help comes, if that's before its 30 seconds are up (help, update).
 TYPES.minotaur = { name: 'The Minotaur', boss: true, hp: [900, 900], block: 30, speed: [6 * FT, 9.4], sight: 90, dmg: [24, 30, 'slash'], reach: 5, r: 2.4, h: 10.5, size: 3.3, pace: 0.88, mob: [1, 1], heavy: true,
-  weak: ['pierce'], resist: ['slash', 'blunt'], drops: [['sharpBone', 20, 30, 1], ['minotaurHide', 12, 12, 1], ['minotaurHead', 1, 1, 1]], thunder: 'big', helpers: 'skeleton' };
+  weak: ['pierce'], resist: ['slash', 'blunt'], drops: [['sharpBone', 20, 30, 1], ['minotaurHide', 12, 12, 1], ['minotaurHead', 1, 1, 1]], thunder: 'big', helpers: 'skeleton', helpAt: 300 };
 TYPES.chimera = { name: 'The Chimera', boss: true, hp: [3300, 3300], block: 40, speed: [8 * FT, 9.6], sight: 100, dmg: [45, 56, 'pierce'], reach: 6.5, r: 4, h: 8.9, size: 3.8, pace: 0.9, body: [-11, 4], mob: [1, 1], heavy: true,
   weak: ['poison'], resist: ['slash', 'fire'], drops: [['dryadHeart', 20, 30, 1], ['chimeraHide', 1, 1, 1], ['chimeraHead', 1, 1, 1]], thunder: 'big', helpers: 'dryad' };
 // a boss's coming, in seconds from the tribute (Trial.stage): the pillar of light rises (light), the beast drops into it
@@ -161,7 +163,7 @@ export class Trial {
     if (t > 1.0 && once('thunder')) { g.sound?.('thunder', 1.2); g.flashSky(0.35); }
     if (t > ARRIVE.light && once('light')) { pillar(at, { rise: ARRIVE.drop - ARRIVE.light, high: 80, r: u.boss === 'chimera' ? 4 : 3 }); g.flashSky(0.7); }
     if (t > ARRIVE.drop && once('drop')) {   // out of the sky, roaring
-      this.calling = null; const c = g.creatures.spawn(u.boss, at.x, at.z, { level: 0, boss: true, aware: true }); c.state = 'chase'; c.arena = u.center.clone(); this.boss = c; this.helperT = 30; this.bossKind = u.boss;
+      this.calling = null; const c = g.creatures.spawn(u.boss, at.x, at.z, { level: 0, boss: true, aware: true }); c.state = 'chase'; c.arena = u.center.clone(); this.begin(c, u.boss);
       c.yaw = Math.atan2(P.pos.x - at.x, P.pos.z - at.z); c.intro = 99; c.ctl = { want: 0, at, air: ARRIVE.high }; A.c = c;
       g.sound?.('roar', { boss: true, long: true, at }); this.bar.classList.remove('hidden'); this.bar.querySelector('.bn').textContent = c.T.name; }
     if (A.c && !A.landed) { const k = Math.min(1, (t - ARRIVE.drop) / (ARRIVE.land - ARRIVE.drop)); A.c.fall = ARRIVE.high * (1 - k * k); }
@@ -178,6 +180,17 @@ export class Trial {
     }
     if (A.landed && t < ARRIVE.land + 0.25) askLight(at.clone().setY(at.y + 4), 60, 70, 0xffe2b0);   // (the flash lighting the ruin)
     if (t > ARRIVE.done) { this.arrival = null; P.focus = null; }
+  }
+  // the fight is on: the first wave of help 30 seconds from now (or sooner: helpAt)
+  begin(c, kind) { this.boss = c; this.bossKind = kind; this.helperT = 30; this.waves = 0; }
+  // a wave of help: two of the boss's helpers rising at the arena's edge, not right beside you, and the next in 30 seconds
+  help(c) {
+    const g = this.g, P = g.player.pos; this.helperT = 30; this.waves++;
+    for (let i = 0; i < 2; i++) {
+      let x = 0, z = 0; for (let k = 0; k < 8; k++) { const a = Math.random() * 6.28; x = c.arena.x + Math.cos(a) * 14; z = c.arena.z + Math.sin(a) * 14; if (Math.hypot(x - P.x, z - P.z) > 6) break; }
+      const h = g.creatures.spawn(c.T.helpers, x, z, { summoned: true, aware: true }); h.state = 'chase'; dust(h.pos.clone().setY(h.pos.y + 0.5), 14, 0x8a7a68, 0.5);
+    }
+    g.hud.toast(c.T.helpers === 'skeleton' ? 'The dead of the Labyrinth rise to fight for their master' : 'Dryads answer the Chimera\'s call');
   }
   onKill(c) {
     if (c !== this.boss) return;
@@ -226,7 +239,7 @@ export class Trial {
   // clip of its own (models.js BLOWS: the roar, the slam, the throw, claws, sting, fire) takes its timing from it: the
   // blow lands, the rock leaves the hand, the fire comes when the clip's moment does (m.hit), and the move lasts until
   // the clip has settled (m.dur). Below half
-  // health a boss is enraged: a roar, help from the dead (or the forest) at once, quicker moves and harder blows.
+  // health a boss is enraged: a roar, quicker moves and harder blows, and (the Chimera) help from the forest at once.
   //   Minotaur: follow-up swings, a bull charge (dazed for a moment if he runs into a wall), a labrys slam that sends a
   //             shockwave round him, a war cry that stuns, and rubble thrown at anyone keeping their distance.
   //   Chimera:  claws, and the serpent's sting for anyone behind it; fire from the lion's mouth; a pounce from afar.
@@ -241,8 +254,8 @@ export class Trial {
     // leash: a boss doesn't wander off its arena; if you run, it goes back and heals
     if (c.arena && c.pos.distanceTo(c.arena) > 45) { c.move = null; c.state = 'idle'; c.yaw = Math.atan2(c.arena.x - c.pos.x, c.arena.z - c.pos.z); c.hp = Math.min(c.max, c.hp + c.max * 0.05 * dt); return null; }
     if (!c.enraged && c.hp < c.max * 0.5) {
-      c.enraged = true; c.dmgK *= 1.15; this.helperT = Math.min(this.helperT, 1.5); c.move = { k: 'roar', ph: 0, enrage: true, ...this.timed(c, 'roar', 1.3) };
-      g.hud.region(`${T.name} is enraged`, c.type === 'minotaur' ? 'The dead of the Labyrinth answer his call' : 'The forest answers its call');
+      c.enraged = true; c.dmgK *= 1.15; if (!T.helpAt) this.helperT = Math.min(this.helperT, 1.5); c.move = { k: 'roar', ph: 0, enrage: true, ...this.timed(c, 'roar', 1.3) };   // (the Minotaur's dead keep their own time: help)
+      g.hud.region(`${T.name} is enraged`, c.type === 'minotaur' ? 'His blows come faster and harder' : 'The forest answers its call');
     }
     // follow-up swings: after a blow, often another straight away
     if (c.state === 'attack') { if (!c.combo) { c.combo = true; c.atkCd = Math.random() < (c.enraged ? 0.6 : 0.4) ? 0.5 : c.enraged ? 1.5 : 2.1; } } else c.combo = false;
@@ -301,7 +314,7 @@ export class Trial {
         }
         if (m.ph === 1) {   // the charge: fast, turning only a little
           m.dir += clamp(angDiff(toP, m.dir), -0.55 * dt, 0.55 * dt); c.ctl = { want: c.enraged ? 19 : 17, face: m.dir, snap: true };   // (a giant's charge: fast, but you can still step out of its way)
-          if (!m.gored && d < T.r + 2.5) { m.gored = true; g.combat.hitPlayer(c, [34, 42, 'pierce']); }
+          if (!m.gored && d < T.r + 2.5) { m.gored = true; g.combat.hitPlayer(c, [42, 46, 'pierce']); }   // (the ram's gore: docs/plans/balance.md)
           const ahead = g.colliders.pick(c.pos.x, c.pos.z, Math.sin(m.dir), Math.cos(m.dir), T.r + 1.1, SOLID);
           if (m.e > 0.2 && (ahead || c.stuck > 0.15)) {   // straight into a wall: dazed, with a crash you feel
             const p = at(3).addScaledVector(fwd(), T.r + 0.5), near = Math.max(0, 1 - P.pos.distanceTo(c.pos) / 45);
@@ -345,11 +358,12 @@ export class Trial {
     if (st.powerCd > 0) { st.powerCd -= dt; if (Math.floor(st.powerCd) !== this.lastCd) { this.lastCd = Math.floor(st.powerCd); this.drawPower(); } }
     if (g.player.stats.has('poisoned')) g.player.stats.damage(1.5 * dt);
     if (g.player.stats.has('burning')) g.player.stats.damage(2.5 * dt);
-    // boss fight: health bar, and help arrives every 30 seconds
+    // boss fight: health bar, and help in waves 30 seconds apart; the first sooner if the boss is brought down to helpAt
+    // (one wave, should both come in the same moment)
     if (this.boss) {
       const c = this.boss; this.bar.querySelector('i').style.width = (c.hp / c.max) * 100 + '%';
       this.helperT -= dt;
-      if (this.helperT <= 0 && !c.dead) { this.helperT = 30; for (let i = 0; i < 2; i++) { const a = Math.random() * 6.28, x = c.arena.x + Math.cos(a) * 14, z = c.arena.z + Math.sin(a) * 14; const h = g.creatures.spawn(c.T.helpers, x, z, { summoned: true, aware: true }); h.state = 'chase'; dust(h.pos.clone().setY(h.pos.y + 0.5), 14, 0x8a7a68, 0.5); } g.hud.toast(c.T.helpers === 'skeleton' ? 'The dead of the Labyrinth rise to fight for their master' : 'Dryads answer the Chimera\'s call'); }
+      if (!c.dead && (this.helperT <= 0 || (!this.waves && c.hp <= (c.T.helpAt ?? -1)))) this.help(c);
       if (g.player.pos.distanceTo(c.arena) > 70 && !c.dead) { g.creatures.remove(c); this.boss = null; this.bar.classList.add('hidden'); setWeather(null); g.hud.toast('You fled. The altar waits for another tribute.'); }
     }
     // a boss's head in the pack: the light over its stand at the temple, and the stand on the compass and map, until it's offered
