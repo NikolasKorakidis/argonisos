@@ -17,9 +17,12 @@
 //   thunder, the world's ambience goes down a little under it, and the giants' roars, steps, slams and fire are layered
 //   with a deep synthesised boom (sub) you feel more than hear; a limiter after the compressor keeps the loudest of it
 //   from clipping.
-let ctx = null, out = null, comp = null, lim = null, sfxBus = null, ambBus = null, musicBus = null, recBus = null, duckG = null, fightG = null, verb = null, noiseBuf = null, brownBuf = null;
+let ctx = null, out = null, comp = null, lim = null, stunF = null, sfxBus = null, ambBus = null, musicBus = null, recBus = null, duckG = null, fightG = null, verb = null, noiseBuf = null, brownBuf = null;
 let volume = 0.8, musicVol = 0.5, sfxVol = 1, ambVol = 1, fightK = 0;
-const FIGHT = { music: 1.9, amb: 0.65, duck: 0.3 };   // (in a boss fight: the music's gain, the ambience's, and how much of its usual dip under thunder the music keeps)
+// (in a boss fight: the music's gain, the ambience's, and how much of its usual dip under thunder the music keeps.
+// Patch 22: the boss's heavy track loud and clear over its storm, about as loud as the blows, the storm's rain and wind a
+// bed under it, the music hardly dipping under the bolts falling all round)
+const FIGHT = { music: 3.6, amb: 0.5, duck: 0.15 };
 const REC_MUSIC = 0.9;   // (the recorded music's level under the slider: music.js tracks are mastered louder than the beds)
 export function setVolume(v) { volume = v; if (out) out.gain.value = v; }
 export function setMusicVolume(v) { musicVol = v; if (musicBus) { musicBus.gain.value = 0.55 * v; recBus.gain.value = REC_MUSIC * v; } }
@@ -51,7 +54,9 @@ function init() {
     comp = ctx.createDynamicsCompressor(); comp.threshold.value = -16; comp.knee.value = 12; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.25;
     // (and a limiter after it: nothing it lets through reaches 0 dBFS, however many booms land at once)
     lim = ctx.createDynamicsCompressor(); lim.threshold.value = -5; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.002; lim.release.value = 0.15;
-    out = ctx.createGain(); out.gain.value = volume; comp.connect(lim).connect(out).connect(ctx.destination);
+    // (and between them the stun's muffle: open until a roar stuns you, daze())
+    stunF = ctx.createBiquadFilter(); stunF.type = 'lowpass'; stunF.frequency.value = 22000; stunF.Q.value = 0.5;
+    out = ctx.createGain(); out.gain.value = volume; comp.connect(stunF).connect(lim).connect(out).connect(ctx.destination);
     verb = makeVerb(); const verbOut = ctx.createGain(); verbOut.gain.value = 0.5; verb.connect(verbOut).connect(comp);
     sfxBus = ctx.createGain(); sfxBus.gain.value = 0.9 * sfxVol; sfxBus.connect(comp);
     ambBus = ctx.createGain(); ambBus.gain.value = ambVol; ambBus.connect(comp);
@@ -172,6 +177,13 @@ function pluck(freq, { vol = 0.12, delay = 0, dur = 2.6, pan = 0 } = {}) {
   const p = ctx.createStereoPanner(); p.pan.value = pan; o1.connect(f); o2.connect(g2).connect(f); f.connect(g).connect(p).connect(musicBus); o1.start(t); o2.start(t); o1.stop(t + dur + 0.1); o2.stop(t + dur + 0.1);
 }
 // The music dips under loud thunder (k: how loud, 0..1) and comes back over a few seconds (in a boss fight it hardly dips)
+// Stunned (a boss's roar): for secs everything comes muffled, as through stopped ears, with a thin ringing over it,
+// opening out again over the last of it
+export function daze(secs = 2) {
+  if (!stunF) return; const t = now(); stunF.frequency.cancelScheduledValues(t); stunF.frequency.setValueAtTime(stunF.frequency.value, t); stunF.frequency.exponentialRampToValueAtTime(420, t + 0.12);
+  stunF.frequency.setValueAtTime(420, t + secs * 0.6); stunF.frequency.exponentialRampToValueAtTime(22000, t + secs + 0.4);
+  tone(3150, secs + 0.6, { type: 'sine', vol: 0.022, attack: 0.15, wet: 0.2, release: secs + 0.6 }); tone(3190, secs * 0.8, { type: 'sine', vol: 0.012, attack: 0.3, wet: 0.2 });
+}
 export function duck(k, at = 0) { if (!duckG || k < 0.05) return; const t = now() + at, d = 1 - Math.min(0.55, k * 0.6) * (1 - (1 - FIGHT.duck) * fightK); duckG.gain.cancelScheduledValues(t); duckG.gain.setTargetAtTime(d, t, 0.08); duckG.gain.setTargetAtTime(1, t + 1.2, 1.4); }
 
 // the recordings for each ground the feet can be on (game.js: the boards of a building, water, paving or bare rock, the
@@ -329,6 +341,30 @@ const SFX = {
     noise(0.9, { type: 'highpass', freq: 5200, q: 0.4, vol: 0.075 * k, attack: 0.05, slide: -1800, delay: 0.66, wet: 0.06, pan });
     AUDIO.log?.push({ k: 'cooked', i: -1, t: now(), vol: +k.toFixed(3), bus: 'sfx' });   // (synthesised: noted for the tests all the same)
   },
+  // ---- the Minotaur fight (trial.js)
+  // his breath when he's spent: a long, deep, rough breath in through the nostrils and a heavier one out, a growl in it (k:
+  // how hard; the next breath is the caller's: one each time it's asked)
+  pant: ({ at, k = 1 } = {}) => { const s = place(at, 15, 120), v = k * s.k; if (v < 0.01) return; const o = { brown: true, wet: 0.3, pan: s.pan * 0.5 };
+    noise(0.65, { ...o, type: 'bandpass', freq: 380, q: 1.4, vol: 0.32 * v, attack: 0.35, slide: 160 }); noise(0.5, { freq: 1300, q: 1, vol: 0.06 * v, attack: 0.3, slide: 300, pan: s.pan * 0.5, wet: 0.2 });
+    noise(0.9, { ...o, type: 'bandpass', freq: 300, q: 1.2, vol: 0.42 * v, attack: 0.06, slide: -170, delay: 0.72 }); tone(62, 0.8, { type: 'sawtooth', vol: 0.05 * v, slide: -14, attack: 0.08, delay: 0.72, wet: 0.3, pan: s.pan * 0.5 });
+    sub(0.7, { f0: 44, f1: 30, k: 0.35 * k, at, near: 15, far: 120, delay: 0.72, attack: 0.1, rumble: 0.3 }); },
+  // the snort and the scrape of a hoof as he lowers his horns to charge
+  snort: ({ at } = {}) => { const s = place(at, 15, 160); if (s.k < 0.01) return; noise(0.35, { type: 'bandpass', freq: 520, q: 1.1, vol: 0.5 * s.k, attack: 0.02, slide: -260, brown: true, wet: 0.35, pan: s.pan * 0.5 }); noise(0.25, { freq: 1700, q: 0.8, vol: 0.12 * s.k, attack: 0.01, slide: -700, wet: 0.2, pan: s.pan * 0.5 });
+    noise(0.5, { type: 'bandpass', freq: 900, q: 0.7, vol: 0.18 * s.k, attack: 0.05, slide: -500, delay: 0.25, wet: 0.2, pan: s.pan * 0.5 }); },
+  // the charge under way: a rumble that grows with his speed for dur seconds (his hooves are his footfalls: giantStep)
+  charge: ({ at, dur = 2 } = {}) => { const s = place(at, 20, 220); if (s.k < 0.01) return; noise(dur, { type: 'lowpass', freq: 160, q: 0.8, vol: 0.55 * s.k, attack: dur * 0.7, slide: 60, brown: true, wet: 0.3, pan: s.pan * 0.4 }); sub(dur, { f0: 34, f1: 48, k: 0.5, at, near: 20, far: 220, attack: dur * 0.7, rumble: 0.4 }); },
+  // a lightning bolt gathering where it will fall (the ground glowing): a fizz and crackle rising for a second (at)
+  zap: ({ at, dur = 1 } = {}) => { const s = place(at, 6, 80); if (s.k < 0.02) return; noise(dur, { type: 'highpass', freq: 2500, q: 0.6, vol: 0.12 * s.k, attack: dur * 0.9, slide: 2500, wet: 0.2, pan: s.pan });
+    for (let i = 0; i < 18; i++) { const d = dur * Math.sqrt(Math.random()); noise(rnd(0.004, 0.015), { freq: rnd(2500, 8000), q: 2, vol: rnd(0.08, 0.2) * s.k * (0.3 + d / dur), attack: 0.001, delay: d, wet: 0.1, pan: s.pan }); } },
+  // a skeleton clawing out of the ground: earth breaking, then its bones knocking together as it pulls free
+  boneRise: ({ at } = {}) => { const s = place(at, 5, 60); if (s.k < 0.02) return; noise(1.2, { type: 'lowpass', freq: 380, vol: 0.4 * s.k, attack: 0.1, slide: -150, brown: true, wet: 0.25, pan: s.pan }); rattle(6, 1, { k: 0.8, at, near: 5, far: 60, delay: 0.1 }); SFX.boneRattle({ at, k: 0.8, delay: 0.7 }); },
+  // its bones clacking as it walks (k: how loud; delay)
+  boneRattle: ({ at, k = 1, delay = 0 } = {}) => { const s = place(at, 4, 40); if (s.k * k < 0.02) return; const n = 3 + Math.floor(Math.random() * 4), f = rnd(700, 1100);
+    for (let i = 0; i < n; i++) { noise(rnd(0.02, 0.05), { freq: f * rnd(0.8, 1.3), q: rnd(5, 10), vol: rnd(0.08, 0.16) * k * s.k, attack: 0.001, delay: delay + i * rnd(0.05, 0.11), wet: 0.15, pan: s.pan }); } },
+  // a skeleton falling apart: a dry crack, then its bones clattering down and rolling, a hollow knock for the skull
+  boneCrumble: ({ at } = {}) => { const s = place(at, 5, 60); if (s.k < 0.02) return; noise(0.08, { freq: 1600, q: 2, vol: 0.4 * s.k, attack: 0.002, wet: 0.2, pan: s.pan });
+    for (let i = 0; i < 16; i++) { const d = 0.05 + 0.7 * Math.random() ** 1.5; noise(rnd(0.02, 0.06), { freq: rnd(600, 1500), q: rnd(4, 9), vol: rnd(0.07, 0.18) * s.k * (1 - d * 0.6), attack: 0.001, delay: d, wet: 0.2, pan: s.pan + rnd(-0.2, 0.2) }); }
+    tone(330, 0.12, { type: 'triangle', vol: 0.08 * s.k, slide: -60, delay: 0.42, wet: 0.2, pan: s.pan }); tone(300, 0.1, { type: 'triangle', vol: 0.05 * s.k, slide: -50, delay: 0.6, wet: 0.2, pan: s.pan }); },
   owl: ({ at } = {}) => { if (play('owlHoot', { vol: 0.5, at, near: 6, far: 70, wet: 0.35, rate: [0.97, 1.03] })) return; tone(400, 0.4, { vol: 0.11, slide: -30, attack: 0.06, wet: 0.5 }); tone(380, 0.7, { vol: 0.11, slide: -50, attack: 0.06, delay: 0.5, wet: 0.5 }); },
 };
 export function sound(name, ...a) { if (!ctx) return; try { SFX[name]?.(...a); } catch { /* audio is optional */ } }

@@ -103,6 +103,46 @@ function updateArrival(dt) {
     if (w >= 1 && f >= 1) { ARRIVE.blast = null; flashM.visible = waveM.visible = false; } }
 }
 const _c2 = new THREE.Vector3();
+// ---- On the ground, for a boss fight (trial.js): rings racing out from a roar or a slam (ring), and marks lying on the
+// ground: a glow where a blow or a bolt is about to fall, the shadow of a thrown rock where it will land (mark), and the
+// cracks a slam leaves (cracks). A few of each made at load and kept in the scene unseen, as the arrival's are, each with
+// its own copy of one material (one program), reused round and round.
+const discTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'), gr = x.createRadialGradient(64, 64, 0, 64, 64, 63);
+  gr.addColorStop(0, 'rgba(255,255,255,0.55)'); gr.addColorStop(0.72, 'rgba(255,255,255,0.75)'); gr.addColorStop(0.9, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); })();
+const crackTex = (() => { const N = 256, c = document.createElement('canvas'); c.width = c.height = N; const x = c.getContext('2d'); x.strokeStyle = '#fff'; x.lineCap = 'round';
+  const arm = (px, py, a, len, w) => { for (let i = 0; i < 7 && len > 4; i++) { const nx = px + Math.cos(a) * len / 7 * 1.6, ny = py + Math.sin(a) * len / 7 * 1.6; x.lineWidth = w; x.beginPath(); x.moveTo(px, py); x.lineTo(nx, ny); x.stroke(); px = nx; py = ny; a += (Math.random() - 0.5) * 0.7; w *= 0.85; if (Math.random() < 0.25) arm(px, py, a + (Math.random() < 0.5 ? -0.8 : 0.8), len * 0.4, w * 0.7); } };
+  for (let i = 0; i < 9; i++) arm(N / 2, N / 2, (i / 9) * Math.PI * 2 + Math.random() * 0.4, N * (0.32 + Math.random() * 0.14), 5); return new THREE.CanvasTexture(c); })();
+const flatMat = (o) => new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -2, ...o });
+const pool = (n, geo, mat) => Array.from({ length: n }, () => { const m = new THREE.Mesh(geo, mat.clone()); m.visible = false; m.frustumCulled = false; m.renderOrder = 5; scene.add(m); return m; });
+const RINGS = pool(6, new THREE.RingGeometry(0.9, 1, 96).rotateX(-Math.PI / 2), glowMat(new THREE.Color(1.6, 1.3, 0.9)));
+const GLOWS = pool(8, new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), flatMat({ map: discTex, blending: THREE.AdditiveBlending, toneMapped: false }));
+const SHADOWS = pool(4, new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), flatMat({ map: discTex, color: 0x000000 }));
+const CRACKS = pool(4, new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), flatMat({ alphaMap: crackTex, color: 0x140f0a }));
+const live = [];   // { m, t, life, f(m, t): sets it for its age t }
+const take = (list) => { const m = list.find((x) => !x.visible) || list.reduce((a, b) => ((a.userData.t0 ?? 0) < (b.userData.t0 ?? 0) ? a : b)); for (let i = live.length - 1; i >= 0; i--) if (live[i].m === m) live.splice(i, 1); m.visible = true; m.userData.t0 = performance.now(); return m; };
+// a ring racing out along the ground from at to reach metres over time seconds, fading as it goes (k: how bright; color);
+// or (grow: false) standing at reach, swelling into sight and fading over time (how far something will reach)
+export function ring(at, { reach = 15, time = 0.6, k = 0.9, color, grow = true } = {}) {
+  const m = take(RINGS); m.position.copy(at).setY(at.y + 0.3); if (color) m.material.color.set(color).multiplyScalar(1.6); else m.material.color.setRGB(1.6, 1.3, 0.9);
+  live.push({ m, t: 0, life: time * 1.15, f: (m, t) => { const u = Math.min(1, t / time), r = grow ? reach * (1 - (1 - u) ** 2) : reach; m.scale.set(r, 1, r); m.material.opacity = k * (grow ? (1 - u) ** 1.2 * Math.min(1, t * 20) : Math.sin(Math.PI * u) ** 0.5); } });
+}
+// A mark on the ground, r metres across its half, at (its y: the ground there): glow (lit, additive: a blow or a bolt to
+// come; color) or a shadow (dark: where a rock will land). Returns it: set(k) brings it in and out (0..1, and r grown
+// or shrunk with r2), done() lets it go. Left alone it fades out after life seconds.
+export function mark(at, { r = 3, color = 0xff8040, shadow = false, life = 6 } = {}) {
+  const m = take(shadow ? SHADOWS : GLOWS); m.position.copy(at).setY(at.y + 0.12); m.scale.set(r, 1, r); if (!shadow) m.material.color.set(color); m.material.opacity = 0;
+  const h = { m, k: 0, t: 0, life, set: (k, r2) => { h.k = k; if (r2) m.scale.set(r2, 1, r2); }, done: () => { h.life = Math.min(h.life, h.t + 0.25); h.out = true; } };
+  live.push({ m, t: 0, life: 99, f: (m, t, e) => { h.t = t; const fade = h.out || t > h.life ? Math.max(0, 1 - (t - h.life + 0.25) / 0.25) : 1; m.material.opacity = (shadow ? 0.55 : 0.9) * h.k * fade; if (fade <= 0) e.life = 0; } });
+  return h;
+}
+// the cracks a great blow leaves in the ground, r metres out, dark, fading over life seconds
+export function cracks(at, { r = 6, life = 7 } = {}) {
+  const m = take(CRACKS); m.position.copy(at).setY(at.y + 0.1); m.scale.set(r, 1, r); m.rotation.y = Math.random() * 6.283;
+  live.push({ m, t: 0, life, f: (m, t) => { m.material.opacity = 0.85 * Math.min(1, t * 12) * Math.min(1, (life - t) / 2); } });
+}
+function updateMarks(dt) {
+  for (let i = live.length - 1; i >= 0; i--) { const e = live[i]; e.t += dt; if (e.t >= e.life) { e.m.visible = false; live.splice(i, 1); continue; } e.f(e.m, e.t, e); if (e.life <= 0) { e.m.visible = false; live.splice(i, 1); } }
+}
 // ---- slow motion: a moment of it as a boss lands (main.js scales the frame's time by TIME.k, eased back to 1 over real time)
 const TIME = { k: 1, hold: 0, low: 1 };
 export function slowMo(secs, k = 0.3) { TIME.hold = Math.max(TIME.hold, secs); TIME.low = Math.min(TIME.low, k); }
@@ -111,7 +151,7 @@ export function timeK(raw) {
   return TIME.k;
 }
 export function updateFx(dt, camera) {
-  updateArrival(dt);
+  updateArrival(dt); updateMarks(dt);
   const n = [0, 0, 0];
   for (let i = P.length - 1; i >= 0; i--) {
     const b = P[i]; b.t += dt; if (b.t >= b.life) { P.splice(i, 1); continue; }

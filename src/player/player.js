@@ -1,7 +1,7 @@
 // The player: third-person movement with momentum, sprinting and jumping that cost stamina, swimming, collisions with
 // trees, rocks and buildings, the storm wall's push-back, and the orbit camera.
 import * as THREE from 'three';
-import { camera } from '../render/core.js';
+import { camera, renderer } from '../render/core.js';
 import { groundAt } from '../world/groundcut.js';
 import { colliders } from '../world/colliders.js';
 import { stormWallDepth, stormWallOut } from '../world/stormwall.js';
@@ -25,6 +25,10 @@ const LOOK = { r: 30, speed: 3, low: 0.15, pitch: 1.5, near: 0.8, far: 14 };
 // and up so the beast fits in the view: at least dist metres back, the point it looks at lift metres higher, the view a
 // few degrees wider (fov); and while a boss arrives (focus: where it comes down) it turns to look that way
 const BOSS_CAM = { dist: 13, lift: 2.6, fov: 8, in: 0.9, out: 0.5 };
+// Stunned (a boss's roar, a guard broken): no moving, jumping or striking; the hero reels (the big stagger played slow and
+// whole) and sways dazed on his feet, and the view swims: blurred, greyed and wavering (DAZE: its blur in px, how much
+// colour goes and how far it wavers, in degrees), easing in at once and out over its last moments
+const DAZE = { blur: 1.6, grey: 0.45, wave: 0.7 };
 
 export class Player {
   constructor(scene) {
@@ -56,7 +60,7 @@ export class Player {
   // partway through the swing (onStrike), where the move's weapon meets what's in front; blows that follow each other
   // closely go through the weapon's moves in turn (a combo)
   strike(kind, cost) {
-    if (this.swing > 0 || this.dead || this.swimming || this.equip || this.hero.moveK < 0.5) return false;
+    if (this.swing > 0 || this.dead || this.swimming || this.equip || this.hero.moveK < 0.5 || this.stats.has('stunned')) return false;
     if (!this.stats.use(cost, kind === 'punch' ? 'unarmed' : null)) { this.onToast?.('Too tired'); return false; }
     this.combo = this.comboT > 0 && this.swingKind === kind ? this.combo + 1 : 0; this.strikeMove = strikeOf(kind, this.combo);
     this.swing = 1; this.swingKind = kind; this.swingHit = false; this.stopT = 0; this.yaw = Math.atan2(-Math.sin(this.camYaw), -Math.cos(this.camYaw));
@@ -70,7 +74,7 @@ export class Player {
   // no blow lands in the heart of a dodge roll
   get dodging() { return !!this.dodge && this.dodge.t > DODGE.safe[0] && this.dodge.t < DODGE.safe[1]; }
   update(dt) {
-    const S = this.stats;
+    const S = this.stats; this.daze(dt);
     // ---- camera input
     // (seated, lookK: the free camera reaches lower, higher and further, and the wheel's steps grow with the distance)
     if (input.locked && !input.uiOpen) {
@@ -189,13 +193,23 @@ export class Player {
     const yawRate = angDiff(this.yaw, this.lastYaw) / Math.max(dt, 1e-3); this.lastYaw = this.yaw;
     this.lean = lerp(this.lean, this.onGround ? clamp(speed / 8, 0, 1) * 0.09 + clamp(this.slope || 0, -0.6, 0.6) * 0.22 * clamp(speed / 3, 0, 1) : 0, Math.min(1, dt * 6));
     this.bank = lerp(this.bank, clamp(-yawRate * 0.03 * clamp(speed / 5, 0, 1), -0.12, 0.12), Math.min(1, dt * 6));
-    this.root.rotation.set(this.lean, this.yaw, this.bank);
+    this.root.rotation.set(this.lean, this.yaw, this.bank + (this.sway || 0));
     // ---- animation
     let moveRel = 0; if ((this.aiming || this.blocking) && speed > 0.3) moveRel = angDiff(Math.atan2(this.hv.x, this.hv.z), this.yaw);
     H.update(dt, { baseY: this.sneaking && !H.crouches ? -0.12 : 0, speed, sprinting: this.sprinting, onGround: this.onGround || this.swimming, jumped: this.jumped, vy: this.vel.y, moving: !!(ix || iz) || this.jumpBuf > 0, swimming: this.swimming, water: 0, moveRel,
       sneaking: this.sneaking && !this.swimming, guard: this.guard, blocking: this.blocking && !this.dodge, swing: this.swing, swingKind: this.swingKind, strike: this.strikeMove,
       equip: this.equip, bow: this.bow, aimPt: this.aimPt, ground: this.groundFn ||= (x, z, y) => this.groundHere(x, z, y), rootY: this.pos.y });
     this.updateCamera(dt);
+  }
+  // Stunned: the hero reels as it begins (the big stagger, slowed), then sways on his feet; the view swims (DAZE)
+  daze(dt) {
+    const on = this.stats.has('stunned') && !this.dead, left = this.stats.cond.stunned || 0;
+    if (on && !this.dazed && this.hero.has('hitLarge')) this.hero.action('hitLarge', { upper: false, rate: 0.7, root: 'keep', lock: true, blend: 0.08, fade: 0.5 });
+    this.dazed = on; this.dazeT = on ? (this.dazeT || 0) + dt : 0;
+    const k = on ? Math.min(1, this.dazeT * 8, left / 0.6) : 0, el = renderer.domElement;
+    if (k > 0.002) { const t = this.dazeT, w = Math.sin(t * 5.3) * DAZE.wave * k; el.style.filter = `blur(${(DAZE.blur * k).toFixed(2)}px) saturate(${(1 - DAZE.grey * k).toFixed(2)})`; el.style.transform = `scale(${1 + 0.025 * k}) rotate(${(w * 0.6).toFixed(3)}deg) skewX(${(Math.sin(t * 3.7) * DAZE.wave * k).toFixed(3)}deg)`; this.dazeOn = true; }
+    else if (this.dazeOn) { el.style.filter = el.style.transform = ''; this.dazeOn = false; }
+    this.sway = on && !this.seat ? Math.sin(this.dazeT * 2.6) * 0.07 * k : 0;   // (swaying on his feet)
   }
   // what you'd stand on at (x, z): the ground (pressed down under floors), or a floor, step or stair within reach of y
   groundHere(x, z, y = this.pos.y) { return Math.max(groundAt(x, z), -SWIM_DEPTH, this.floorAt ? this.floorAt({ x, z, y }) : -1e9); }

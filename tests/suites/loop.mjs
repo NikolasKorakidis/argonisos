@@ -47,14 +47,14 @@ export default {
     await t.step('16 copy the marks of three olives', `for (let i = 0; i < 3; i++) { ${at('scrap', " && !g.trial.st.scraps.includes(u.id)")} } g.guide.update(1); return g.guide.cur >= 16 || 'copied ' + g.trial.st.scraps.join(',');`);
     await t.step('17 the Minotaur’s tribute', `g.give('deerHide', 5); g.give('olive', 10); ${guide(17)}`);
     await t.step('18 call the Minotaur at the Labyrinth', `${at('summon', " && u.boss === 'minotaur'")} return true;`);
-    await t.wait(3600);
+    await t.page.waitForFunction(() => AG.game.trial.boss && !AG.game.trial.arrival?.c?.fall, null, { timeout: 15000 }).catch(() => {});   // (the beast down out of the sky: its coming keeps the game's time, slower than the clock's when frames come slowly)
     await t.step('19 defeat the Minotaur', `if (!g.trial.boss) return 'no boss came'; ${kill('g.trial.boss')} ${guide(19)}`);
     await t.step('20 offer his head: the Roar is yours', `if (!inv.count('minotaurHead')) g.give('minotaurHead'); ${at('offering', " && u.boss === 'minotaur'")} g.guide.update(1); return (g.guide.cur >= 20 && g.trial.st.power === 'roar' && AG.S.tier >= 1) || 'step ' + g.guide.cur + ' power ' + g.trial.st.power + ' tier ' + AG.S.tier;`);
     await t.step('21 enter Yleos', `g.owl.st.done.push('yleos'); ${guide(21)}`);
     await t.step('22 rubbings in three giant caves', `for (let i = 0; i < 3; i++) { ${at('carving', " && !g.trial.st.carvings.includes(u.id)")} } g.guide.update(1); return g.guide.cur >= 22 || 'carvings ' + g.trial.st.carvings.join(',');`);
     await t.step('23 the Chimera’s tribute', `g.give('dryadHeart', 3); g.give('pomegranate', 10); ${guide(23)}`);
     await t.step('24 call the Chimera at its shrine', `for (const c of [...g.creatures.list]) g.creatures.remove(c); ${at('summon', " && u.boss === 'chimera'")} return true;`);
-    await t.wait(3600);
+    await t.page.waitForFunction(() => AG.game.trial.boss && !AG.game.trial.arrival?.c?.fall, null, { timeout: 15000 }).catch(() => {});   // (the beast down out of the sky: its coming keeps the game's time, slower than the clock's when frames come slowly)
     await t.step('25 defeat the Chimera', `if (!g.trial.boss) return 'no boss came'; ${kill('g.trial.boss')} ${guide(25)}`);
     await t.step('26 offer its head: the trial is complete', `if (!inv.count('chimeraHead')) g.give('chimeraHead'); ${at('offering', " && u.boss === 'chimera'")} g.guide.update(1); return (g.guide.cur === g.guide.steps.length && AG.S.tier >= 2) || 'step ' + g.guide.cur + ' tier ' + AG.S.tier;`);
     // save, then reload the page as a player would: the new game loads the save at start-up

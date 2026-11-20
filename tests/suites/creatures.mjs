@@ -7,9 +7,9 @@ export default {
   name: 'Creatures and bosses',
   slow: true,
   async run(t) {
-    await t.step('summon the Minotaur in the Labyrinth', `AG.S.peaceful = false; g.give('deerHide', 5); g.give('olive', 10); const u = g.structures.uses.find((u) => u.kind === 'summon' && u.boss === 'minotaur'); P.spawn(u.at.x, u.at.z + 1); g.trial.summon(u); window._u = u; let taken = 0; P.stats.damage = (n) => { taken += n; }; window._taken = () => taken; return true;`);
+    await t.step('summon the Minotaur in the Labyrinth', `window._s0 = g.trial.struck || 0; AG.AUDIO.ctx()?.resume?.(); AG.S.peaceful = false; g.give('deerHide', 5); g.give('olive', 10); const u = g.structures.uses.find((u) => u.kind === 'summon' && u.boss === 'minotaur'); P.spawn(u.at.x, u.at.z + 1); g.trial.summon(u); window._u = u; let taken = 0; P.stats.damage = (n) => { taken += n; }; window._taken = () => taken; return true;`);
     await t.wait(3500);
-    await t.step('…he is a giant, five to six times the hero\'s height, and stands on his own feet (legs posed, nothing broken)', `const c = g.trial.boss; if (!c) return 'no boss'; const b = c.body; if (!b.ik || b.ik.legs.length !== 2) return 'no foot placement on the boss';
+    await t.step('…he is a giant, five to six times the hero\'s height, and stands on his own feet (legs posed, nothing broken)', `const c = g.trial.boss; if (!c) return 'no boss'; const b = c.body; for (let i = 0; i < 60 && !b.ik; i++) await new Promise((r) => setTimeout(r, 100)); if (!b.ik || b.ik.legs.length !== 2) return 'no foot placement on the boss';
       b.obj.updateMatrixWorld(true); const box = new AG.THREE.Box3().setFromObject(b.obj), h = box.max.y - box.min.y; if (h < 1.9 * 5 || h > 1.9 * 6.3) return 'he is ' + h.toFixed(1) + ' m tall';
       const v = new V(), ys = b.ik.legs.map((L) => L.foot.getWorldPosition(v).y - c.pos.y); if (!ys.every(Number.isFinite) || Math.min(...ys.map(Math.abs)) > c.T.h * 0.15 || Math.max(...ys.map(Math.abs)) > c.T.h * 0.35) return 'feet at ' + ys.map((y) => y.toFixed(2)) + ' m'; return true;`);
     await t.wait(5000);
@@ -18,28 +18,37 @@ export default {
       if (R.falls.length || !R.fallenG.visible || !R.debrisG.visible) return 'the collapse never settled: ' + R.falls.length + ' falling';
       const L = g.structures.lab, a = new V(L.c.x + 20, 0, L.c.z), b2 = new V(L.c.x + 3, 0, L.c.z); return g.structures.navTarget(a, b2) === null || 'still routing through the gaps';`);
     // the chase: the player held at points about the arena, each in turn; how long he takes to reach each (within the
-    // reach of his slam), and the
+    // reach of his slam: he walks at a giant's 4.5 m/s and stops for his moves and when he's spent, so up to 25 s), and the
     // longest he stood stuck while chasing (wanting to come on, no move under way, but not moving)
     const chase = await t.eval(`const c = g.trial.boss, u = window._u, L = g.structures.lab, out = [], wait = (ms) => new Promise((r) => setTimeout(r, ms)); if (!c) return 'boss gone';
       let worst = 0, stuck = 0, last = c.pos.clone(); const iv = setInterval(() => { const d = c.pos.distanceTo(P.pos), moved = Math.hypot(c.pos.x - last.x, c.pos.z - last.z); last.copy(c.pos);
         if (c.state === 'chase' && !c.move && !(c.intro > 0) && c.fall === undefined && d > c.T.reach + c.T.r + 1 && moved < 0.05) stuck += 0.1; else stuck = 0; worst = Math.max(worst, stuck); }, 100);
       for (const [r, a] of [[19, 0.4], [12, 2.2], [17, 3.6], [6, 5.0], [20, 1.3]]) {
         const x = L.c.x + Math.cos(a) * r, z = L.c.z + Math.sin(a) * r, pin = setInterval(() => { P.pos.set(x, P.pos.y, z); P.hv.set(0, 0, 0); P.stats.health = 99; }, 50); P.spawn(x, z);
-        const t0 = performance.now(); let got = false; while (performance.now() - t0 < 15000) { if (c.pos.distanceTo(P.pos) < c.T.reach + c.T.r + 3.5) { got = true; break; } await wait(100); }
+        const t0 = performance.now(); let got = false; while (performance.now() - t0 < 25000) { if (c.pos.distanceTo(P.pos) < c.T.reach + c.T.r + 3.5) { got = true; break; } await wait(100); }
         clearInterval(pin); out.push({ r, a, s: +((performance.now() - t0) / 1000).toFixed(1), got });
       }
       clearInterval(iv); return { out, worst: +worst.toFixed(1) };`);
     if (typeof chase === 'string') t.check('the chase', false, chase);
     else {
       t.metric('the chase across the broken Labyrinth (each point: seconds to reach it)', chase);
-      t.check('after the collapse he reaches you anywhere in the arena, within 15 s each time', chase.out.every((q) => q.got), JSON.stringify(chase.out));
+      t.check('after the collapse he reaches you anywhere in the arena, within 25 s each time', chase.out.every((q) => q.got), JSON.stringify(chase.out));
       t.check('…and is never stuck for more than 2 s', chase.worst <= 2, `${chase.worst} s stuck`);
     }
     await t.step('…and used his moves on the way (charge, throw, slam, roar)', `return window._taken() > 0 || 'no damage taken';`);
+    // Zeus's storm over the fight: bolts falling about the arena (trial.js counts them) all through it, and the boss's
+    // heavy track loud over the storm's rain and thunder (sound.js meters: the music's bus above the ambience's)
+    const storm = await t.eval(`const A = AG.AUDIO, S = {}; for (let i = 0; i < 40; i++) { const m = A.meters(); if (m) for (const k of ['music', 'amb', 'sfx']) { S[k] = (S[k] || 0) + 10 ** (m[k].lufs / 10); } await new Promise((r) => setTimeout(r, 100)); }
+      const lu = (k) => +(10 * Math.log10((S[k] || 0) / 40 + 1e-12)).toFixed(1); return { strikes: (g.trial.struck || 0) - window._s0, weather: AG.WEATHER.type, music: lu('music'), amb: lu('amb'), sfx: lu('sfx'), track: AG.MUSIC.playing.find((p) => !p.out)?.key || null };`);
+    t.metric('the fight\'s storm and mix (strikes since the summons, weather, LUFS)', storm);
+    t.check('a thunderstorm over the fight: bolts falling about the arena', storm.weather === 'thunder' && storm.strikes >= 5, JSON.stringify(storm));
+    t.check('…and the boss\'s track plays loud over it (the music above the ambience)', storm.track === 'bossMinotaur' && storm.music > storm.amb, JSON.stringify(storm));
     await t.shot('minotaur');
     await t.step('the Minotaur falls and drops his head', `g.creatures.hurt(g.trial.boss, [[99999, 'force']], P); return true;`);
     await t.wait(1500);
     await t.step('…(his head lies on the ground; the Labyrinth stays in ruins)', `return (g.pickups.drops.some((d) => d.item === 'minotaurHead') || g.trial.st.down.minotaur) && g.structures.ruins.labyrinth.broken || 'no head, ' + JSON.stringify(g.trial.st.down);`);
+    await t.step('…and the storm breaks: no more bolts, the sky clearing', `const s0 = g.trial.struck || 0; await new Promise((r) => setTimeout(r, 6000)); const n = (g.trial.struck || 0) - s0;
+      return (n === 0 && !g.trial.bolts.length && AG.WEATHER.type === 'clear' && AG.WEATHER.k.rain < 0.5) || JSON.stringify({ strikes: n, bolts: g.trial.bolts.length, weather: AG.WEATHER.type, rain: AG.WEATHER.k.rain });`);
     await t.step('summon the Chimera at its shrine', `for (const c of [...g.creatures.list]) g.creatures.remove(c); g.give('dryadHeart', 3); g.give('pomegranate', 10); const u = g.structures.uses.find((u) => u.kind === 'summon' && u.boss === 'chimera'); P.spawn(u.at.x, u.at.z + 1); g.trial.summon(u); return true;`);
     await t.wait(9000);
     await t.step('…the Chimera, a giant too, fights (it has hurt the player) and its shrine is broken', `const c = g.trial.boss; if (!c || c.type !== 'chimera') return 'no chimera'; const v = new V(); for (const [k, b] of Object.entries(c.body.bones || {})) { b.getWorldPosition(v); if (!Number.isFinite(v.x + v.y + v.z)) return 'bone ' + k + ' not finite'; }

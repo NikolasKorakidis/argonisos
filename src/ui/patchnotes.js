@@ -7,6 +7,22 @@ export const PATCHES = [
     id: 'patch-22', name: 'Patch 22', title: 'Learning by Doing', date: '20 November 2026',
     intro: 'Skills you can see grow, a hero who doesn\'t race across the island, your stamina in numbers, and meat that tells you when it\'s done.',
     sections: [
+      { t: 'The Minotaur', icon: 'bull', items: [
+        'He moves like the giant he is: he swings his weight round slowly and turns in an arc as he walks, gathers speed over a few strides and takes a while to stop, and his hooves stay put on the ground instead of sliding. No more leg hanging in the air while he stands, no lurch forward when he hits a wall, no slide back when he paws the ground.',
+        'He doesn\'t flinch at every blow any more: only a flurry of hard hits staggers him.',
+        '<b>His roar stuns.</b> He rears and bellows, and a shockwave rolls out some 16 m round him (the ground shows how far as he draws breath). Caught in it, you\'re stunned for 2 seconds: you reel, the world swims and sounds come muffled, and you can\'t move or strike. Get out of reach, or behind a wall.',
+        '<b>His charge</b> is slower and heavier. He lowers his horns and paws the ground first, then gathers speed over a few strides, and once he\'s going he can hardly turn: step aside at the last moment and he thunders past, skids to a stop and turns round, panting. Run him into a wall and he reels, dazed.',
+        '<b>His slam</b> glows on the ground where the axe will bite, and its shockwave hurts less the further you are from it (jump it and it passes under you). <b>His sweep</b> swings the axe flat across in front of him: roll back out of it, or crouch and it goes over you. A rock he throws shows its shadow where it will land.',
+        '<b>He tires.</b> After a few big moves, or a charge into a wall, he stops and stands heaving for breath, steam from his nostrils, a golden glow on him and on his health bar. For those few seconds your blows land half again as hard. Then he bellows you back and comes on.',
+        'Below half his health he\'s enraged: lightning strikes beside him, his moves come faster and he rests less.',
+        '<b>His dead</b> claw their way up out of the ground and come on at a shamble, each at its own pace. Only two at a time come at you; the others circle a few steps off, waiting their turn, and they all hold back while he charges. They\'re frailer than the dead of Valtos and hit softer, and they fall apart in a clatter of bones.',
+        'The Chimera shows where its pounce will land, and it tires too after its fire and its leaps.',
+      ] },
+      { t: 'Zeus\'s storm', icon: 'zeus', items: [
+        'When you lay the tribute, a thunderstorm rolls in over the arena: the sky goes dark, the rain drives and the wind gets up. Lightning strikes all round you with the thunder right on top of it, and some bolts come down close: the ground glows and crackles a second first, so move. A bolt hurts whatever it falls on, you, the Minotaur or his dead.',
+        'When the beast falls, the storm breaks: the rain stops, the clouds part and the sun comes through.',
+        'The boss\'s music plays loud and clear through the fight, over the storm.',
+      ] },
       { t: 'Skills', icon: 'star', items: [
         'The first time you use a skill, a banner on the right tells you at once: <b>Skill learned: Jumping, level 1</b>. Your first sprint, jump, swim, sneak and swing, the first guard you raise and the first thing you pick up each find theirs.',
         'Every level after that shows a banner too, with a soft chime. Several at once wait their turn, so none covers another.',
@@ -20,6 +36,14 @@ export const PATCHES = [
       ] },
       { t: 'Cooking', icon: 'fire', items: [
         'When meat or fish is done on the cooking stand it sizzles and lets out a soft hiss and a puff of steam, so you know it\'s ready without watching it.',
+      ] },
+      { t: 'Felling', icon: 'tree', items: [
+        'A felled tree falls with its own weight: slowly at first, then faster, until it hits the ground, a rock, a wall or another tree. Where the ground drops away it falls further, and on a rise it lands sooner.',
+        'If it falls onto a smaller tree, it breaks that one too and both come down, each leaving its own stump and log. Only the one: the second tree can\'t knock down a third. If the tree it falls onto is as big or bigger, it stays leaning against it.',
+        'Logs roll. On a slope a log rolls downhill, faster the steeper the ground, and slides a little on very steep ground. It stops against trees, rocks, stumps, walls and other logs, glances off them at an angle, and settles on flat ground or in a hollow. You can split it wherever it comes to rest.',
+        'Keep out of the way of a rolling log: it shoves you aside, and a fast, heavy one hurts and knocks you back. Creatures too.',
+        'You hear a log rumble as it rolls and thud when it lands, and it kicks up dust.',
+        'Logs now stay where they lie when you save and come back.',
       ] },
       { t: 'The abandoned house', icon: 'roof', items: [
         'The abandoned house is a farmstead now: the house under a porch on square piers that stand either side of the door, never in front of it, a roofless storeroom along the yard, and a dry-stone wall round the yard with the well, the bread oven and a vine. Part of the porch has come down, and the old hearth, the loom, the couch, the shelves and the chest are still inside.',

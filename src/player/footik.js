@@ -10,6 +10,9 @@ const _h = new THREE.Vector3(), _k = new THREE.Vector3(), _a = new THREE.Vector3
 const _g = new THREE.Vector3(), _f = new THREE.Vector3(), _s = new THREE.Vector3();
 const _q = new THREE.Quaternion(), _pq = new THREE.Quaternion(), _bq = new THREE.Quaternion(), _fq = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
 const MAX_DROP = 0.5, MAX_LIFT = 0.55, MAX_TILT = 0.45;
+// a locked foot (FootIK lock): planted while within lift of as low as it goes, held until the clip has carried it reach away
+// (both in metres at a man's size), and let go of over ease seconds
+const LOCK = { lift: 0.06, reach: 0.45, ease: 0.15 };
 
 // turn a bone by a world-space rotation q, keeping its parent where it is
 function rotateWorld(bone, q) {
@@ -28,9 +31,11 @@ export class FootIK {
   // bones: the rig's bones by name (a foot's userData.sole, from soleOf, lets it be levelled across); ground(x, z, y) → the height of whatever you'd stand on there, reaching up to ~0.5 m
   // above y; legs('Left' | 'Right') → the names of that leg's thigh, shin and foot bones (Mixamo's unless told); k: how
   // much bigger than a man the body is (a giant boss's feet reach and lift as much further)
-  constructor(bones, ground, legs = (s) => [`mixamorig${s}UpLeg`, `mixamorig${s}Leg`, `mixamorig${s}Foot`], k = 1) {
-    this.ground = ground; this.w = 0; this.pelvis = 0; this.k = k;
-    this.legs = ['Left', 'Right'].map((s) => { const [up, knee, foot] = legs(s).map((n) => bones[n]); return { up, knee, foot, d: 0, tilt: new THREE.Quaternion(), sole: foot?.userData.sole }; }).filter((l) => l.up && l.knee && l.foot);
+  // lock: a planted foot stays where it came down until the clip lifts it again (a giant's: its clips' strides never
+  // quite match the ground going by, and it turns where it stands), let go of over a moment so it doesn't snap
+  constructor(bones, ground, legs = (s) => [`mixamorig${s}UpLeg`, `mixamorig${s}Leg`, `mixamorig${s}Foot`], k = 1, lock = false) {
+    this.ground = ground; this.w = 0; this.pelvis = 0; this.k = k; this.lock = lock;
+    this.legs = ['Left', 'Right'].map((s) => { const [up, knee, foot] = legs(s).map((n) => bones[n]); return { up, knee, foot, d: 0, tilt: new THREE.Quaternion(), sole: foot?.userData.sole, at: null, ox: 0, oz: 0 }; }).filter((l) => l.up && l.knee && l.foot);
   }
   // Before the pose is solved: where is the ground under each foot, relative to where the body stands (rootY)? Sets the
   // pelvis drop (returned, in metres, ≤ 0) for the caller to apply before solve()
@@ -49,13 +54,24 @@ export class FootIK {
     return this.pelvis;
   }
   // After the pelvis drop is applied and the rig's matrices are current: bend each leg so its foot meets its ground
-  solve(rootY) {
-    if (this.w < 0.01) return;
+  solve(rootY, dt = 0) {
+    if (this.w < 0.01) { for (const L of this.legs) { L.at = null; L.ox = L.oz = 0; } return; }
     for (const L of this.legs) {
-      const need = (L.d - this.pelvis) * this.w; if (Math.abs(need) < 0.004 && !L.sole) continue;
-      if (Math.abs(need) >= 0.004) {
+      const need = (L.d - this.pelvis) * this.w;
+      // (a planted foot held where it came down: how far the clip has carried it off that spot, ox and oz, eased back to
+      // nothing once the clip lifts it or it would have to reach too far)
+      if (this.lock) {
+        L.foot.getWorldPosition(_a); const lift = _a.y + need - (rootY + L.d); L.base = Math.min((L.base ?? lift) + dt * 0.05 * this.k, lift);   // (base: the ankle's height when it's down, the lowest of late)
+        const down = lift - L.base < LOCK.lift * this.k;
+        if (down && !L.at) L.at = { x: _a.x, z: _a.z };
+        if (L.at && (!down || Math.hypot(L.at.x - _a.x, L.at.z - _a.z) > LOCK.reach * this.k)) L.at = null;
+        if (L.at) { L.ox = L.at.x - _a.x; L.oz = L.at.z - _a.z; } else { const f = Math.max(0, 1 - dt / LOCK.ease); L.ox *= f; L.oz *= f; }
+      }
+      const off = Math.hypot(L.ox, L.oz) * this.w;
+      if (Math.abs(need) < 0.004 && off < 0.004 && !L.sole) continue;
+      if (Math.abs(need) >= 0.004 || off >= 0.004) {
         L.up.getWorldPosition(_h); L.knee.getWorldPosition(_k); L.foot.getWorldPosition(_a);
-        _t.copy(_a); _t.y += need;
+        _t.copy(_a); _t.y += need; _t.x += L.ox * this.w; _t.z += L.oz * this.w;
         const a = _h.distanceTo(_k), b = _k.distanceTo(_a), d = clamp(_h.distanceTo(_t), Math.abs(a - b) + 1e-3, a + b - 1e-3);
         // knee: open or close it until hip-to-ankle is the distance we need (law of cosines)
         _u.subVectors(_a, _k); _v.subVectors(_h, _k);
