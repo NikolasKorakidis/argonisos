@@ -4,6 +4,25 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-23', name: 'Patch 23', title: 'Polish and Pace', date: '21 November 2026',
+    intro: 'A long look over the whole island: a brighter sky and storm, clearer air, a smoother forest, fuller sound, fairer fights and building that keeps what you build.',
+    sections: [
+      { t: 'The look', icon: 'sun', items: [
+      ] },
+      { t: 'Smoother', icon: 'sprint', items: [
+        'Fixed: a short freeze every time the sky\'s light was refreshed, felt most in the woods and when time runs fast.',
+      ] },
+      { t: 'Sound', icon: 'lyre', items: [
+      ] },
+      { t: 'Fights and survival', icon: 'sword', items: [
+      ] },
+      { t: 'Building and crafting', icon: 'hammer', items: [
+      ] },
+      { t: 'Under the hood', icon: 'gear', items: [
+      ] },
+    ],
+  },
+  {
     id: 'patch-22', name: 'Patch 22', title: 'Learning by Doing', date: '20 November 2026',
     intro: 'Skills you can see grow, a hero who doesn\'t race across the island, your stamina in numbers, and meat that tells you when it\'s done.',
     sections: [
