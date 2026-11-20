@@ -3947,62 +3947,199 @@
     ]
   },
   "sounds": {
-    "stepGrass": [
-      "Classic Footstep SFX/Forest ground/Forest_ground_step0.wav",
-      "Classic Footstep SFX/Forest ground/Forest_ground_step1.wav",
-      "Classic Footstep SFX/Forest ground/Forest_ground_step2.wav",
-      "Classic Footstep SFX/Forest ground/Forest_ground_step3.wav"
-    ],
-    "stepDirt": [
-      "Classic Footstep SFX/Ground/Ground_Step0.wav",
-      "Classic Footstep SFX/Ground/Ground_Step1.wav",
-      "Classic Footstep SFX/Ground/Ground_Step2.wav",
-      "Classic Footstep SFX/Ground/Ground_Step3.wav",
-      "Classic Footstep SFX/Ground/Ground_Step4.wav"
-    ],
-    "stepRock": [
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step0.wav",
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step1.wav",
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step2.wav",
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step3.wav",
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step4.wav",
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step5.wav"
-    ],
-    "stepWood": [
-      "Classic Footstep SFX/Floor/Floor_step0.wav",
-      "Classic Footstep SFX/Floor/Floor_step1.wav",
-      "Classic Footstep SFX/Floor/Floor_step2.wav",
-      "Classic Footstep SFX/Floor/Floor_step3.wav",
-      "Classic Footstep SFX/Floor/Floor_step4.wav",
-      "Classic Footstep SFX/Floor/Floor_step5.wav"
-    ],
-    "stepWater": [
-      "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_01.wav",
-      "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_02.wav",
-      "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_03.wav"
-    ],
-    "stepLeaves": [
-      "Classic Footstep SFX/Forest ground/Forest_ground_step4.wav",
-      "Classic Footstep SFX/Forest ground/Forest_ground_step5.wav",
-      "Classic Footstep SFX/Forest ground/Forest_ground_step6.wav"
-    ],
-    "stepSand": [
-      "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_01.wav",
-      "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_02.wav",
-      "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_03.wav"
-    ],
-    "landGrass": [
-      "Classic Footstep SFX/Forest ground/Forest_ground_jump0.wav"
-    ],
-    "landRock": [
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_jump0.wav"
-    ],
-    "landWood": [
-      "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Jump/Footsteps_Wood_Jump_Land_01.wav"
-    ],
-    "landWater": [
-      "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Jump/Footsteps_Water_Jump_Big_01.wav"
-    ],
+    "stepGrass": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Forest ground/Forest_ground_step0.wav",
+        "Classic Footstep SFX/Forest ground/Forest_ground_step1.wav",
+        "Classic Footstep SFX/Forest ground/Forest_ground_step2.wav",
+        "Classic Footstep SFX/Forest ground/Forest_ground_step3.wav"
+      ]
+    },
+    "stepDirt": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Ground/Ground_Step0.wav",
+        "Classic Footstep SFX/Ground/Ground_Step1.wav",
+        "Classic Footstep SFX/Ground/Ground_Step2.wav",
+        "Classic Footstep SFX/Ground/Ground_Step3.wav",
+        "Classic Footstep SFX/Ground/Ground_Step4.wav"
+      ]
+    },
+    "stepRock": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_step0.wav",
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_step1.wav",
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_step2.wav",
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_step3.wav",
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_step4.wav",
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_step5.wav"
+      ]
+    },
+    "stepWood": {
+      "group": "stepWood",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Floor/Floor_step0.wav",
+        "Classic Footstep SFX/Floor/Floor_step1.wav",
+        "Classic Footstep SFX/Floor/Floor_step2.wav",
+        "Classic Footstep SFX/Floor/Floor_step3.wav",
+        "Classic Footstep SFX/Floor/Floor_step4.wav",
+        "Classic Footstep SFX/Floor/Floor_step5.wav"
+      ]
+    },
+    "stepWater": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_01.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_02.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_03.wav"
+      ]
+    },
+    "stepLeaves": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Forest ground/Forest_ground_step4.wav",
+        "Classic Footstep SFX/Forest ground/Forest_ground_step5.wav",
+        "Classic Footstep SFX/Forest ground/Forest_ground_step6.wav"
+      ]
+    },
+    "stepSand": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_01.wav",
+        "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_02.wav",
+        "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_03.wav"
+      ]
+    },
+    "stepSnow": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Walk/Footsteps_Snow_Hard_Walk_01.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Walk/Footsteps_Snow_Hard_Walk_02.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Walk/Footsteps_Snow_Hard_Walk_03.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Walk/Footsteps_Snow_Hard_Walk_04.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Walk/Footsteps_Snow_Hard_Walk_05.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Walk/Footsteps_Snow_Hard_Walk_06.wav"
+      ]
+    },
+    "stepMud": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Walk/Footsteps_Mud_Walk_01.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Walk/Footsteps_Mud_Walk_02.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Walk/Footsteps_Mud_Walk_03.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Walk/Footsteps_Mud_Walk_04.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Walk/Footsteps_Mud_Walk_05.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Walk/Footsteps_Mud_Walk_06.wav"
+      ]
+    },
+    "landGrass": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Forest ground/Forest_ground_jump0.wav",
+        "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Jump/Footsteps_Grass_Jump_Land_01.wav",
+        "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Jump/Footsteps_Grass_Jump_Land_02.wav",
+        "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Jump/Footsteps_Grass_Jump_Land_03.wav"
+      ]
+    },
+    "landRock": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_jump0.wav",
+        "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Jump/Footsteps_Rock_Jump_Land_01.wav",
+        "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Jump/Footsteps_Rock_Jump_Land_02.wav"
+      ]
+    },
+    "landWood": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Jump/Footsteps_Wood_Jump_Land_01.wav",
+        "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Jump/Footsteps_Wood_Jump_Land_02.wav"
+      ]
+    },
+    "landWater": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Jump/Footsteps_Water_Jump_Big_01.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Jump/Footsteps_Water_Jump_Big_02.wav"
+      ]
+    },
+    "landSand": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Jump/Footsteps_Sand_Jump_Land_01.wav",
+        "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Jump/Footsteps_Sand_Jump_Land_02.wav",
+        "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Jump/Footsteps_Sand_Jump_Land_03.wav"
+      ]
+    },
+    "landSnow": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Jump/Footsteps_Snow_Hard_Jump_Land_01.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Jump/Footsteps_Snow_Hard_Jump_Land_02.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Jump/Footsteps_Snow_Hard_Jump_Land_03.wav"
+      ]
+    },
+    "landMud": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Jump/Footsteps_Mud_Jump_Land_01.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Jump/Footsteps_Mud_Jump_Land_02.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Jump/Footsteps_Mud_Jump_Land_03.wav"
+      ]
+    },
+    "swimStroke": {
+      "group": "swim",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_04.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_05.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_06.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_07.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_08.wav"
+      ]
+    },
+    "roll": {
+      "group": "roll",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Grass/Foley_Grass/Footsteps_Grass_Tall_Movement_02.wav",
+        "Footsteps - Essentials/Footsteps_Grass/Foley_Grass/Footsteps_Grass_Tall_Movement_04.wav",
+        "Footsteps - Essentials/Footsteps_Grass/Foley_Grass/Footsteps_Grass_Tall_Movement_05.wav",
+        "Footsteps - Essentials/Footsteps_Grass/Foley_Grass/Footsteps_Grass_Tall_Movement_08.wav"
+      ]
+    },
+    "giantCall": {
+      "group": "creature",
+      "from": "pack",
+      "files": [
+        "96 General Library (Free Sample)/Samples/ANMLPrim_InsJ_Gorillas_Vocalizing_Single_01-01.wav"
+      ]
+    },
+    "bell": {
+      "group": "chime",
+      "from": "pack",
+      "files": [
+        "96 General Library (Free Sample)/Samples/MUSCChim_InsJ_Hand-Bell_01-16_High-C.wav"
+      ]
+    },
     "door": [
       "96 General Library (Free Sample)/Samples/DOORWood_InsJ_Door_Wooden_Closing_03-01.wav"
     ],
@@ -4012,9 +4149,13 @@
     "stoneHit": [
       "96 General Library (Free Sample)/Samples/CERMImpt_InsJ_Bricks_Impact_Single_01-02.wav"
     ],
-    "whoosh": [
-      "96 General Library (Free Sample)/Samples/WHSH_InsJ_Whooshing_Bamboo_01-01.wav"
-    ],
+    "whoosh": {
+      "group": "swing",
+      "from": "pack",
+      "files": [
+        "96 General Library (Free Sample)/Samples/WHSH_InsJ_Whooshing_Bamboo_01-01.wav"
+      ]
+    },
     "growl": [
       "96 General Library (Free Sample)/Samples/CREAMnstr_InsJ_Monster_Growling_Male_09-01.wav"
     ],
@@ -4253,7 +4394,7 @@
         {
           "file": "BOSS & TRIAL/boss-roar-1.mp3",
           "trim": 4.2,
-          "fade": 1.0
+          "fade": 1
         }
       ]
     },
@@ -4508,6 +4649,30 @@
       "level": -24,
       "loop": true,
       "stereo": true
+    },
+    "step": {
+      "level": -25
+    },
+    "stepWood": {
+      "level": -23
+    },
+    "land": {
+      "level": -22
+    },
+    "swim": {
+      "level": -22
+    },
+    "roll": {
+      "level": -21
+    },
+    "swing": {
+      "level": -20
+    },
+    "creature": {
+      "level": -16
+    },
+    "chime": {
+      "level": -20
     }
   },
   "music": {
@@ -4515,7 +4680,8 @@
     "tracks": {
       "menu": {
         "file": "0-Track 5-Main-Menu.wav",
-        "use": "the title screen and the character creator (looped)"
+        "use": "the title screen and the character creator (looped)",
+        "loop": true
       },
       "story": {
         "file": "1-Track 1-Story-Telling.wav",
@@ -4539,8 +4705,7 @@
       },
       "oros": {
         "file": "6-Track 2-Oros.wav",
-        "use": "not in the game yet",
-        "play": false
+        "use": "the climb up Olympos"
       },
       "sailing": {
         "file": "7-Track 6-Sailing.wav",
@@ -4549,13 +4714,11 @@
       },
       "nisia": {
         "file": "8-Track 9-Nisia.wav",
-        "use": "not in the game yet",
-        "play": false
+        "use": "the shore, at dawn and dusk"
       },
       "sirenReef": {
         "file": "9-Track 7-Siren-Reef.wav",
-        "use": "not in the game yet",
-        "play": false
+        "use": "the shore, at dawn and dusk"
       },
       "acheron": {
         "file": "10-Track 1-Acheron.wav",
@@ -4564,16 +4727,17 @@
       },
       "erebos": {
         "file": "11-Track 11-Erebos.wav",
-        "use": "not in the game yet",
-        "play": false
+        "use": "the Giants' caves, and a land come into by night"
       },
       "bossMinotaur": {
         "file": "boss-minotaur-combat-music.mp3",
-        "use": "the Minotaur's fight (looped)"
+        "use": "the Minotaur's fight (looped)",
+        "loop": true
       },
       "bossChimera": {
         "file": "boss-chimera-combat-music.mp3",
-        "use": "the Chimera's fight (looped)"
+        "use": "the Chimera's fight (looped)",
+        "loop": true
       }
     }
   },
