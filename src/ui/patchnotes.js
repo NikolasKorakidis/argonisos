@@ -30,6 +30,7 @@ export const PATCHES = [
       ] },
       { t: 'Moving', icon: 'sprint', items: [
         'You move a quarter slower: running, sprinting, walking, sneaking, swimming, aiming and walking with your guard up. The island feels bigger, and your feet still keep time with the ground.',
+        'Fixed: when you woke at your bed after dying, the camera swept over from where you fell. It now starts behind you.',
       ] },
       { t: 'The HUD', icon: 'stamina', items: [
         'The stamina bar shows how much you have and how much you can have, under the bar, as the health bar does.',

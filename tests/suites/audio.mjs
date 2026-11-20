@@ -55,8 +55,11 @@ export default {
       it().use(); await wait(100); it().use(); const door = [got('doorOpen').length, got('doorClose').length];
       P.spawn(x + 6, z - 1.4); P.yaw = 0; it().use(); g.hud.toggle(false); In.uiOpen = false; B.update(0.016); const chest = [got('chestOpen').length, got('chestClose').length];
       return (door.join() === '1,1' && chest.join() === '1,1') || JSON.stringify({ door, chest, log: A.log.map((e) => e.k) });`);
-    // (each bed is fetched and decoded the first time it's wanted, which on a busy machine takes some seconds: waited for)
-    await t.step('rain: droplets as it starts, the downpour when heavy, the drumming under a roof, the hush inside', `${A} const came = async (k, s = 10) => { for (let i = 0; i < s * 10 && !A.log.some((e) => e.k === k); i++) await wait(100); return A.log.some((e) => e.k === k); };
+    // (each bed is fetched and decoded the first time it's wanted, which on a busy machine takes some seconds: waited for.
+    // One still playing from rain a little earlier, as when the game came up in rain before the tests set it clear, isn't
+    // started again, only turned up: heard, as one started is)
+    await t.step('rain: droplets as it starts, the downpour when heavy, the drumming under a roof, the hush inside', `${A} const heard = (k) => A.log.some((e) => e.k === k) || (A.levels().beds[k] ?? 0) > 0.05, came = async (k, s = 10) => { for (let i = 0; i < s * 10 && !heard(k); i++) await wait(100); return heard(k); };
+      const was = A.levels().beds; if (['bedDrops', 'bedRain', 'bedRoof', 'bedMuffled'].some((k) => (was[k] ?? 0) > 0.05)) return 'a rain bed is heard before the rain: ' + JSON.stringify(was);
       A.log = []; AG.setWeather('lightRain'); const drops = await came('bedDrops');
       AG.setWeather('heavyRain'); AG.WEATHER.k.rain = 1; const pour = await came('bedRain');
       const ur = g.underRoof, rb = B.rayBlock; g.underRoof = () => true; const roof = await came('bedRoof');

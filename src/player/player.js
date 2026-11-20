@@ -267,7 +267,8 @@ export class Player {
       if (this.home) { const k = e(4); this.camYaw += angDiff(this.yaw + Math.PI, this.camYaw) * k; this.camPitch = lerp(this.camPitch, this.home.pitch, k); this.camDist = lerp(this.camDist, this.home.dist, k); if (L < 0.02) this.home = null; }
     }
     const raw = this.pos.clone(); raw.y += (this.swimming ? 1.2 : this.sneaking ? (this.hero.crouches ? 1.35 : 1.45) : 1.65) - 0.8 * L;   // (seated, the body's middle)
-    if (!this.camInit || this.camT.distanceTo(raw) > 8) { this.camT.copy(raw); this.camInit = true; }
+    // (a jump of the hero (spawn, teleport) takes the camera along at once, not sweeping over from where it was)
+    const jump = !this.camInit || this.camT.distanceTo(raw) > 8; if (jump) { this.camT.copy(raw); this.camInit = true; }
     this.camT.x += (raw.x - this.camT.x) * Math.min(1, dt * 16); this.camT.z += (raw.z - this.camT.z) * Math.min(1, dt * 16); this.camT.y += (raw.y - this.camT.y) * Math.min(1, dt * 8);
     this.aimK = lerp(this.aimK || 0, this.aiming ? 1 : 0, Math.min(1, dt * 8));
     const want0 = this.bossCam && !L ? 1 : 0; this.bossK = lerp(this.bossK, want0, e(want0 > this.bossK ? BOSS_CAM.in : BOSS_CAM.out)); const bk = this.bossK * (1 - this.aimK);
@@ -292,6 +293,6 @@ export class Player {
     }
     // ...and out of walls and roofs: pull in to just in front of whatever is between
     const block = this.camBlock?.(target, want); if (block !== undefined && block !== null) { const dir = want.clone().sub(target); want.copy(target).add(dir.setLength(Math.max(0.6 * (1 - L) + 0.2 * L, block - 0.25))); }
-    camera.position.lerp(want, Math.min(1, dt * lerp(14 + k * 10, 6, L))); camera.lookAt(target);
+    if (jump) camera.position.copy(want); else camera.position.lerp(want, Math.min(1, dt * lerp(14 + k * 10, 6, L))); camera.lookAt(target);
   }
 }

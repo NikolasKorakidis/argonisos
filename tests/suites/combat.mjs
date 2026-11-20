@@ -165,13 +165,15 @@ export default {
     if (typeof gore === 'string') t.check('the Minotaur\'s charge gores', false, gore);
     else { t.metric('the Minotaur\'s charge before armour', gore); t.check('the Minotaur\'s charge gores for 42-46 pierce before armour', gore.every((q) => q.dmg >= 42 && q.dmg <= 46), JSON.stringify(gore)); }
     // his dead in waves: the fight's clock run by hand (the world paused, the trial stepped a tenth of a second at a time)
-    const waves = await t.eval(`${H} clear(); g.paused = true; const Tr = g.trial, out = {};
+    // (Zeus's storm held off meanwhile: its bolts would fall on you with the world paused, and the staggers they leave play
+    // out once it runs again, carrying you metres off for the tests after)
+    const waves = await t.eval(`${H} clear(); g.paused = true; const Tr = g.trial, out = {}, storm = Tr.storm; Tr.storm = () => {};
       const fight = () => { for (const c of [...g.creatures.list]) g.creatures.remove(c); const a = new V(P.pos.x + 20, P.pos.y, P.pos.z), c = g.creatures.spawn('minotaur', a.x, a.z, { level: 0, boss: true, aware: true }); c.arena = a; Tr.begin(c, 'minotaur'); return c; };
       const run = (s) => { for (let i = 0, n = Math.round(s / 0.1); i < n; i++) Tr.update(0.1); }, at = (c) => ({ waves: Tr.waves, skeletons: g.creatures.list.filter((k) => k.summoned && k.type === 'skeleton').length, near: +Math.min(99, ...g.creatures.list.filter((k) => k.summoned).map((k) => k.pos.distanceTo(P.pos))).toFixed(1) });
       let c = fight(); c.hp = 301; run(29.8); out.by30 = at(c); run(0.4); out.at30 = at(c); run(29.6); out.by60 = at(c); run(0.4); out.at60 = at(c);
       c = fight(); run(10); out.by10 = at(c); c.hp = 300; run(0.1); out.at300 = at(c); run(29.7); out.by300and30 = at(c); run(0.4); out.at300and30 = at(c);
       c = fight(); run(29.9); out.before = at(c); c.hp = 300; Tr.update(Tr.helperT); out.both = at(c); run(29.8); out.bothAnd30 = at(c); run(0.4); out.bothAnd30b = at(c);
-      for (const k of [...g.creatures.list]) g.creatures.remove(k); Tr.boss = null; g.paused = false; return out;`);
+      for (const k of [...g.creatures.list]) g.creatures.remove(k); Tr.boss = null; Tr.storm = storm; Tr.calm(); g.paused = false; return out;`);
     t.metric('the Minotaur\'s waves of dead', waves);
     const W = (k) => waves[k]?.waves;
     t.check('Minotaur, health above 300: no wave before 30 s, one at 30 s (two skeletons, not beside you), the next 30 s later', W('by30') === 0 && W('at30') === 1 && waves.at30.skeletons === 2 && waves.at30.near > 6 && W('by60') === 1 && W('at60') === 2, JSON.stringify(waves));
