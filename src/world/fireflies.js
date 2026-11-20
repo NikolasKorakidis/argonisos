@@ -7,10 +7,11 @@ import * as THREE from 'three';
 import { scene, renderer } from '../render/core.js';
 import { WET_U, SHELTER } from './wetness.js';
 import { grassU } from './grass.js';
+import { seeded } from '../util/math.js';
 
 const N = 420, SWARMS = 28, BOX = 56;
 export const FIREFLY_U = { uCam: { value: new THREE.Vector3() }, uTime: { value: 0 }, uAmount: { value: 0 }, uScale: { value: 400 }, uFogR: { value: new THREE.Vector2(300, 2400) } };
-const seed = new Float32Array(N * 4); { let s = 29; const r = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; for (let i = 0; i < N * 4; i++) seed[i] = r(); }
+const seed = new Float32Array(N * 4); { const r = seeded(29); for (let i = 0; i < N * 4; i++) seed[i] = r(); }
 const geo = new THREE.BufferGeometry();
 geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * 3), 3)); geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 4));
 const mat = new THREE.ShaderMaterial({

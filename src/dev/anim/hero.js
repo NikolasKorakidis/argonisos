@@ -7,6 +7,7 @@ import { Hero, CLIPS, BODIES, SKINS, HAIRS, HAIR_COLOURS, BEARDS, EYES, CLOTHS, 
 import { heldModel } from '../../player/held.js';
 import { RUN, SPRINT, SNEAK, AIM, BLOCK_K, GRAV, JUMP_V } from '../../player/speeds.js';
 import { fpsOf } from './pose.js';
+import { angDiff } from '../../util/math.js';
 
 // The clips from before the moves library: [name in CLIPS, its file in assets/models]
 const OLD = { run: 'run', sprint: 'sprint', jump: 'jump', attack: 'attack', punch: 'punch', equip: 'equip', disarm: 'disarm', bowEquip: 'bow_equip', bowDraw: 'bow_draw', bowAim: 'bow_aim', bowDisarm: 'bow_disarm' };
@@ -27,7 +28,7 @@ const RIGHT = [['', 'Nothing'], ['crudeAxe', 'Crude axe', 'axe', 1], ['lightston
 const LEFT = [['', 'Nothing'], ['crudeShield', 'Shield'], ['crudeTowerShield', 'Tower shield'], ['crudeBow', 'Crude bow'], ['cretanBow', 'Cretan bow']];
 const ARMOUR = [['', 'None'], ['thrower', 'Thrower set'], ['cretan', 'Cretan set']];
 const isBow = (id) => /Bow$/.test(id), isShield = (id) => /Shield$/.test(id);
-const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b)), clamp = THREE.MathUtils.clamp, lerp = THREE.MathUtils.lerp;
+const clamp = THREE.MathUtils.clamp, lerp = THREE.MathUtils.lerp;
 const END = /_End$|HeadTop|Hand[A-Za-z]+4$/;
 
 // The look last chosen in the game on this computer (ui/settings.js keeps it; that module builds the game's renderer

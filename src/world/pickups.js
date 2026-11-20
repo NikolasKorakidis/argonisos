@@ -7,6 +7,7 @@ import { clearGrass } from './grass.js';
 import { shapeGround, onCutsChanged } from './groundcut.js';
 import { CELL, layoutPickups, rnd } from './pickup-layout.js';
 import { PRIORITY } from './pool.js';
+import { seeded } from '../util/math.js';
 import { loadPack, bake } from '../assets.js';
 import { windUniform, LIGHT_U } from './trees.js';
 export { layoutPickups };
@@ -156,7 +157,7 @@ export class Pickups {
     // a patch of bare earth and pebbles under each one, tilted to the slope
     const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
     const gr = x.createRadialGradient(64, 64, 4, 64, 64, 62); gr.addColorStop(0, 'rgba(112,92,64,0.95)'); gr.addColorStop(0.55, 'rgba(104,86,58,0.75)'); gr.addColorStop(1, 'rgba(96,80,54,0)'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
-    let sd = 5; const r = () => ((sd = (sd * 16807) % 2147483647) - 1) / 2147483646;
+    const r = seeded(5);
     for (let i = 0; i < 70; i++) { const a = r() * 6.28, d = Math.sqrt(r()) * 44, v = 120 + r() * 70; x.fillStyle = `rgba(${v},${v * 0.95},${v * 0.85},${0.5 + r() * 0.4})`; x.beginPath(); x.ellipse(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 1 + r() * 2.5, 1 + r() * 2, r() * 3, 0, 7); x.fill(); }
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
     this.patch = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 2048);

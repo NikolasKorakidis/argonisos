@@ -3,6 +3,8 @@
 export const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export const lerp = (a, b, t) => a + (b - a) * t;
 export const smooth = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };   // smoothstep
+// The signed difference between two angles (radians), the short way round: in [-π, π]
+export const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 export const rr = (a, b) => a + Math.random() * (b - a);   // (not for anything the world is built from: use a seeded generator there)
 // A repeatable sequence of numbers in [0, 1) from a seed (Park-Miller), for things that must come out the same every time
 export const seeded = (seed) => { let s = seed; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; };

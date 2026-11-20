@@ -6,6 +6,7 @@ import { Sky } from '../../vendor/three/jsm/objects/Sky.js';
 import { GLTFLoader } from '../../vendor/three/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from '../../vendor/three/jsm/utils/SkeletonUtils.js';
 import { loadGLB } from '../assets.js';
+import { seeded } from '../util/math.js';
 
 // core.js's tone mapping, with the meadows' grade from the atmosphere pass (white balance, saturation, the shadows' tint)
 // put in front of it, since the page renders straight to the screen without that pass
@@ -63,7 +64,7 @@ dome.renderOrder = -1; dome.frustumCulled = false; scene.add(dome);
 // reflection strength), and a 1 m / 10 m grid over it for judging sizes.
 const grassTex = (() => {
   const N = 256, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d'), img = g.createImageData(N, N);
-  const a = new THREE.Color(0x5b8a32), b = new THREE.Color(0x6f9a3a), d = new THREE.Color(0x4f7a2c); let s = 7; const r = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
+  const a = new THREE.Color(0x5b8a32), b = new THREE.Color(0x6f9a3a), d = new THREE.Color(0x4f7a2c); const r = seeded(7);
   const cells = (k) => { const v = []; for (let i = 0; i < k * k; i++) v.push(r()); return (x, y) => { const fx = x * k / N, fy = y * k / N, ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy, at = (i, j) => v[((j % k + k) % k) * k + ((i % k + k) % k)];
     const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty); return (at(ix, iy) * (1 - sx) + at(ix + 1, iy) * sx) * (1 - sy) + (at(ix, iy + 1) * (1 - sx) + at(ix + 1, iy + 1) * sx) * sy; }; };   // (tiling value noise: wraps at the edge)
   const n1 = cells(4), n2 = cells(16), n3 = cells(64), col = new THREE.Color(), rgb = {};
