@@ -193,6 +193,7 @@ export class Combat {
     // blocking with RMB (not with the bow or the hammer out)
     const canBlock = !g.bow() && !g.equippedTool('build') && !P.seat && (g.held() || g.inv.slots.some((s) => s?.worn === 'left'));
     const was = P.blocking; P.blocking = canBlock && input.rmb && !input.uiOpen && !P.dead && P.swing <= 0 && !P.swimming;
+    if (P.blocking && !was) P.stats.learn('blocking');   // (the first guard raised finds the skill, before any blow meets it)
     // a one-handed weapon and a shield: the hero stands on guard (hero.js)
     const r = g.held(); P.guard = !!r && r.type === 'weapon' && r.hands === 1 && g.inv.slots.some((s) => s?.worn === 'left' && ITEMS[s.id].type === 'shield');
     this.blockT = P.blocking ? (was ? this.blockT + dt : 0) : 0;

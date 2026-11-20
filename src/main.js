@@ -77,7 +77,7 @@ player.spawn(SPAWN.x, SPAWN.z); player.camYaw = Math.PI * 0.8; player.yaw = play
 const inv = new Inventory(), hud = new HUD();
 hud.bind(player, inv);
 player.onToast = (m) => hud.toast(m);
-player.stats.onLevel = (s, L) => hud.toast(`<b>${s[0].toUpperCase() + s.slice(1)}</b> skill is now level ${L}`);
+player.stats.onLevel = (s, L) => hud.skill(s, L); player.stats.onLearn = (s, L) => hud.skill(s, L, true);   // (a skill found, and each level after it: a banner and a chime)
 const baseDeath = player.stats.onDeath;
 player.stats.onDeath = () => { baseDeath(); hud.death(true); game.onDeath?.(); setTimeout(respawn, 5500); };
 function respawn() {

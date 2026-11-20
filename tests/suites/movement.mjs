@@ -4,6 +4,12 @@ const feetOk = `const HB = P.hero.bones, v = new V(); for (const s of ['Left', '
 const temple = `const s = g.map.sites().find((q) => q.kind === 'temple'), r = Math.atan2(-s.x, -s.z), lz = 12.66 * 2.25 + 4; AG.teleport(s.x + lz * Math.sin(r) + 0.6 * Math.cos(r), s.z + lz * Math.cos(r) - 0.6 * Math.sin(r), r, -0.2); return true;`;
 const hill = `for (let r = 400; r < 1400; r += 5) for (let a = 0; a < 6.28; a += 0.2) { const x = r * Math.cos(a), z = r * Math.sin(a), gx = AG.heightAt(x + 1, z) - AG.heightAt(x - 1, z), gz = AG.heightAt(x, z + 1) - AG.heightAt(x, z - 1), s = Math.hypot(gx, gz) / 2; if (s > 0.25 && s < 0.7 && AG.heightAt(x, z) > 2 && AG.heightAt(x + gx * 4, z + gz * 4) > AG.heightAt(x, z) + 1 && AG.heightAt(x + gx * 8 / Math.hypot(gx, gz), z + gz * 8 / Math.hypot(gx, gz)) > AG.heightAt(x, z) + 3) { AG.teleport(x, z, Math.atan2(gx, gz) + Math.PI, -0.2); window._hy = AG.heightAt(x, z); return true; } } return 'no hillside found';`;
 
+// (a spy on the HUD's skill banners: each asked for, with its time; each shown, with its text; the most on screen at once)
+const spy = `window._pops = []; window._shown = []; window._maxPops = 0; const H = g.hud, ask = H.skill.bind(H), next = H.nextSkill.bind(H);
+  H.skill = (s, L, learned) => { window._pops.push({ s, L, learned: !!learned, t: performance.now() }); ask(s, L, learned); };
+  H.nextSkill = () => { const box = document.getElementById('skillPops'), n = box.children.length; next(); if (box.children.length > n) { const e = box.lastElementChild; window._shown.push({ s: e.dataset.s, text: e.textContent, svg: !!e.querySelector('svg') }); } window._maxPops = Math.max(window._maxPops, box.children.length); };
+  return true;`;
+
 // walk forward for a while, sampling how far each foot is above its own ground
 async function walk(t, setup, secs) {
   await t.eval(setup); await t.wait(1500);
@@ -15,10 +21,33 @@ async function walk(t, setup, secs) {
 export default {
   name: 'Movement and feet',
   async run(t) {
+    // (every skill banner the HUD is asked for, with when: hud.js skill, from stats.js onLearn and onLevel)
+    await t.eval(spy);
+    await t.eval(`g.owl.o.g.visible = false; window._ts = performance.now(); return true;`);
     await t.page.keyboard.down('KeyW'); await t.page.keyboard.down('ShiftLeft'); await t.wait(2500);
-    for (let i = 0; i < 3; i++) { await t.page.keyboard.press('Space'); await t.wait(700); }
+    await t.eval(`window._tj = performance.now(); return true;`);
+    for (let i = 0; i < 3; i++) { await t.page.keyboard.press('Space'); if (!i) { await t.wait(500); await t.shot('skill-learned'); await t.wait(150); } else await t.wait(700); }
+    await t.step('the stamina bar shows its number while you run', `const e = document.querySelector('#stam > u'), st = document.getElementById('stam'); return (/^\\d+ \\/ \\d+$/.test(e?.textContent || '') && !st.classList.contains('full') && getComputedStyle(e).display !== 'none') || 'stamina reads "' + e?.textContent + '", full ' + st.classList.contains('full');`);
     await t.page.keyboard.up('ShiftLeft'); await t.page.keyboard.up('KeyW');
     await t.step('sprinting and jumping: legs fine, the feet let go in the air', feetOk);
+    // Skills found at once (Patch 22): the first sprint and the first jump each show "Skill learned" as they happen
+    await t.step('the first sprint shows "Skill learned: Sprinting, level 1" at once', `const p = window._pops.find((q) => q.s === 'sprinting'); return (p && p.learned && p.L === 1 && p.t - window._ts < 600) || JSON.stringify(p || window._pops);`);
+    await t.step('the first jump shows "Skill learned: Jumping, level 1" as you leave the ground', `const p = window._pops.find((q) => q.s === 'jumping'); return (p && p.learned && p.L === 1 && p.t - window._tj < 250) || JSON.stringify(p || window._pops);`);
+    await t.step('…each shown once, a banner with the skill\'s glyph, name and level', `const n = window._pops.filter((q) => q.learned && (q.s === 'jumping' || q.s === 'sprinting')).length; return (n === 2 && window._shown.some((x) => x.s === 'jumping' && x.svg && /Skill learned/.test(x.text) && /Jumping, level 1/.test(x.text))) || JSON.stringify({ n, shown: window._shown });`);
+    await t.step('the first swing of an axe shows "Skill learned: Axeman" before the blow lands', `g.give('crudeAxe'); g.equip(inv.slots.findIndex((s) => s?.id === 'crudeAxe')); await new Promise((r) => { const w = () => (!P.equip && P.swing <= 0 && P.hero.moveK > 0.9 ? r() : setTimeout(w, 50)); w(); });
+      if (window._pops.some((q) => q.s === 'axe')) return 'found before the swing'; const ok = P.strike('axe', 5), p = window._pops.find((q) => q.s === 'axe'); return (ok && p?.learned && P.swingHit === false) || JSON.stringify({ ok, p, hit: P.swingHit });`);
+    await t.step('a level-up shows "Jumping, level 2"', `await new Promise((r) => setTimeout(r, 4800)); P.stats.train('jumping', 300); const p = window._pops.find((q) => q.s === 'jumping' && !q.learned); await new Promise((r) => setTimeout(r, 600));
+      const e = document.querySelector('.skillPop[data-s="jumping"]'); return (p?.L === 2 && e && /Skill improved/.test(e.textContent) && /Jumping, level 2/.test(e.textContent)) || JSON.stringify({ p, text: e?.textContent });`);
+    await t.shot('skill-level');
+    await t.step('several at once queue: never more than three banners on screen, none on another', `for (const s of ['sneaking', 'swimming', 'mace', 'spear', 'dagger']) P.stats.learn(s); await new Promise((r) => setTimeout(r, 1200)); const r = [...document.querySelectorAll('.skillPop')].map((e) => e.getBoundingClientRect());
+      const over = r.some((a, i) => r.some((b, j) => i < j && a.bottom > b.top + 1 && b.bottom > a.top + 1)); await new Promise((q) => setTimeout(q, 5000)); const later = window._shown.filter((x) => ['sneaking', 'swimming', 'mace', 'spear', 'dagger'].includes(x.s)).length;
+      return (r.length <= 3 && !over && window._maxPops <= 3 && later === 5) || JSON.stringify({ n: r.length, over, max: window._maxPops, later });`);
+    await t.step('running is a quarter slower than before Patch 22: 3.45 m/s, not 4.6', `const { RUN, SPRINT } = await import('/src/player/speeds.js'); if (Math.abs(RUN - 4.6 * 0.75) > 1e-9 || Math.abs(SPRINT - 7.6 * 0.75) > 1e-9) return 'RUN ' + RUN + ' SPRINT ' + SPRINT;
+      inv.slots.forEach((s) => { if (s?.worn) delete s.worn; }); g.inv.onChange?.(); P.spawn(10, 10); P.yaw = P.camYaw + Math.PI; return true;`);
+    await t.wait(800); await t.page.keyboard.down('KeyW'); await t.wait(1500);
+    const run = await t.eval(`const S = P.stats, sl = P.slope || 0, k = sl > 0 ? 1 - 0.35 * Math.min(sl, 0.8) : 1 + 0.12 * Math.min(-sl, 0.6); return { speed: P.speed, want: 4.6 * 0.75 * S.speedK * (1 + P.speedMod) * (P.overweight ? 0.6 : 1) * k, slope: sl };`);
+    await t.page.keyboard.up('KeyW');
+    t.check('…measured: the hero runs at 75% of the old run (within 6%)', Math.abs(run.speed / run.want - 1) < 0.06 && run.speed < 4.6 * 0.8, JSON.stringify(run));
     await t.step('into the sea', `for (let r = 600; r < 2000; r += 20) if (AG.heightAt(r, 0) < -3) { P.spawn(r, 0); return true; } return 'no sea found';`);
     await t.page.keyboard.down('KeyW'); await t.wait(2000); await t.page.keyboard.up('KeyW');
     await t.step('…swimming: no foot planting, nothing broken', `if (!P.swimming) return 'not swimming'; if (P.hero.ik.w > 0.2) return 'feet still planting (w ' + P.hero.ik.w.toFixed(2) + ')'; ${feetOk}`);
@@ -57,5 +86,14 @@ export default {
     await t.eval(`g.give('hammer'); g.useSlot(g.inv.slots.findIndex((s) => s?.id === 'hammer')); return true;`); await t.wait(1500);
     await t.page.keyboard.press('KeyX'); await t.wait(500);
     await t.step('with the hammer in hand X does not sit you down (it takes down a piece)', `return !g.acts.pose || 'sat down: ' + g.acts.pose.kind;`);
+    // last, as it reloads the page: the skills found are in the save, so using them again after a reload announces
+    // nothing, while a level-up still shows
+    const seen = await t.eval(`const { save } = await import('/src/game/save.js'); if (!save(g)) return null; return Object.keys(P.stats.skills).filter((k) => P.stats.skills[k].seen);`);
+    await t.page.reload(); await t.page.waitForFunction(() => window.AG?.player.hero.model && AG.terrain.pending === 0, null, { timeout: 120000 });
+    await t.eval(`g.save = () => false; AG.S.peaceful = true; g.weatherRain = () => 0; g.owl.st.done.push('intro', 'night', 'house', 'temple'); g.owl.st.queue = []; g.owl.st.met = true; ${spy}`);
+    await t.step('after a reload, the skills found are not announced again', `const seen = ${JSON.stringify(seen)}; if (!seen?.length) return 'no skills found before the reload (or the save failed)'; if (!g.loaded) return 'the save did not load';
+      for (const s of seen) { P.stats.learn(s); P.stats.use(0.1, s); P.stats.train(s, 0.5); } const again = window._pops.filter((q) => q.learned); localStorage.removeItem('argonisos.world.v1');
+      return (!again.length && seen.includes('sprinting') && seen.includes('jumping') && seen.includes('axe')) || JSON.stringify({ seen, again });`);
+    await t.step('…but a level-up still shows', `const L = P.stats.skills.sprinting.level; P.stats.train('sprinting', 2000); const p = window._pops.find((q) => q.s === 'sprinting'); await new Promise((r) => setTimeout(r, 600)); return (p && !p.learned && p.L > L && !!document.querySelector('.skillPop[data-s="sprinting"]')) || JSON.stringify({ L, p });`);
   },
 };

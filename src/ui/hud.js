@@ -4,6 +4,7 @@ import { ITEMS } from '../game/items.js';
 import { COLS, ROWS, MAX_WEIGHT } from '../game/inventory.js';
 import { CONDITIONS, SKILLS, xpForLevel, Stats } from '../player/stats.js';
 import { input, lock, unlock } from '../input.js';
+import { sound } from '../audio/sound.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
@@ -17,16 +18,16 @@ export class HUD {
       <div id="hurt"></div><div id="hurtDir" style="position:absolute;inset:0;pointer-events:none;opacity:0"></div>
       <div id="hotbar"></div>
       <div id="status"><div id="clock"></div><div id="conds"></div></div>
-      <div id="toasts"></div><div id="pickups"></div>
+      <div id="toasts"></div><div id="pickups"></div><div id="skillPops"></div>
       <div id="region"><div class="rname"></div><div class="rsub"></div></div>
       <div id="cross"></div>
       <div id="prompt" class="hidden"></div>
       <div id="act" class="hidden"><i></i><span></span></div>
-      <div id="stam" class="full"><div class="vbar"><i class="ghost"></i><i class="val"></i></div></div>
+      <div id="stam" class="full"><div class="vbar"><i class="ghost"></i><i class="val"></i></div><u></u></div>
       <div id="vitals"><div id="foods"></div><div class="vbar" id="hpBar"><span>${icon('health')}</span><i class="ghost"></i><i class="val"></i><u></u></div></div>`;
     document.body.appendChild(hud);
     const death = el('div', '', '<h1>You have fallen</h1><p>Zeus is not done with you yet…</p>'); death.id = 'death'; document.body.appendChild(death);
-    this.inv = null; this.player = null; this.last = {}; this.open = false; this.sel = -1;
+    this.inv = null; this.player = null; this.last = {}; this.open = false; this.sel = -1; this.skillQ = []; this.skillT = null;
     // inventory screen
     const p = el('div'); p.id = 'invPanel'; p.className = 'hidden';
     p.innerHTML = `<div class="pnl"><h2>Pack</h2><button class="xbtn" id="invX">${icon('close')}</button><div class="pbody"><div class="grid" id="invGrid"></div><div id="invInfo"></div><div id="invFoot"></div></div></div>
@@ -50,6 +51,21 @@ export class HUD {
     if (cur) { cur.dataset.n = +cur.dataset.n + n; cur.querySelector('em').textContent = '×' + cur.dataset.n; cur.style.animation = 'none'; void cur.offsetWidth; cur.style.animation = ''; cur.dataset.t = Date.now(); return; }
     const e = el('div', 'pick', `${icon(def.icon || 'stone')}<span>${def.name}</span><em>×${n}</em>`); e.dataset.id = id; e.dataset.n = n; e.dataset.t = Date.now();
     box.appendChild(e); setTimeout(() => e.remove(), 3000); while (box.children.length > 6) box.firstChild.remove();
+  }
+  // A skill found (learned) or up a level: a banner on the right that rises in and fades, its glyph, name and level, and
+  // a soft chime. Several at once wait their turn a beat apart, three on screen at most, so none lands on another; one
+  // still waiting that goes up again is told once, at its newest level
+  skill(s, level, learned = false) {
+    const q = this.skillQ.find((x) => x.s === s); if (q) { q.level = level; return; }
+    this.skillQ.push({ s, level, learned }); this.nextSkill();
+  }
+  nextSkill() {
+    const box = $('skillPops'); if (!this.skillQ.length || this.skillT || box.children.length >= 3) return;
+    const { s, level, learned } = this.skillQ.shift(), d = SKILLS[s];
+    const e = el('div', 'skillPop' + (learned ? ' new' : ''), `<i>${glyph(d.icon || 'star')}</i><div><small>${learned ? 'Skill learned' : 'Skill improved'}</small><span><b>${d.name}</b>, level ${level}</span></div>`);
+    e.dataset.s = s; box.appendChild(e); sound('skill', { learned });
+    setTimeout(() => { e.remove(); this.nextSkill(); }, 4600);
+    this.skillT = setTimeout(() => { this.skillT = null; this.nextSkill(); }, 450);
   }
   region(name, sub) { const r = $('region'); r.querySelector('.rname').textContent = name; r.querySelector('.rsub').textContent = sub || ''; r.classList.remove('show'); void r.offsetWidth; r.classList.add('show'); }
   prompt(key, text, sub, alt) {
@@ -93,6 +109,7 @@ export class HUD {
     st.querySelector('.vbar').style.width = Math.min(240 + (ms - 50) * 1.4, 480) + 'px';
     st.querySelector('.val').style.width = sk * 100 + '%'; st.querySelector('.ghost').style.width = sk * 100 + '%';
     st.classList.toggle('full', sk > 0.995); st.classList.toggle('low', sk < 0.2);
+    const stn = `${Math.ceil(S.stamina)} / ${Math.round(ms)}`; if (stn !== this.last.stam) { this.last.stam = stn; st.querySelector('u').textContent = stn; }   // (the number under the bar, as the health bar has its own)
     this.t = (this.t || 0) - dt; if (this.t > 0 && !this.dirtyInv) return; this.t = 0.2;
     // food slots
     const fk = S.food.map((f) => `${f.id}:${Math.round(Stats.foodK(f) * 20)}`).join() + S.food.length;

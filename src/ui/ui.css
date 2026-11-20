@@ -92,6 +92,7 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 #stam .vbar { width:260px; height:10px; margin:0; } #stam .vbar span { display:none; }
 #stam .vbar > i.val { background:linear-gradient(180deg,#f0d468,#a1841e); }
 #stam.full { opacity:0; }
+#stam > u { display:block; margin-top:3px; text-align:center; font:700 12px/14px 'Alegreya Sans',sans-serif; text-decoration:none; color:#fff8e6; text-shadow:0 1px 2px #000, 0 0 4px rgba(0,0,0,.6); }   /* the number, under the bar (hud.js) */
 #stam.low .vbar > i.val { background:linear-gradient(180deg,#f08a50,#a1441e); animation:blink .5s infinite alternate; }
 @keyframes blink { to { opacity:.5; } }
 #prompt { position:absolute; left:50%; bottom:110px; transform:translateX(-50%); display:flex; align-items:center; gap:10px; padding:7px 16px 7px 8px; border-radius:20px;
@@ -119,6 +120,17 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 #region .rname::before, #region .rname::after { content:""; display:inline-block; width:60px; height:1px; background:var(--gold); vertical-align:middle; margin:0 16px; opacity:.7; }
 #region .rsub { font-style:italic; color:var(--gold); font-size:18px; margin-top:4px; text-shadow:0 1px 6px #000; }
 @keyframes region { 0%{opacity:0; letter-spacing:.3em} 15%{opacity:1} 80%{opacity:1} 100%{opacity:0} }
+/* a skill found or up a level (hud.js skill): banners down the right, each rising in and fading out */
+#skillPops { position:absolute; right:16px; top:30%; display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+.skillPop { display:flex; align-items:center; gap:11px; padding:6px 18px 6px 6px; border-radius:26px 3px 3px 26px; background:linear-gradient(90deg,rgba(31,22,16,.86),rgba(31,22,16,.64));
+            box-shadow:0 0 0 1px rgba(0,0,0,.5), 0 6px 16px rgba(0,0,0,.3); border-right:3px solid var(--gold); animation:skillPop 4.6s ease forwards; }
+.skillPop > i { width:40px; height:40px; flex:none; border-radius:50%; display:grid; place-items:center; font-size:27px; background:radial-gradient(circle at 45% 40%, var(--clay3), var(--clay) 70%, var(--clay2));
+                box-shadow:0 0 0 1px var(--glaze), 0 0 0 3px rgba(217,169,74,.45); }
+.skillPop.new > i { box-shadow:0 0 0 1px var(--glaze), 0 0 0 3px rgba(217,169,74,.75), 0 0 16px rgba(240,200,110,.75); }
+.skillPop small { display:block; font:700 10px/1.3 Stoix,Cinzel,serif; letter-spacing:.2em; text-transform:uppercase; color:var(--gold); }
+.skillPop span { display:block; font-size:16px; line-height:1.25; color:var(--cream); white-space:nowrap; text-shadow:0 1px 2px rgba(0,0,0,.6); }
+.skillPop span b { font:600 17px Stoix,Cinzel,serif; letter-spacing:.05em; }
+@keyframes skillPop { 0%{opacity:0;transform:translateY(16px)} 9%{opacity:1;transform:none} 82%{opacity:1;transform:none} 100%{opacity:0;transform:translateY(-12px)} }
 #hurt { position:absolute; inset:0; box-shadow:inset 0 0 160px rgba(200,20,20,0); transition:box-shadow .25s; }
 #death { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; background:radial-gradient(ellipse at center, rgba(20,8,4,.35), rgba(10,4,2,.85));
          color:var(--cream); font-family:Stoix,Cinzel,serif; z-index:30; opacity:0; transition:opacity 1.2s; pointer-events:none; }

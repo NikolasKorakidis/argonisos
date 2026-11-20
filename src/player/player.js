@@ -60,6 +60,7 @@ export class Player {
     if (!this.stats.use(cost, kind === 'punch' ? 'unarmed' : null)) { this.onToast?.('Too tired'); return false; }
     this.combo = this.comboT > 0 && this.swingKind === kind ? this.combo + 1 : 0; this.strikeMove = strikeOf(kind, this.combo);
     this.swing = 1; this.swingKind = kind; this.swingHit = false; this.stopT = 0; this.yaw = Math.atan2(-Math.sin(this.camYaw), -Math.cos(this.camYaw));
+    this.stats.learn(kind === 'punch' ? 'unarmed' : kind);   // (the first swing finds its skill, before any blow lands; a tool's has none)
     return true;
   }
   // A blow that lands hard holds the swing for a moment where the weapon meets what it hit (Valheim's freeze frame): t

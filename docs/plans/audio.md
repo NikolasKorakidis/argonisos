@@ -57,7 +57,9 @@ The first packs' sounds stay where nothing new replaces them: footsteps and land
 fire, the fox. The rest of them (rain, birds, crickets, thunder, door, chest creak, stone hit, foliage) are the
 fallback, played only if the team's files are missing; without any pack, everything is synthesised as before. Still
 synthesised: the jump, the creak of a tree starting to fall, the wrong tool's clink, blunt hits (club, fist, kick), the
-kill, the dryads' thorns, the guide's and the grave's little chime (the lyre's rising notes).
+kill, the dryads' thorns, the guide's and the grave's little chime (the lyre's rising notes), and since Patch 22 the
+skill banner's bell (`skill`) and the food done on a cooking stand (`cooked`: a sizzle crackling up, then a soft "pss" of
+steam, all filtered noise, from the stand).
 
 ## Ambience (sound.js `updateAmbience`, beds faded every frame)
 | Bed | Files | When |
@@ -117,3 +119,6 @@ about 3-4 LU over the ambience, the blows of a fight peaking about 10 LU over it
 - Music: `Main-Menu` and `Yleos` are the same file ("Track 5"), as are `Story-Telling`, `Swamp` and `Acheron` ("Track 1").
 - Missing: a woman's hurt and death, a sheathing, jump and landing grunts, breathing when tired, a tree's creak, blunt
   hits.
+- Wanted for the to-do list (Patch 22, synthesised for now): **food done cooking**, a real recording of meat on a hot
+  grill: a short sizzle and spit of fat, then the soft hiss of steam as it settles (Valheim's "pss"), 1-2 s, a few
+  variants. And a gentle chime for a skill learned or levelled (two or three bell notes).

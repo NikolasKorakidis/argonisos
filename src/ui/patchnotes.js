@@ -4,6 +4,26 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-22', name: 'Patch 22', title: 'Learning by Doing', date: '20 November 2026',
+    intro: 'Skills you can see grow, a hero who doesn\'t race across the island, your stamina in numbers, and meat that tells you when it\'s done.',
+    sections: [
+      { t: 'Skills', icon: 'star', items: [
+        'The first time you use a skill, a banner on the right tells you at once: <b>Skill learned: Jumping, level 1</b>. Your first sprint, jump, swim, sneak and swing, the first guard you raise and the first thing you pick up each find theirs.',
+        'Every level after that shows a banner too, with a soft chime. Several at once wait their turn, so none covers another.',
+        'Your save remembers which skills you\'ve found, so they aren\'t announced again when you come back.',
+      ] },
+      { t: 'Moving', icon: 'sprint', items: [
+        'You move a quarter slower: running, sprinting, walking, sneaking, swimming, aiming and walking with your guard up. The island feels bigger, and your feet still keep time with the ground.',
+      ] },
+      { t: 'The HUD', icon: 'stamina', items: [
+        'The stamina bar shows how much you have and how much you can have, under the bar, as the health bar does.',
+      ] },
+      { t: 'Cooking', icon: 'fire', items: [
+        'When meat or fish is done on the cooking stand it sizzles and lets out a soft hiss and a puff of steam, so you know it\'s ready without watching it.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-21', name: 'Patch 21', title: 'The Island Speaks', date: '19 November 2026',
     intro: 'The team\'s own sounds and music: every blow, cut and knock, the fire, the bosses, thunder and rain, the wind and the creatures of each land, and music that comes now and then, as it does in Valheim. And bronze Corinthian armour for those who have beaten the Chimera.',
     sections: [

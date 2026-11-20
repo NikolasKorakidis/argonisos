@@ -142,7 +142,7 @@ export function installGame(g) {
   }
   g.interact = () => {
     const t = target(); if (!t) return;
-    if (t.kind === 'pickup') { const [id, n, extra] = g.pickups.take(t.p); g.give(id, n, extra?.dur ? { dur: extra.dur } : undefined); g.sound('pick'); g.acts.reach(); return; }
+    if (t.kind === 'pickup') { if (t.p.kind !== 'drop') player.stats.learn('gathering'); const [id, n, extra] = g.pickups.take(t.p); g.give(id, n, extra?.dur ? { dur: extra.dur } : undefined); g.sound('pick'); g.acts.reach(); return; }   // (the first thing picked up off the land finds Gathering)
     if (t.kind === 'fruit') { g.harvest.pick(t.t); return; }
     t.use?.();
   };

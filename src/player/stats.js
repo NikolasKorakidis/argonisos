@@ -22,11 +22,14 @@ export const CONDITIONS = {
   zeusBlessing: { name: "Zeus's Blessing", icon: 'blessing', time: 600, desc: '+30 health, +10% movement speed, +10% melee and bow damage, +10% block.' },
 };
 
-// ---- Skills: level 1 → 100, XP to reach level L is 50·(L-1)·(L+2); each level is worth 0.3% (0.03× damage for weapons)
+// ---- Skills: level 1 → 100, XP to reach level L is 50·(L-1)·(L+2); each level is worth 0.3% (0.03× damage for weapons).
+// A skill is found the first time it's used (seen, kept in the save with its level), and the HUD says so at once
+// (onLearn), so a player knows from the first sprint, jump or swing that it can grow; each level after it says again
+// (onLevel). icon: the HUD's glyph for it
 export const SKILLS = {
-  sprinting: { name: 'Sprinting', xp: 'per 10 ft sprinted' }, jumping: { name: 'Jumping' }, gathering: { name: 'Gathering' }, swimming: { name: 'Swimming' },
-  sneaking: { name: 'Sneaking' }, unarmed: { name: 'Unarmed' }, axe: { name: 'Axeman' }, sword: { name: 'Swordsman' }, spear: { name: 'Spearman' },
-  dagger: { name: 'Daggerman' }, mace: { name: 'Maceman' }, bow: { name: 'Bowman' }, blocking: { name: 'Blocking' },
+  sprinting: { name: 'Sprinting', xp: 'per 10 ft sprinted', icon: 'sprint' }, jumping: { name: 'Jumping', icon: 'jump' }, gathering: { name: 'Gathering', icon: 'wood' }, swimming: { name: 'Swimming', icon: 'wet' },
+  sneaking: { name: 'Sneaking', icon: 'moon' }, unarmed: { name: 'Unarmed', icon: 'hands' }, axe: { name: 'Axeman', icon: 'axe' }, sword: { name: 'Swordsman', icon: 'dagger' }, spear: { name: 'Spearman', icon: 'spear' },
+  dagger: { name: 'Daggerman', icon: 'dagger' }, mace: { name: 'Maceman', icon: 'club' }, bow: { name: 'Bowman', icon: 'bow' }, blocking: { name: 'Blocking', icon: 'shield' },
 };
 export const xpForLevel = (L) => 50 * (L - 1) * (L + 2);
 
@@ -36,7 +39,7 @@ export class Stats {
     this.food = [];                               // up to 3: { id, def, t } (def: health, stamina, regen, duration, effect)
     this.cond = {};                               // active conditions: name → seconds left (Infinity for world-driven ones)
     this.skills = Object.fromEntries(Object.keys(SKILLS).map((k) => [k, { level: 1, xp: 0 }]));
-    this.onLevel = null; this.onDeath = null; this.dead = false;
+    this.onLevel = null; this.onLearn = null; this.onDeath = null; this.dead = false;
   }
   // ---- food
   // How much of a food's bonus is left: full for most of its time, tailing off at the end (as in Valheim)
@@ -75,18 +78,21 @@ export class Stats {
   get staminaRegenK() { return (1 - (this.has('wet') ? 0.25 : 0)) * (1 - (this.has('cold') ? 0.15 : 0)) * (this.has('freezing') ? 0.4 : 1); }
   // ---- stamina
   // Spend stamina for an action (skill makes it cheaper). Returns false if there isn't enough
+  // (spending it for a skill is using that skill: the first sprint, swim or sneak finds it at once, not 10 ft later)
   use(amount, skill) {
-    if (this.god) return true;
+    if (this.god) { if (skill) this.learn(skill); return true; }
     const cost = amount * this.drainK * (skill ? 1 - (this.skills[skill].level - 1) * 0.003 : 1);
     if (this.stamina < cost && amount > 0) return false;
-    this.stamina = Math.max(0, this.stamina - cost); this.staminaUsedT = 0; return true;
+    this.stamina = Math.max(0, this.stamina - cost); this.staminaUsedT = 0; if (skill) this.learn(skill); return true;
   }
   drain(perSec, dt, skill) { this.use(perSec * dt, skill); this.stamina = Math.max(0, this.stamina); }
   // ---- skills
   skillK(s) { return 1 + (this.skills[s].level - 1) * 0.003; }
   damageK(s) { return 1 + (this.skills[s].level - 1) * 0.03; }
+  // A skill used for the first time. (An older save's skill with some XP in it was found long ago: marked, not announced)
+  learn(s) { const k = this.skills[s]; if (!k || k.seen) return; k.seen = true; if (!(k.xp > 0 || k.level > 1)) this.onLearn?.(s, k.level); }
   train(s, xp) {
-    const k = this.skills[s]; if (!k || k.level >= 100) return;
+    const k = this.skills[s]; if (!k) return; if (xp > 0) this.learn(s); if (k.level >= 100) return;
     k.xp += xp;
     while (k.level < 100 && k.xp >= xpForLevel(k.level + 1)) { k.level++; this.onLevel?.(s, k.level); }
   }
