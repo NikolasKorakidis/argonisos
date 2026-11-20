@@ -74,14 +74,17 @@ export class Cape {
     this.group.visible = on;
   }
   // After the hero is posed (feet and all): move the rope's points, keep them behind the body, turn the bones to them
+  // (no time passing, a held frame (S.still, hero.js): nothing moves, and the step isn't taken, since its speed would be
+  // 0 / 0; that NaN once poisoned the rope for good and the cape vanished. A rope gone wrong anyhow starts again hanging)
   update(dt) {
-    if (!this.group.visible) return;
+    if (!this.group.visible || !(dt > 0)) return;
     dt = Math.min(dt, 1 / 30); const bones = this.bones, R = this.root, L = this.len;
     for (const b of bones) b.quaternion.identity(); this.group.updateWorldMatrix(true, true);
     // the rest of the rope hangs from the shoulder-blade bone; its points: that bone, the next two, the hem
     const seg = [JOINTS[2] - JOINTS[1], JOINTS[3] - JOINTS[2], 1 - JOINTS[3]].map((f) => f * L);
     const pin = bones[1].getWorldPosition(new THREE.Vector3());
     if (!this.pts) { this.pts = [pin.clone()]; for (const l of seg) this.pts.push(this.pts.at(-1).clone().addScaledVector(DOWN, l)); this.prev = this.pts.map((p) => p.clone()); this.dt0 = dt; }
+    if (!this.pts.every((p) => Number.isFinite(p.x + p.y + p.z))) { this.pts = null; return; }
     const P = this.pts, Q = this.prev, k = dt / (this.dt0 || dt), damp = Math.max(0, 1 - DRAG * dt); this.dt0 = dt;
     P[0].copy(pin); Q[0].copy(pin);
     for (let i = 1; i < P.length; i++) { _v.copy(P[i]).sub(Q[i]).multiplyScalar(k * damp); Q[i].copy(P[i]); P[i].add(_v); P[i].y -= GRAV * dt * dt; }

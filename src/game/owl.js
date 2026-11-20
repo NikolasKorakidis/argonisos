@@ -14,20 +14,21 @@ export const TOPICS = {
   intro: [
     { title: 'The Trial', body: 'You wake on Nisos because Zeus wills it. This island is your trial: survive it, grow strong on it, and bring down the beasts that rule its lands.<br><br>I am the Owl. I will find you whenever there is something you should know.' },
     { title: 'Everything Teaches', body: `Whatever you pick up shows you what it can become. Fallen branches give you wood; wood and stone make a club, a dagger, a hammer.<br><br>Press ${K('C')} to see what you can make, ${K('Tab')} for your pack, ${K('M')} for your map. An abandoned house is marked on it. Somewhere out in the meadows stands Zeus's temple: find it.` },
-    { title: 'How You Move', body: `${K('WASD')} move · ${K('Shift')} sprint · ${K('Space')} jump · ${K('Ctrl')} sneak<br>${K('LMB')} strike · ${K('RMB')} block or draw the bow · ${K('Q')} kick · ${K('E')} use · ${K('1')}–${K('8')} hotbar<br>${K('X')} sit down (by a fire it rests you; seated, the camera is free: ${K('WASD')} ${K('Q')} ${K('E')} move it, ${K('F10')} hides the HUD) · ${K('G')} wave · ${K('H')} cheer<br><br>Hunt with care: a beast that hasn't noticed you takes a sneak attack hard.` },
+    { title: 'How You Move', body: `${K('WASD')} move · ${K('Shift')} sprint · ${K('Space')} jump · ${K('Ctrl')} sneak<br>${K('LMB')} strike · ${K('RMB')} block or draw the bow · ${K('RMB')}+${K('Space')} roll · ${K('Q')} kick · ${K('E')} use · ${K('1')}–${K('8')} hotbar<br>${K('X')} sit down (by a fire it rests you; seated, the camera is free: ${K('WASD')} ${K('Q')} ${K('E')} move it, ${K('F10')} hides the HUD) · ${K('G')} wave · ${K('H')} cheer<br><br>Hunt with care: a beast that hasn't noticed you takes a sneak attack hard.` },
   ],
+  fight: [{ title: 'Guard and Roll', body: `You took a blow. Hold ${K('RMB')} with a weapon or shield to raise your guard: it soaks the blow for stamina. Raise it <b>just as the blow comes</b> and you parry it: the beast staggers, open to you. The biggest of them don't stagger, and a tower shield can't parry.<br><br>With ${K('RMB')} held, whatever is in your hands (the bow, or nothing at all), ${K('Space')} <b>rolls</b> you clear. It costs stamina, and in the heart of the roll nothing touches you.` }],
   night: [{ title: 'Night Is Coming', body: `Night and rain make you cold, and the cold slows your healing. Light a <b>campfire</b> (10 stone, 10 wood) and keep it fed with wood; rain drowns a fire that has no roof over it.<br><br>Make a <b>hammer</b> and hold ${K('RMB')} to build: walls, a roof, a <b>bed</b>. Sleep in it under a roof and the night passes, and you wake there if you fall.` }],
   house: [{ title: 'The Abandoned House', body: 'Someone lived here before you, and left in a hurry. Search the old chest: <b>rope</b> is precious early on, and you will need it for an axe and for building.<br><br>When it runs out, twist rope from the <b>fiber bushes</b> that grow in the meadows, or make it from <b>leather</b> at a workbench. Leather comes from the animals of the meadows.' }],
   temple: [
-    { title: 'The Ancient Temple', body: 'This is Zeus\'s house on Nisos. <b>Pray at the altar</b> before the steps once a day and he will bless you: more health, more speed, harder blows, for a while.<br><br>Its fire never dies. Warm yourself by it on cold nights.' },
+    { title: 'The Ancient Temple', body: 'This is Zeus\'s house on Nisos. <b>Pray at the altar</b> before the steps once a day and he will bless you: more health, more speed, harder blows, for a while. Pray the first time and he will show you where the trial begins.<br><br>Its fire never dies. Warm yourself by it on cold nights.' },
     { title: 'The Offering Stands', body: 'The two stands by the steps wait for heads: the <b>Minotaur\'s</b> and the <b>Chimera\'s</b>. Bring them here and Zeus will give you the beast\'s power and teach you to work stronger things.' },
   ],
   olive: [{ title: 'The Marked Olives', body: 'See the marks cut into this ancient olive? The old ones left them to show the way to the <b>Minotaur\'s Labyrinth</b>.<br><br>Copy the marks with ' + K('E') + '. Each tree points to another; <b>three</b> pieces make the map.' }],
   labyrinth: [{ title: 'The Way Is Clear', body: 'The pieces fit. The <b>Labyrinth</b> is marked on your map and compass.<br><br>Its altar asks for a tribute: <b>5 deer hides and 10 olives</b>. Deer give hides; olive trees give olives once a day. Bring them, and bring a bow or a spear: the Minotaur shrugs off cuts and blows, but not points.' }],
-  labyrinthAltar: [{ title: 'The Altar of the Minotaur', body: 'Lay the tribute here (' + K('E') + ') and he will come. He swings a great axe, charges, and roars hard enough to stun you. The dead of the Labyrinth rise to help him every half minute.<br><br>Eat well before you call him. If you run, the fight is over and the tribute is lost.' }],
+  labyrinthAltar: [{ title: 'The Altar of the Minotaur', body: 'Lay the tribute here (' + K('E') + ') and he will come. He swings a great axe, charges, and roars hard enough to stun you. The dead of the Labyrinth rise to help him every half minute.<br><br>Eat well before you call him. If you run or fall, the fight is over, but the tribute stays on the altar: you can call him again.' }],
   minotaurDown: [{ title: 'The Minotaur Is Dead', body: 'Well done. Take his <b>head</b> to the Ancient Temple and lay it on its stand. Zeus keeps his promises.' }],
   offered1: [{ title: 'The Next Land', body: `You have the Minotaur's roar now: ${K('F')} stuns everything around you. And you can work <b>lightstone</b>: better axes, spears and daggers, and Cretan armour from deer hides.<br><br>The forest of <b>Yleos</b> is next. Its master is the Chimera.` }],
-  yleos: [{ title: 'Yleos', body: '<b>The dark forest.</b> Dryads live here and hunt on sight; they fear fire. Giants walk among the trees, slow but terrible: one blow can kill you. Eat your best food and wear armour.<br><br>Lightstone lies in these hills. A pickaxe breaks it out of the boulders.' }],
+  yleos: [{ title: 'Yleos', body: '<b>The dark forest.</b> Dryads live here and hunt on sight, and no fire frightens them; only their little dryadlings shy from a campfire. Giants walk among the trees, slow but terrible: one blow can kill you. Eat your best food and wear armour.<br><br>Lightstone lies in these hills. A pickaxe breaks it out of the boulders.' }],
   cave: [{ title: 'The Giants\' Caves', body: 'The Giants carve what they see on the walls of their caves, and they have seen where the <b>Chimera</b> sleeps. Each cave has a guard.<br><br>Take a rubbing of the carving inside. Three of them will show you the way.' }],
   chimera: [{ title: 'The Chimera\'s Shrine', body: 'The carvings fit. The <b>Chimera\'s Shrine</b> is on your map.<br><br>Its altar asks for <b>3 dryad hearts and 10 pomegranates</b>. Some dryads carry a heart; pomegranate trees grow in the meadow groves.' }],
   chimeraAltar: [{ title: 'The Altar of the Chimera', body: 'Lion, goat and serpent in one body. It bites, it claws, and its tail stings whoever stands behind it, with venom. The forest answers its call every half minute.<br><br>It is the strongest thing on Nisos. Be ready.' }],
@@ -84,6 +85,28 @@ export class Owl {
     const base = g.onFirstItem; g.onFirstItem = (id) => { base?.(id); this.want('intro'); };
     const bd = g.onDeath; g.onDeath = () => { bd?.(); this.want('death'); };
   }
+  // ---- one-time hints (a toast, once ever: st.hints), for small lessons the moment they matter
+  hint(key) {
+    const H = { parry: `Blocked. Raise your guard (${K('RMB')}) <b>just as</b> a blow lands to <b>parry</b> it and stagger the beast.` };
+    const h = (this.st.hints ||= []); if (h.includes(key) || !H[key]) return; h.push(key); this.g.hud.toast(H[key]);
+  }
+  // ---- what she has told you, to read again (the pause menu's Owl's counsel): a list of the topics heard, in the order
+  // she tells them, and a topic's cards in her box (closing it goes back to the list, nothing else changes)
+  counsel(onClose) {
+    let box = document.getElementById('owlCounsel');
+    if (!box) { box = document.createElement('div'); box.id = 'owlCounsel'; box.className = 'pnl hidden'; document.body.appendChild(box); }
+    const heard = ORDER.filter((t) => this.st.done.includes(t));
+    box.innerHTML = `<h2>The Owl's Counsel</h2><div class="pbody">${heard.length ? `<p class="psub">What she has told you</p><div class="clist">${heard.map((t) => `<button class="btn ghost" data-t="${t}">${TOPICS[t][0].title}</button>`).join('')}</div>` : '<p>She has told you nothing yet.</p>'}<div class="btns"><button class="btn" id="counselX">Back</button></div></div>`;
+    box.classList.remove('hidden');
+    const done = () => { box.classList.add('hidden'); onClose?.(); };
+    box.querySelector('#counselX').onclick = done;
+    box.querySelectorAll('[data-t]').forEach((b) => (b.onclick = () => { box.classList.add('hidden'); this.reread(b.dataset.t, () => box.classList.remove('hidden')); }));
+  }
+  reread(topic, back) {
+    this.cards = TOPICS[topic]; this.card = 0; this.talked = []; this.rereading = back; this.box.classList.remove('hidden'); this.draw();
+  }
+  // (the counsel or one of its topics open: the pause key leaves it be, main.js)
+  get reading() { return !!this.rereading || !!document.getElementById('owlCounsel')?.offsetParent; }
   // ---- topics
   want(topic) { if (this.st.done.includes(topic) || this.st.queue.includes(topic)) return; this.st.queue.push(topic); this.st.queue.sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)); }
   get hasNews() { return this.st.queue.length > 0; }
@@ -113,6 +136,7 @@ export class Owl {
   }
   next() { this.card++; if (this.card >= this.cards.length) this.close(); else this.draw(); }
   close() {
+    if (this.rereading) { const back = this.rereading; this.rereading = null; this.box.classList.add('hidden'); back(); return; }   // (read again from the counsel: back to its list)
     this.open = false; this.box.classList.add('hidden'); input.uiOpen = this.g.hud.open || this.g.map?.open || false; if (!input.uiOpen) lock();
     for (const t of this.talked || []) { if (!this.st.done.includes(t)) this.st.done.push(t); this.st.queue.splice(this.st.queue.indexOf(t), 1); }
     this.st.met = true; this.leave(); this.g.acts?.wave();   // (a wave as she flies off)

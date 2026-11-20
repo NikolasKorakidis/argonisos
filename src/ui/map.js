@@ -5,8 +5,10 @@ import { glyph as icon, iconImg } from './icons.js';   // (the map's marks stay 
 import { SITES } from '../world/sites.js';
 import { BIOME_NAMES, biomeAt } from '../world/gen.js';
 import { input, lock, unlock } from '../input.js';
+import { PRIORITY } from '../world/pool.js';
 
-const EXT = 3200, N = 512, FOG = 256, SEEN_R = 70;
+// (N: the painted map's size, 3 m a pixel, and FOG the explored mask's, so the minimap, 300 m across, isn't a blur)
+const EXT = 3200, N = 1024, FOG = 1024, SEEN_R = 70;
 const LABEL = { temple: 'Ancient Temple', house: 'Abandoned House', labyrinth: 'The Labyrinth', chimera: "Chimera's Shrine", olive: 'Ancient Olive', cave: 'Giant Cave' };
 const ICON = { temple: 'temple', house: 'roof', labyrinth: 'goal', chimera: 'goal', olive: 'olivebranch', cave: 'stone' };
 
@@ -16,7 +18,8 @@ export class WorldMap {
     const st = (g.S.map ||= { known: [] }); this.st = st;
     this.fog = document.createElement('canvas'); this.fog.width = this.fog.height = FOG; this.fctx = this.fog.getContext('2d'); this.fctx.fillStyle = '#d4c49a'; this.fctx.fillRect(0, 0, FOG, FOG);   // unexplored: blank parchment
     this.base = document.createElement('canvas'); this.base.width = this.base.height = N;
-    g.pool.post({ type: 'mapImage', N, extent: EXT }).then((m) => { const c = this.base.getContext('2d'), id = c.createImageData(N, N); id.data.set(m.data); c.putImageData(id, 0, 0); this.img = true; });
+    // (painted after the land round you is in, background work: a few seconds of one worker's time)
+    g.pool.post({ type: 'mapImage', N, extent: EXT }, PRIORITY.background).then((m) => { const c = this.base.getContext('2d'), id = c.createImageData(N, N); id.data.set(m.data); c.putImageData(id, 0, 0); this.img = true; });
     // panel
     const p = document.createElement('div'); p.id = 'mapPanel'; p.className = 'hidden';
     p.innerHTML = `<div class="pnl"><h2>Nisos</h2><button class="xbtn" id="mapX">${icon('close')}</button><div class="pbody"><canvas id="mapCanvas"></canvas><div id="mapLegend"></div></div></div>`;
@@ -51,21 +54,26 @@ export class WorldMap {
       c.font = '600 13px Cinzel, serif'; c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = 'rgba(244,230,196,.9)'; const lb = LABEL[s.kind] + (done ? (s.kind === 'olive' ? ' (copied)' : ' (taken)') : ''); c.strokeText(lb, px, py + 27); c.fillStyle = '#2b1c0f'; c.fillText(lb, px, py + 27); c.globalAlpha = 1; }
     const gt = this.guideTarget; if (gt) { const [gx, gy] = P(gt.x, gt.z); c.strokeStyle = '#c9973a'; c.lineWidth = 3; c.setLineDash([6, 4]); c.beginPath(); c.arc(gx, gy, 22, 0, 7); c.stroke(); c.setLineDash([]); }
     const b = this.g.S.bed; if (b) { const [px, py] = P(b.x, b.z); this.spawnMark(c, px, py, 1); c.font = '600 12px Cinzel, serif'; c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = 'rgba(244,230,196,.9)'; c.strokeText('Spawn point', px, py + 24); c.fillStyle = '#7a2614'; c.fillText('Spawn point', px, py + 24); }
+    const gr = this.g.graves?.list || []; for (const q of gr) { const [px, py] = P(q.x, q.z); this.graveMark(c, px, py, 1); c.font = '600 12px Cinzel, serif'; c.textAlign = 'center'; c.lineWidth = 3; c.strokeStyle = 'rgba(244,230,196,.9)'; c.strokeText('Your grave', px, py + 24); c.fillStyle = '#2b1c0f'; c.fillText('Your grave', px, py + 24); }
     const pl = this.g.player, [px, py] = P(pl.pos.x, pl.pos.z); c.save(); c.translate(px, py); c.rotate(-pl.yaw + Math.PI); c.fillStyle = '#a8401f'; c.strokeStyle = '#fff4dc'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, -11); c.lineTo(8, 9); c.lineTo(0, 4); c.lineTo(-8, 9); c.closePath(); c.fill(); c.stroke(); c.restore();
-    document.getElementById('mapLegend').innerHTML = `<span>${icon('you')} You</span>${b ? `<span>${icon('roof')} Spawn point</span>` : ''}<span class="dim">Wheel to zoom · drag to pan · <span class="kbd">M</span> close</span>`;
+    document.getElementById('mapLegend').innerHTML = `<span>${icon('you')} You</span>${b ? `<span>${icon('roof')} Spawn point</span>` : ''}${gr.length ? `<span>${icon('bone')} Your grave</span>` : ''}<span class="dim">Wheel to zoom · drag to pan · <span class="kbd">M</span> close</span>`;
   }
+  // your grave (save.js Graves): a dark stone with bones on it, until you've emptied it
+  graveMark(c, x, y, k) { const r = 11 * k, im = iconImg('bone'); c.fillStyle = '#3a3430'; c.beginPath(); c.arc(x, y, r, 0, 7); c.fill(); c.strokeStyle = '#f4e6c4'; c.lineWidth = 2; c.stroke(); if (im.complete) { c.save(); c.filter = 'invert(1)'; c.drawImage(im, x - r * 0.75, y - r * 0.75, r * 1.5, r * 1.5); c.restore(); } }
   spawnMark(c, x, y, k) { const r = 11 * k, im = iconImg('roof'); c.fillStyle = '#9a3420'; c.beginPath(); c.arc(x, y, r, 0, 7); c.fill(); c.strokeStyle = '#f4e6c4'; c.lineWidth = 2; c.stroke(); if (im.complete) { c.save(); c.filter = 'invert(1) sepia(0.4)'; c.drawImage(im, x - r * 0.75, y - r * 0.75, r * 1.5, r * 1.5); c.restore(); } }
   // ---- the minimap (bottom right): north up, 300 m across, the same painted map and fog as the big one
   drawMini() {
     const cv = this.mini, c = cv.getContext('2d'), W = cv.width, P = this.g.player.pos, span = 300, k = W / span, x0 = P.x - span / 2, z0 = P.z - span / 2;
     c.save(); c.clearRect(0, 0, W, W); c.beginPath(); c.arc(W / 2, W / 2, W / 2, 0, 7); c.clip();
-    c.fillStyle = '#d4c49a'; c.fillRect(0, 0, W, W);
+    c.fillStyle = '#d4c49a'; c.fillRect(0, 0, W, W); c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
     const sx = ((x0 + EXT / 2) / EXT) * N, sz = ((z0 + EXT / 2) / EXT) * N, sw = (span / EXT) * N;
     if (this.img) c.drawImage(this.base, sx, sz, sw, sw, 0, 0, W, W);
     c.globalAlpha = 0.96; c.drawImage(this.fog, (sx / N) * FOG, (sz / N) * FOG, (sw / N) * FOG, (sw / N) * FOG, 0, 0, W, W); c.globalAlpha = 1;
     const at = (x, z) => [(x - x0) * k, (z - z0) * k], inside = ([x, y]) => Math.hypot(x - W / 2, y - W / 2) < W / 2 - 8;
     for (const s of this.sites()) { if (!this.isKnown(s)) continue; const q = at(s.x, s.z); if (!inside(q)) continue; const im = iconImg(ICON[s.kind]); c.globalAlpha = this.done(s) ? 0.5 : 1; c.fillStyle = 'rgba(244,230,196,.9)'; c.beginPath(); c.arc(q[0], q[1], 9, 0, 7); c.fill(); if (im.complete) c.drawImage(im, q[0] - 7, q[1] - 7, 14, 14); c.globalAlpha = 1; }
     const gt = this.guideTarget; if (gt) { const q = at(gt.x, gt.z); if (inside(q)) { c.strokeStyle = '#c9973a'; c.lineWidth = 2; c.setLineDash([4, 3]); c.beginPath(); c.arc(q[0], q[1], 11, 0, 7); c.stroke(); c.setLineDash([]); } }
+    const rim = (q) => { if (inside(q)) return q; const a = Math.atan2(q[1] - W / 2, q[0] - W / 2); return [W / 2 + Math.cos(a) * (W / 2 - 12), W / 2 + Math.sin(a) * (W / 2 - 12)]; };
+    for (const q of this.g.graves?.list || []) { const p = rim(at(q.x, q.z)); this.graveMark(c, p[0], p[1], 0.8); }   // (your grave too, on the rim while it's further off)
     const b = this.g.S.bed; if (b) { let q = at(b.x, b.z); if (!inside(q)) { const a = Math.atan2(q[1] - W / 2, q[0] - W / 2); q = [W / 2 + Math.cos(a) * (W / 2 - 12), W / 2 + Math.sin(a) * (W / 2 - 12)]; } this.spawnMark(c, q[0], q[1], 0.8); }   // kept on the rim when it's further away
     c.save(); c.translate(W / 2, W / 2); c.rotate(-this.g.player.yaw + Math.PI); c.fillStyle = '#a8401f'; c.strokeStyle = '#fff4dc'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, -9); c.lineTo(7, 8); c.lineTo(0, 4); c.lineTo(-7, 8); c.closePath(); c.fill(); c.stroke(); c.restore();
     c.restore();
@@ -81,6 +89,7 @@ export class WorldMap {
     [['N', 180], ['E', 90], ['S', 0], ['W', 270]].forEach(([l, b]) => put(b, l, 'card')); [45, 135, 225, 315].forEach((b) => put(b, '·', 'mid'));
     for (const s of this.sites()) if (this.isKnown(s) && !this.done(s)) { const b = ((Math.atan2(s.x - P.x, s.z - P.z) * 180) / Math.PI + 360) % 360, dist = Math.hypot(s.x - P.x, s.z - P.z); if (dist > 15) put(b, `${icon(ICON[s.kind])}<small>${dist > 999 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm'}</small>`, 'poi'); }
     const sp = this.g.S.bed; if (sp) { const b = ((Math.atan2(sp.x - P.x, sp.z - P.z) * 180) / Math.PI + 360) % 360, dist = Math.hypot(sp.x - P.x, sp.z - P.z); if (dist > 8) put(b, `${icon('roof')}<small>${dist > 999 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm'}</small>`, 'poi spawn'); }
+    for (const q of this.g.graves?.list || []) { const b = ((Math.atan2(q.x - P.x, q.z - P.z) * 180) / Math.PI + 360) % 360, dist = Math.hypot(q.x - P.x, q.z - P.z); if (dist > 4) put(b, `${icon('bone')}<small>${dist > 999 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm'}</small>`, 'poi grave'); }
     const gt = this.guideTarget; if (gt) { const b = ((Math.atan2(gt.x - P.x, gt.z - P.z) * 180) / Math.PI + 360) % 360, dist = Math.hypot(gt.x - P.x, gt.z - P.z); if (dist > 6) put(b, `${icon('goal')}<small>${dist > 999 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm'}</small>`, 'poi guide'); }
     if (html !== this.lastC) { this.lastC = html; this.strip.innerHTML = html; }
   }

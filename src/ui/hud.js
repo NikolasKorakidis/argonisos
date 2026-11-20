@@ -91,7 +91,12 @@ export class HUD {
   // moment and fading
   hurtFrom(x, y, k = 0.5) { const e = $('hurtDir'), n = Math.hypot(x, y) || 1; e.style.transition = 'none'; e.style.background = `radial-gradient(ellipse 60% 60% at ${50 + (x / n) * 60}% ${50 - (y / n) * 60}%, rgba(215,24,16,${Math.min(0.85, 0.35 + k * 0.5)}) 0%, rgba(215,24,16,0) 70%)`; e.style.opacity = 1; void e.offsetWidth; e.style.transition = 'opacity .8s ease-in .2s'; e.style.opacity = 0; }
   hurt(k) { $('hurt').style.boxShadow = `inset 0 0 160px rgba(200,20,20,${Math.min(0.75, k)})`; clearTimeout(this.hurtT); this.hurtT = setTimeout(() => ($('hurt').style.boxShadow = ''), 250); }
-  death(on) { $('death').classList.toggle('show', on); }
+  // The death screen; lost: what death took of each skill (stats.js deathPenalty), named under the title, the most first
+  death(on, lost = []) {
+    const d = $('death'); d.classList.toggle('show', on); let el = d.querySelector('.toll'); if (!el) { el = document.createElement('div'); el.className = 'toll'; d.appendChild(el); }
+    const top = on ? lost.slice().sort((a, b) => b[3] - a[3]).slice(0, 6) : [];
+    el.innerHTML = top.length ? `<small>Death takes 5% of all you have learned</small>${top.map(([n, a, b]) => `<span>${n} ${b < a ? `<b>${a} → ${b}</b>` : a}</span>`).join('')}` : '';
+  }
   // Fade out, let the night pass, fade back in
   sleep(cb) {
     const d = $('death'); d.querySelector('h1').textContent = 'You sleep'; d.querySelector('p').textContent = 'The night passes…'; d.classList.add('show');
@@ -204,7 +209,7 @@ export class HUD {
   }
   drawChar() {
     const S = this.player.stats, armor = this.armor?.() ?? 0;
-    const sk = Object.entries(SKILLS).map(([k, d]) => { const s = S.skills[k], a = xpForLevel(s.level), b = xpForLevel(s.level + 1); return `<div class="skill"><span>${d.name}</span><b>${s.level}</b><i><u style="width:${((s.xp - a) / (b - a)) * 100}%"></u></i></div>`; }).join('');
+    const sk = Object.entries(SKILLS).map(([k, d]) => { const s = S.skills[k], a = xpForLevel(s.level), b = xpForLevel(s.level + 1); return `<div class="skill"><span>${d.name}</span><b>${s.level}</b><i><u style="width:${Math.min(100, Math.max(0, ((s.xp - a) / (b - a)) * 100))}%"></u></i></div>`; }).join('');   // (kept within the bar, whatever an old save holds)
     const html = `<div class="statrow"><span>Health</span><b>${Math.ceil(S.health)} / ${Math.round(S.maxHealth)}</b></div><div class="statrow"><span>Stamina</span><b>${Math.ceil(S.stamina)} / ${Math.round(S.maxStamina)}</b></div>
       <div class="statrow"><span>Armour</span><b>${armor}</b></div><p class="psub" style="margin-top:14px">Skills</p><div class="skills">${sk}</div>`;
     if (html !== this.last.char) { this.last.char = html; $('charBody').innerHTML = html; }

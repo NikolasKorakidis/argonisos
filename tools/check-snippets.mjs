@@ -41,7 +41,8 @@ const strings = (n, out = []) => {
 };
 for (const f of walk(path.join(ROOT, 'tests'))) {
   const rel = path.relative(ROOT, f), want = (k) => { if (!used.has(k)) used.set(k, rel); };
-  for (const text of strings(tree(fs.readFileSync(f, 'utf8')))) {
+  let ast; try { ast = tree(fs.readFileSync(f, 'utf8')); } catch (e) { bad.push(`${rel}: can't be parsed (${e.message})`); continue; }
+  for (const text of strings(ast)) {
     if (!text.includes('/src/')) continue;
     const alias = new Map();
     for (const m of text.matchAll(new RegExp(String.raw`(?:const|let|var)\s+\{([^{}]*)\}\s*=\s*` + IMP, 'g'))) for (const p of m[1].split(',')) { const k = p.split(':')[0].trim(); if (k && !k.startsWith('...')) want(m.groups.p + '\0' + k); }

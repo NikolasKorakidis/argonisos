@@ -1,6 +1,6 @@
 // Gameplay glue: equipping from the hotbar, strikes and what they hit, E to interact, picking up and dropping, durability.
 import * as THREE from 'three';
-import { ITEMS } from './items.js';
+import { ITEMS, SET_BONUS } from './items.js';
 import { Pickups, KINDS } from '../world/pickups.js';
 import { Harvest } from './harvest.js';
 import { Crafting } from './crafting.js';
@@ -16,7 +16,7 @@ import { Owl } from './owl.js';
 import { Guide } from './guide.js';
 import { BuildMenu } from '../ui/buildmenu.js';
 import { Occlusion } from '../render/occlusion.js';
-import { save, load, Graves } from './save.js';
+import { save, load, Graves, SAVE_LOST } from './save.js';
 import { sound, updateAmbience, listen, fires } from '../audio/sound.js';
 import { WIND } from '../world/wind.js';
 import { LIGHT } from '../world/sky.js';
@@ -88,7 +88,7 @@ export function installGame(g) {
   g.torchLit = () => g.equippedTool('light') && !player.swimming && !player.dead;   // (a torch in your hand burns, out of the water: a fire the creatures that fear fire keep clear of, creatures.js)
   g.warmArmor = () => inv.slots.some((s) => s?.worn && ITEMS[s.id].warm);
   g.resists = (kind) => inv.slots.some((s) => s?.worn && ITEMS[s.id].resist?.includes(kind));   // (combat.js: a blow of that kind halved)
-  g.armor = () => { let a = 0; const sets = {}; for (const s of inv.slots) if (s?.worn && ITEMS[s.id].armor) { a += ITEMS[s.id].armor; const st = ITEMS[s.id].set; sets[st] = (sets[st] || 0) + 1; } if (Object.values(sets).some((n) => n >= 3)) a *= 1.05; return Math.round(a); };
+  g.armor = () => { let a = 0; const sets = {}; for (const s of inv.slots) if (s?.worn && ITEMS[s.id].armor) { a += ITEMS[s.id].armor; const st = ITEMS[s.id].set; sets[st] = (sets[st] || 0) + 1; } if (Object.values(sets).some((n) => n >= 3)) a *= SET_BONUS; return Math.round(a); };
   hud.armor = g.armor;
   function refreshLook() {
     const r = worn('hand'), l = worn('left');
@@ -119,7 +119,9 @@ export function installGame(g) {
   };
   inv.onChange = ((base) => () => { base?.(); for (const s of inv.slots) if (s?.worn && !s.n) delete s.worn; refreshLook(); })(inv.onChange);
 
-  // ---- strikes
+  // ---- strikes. A swing's stamina goes by the weapon's heft (SWING): a dagger or a fist is quick and cheap, an axe or a
+  // club dearer, a spear's two-handed thrust the dearest; a tool's swing costs what it always has
+  const SWING = { unarmed: 4, dagger: 4, axe: 6, mace: 6, spear: 7 }, swingCost = (d) => (d?.type === 'weapon' || !d ? SWING[d?.skill ?? 'unarmed'] : null) ?? 5;
   player.onStrike = () => {
     const slot = g.heldSlot(), item = slot ? ITEMS[slot.id] : null;
     const hitSomething = g.combat.strike(item) || g.harvest.strike(item) || false;
@@ -132,7 +134,8 @@ export function installGame(g) {
     const f = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)), front = player.pos.clone().addScaledVector(f, 0.9);
     const owl = g.owl.interactable(player.pos); if (owl && g.owl.faced()) return owl;
     const p = g.pickups.nearest(front, 1.9);
-    if (p) { const K = KINDS[p.kind], id = p.kind === 'drop' ? p.item : K.item, n = p.kind === 'drop' ? p.n : 1; return { kind: 'pickup', p, label: `${K.verb || 'Pick up'} ${K.label || ITEMS[id].name}${n > 1 ? ` ×${n}` : ''}`, sub: K.label ? `+${K.n[0]} ${ITEMS[id].name.toLowerCase()}` : '' }; }
+    // (a drop of something this version no longer knows, from an old save, is named by its id rather than stopping the frame)
+    if (p) { const K = KINDS[p.kind], id = p.kind === 'drop' ? p.item : K.item, n = p.kind === 'drop' ? p.n : 1, name = ITEMS[id]?.name ?? String(id); return { kind: 'pickup', p, label: `${K.verb || 'Pick up'} ${K.label || name}${n > 1 ? ` ×${n}` : ''}`, sub: K.label ? `+${K.n[0]} ${name.toLowerCase()}` : '' }; }
     const ow = g.owl.interactable(player.pos) || g.graves.interactable(player.pos); if (ow) return ow;
     const tr = g.trial.interactable(player.pos); if (tr) return tr;
     const s = g.build?.interactable?.(player.pos, f); if (s) return s;
@@ -188,9 +191,9 @@ export function installGame(g) {
       const d = g.held();
       if (d?.tool === 'build' && g.build?.active) continue;
       if (g.bow()) { g.combat?.bowClick?.(); continue; }
-      player.strike(strikeKind(d), 5);
+      player.strike(strikeKind(d), swingCost(d));
     }
-    if (input.lmb && !input.clicks.length && player.swing <= 0 && !g.bow() && !(g.held()?.tool === 'build' && g.build?.active)) player.strike(strikeKind(g.held()), 5);   // hold to keep swinging
+    if (input.lmb && !input.clicks.length && player.swing <= 0 && !g.bow() && !(g.held()?.tool === 'build' && g.build?.active)) player.strike(strikeKind(g.held()), swingCost(g.held()));   // hold to keep swinging
     g.pickups.update(player.pos, g.S.day);
     g.harvest.update(dt);
     g.build.update(dt);
@@ -206,7 +209,17 @@ export function installGame(g) {
   g.lateUpdate = (dt) => { updateFx(dt, camera); updateLights(); g.occlusion.update(dt); };
   hud.onToggle = (on) => { if (on) g.crafting.open(); };
   g.loaded = load(g);
-  g.save = () => !player.dead && save(g);
-  setInterval(() => g.save(), 60000); addEventListener('beforeunload', () => g.save());
+  // (a save that couldn't be read: load kept a copy of it beside the save and starts the page again on a new trial,
+  // saving nothing meanwhile; the title screen and a toast say so, save.js)
+  if (g.loaded === 'lost') { g.loaded = false; g.save = () => false; location.reload(); }
+  else {
+    if (g.saveLost) setTimeout(() => hud.toast(SAVE_LOST), 3000);
+    // (a save that fails, the browser's storage full, says so on the HUD, once in a while rather than every minute; a
+    // death saves at once, the grave and where you'll wake, so closing the page on the death screen keeps the grave)
+    let warnedT = -1e9;
+    g.save = () => { if (g.saveBlocked) return false; const ok = save(g); if (!ok && performance.now() - warnedT > 300000) { warnedT = performance.now(); hud.toast('<b>Could not save</b>: the browser\'s storage for this page is full or blocked'); } return ok; };
+    const od = g.onDeath; g.onDeath = () => { od?.(); g.save(); };
+    setInterval(() => g.save(), 60000); addEventListener('beforeunload', () => g.save());
+  }
   refreshLook();
 }

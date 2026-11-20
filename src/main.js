@@ -79,10 +79,11 @@ hud.bind(player, inv);
 player.onToast = (m) => hud.toast(m);
 player.stats.onLevel = (s, L) => hud.skill(s, L); player.stats.onLearn = (s, L) => hud.skill(s, L, true);   // (a skill found, and each level after it: a banner and a chime)
 const baseDeath = player.stats.onDeath;
-player.stats.onDeath = () => { baseDeath(); hud.death(true); game.onDeath?.(); setTimeout(respawn, 5500); };
+// (death costs every skill you have used a share of what you've learned of it, as in Valheim: stats.js deathPenalty, told
+// on the death screen; taken at once, so a save made on the death screen has it: game.js)
+player.stats.onDeath = () => { baseDeath(); hud.death(true, player.stats.deathPenalty()); game.onDeath?.(); setTimeout(respawn, 5500); };
 function respawn() {
   hud.death(false);
-  const skills = Object.values(player.stats.skills), k = skills[Math.floor(Math.random() * skills.length)]; k.xp *= 0.95;   // death costs 5% of one skill's progress
   const bed = S.bed || SPAWN; player.revive(bed.x, bed.z); snapWeather();
   hud.toast('Zeus lifts you up again. <b>Zeus\'s Favour</b> carries you for a while.');
 }
@@ -124,7 +125,7 @@ function updateConditions() {
   st.set('cold', (night || st.has('wet')) && !fire && !(game.warmArmor?.() ?? false));
 }
 // Game systems (crafting, building, creatures...) plug in here
-export const game = { player, inv, hud, veg, colliders, scene, S, pool, useSlot };
+export const game = { player, inv, hud, veg, colliders, scene, S, pool, useSlot, spawnAt: SPAWN };
 installGame(game);
 // Free flight (F9 or the dev menu): the camera flies; leaving it sets the hero down on the ground below
 game.setFly = (on) => {
@@ -162,7 +163,7 @@ function loop() {
   // keys
   const busy = !game.started || game.paused;
   const pauseKey = hit('KeyP') || (hit('Escape') && performance.now() - (game.pausedAt || 0) > 400);   // (the Esc that just paused us via the mouse release doesn't unpause)
-  if (game.started && pauseKey && !hud.open && !game.map?.open && !game.owl?.open && !game.buildMenu?.open && !(game.build?.sel && !game.paused)) game.pause(!game.paused);
+  if (game.started && pauseKey && !hud.open && !game.map?.open && !game.owl?.open && !game.owl?.reading && !game.buildMenu?.open && !(game.build?.sel && !game.paused)) game.pause(!game.paused);
   if (!busy && !game.buildMenu?.open && (hit('Tab') || hit('KeyI') || (hit('Escape') && hud.open))) hud.toggle();
   if (!busy && !input.uiOpen) for (let k = 1; k <= 8; k++) if (hit('Digit' + k)) useSlot(k - 1);
   if (hit('F3')) setPerfOverlay(!SETTINGS.perf);

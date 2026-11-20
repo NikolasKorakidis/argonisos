@@ -32,6 +32,7 @@ export const SKILLS = {
   dagger: { name: 'Daggerman', icon: 'dagger' }, mace: { name: 'Maceman', icon: 'club' }, bow: { name: 'Bowman', icon: 'bow' }, blocking: { name: 'Blocking', icon: 'shield' },
 };
 export const xpForLevel = (L) => 50 * (L - 1) * (L + 2);
+const DEATH = 0.05;   // (the share of each skill's learning a death takes)
 
 export class Stats {
   constructor() {
@@ -95,6 +96,17 @@ export class Stats {
     const k = this.skills[s]; if (!k) return; if (xp > 0) this.learn(s); if (k.level >= 100) return;
     k.xp += xp;
     while (k.level < 100 && k.xp >= xpForLevel(k.level + 1)) { k.level++; this.onLevel?.(s, k.level); }
+  }
+  // Death's toll (Valheim's): DEATH of what you've learned of each skill you have used, levels and all, so a long-trained
+  // skill can fall a level. Returns what each lost, [name, level before, level after, xp lost], for the death screen
+  deathPenalty(share = DEATH) {
+    const out = [];
+    for (const [s, k] of Object.entries(this.skills)) {
+      if (!(k.xp > 0)) continue; const from = k.level, lost = k.xp * share; k.xp -= lost;
+      while (k.level > 1 && k.xp < xpForLevel(k.level)) k.level--;
+      out.push([SKILLS[s]?.name ?? s, from, k.level, lost]);
+    }
+    return out;
   }
   // ---- health
   damage(n) { if (this.dead || n <= 0 || this.god) return; this.health -= n; if (this.health <= 0) { this.health = 0; this.dead = true; this.onDeath?.(); } }

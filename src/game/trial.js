@@ -2,7 +2,8 @@
 //   Clues: three of the five marked olive trees in Pedias piece together the way to the Minotaur's Labyrinth; three of
 //   the four Giant caves in Yleos (each guarded) show where the Chimera sleeps.
 //   Tribute: lay it on the boss's altar to call it: 5 deer hides and 10 olives for the Minotaur, 3 dryad hearts and
-//   10 pomegranates for the Chimera. Mid-fight, the dead (or the forest) come to the boss's aid in waves 30 seconds
+//   10 pomegranates for the Chimera. A fight that ends without the kill (you fled, fell, or left the game mid-fight)
+//   leaves the tribute on the altar (st.paid), and E there calls the beast again for nothing more. Mid-fight, the dead (or the forest) come to the boss's aid in waves 30 seconds
 //   apart; the Minotaur's first comes sooner if he's brought down to 300 health first (helpAt).
 //   Offering: bring the head to the Ancient Temple. Zeus grants its power (F) and the next tier of crafting.
 //   Prayer: once a day at the temple altar, Zeus's Blessing. (And once ever at the old altar on the top of Olympos,
@@ -24,6 +25,8 @@ import { loadGLB } from '../assets.js';
 // what stops a giant boss (creatures.js BIG): not rubble (low), not trees and rocks
 const SOLID = (k) => !k.low && k.ref?.sp === undefined;
 const FT = 0.3048, angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+// a blow that got through (combat.js hitPlayer: some damage, not 'dodged' or 'blocked')
+const landed = (r) => typeof r === 'number' && r > 0;
 // The bosses are giants (Patch 21): the Minotaur stands 10.5 m to his horns, five and a half times the hero, and the
 // Chimera is 23 m from its jaws to its tail and nearly 9 m tall at the head (size: its model drawn that many times its
 // own size, models.js KIT; pace: its blows and roars played that much slower, for their weight). Their bodies, reach and
@@ -93,6 +96,7 @@ export class Trial {
     const bar = document.createElement('div'); bar.id = 'bossBar'; bar.className = 'hidden'; bar.innerHTML = '<div class="bn"></div><div class="bb"><i></i></div>'; document.getElementById('hud').appendChild(bar); this.bar = bar;
     const pw = document.createElement('div'); pw.id = 'power'; pw.className = 'hidden'; document.getElementById('hud').appendChild(pw); this.pw = pw;
     g.onKill = (c) => this.onKill(c);
+    { const od = g.onDeath; g.onDeath = () => { od?.(); if (this.boss) this.fell = true; }; }   // (fallen in the fight: said so if it ends that way, update)
   }
   // ---- what E does at the trial's places
   interactable(pos) {
@@ -109,7 +113,8 @@ export class Trial {
     if (u.kind === 'carving') return st.carvings.includes(u.id) ? { label: 'You already took this carving', sub: this.nextHint('carvings'), use: () => this.pointNext('carvings', true) } : { label: 'Take a rubbing of the carving', sub: 'Giant cave', use: () => this.clue(u, 'carvings', 'caveCarving') };
     if (u.kind === 'summon') {
       if (st.down[u.boss]) return { label: 'The altar is silent', sub: `${BOSS_NAME[u.boss][0].toUpperCase() + BOSS_NAME[u.boss].slice(1)} is no more`, use: () => {} };
-      if (this.boss) return { label: 'The fight is on', sub: '', use: () => {} };
+      if (this.boss || this.calling) return { label: 'The fight is on', sub: '', use: () => {} };
+      if (st.paid?.[u.boss]) return { label: `Call ${BOSS_NAME[u.boss]} again`, sub: 'Your tribute still lies on the altar', use: () => this.summon(u) };
       const T = TRIBUTE[u.boss], txt = Object.entries(T).map(([id, n]) => `${n} ${ITEMS[id].name.toLowerCase()}${n > 1 && !ITEMS[id].name.endsWith('s') ? 's' : ''}`).join(' and ');
       return { label: inv.has(T) ? `Lay the tribute: ${txt}` : `The altar asks for ${txt}`, sub: `Altar of ${BOSS_NAME[u.boss]}`, use: () => this.summon(u) };
     }
@@ -126,6 +131,9 @@ export class Trial {
     this.st.prayDay = g.S.day; g.player.stats.add('zeusBlessing'); g.player.stats.heal(99);
     burst(u.at.clone().setY(u.at.y + 1.8), { color: 0xffe08a, n: 40, speed: 3, size: 0.07, grav: -3, life: 1.6 }); g.flashSky(0.35); addShake(0.3); g.sound?.('thunder');
     g.hud.region("Zeus's Blessing", 'Your strength grows for a while');
+    // (the first prayer, before any olive is found: Zeus shows the way to the nearest marked olive, on the map and compass)
+    const st = this.st; if (!st.scraps.length && !st.revealed.labyrinth && !st.shown) { st.shown = true; const s = this.remaining('scraps')[0];
+      if (s) setTimeout(() => { g.map?.reveal(s); g.hud.toast(`Zeus shows you an <b>ancient olive</b> where the old ones carved the way, about ${Math.round(Math.hypot(s.x - g.player.pos.x, s.z - g.player.pos.z))} m off. It's on your map and compass.`); g.sound?.('reveal'); }, 3500); }
   }
   // The old altar on the top of Olympos, an Easter egg (no step of the guide and nothing the owl says leads there): praying
   // at it once opens the whole island, the map uncovered everywhere and every place of the trial marked on it (the
@@ -169,9 +177,12 @@ export class Trial {
     const d = Math.round(Math.hypot(s.x - this.g.player.pos.x, s.z - this.g.player.pos.z));
     if (!known || again) this.g.hud.toast(key === 'scraps' ? `The marks point to another <b>ancient olive</b>, about ${d} m away. It's on your map and compass.` : `The carving shows another <b>Giant cave</b>, about ${d} m away. It's on your map and compass.`);
   }
+  // (the tribute laid, or already lying there from a fight that ended without the kill: st.paid; while the fight is on
+  // it's st.fight, saved, so a game left mid-fight finds it on the altar again: save.js)
   summon(u) {
-    const g = this.g, T = TRIBUTE[u.boss]; if (!g.inv.has(T)) { g.hud.toast('You don\'t have the tribute yet'); return; }
-    g.inv.takeMats(T); g.sound?.('summon'); this.calling = u.boss;   // (the beast is on its way: its music starts now, audio/music.js)
+    const g = this.g, T = TRIBUTE[u.boss], st = this.st; if (this.boss || this.calling) return;   // (not while a beast is on its way or fighting)
+    if (st.paid?.[u.boss]) delete st.paid[u.boss]; else if (!g.inv.has(T)) { g.hud.toast('You don\'t have the tribute yet'); return; } else g.inv.takeMats(T);
+    st.fight = u.boss; this.fell = false; g.sound?.('summon'); this.calling = u.boss;   // (the beast is on its way: its music starts now, audio/music.js)
     g.acts?.kneel(u.center, 2.8);   // (kneeling while the beast is called)
     gatherStorm(); g.flashSky(0.5); addShake(0.4);   // (Zeus's storm rolls in over the arena: weather.js, and the bolts, storm)
     dust(u.center.clone().setY(u.center.y + 1), 40, 0x6a5a48, 0.9);
@@ -212,6 +223,8 @@ export class Trial {
     if (A.landed && t < ARRIVE.land + 0.25) askLight(at.clone().setY(at.y + 4), 60, 70, 0xffe2b0);   // (the flash lighting the ruin)
     if (t > ARRIVE.done) { this.arrival = null; P.focus = null; }
   }
+  // a fight over without the kill: the tribute stays on the altar (and the beast's dead go back into the ground)
+  unpaid() { const st = this.st; if (st.fight) { (st.paid ||= {})[st.fight] = true; delete st.fight; } for (const k of [...this.g.creatures.list]) if (k.summoned && !k.dead) this.g.creatures.remove(k); }
   // the fight is on: the first wave of help 30 seconds from now (or sooner: helpAt)
   begin(c, kind) { this.boss = c; this.bossKind = kind; this.helperT = 30; this.waves = 0; }
   // a wave of help: two of the boss's helpers rising at the arena's edge, not right beside you, and the next in 30 seconds
@@ -226,7 +239,7 @@ export class Trial {
   onKill(c) {
     if (c !== this.boss) return;
     // (and the storm breaks: the clouds part and the sun comes through, weather.js)
-    const g = this.g; this.st.down[this.bossKind] = true; this.unspend(c); this.calm(); this.boss = null; this.bar.classList.add('hidden'); breakStorm();
+    const g = this.g; this.st.down[this.bossKind] = true; delete this.st.fight; this.unspend(c); this.calm(); this.boss = null; this.bar.classList.add('hidden'); breakStorm();
     for (const k of g.creatures.list) if (k.summoned && !k.dead) g.creatures.hurt(k, [[9999, 'force']], null);
     g.hud.region(`${BOSS_NAME[this.bossKind][0].toUpperCase()}${BOSS_NAME[this.bossKind].slice(1)} has fallen`, 'Take its head to Zeus at the Ancient Temple');
     g.acts?.later.push({ t: 1.2, fn: () => g.acts.cheer() });   // (arms raised in triumph)
@@ -426,7 +439,8 @@ export class Trial {
       case 'claw': case 'sting':   // the old strikes, now as moves: committed a moment before they land, the claws only in front
         c.ctl = { want: 0, face: m.e < m.hit - 0.3 ? toP : undefined };
         if (!m.hit0 && m.e >= m.hit) { m.hit0 = true;
-          if (m.k === 'sting' && d < 14) { g.combat.hitPlayer(c, [52, 72, 'pierce']); P.stats.add('poisoned', 6); } else if (m.k === 'claw' && d < T.reach + 1.5 && Math.abs(angDiff(toP, c.yaw)) < 1) g.combat.hitPlayer(c, [22, 32, 'slash']);
+          // (the venom only if the sting went in: not rolled clear of, not taken on the guard)
+          if (m.k === 'sting' && d < 14) { if (landed(g.combat.hitPlayer(c, [52, 72, 'pierce']))) P.stats.add('poisoned', 6); } else if (m.k === 'claw' && d < T.reach + 1.5 && Math.abs(angDiff(toP, c.yaw)) < 1) g.combat.hitPlayer(c, [22, 32, 'slash']);
           const paw = c.body.point?.(m.k === 'sting' ? 'tail11' : 'Leg_R_F5'); if (paw) { dust(paw.setY(c.pos.y + 0.2), 6, 0x7a6c5c, 0.8); g.sound?.('slam', { at: paw, big: true }); } }
         return m.e >= m.dur ? over(false) : m.k;
       case 'breath':   // fire from the lion's mouth, swept slowly after you, once its head is down (the clip held there)
@@ -438,7 +452,7 @@ export class Trial {
           for (let i = 0; i < 5; i++) { const s = Math.random(); burst(mouth.clone().addScaledVector(f, s * 20).add(new THREE.Vector3((Math.random() - 0.5) * s * 8, -s * (mouth.y - c.pos.y) * 0.75, (Math.random() - 0.5) * s * 8)), { color: Math.random() < 0.5 ? 0xff7a20 : 0xffc040, n: 4, speed: 4 + s * 6, size: 0.25 + s * 0.6, grav: -2, life: 0.5, glow: Math.random() < 0.3 }); }
           askLight(mouth.clone().addScaledVector(f, 8), 40, 30, 0xff8a30);
           m.tick = (m.tick || 0) - dt;
-          if (m.tick <= 0) { m.tick = 0.25; if (d < 26 && Math.abs(angDiff(toP, c.yaw)) < 0.45) { g.combat.hitPlayer(c, [9, 13, 'fire']); P.stats.add('burning', 3); } } }
+          if (m.tick <= 0) { m.tick = 0.25; if (d < 26 && Math.abs(angDiff(toP, c.yaw)) < 0.45 && landed(g.combat.hitPlayer(c, [9, 13, 'fire']))) P.stats.add('burning', 3); } }
         return m.t <= 0 ? over(true) : 'breath';
       case 'pounce':   // crouched to spring, its landing glowing on the ground under you, then the leap
         if (m.ph === 0) { c.ctl = { want: 0, face: toP }; m.to = P.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(toP), 0, Math.cos(toP)), -5); m.mark ||= mark(m.to, { r: T.r + 4.5, color: 0xff6a30 }); m.mark.m.position.set(m.to.x, this.g.creatures.groundAt(m.to.x, m.to.z, m.to.y) + 0.12, m.to.z); m.mark.set(Math.min(1, m.e / m.hit) * 0.7);
@@ -499,7 +513,8 @@ export class Trial {
       const c = this.boss; this.bar.querySelector('i').style.width = (c.hp / c.max) * 100 + '%';
       this.helperT -= dt;
       if (!c.dead && (this.helperT <= 0 || (!this.waves && c.hp <= (c.T.helpAt ?? -1)))) this.help(c);
-      if (g.player.pos.distanceTo(c.arena) > 70 && !c.dead) { this.unspend(c); this.calm(); g.creatures.remove(c); this.boss = null; this.bar.classList.add('hidden'); setWeather(null); g.hud.toast('You fled. The altar waits for another tribute.'); }
+      if (g.player.pos.distanceTo(c.arena) > 70 && !c.dead) { this.unspend(c); this.calm(); g.creatures.remove(c); this.boss = null; this.bar.classList.add('hidden'); setWeather(null); this.unpaid();
+        g.hud.toast(`${this.fell ? 'You fell' : 'You fled'}. Your tribute still lies on the altar: call ${BOSS_NAME[this.bossKind]} again when you're ready.`); }
     }
     // a boss's head in the pack: the light over its stand at the temple, and the stand on the compass and map, until it's offered
     this.headT = (this.headT || 0) - dt;

@@ -1,10 +1,11 @@
 // Runs the test suites in tests/suites, each in a fresh game.
 //   node tests/run.mjs                  all suites
 //   node tests/run.mjs loop build       only suites whose file name starts with one of these
-//   --quick                             skip the slow ones (perf, visual, creatures)
+//   --quick                             skip the ones marked slow (perf, visual, creatures, combat, light, structures)
 //   --headed                            watch it play in a visible window
 //   --update                            visual: accept the current screenshots as the new baseline
-// Writes tests/reports/results.json; exits non-zero if anything failed.
+// Writes tests/reports/results.json (and, for a run of every suite, results-all.json too, so running one suite
+// afterwards doesn't lose it); exits non-zero if anything failed.
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -48,7 +49,9 @@ for (const s of suites) {
 await browser?.close(); server.close();
 
 const pass = out.reduce((a, s) => a + s.results.filter((r) => r.ok).length, 0), fail = out.reduce((a, s) => a + s.results.filter((r) => !r.ok).length, 0);
-fs.writeFileSync(path.join(REPORTS, 'results.json'), JSON.stringify({ when: new Date().toISOString(), secs: Math.round((Date.now() - t0) / 1000), pass, fail, suites: out }, null, 1));
+const report = JSON.stringify({ when: new Date().toISOString(), secs: Math.round((Date.now() - t0) / 1000), pass, fail, suites: out }, null, 1);
+fs.writeFileSync(path.join(REPORTS, 'results.json'), report); if (!names.length && !flags.has('--quick') && !flags.has('--update')) fs.writeFileSync(path.join(REPORTS, 'results-all.json'), report);
 console.log(`\n\x1b[1m${pass} passed, ${fail} failed\x1b[0m in ${Math.round((Date.now() - t0) / 1000)} s`);
+if (out.length > 1) console.log('  slowest: ' + [...out].sort((a, b) => b.secs - a.secs).slice(0, 5).map((s) => `${s.file} ${s.secs} s`).join(', '));
 for (const s of out) for (const r of s.results) if (!r.ok) console.log(`  \x1b[31m✗ ${s.name} › ${r.name}\x1b[0m → ${r.why}`);
 process.exit(fail ? 1 : 0);
