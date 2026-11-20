@@ -276,7 +276,7 @@ export class Harvest {
     else if (f.t > (f.state === 'lean' ? FALL.lean : FALL.hold)) {
       f.pivot.scale.multiplyScalar(1 - dt * 3); f.pivot.position.y -= dt * 1.5;   // (the crown breaks up)
       if (f.t > (f.state === 'lean' ? FALL.lean : FALL.hold) + 0.5) {
-        this.g.scene.remove(f.pivot); this.spawnLog(f);
+        this.g.veg.dropSingle(f.pivot); this.spawnLog(f);   // (its instance buffers freed: vegetation.js)
         const sn = Math.sin(f.th), m = f.tall * 0.55; dust(new THREE.Vector3(f.x + f.dx * m * sn, f.y + 0.5 + Math.max(0, Math.cos(f.th)) * m, f.z + f.dz * m * sn), 18, 0x6f8a46, 0.45);
         return true;
       }

@@ -108,7 +108,7 @@ export class Occlusion {
     if (e.kind === 'piece') { for (const o of e.orig) { o.m.transparent = o.transparent; o.m.opacity = o.opacity; o.m.depthWrite = o.depthWrite; } }
     else if (e.kind === 'site') { e.mesh.material = e.origMat; for (const m of e.mat) spare(m); }
     else if (e.kind === 'tree') {
-      this.g.scene.remove(e.single); for (const m of e.mats) spare(m);
+      this.g.veg.dropSingle(e.single); for (const m of e.mats) spare(m);
       // put the instance back, unless the tree was felled meanwhile or its cell was rebuilt
       const { cx, cz } = e.cell, live = this.g.veg.near.get(cx + ',' + cz) === e.cell;
       if (live) this.g.veg.hideTree(e.cell, e.i, false);

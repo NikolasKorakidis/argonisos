@@ -533,5 +533,8 @@ export class Vegetation {
     if (P.cards) { const l = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, false), 1); l.setMatrixAt(0, I); l.castShadow = true; l.frustumCulled = false; g.add(l); }
     return g;
   }
+  // ...and done with: its instances' buffers freed on the card (the shape and materials are the species', shared). Each tree
+  // the camera's view faded or an axe felled left one or two behind for good otherwise, hundreds an hour in the woods.
+  dropSingle(g) { g.parent?.remove(g); g.traverse((m) => { if (m.isInstancedMesh) m.dispose(); }); }
 }
 void mergeParts;
