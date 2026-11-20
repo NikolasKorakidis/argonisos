@@ -44,11 +44,11 @@ export class Occlusion {
     this.t -= dt; const now = performance.now() / 1000;
     if (this.t <= 0) {
       this.t = 0.08;
-      const hits = new Map();
+      const hits = new Map(), cand = this.candidates();
       for (const h of [1.65, 1.0]) {
         const target = _a.copy(P.pos); target.y += h; _d.copy(target).sub(camera.position); const len = _d.length(); if (len < 0.5) continue;
         ray.set(camera.position, _d.normalize()); ray.far = len - 0.3;
-        for (const hit of ray.intersectObjects(this.candidates(), false)) { const key = this.keyOf(hit); if (key && !(hits.get(key)?.distance < hit.distance)) hits.set(key, hit); }
+        for (const hit of ray.intersectObjects(cand, false)) { const key = this.keyOf(hit); if (key && !(hits.get(key)?.distance < hit.distance)) hits.set(key, hit); }
       }
       // and a tree or rock the camera stands in or right against, whether or not it hides the hero: a camera far back in a
       // thick wood ends up inside a trunk or among its lowest boughs, and the inside of the tree blacked out half the picture
@@ -68,10 +68,10 @@ export class Occlusion {
   }
   // what can obstruct: building pieces near the camera, site buildings, nearby trees and rocks
   candidates() {
-    const g = this.g, out = [], c = camera.position;
+    const g = this.g, out = this.cand ||= [], c = camera.position; out.length = 0;   // (one list for both rays, kept)
     for (const p of g.build.near(c.x, c.z, 14)) for (const m of p.inner.children) out.push(m);
     for (const grp of g.structures.groups) if (grp.position.distanceTo(c) < 70) for (const m of grp.children) if (m.isMesh) out.push(m);
-    for (const b of g.veg.batches.values()) if (b.meshes[0].count) out.push(...b.meshes);
+    for (const b of g.veg.batches.values()) if (b.meshes[0].count) for (const m of b.meshes) if (!m.userData.shade) out.push(m);   // (not the shadows' stand-ins: the ray's layer never meets them)
     // a faded tree is out of its batch: its stand-in copy has to keep catching the ray, or it would pop back and fade again
     for (const e of this.faded.values()) if (e.kind === 'tree') e.single.traverse((m) => { if (m.isMesh) out.push(m); });
     return out;
