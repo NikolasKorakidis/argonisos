@@ -7,6 +7,7 @@ import { WORLD } from './gen.js';
 import { seeded, hash21, tileNoise } from '../util/math.js';
 import { PRIORITY } from './pool.js';
 import { ULTRA } from '../render/quality.js';
+import { ATMO } from '../render/atmosphere.js';
 
 // (On Ultra, render/quality.js, a patch splits into finer ones half as far out again, so the land keeps its shape further
 // off: hills and ridges in the distance with their own folds rather than a few broad facets; more of them kept.)
@@ -154,26 +155,32 @@ const FLOOR_TEX = (() => {
   t.generateMipmaps = true; t.anisotropy = 8; t.needsUpdate = true; return t;
 })();
 const FLOOR = `
-      // each biome's floor (FLOOR_TEX), not on bare rock, fading out with distance (where the mipmaps would only grey it)
-      float fy = vBio.x * (1.0 - vRock), fv = vBio.y * (1.0 - vRock), fd = 1.0 - smoothstep(25.0, 70.0, length(vViewPosition));
+      // each biome's floor (FLOOR_TEX), not on bare rock, fading out with distance (where the mipmaps would only grey it);
+      // the forest's litter and roots only where there is wood (the woods texture) and above the beach (the review of 20
+      // Nov: the forest's weight runs out over the east coast and up Olympos, and drew black roots over the sand and rock)
+      float fw = smoothstep(0.12, 0.45, texture2D(uWoods, vRockP.xz / uWoodsExt + 0.5).r) * smoothstep(1.5, 4.0, vRockP.y);
+      float fy = vBio.x * (1.0 - vRock) * fw, fv = vBio.y * (1.0 - vRock), fd = 1.0 - smoothstep(25.0, 70.0, length(vViewPosition));
       vec4 fl = texture2D(uFloorTex, vRockP.xz / 9.0), fs = texture2D(uFloorTex, vRockP.xz / 3.3 + 0.43);
       float fmoss = smoothstep(0.56, 0.74, fl.g), froot = fl.b * (1.0 - fmoss) * fd, fpool = smoothstep(0.52, 0.68, fl.a + (fs.a - 0.5) * 0.15) * fv;
       vec3 fc = diffuseColor.rgb;
       fc *= mix(1.0, 0.62 + mix(fl.r, fs.r, 0.6) * 0.75, fy * fd * (1.0 - fmoss * 0.7));          // needles and twigs, light and dark
       fc = mix(fc, fc * vec3(0.78, 1.22, 0.7), fmoss * fy * 0.75);                                  // the moss greener
-      fc *= 1.0 - froot * fy * 0.45;                                                               // the roots dark
+      fc *= 1.0 - froot * fy * 0.28;                                                               // the roots dark
       fc *= mix(1.0, 0.82 + fs.a * 0.3, fv) * (1.0 - fpool * 0.45);                                // the marsh's mud, darker where it's sodden
+      // bare earth, paths and sand a little darker (warm grounds, redder than green): their pale colour under the moon's
+      // silver light read as frost or snow
+      fc *= 1.0 - 0.3 * smoothstep(-0.02, 0.05, fc.r - fc.g);
       diffuseColor.rgb = fc;
       float floorRelief = fmoss * (0.4 + fl.g * 0.4) * fy * fd;   // (the moss cushions stand up; the roots only darken: thin lines in relief caught the firelight texel by texel)`;
 export function rockGround(mat) {
   const base = mat.onBeforeCompile;
   mat.onBeforeCompile = (sh, r) => {
     base?.call(mat, sh, r);
-    sh.uniforms.uRockTex = { value: ROCK_TEX }; sh.uniforms.uFloorTex = { value: FLOOR_TEX };
+    sh.uniforms.uRockTex = { value: ROCK_TEX }; sh.uniforms.uFloorTex = { value: FLOOR_TEX }; sh.uniforms.uWoods = ATMO.tWoods; sh.uniforms.uWoodsExt = ATMO.woodsExt;
     sh.vertexShader = 'attribute float rock; attribute vec2 bio; varying float vRock; varying vec2 vBio; varying vec3 vRockP, vRockN;\n' + sh.vertexShader.replace('#include <project_vertex>', `
       vRock = rock; vBio = bio; vRockP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRockN = normalize(mat3(modelMatrix) * objectNormal);
       #include <project_vertex>`);
-    sh.fragmentShader = 'uniform sampler2D uRockTex, uFloorTex; varying float vRock; varying vec2 vBio; varying vec3 vRockP, vRockN;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>${FLOOR}
+    sh.fragmentShader = 'uniform sampler2D uRockTex, uFloorTex, uWoods; uniform float uWoodsExt; varying float vRock; varying vec2 vBio; varying vec3 vRockP, vRockN;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>${FLOOR}
       // (sampled everywhere, not only on rock: the relief's screen derivatives need every pixel of the quad)
       vec3 rbw = pow(abs(vRockN), vec3(4.0)); rbw /= rbw.x + rbw.y + rbw.z;
       vec3 rp = vRockP / 7.0;   // (a tile 7 m across: slabs of about 1.7 m)

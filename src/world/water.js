@@ -36,7 +36,7 @@ export function makeWaterMat({ level, shallow, deep, foam = 1, depthScale = 6, c
         if (uRainK > 0.01) { vec2 rs = wetRipples(vW.xz, uRainT) * uRainK * (1.0 - smoothstep(20.0, 45.0, dist)); n = normalize(n + vec3(-rs.x, 0.0, -rs.y) * 1.6); }
         float F = 0.02 + 0.98 * pow(1.0 - max(dot(n, V), 0.0), 5.0);
         // body colour: light absorbed with depth (Beer-Lambert)
-        float ab = 1.0 - exp(-depth / uDS * 2.4);
+        float ab = 1.0 - exp(-depth / uDS * 3.4);   // (deep and saturated soon past the shallows: the sea read pale teal)
         vec3 body = mix(mix(uShallow, uDeep, ab), mix(vec3(0.36, 0.42, 0.2), vec3(0.13, 0.19, 0.1), ab), marsh) * mix(vec3(0.07, 0.1, 0.18), vec3(1.0), uDay);   // water darkens to moonlit blue at night
         // caustics dancing on the shallow bottom
         vec2 cp = vW.xz * 0.42 + n.xz * 0.8;
@@ -48,14 +48,17 @@ export function makeWaterMat({ level, shallow, deep, foam = 1, depthScale = 6, c
         float cl = vn(R.xz / (R.y + 0.3) * 1.6 + vec2(t * 0.015, 0.0)) * 0.65 + vn(R.xz / (R.y + 0.3) * 4.0) * 0.35;
         refl = mix(refl, vec3(1.0), smoothstep(0.55, 0.8, cl) * 0.35 * clamp(R.y * 3.0, 0.0, 1.0));
         refl *= mix(1.0, 0.5, marsh);                       // the marsh is dark and peaty: a dull, tea-coloured mirror
-        vec3 col = mix(body, refl, clamp(F * 0.85 + 0.04, 0.0, 1.0));
+        vec3 col = mix(body, refl, clamp(F * 0.85 + 0.04, 0.0, 0.6));   // (never all sky, even at a grazing look: the sea keeps its own colour out to the horizon)
         vec3 Hh = normalize(normalize(uSunDir) + V); float sp = max(dot(n, Hh), 0.0);
         col += uSunCol * (pow(sp, 320.0) * 3.2 + pow(sp, 45.0) * 0.1) * (1.0 - max(uWeed, marsh) * 0.6);
-        // shoreline: a solid wet line plus foam lapping in and out, broken up by noise
+        // shoreline: a wet line plus foam lapping in and out, broken up by noise; the line itself comes and goes along the
+        // shore, and the laps roll in in sets, stronger and weaker by turns and not all along the beach at once (it was
+        // one even white stripe)
         float edge = 1.0 - smoothstep(0.0, 1.0, depth);
-        float nz = texture2D(uNorm, vW.xz * 0.07 + vec2(t * 0.01, -t * 0.007)).r;
-        float lap = smoothstep(0.6, 0.95, sin(depth * 8.0 - t * 1.5 + nz * 5.0) * 0.5 + 0.5);
-        float foam = clamp(pow(edge, 3.0) * 1.3 + lap * edge * 0.9, 0.0, 1.0) * smoothstep(0.3, 0.62, nz + edge * 0.45) * uFoam * (1.0 - marsh);   // still marsh pools don't foam
+        float nz = texture2D(uNorm, vW.xz * 0.07 + vec2(t * 0.01, -t * 0.007)).r, along = vn(vW.xz * 0.045 + vec2(t * 0.02, 0.0));
+        float surge = 0.35 + 0.65 * smoothstep(-0.2, 0.8, sin(t * 0.45 + along * 9.0));
+        float lap = smoothstep(0.6, 0.95, sin(depth * 8.0 - t * 1.5 + nz * 5.0) * 0.5 + 0.5) * surge;
+        float foam = clamp(pow(edge, 3.0) * (0.35 + 0.95 * smoothstep(0.3, 0.7, along)) + lap * edge * 0.9, 0.0, 1.0) * smoothstep(0.3, 0.62, nz + edge * 0.45) * uFoam * (1.0 - marsh);   // still marsh pools don't foam
         col = mix(col, vec3(0.96, 0.98, 1.0) * mix(0.25, 1.0, uDay), foam * 0.85);
         // marsh: floating duckweed rafts
         float wk = 0.0;
