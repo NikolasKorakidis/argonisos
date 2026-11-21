@@ -1,5 +1,8 @@
 # Shadows and shade: the plan
 
+> Status: done (Patch 19): the two cascades and the ambient occlusion are in `render/core.js` and `atmosphere.js`;
+> "Worth doing next" is still open.
+
 Our own summary, November 2026. The player asked for "the next level" of shadows: the trees' shade in the forest, and
 in the open the hero's, the rocks' and everything else's, without making the game heavy. This page lists what three.js
 r160 offers, what similar games do, what each option costs us, and what we built (Patch 19).

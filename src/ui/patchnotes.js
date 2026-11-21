@@ -19,6 +19,7 @@ export const PATCHES = [
       { t: 'Building and crafting', icon: 'hammer', items: [
       ] },
       { t: 'Under the hood', icon: 'gear', items: [
+        'The title screen shows which build of the game you are playing, its number and the date it went up, so a report can say which one it was.',
       ] },
     ],
   },

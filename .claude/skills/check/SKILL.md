@@ -5,8 +5,10 @@ description: Run Argonisos's checks before a commit or pull request (lint, impor
 
 Run these from the project root, in order, and stop to report at the first stage that fails:
 
-1. `npm run check`: lint, import cycles, unused files and dependencies, and the world fingerprint (Node only, about 20 s).
-2. `npm run test:quick`: the game's suites in headless Chrome on the GPU, without perf, visual and creatures (about 8 min).
+1. `npm run check`: the repository guard, lint, the stylesheet, the tests' in-page imports, import cycles, unused files
+   and dependencies, and the world fingerprint (Node only, under a minute on an idle machine).
+2. `npm run test:quick`: the game's suites in headless Chrome on the GPU, without the slow ones (perf, visual, creatures,
+   combat, light, structures); many minutes, more on a busy machine (`tests/reports/results.json` has each suite's time).
    Run it in the background and wait for it to finish.
 3. If the change could alter how the game looks or performs, also `node tests/run.mjs perf visual`. Check the machine
    load first (`uptime`): timings from a busy machine are meaningless, so rerun them rather than trusting them.

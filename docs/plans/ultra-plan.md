@@ -1,5 +1,7 @@
 # Ultra: the plan
 
+> Status: done (the Ultra preset, `render/quality.js` and `ui/settings.js`); the "Not done" list at the end is still open.
+
 Our own summary, November 2026. The player asked for a setting above High for a high-end PC, "literally no
 limitations": everything visible from far away, as far as the browser goes. This page lists what WebGL2 in Chrome can
 sustain on such a machine, which techniques give the biggest visual step for a stylised open world in three.js r160,

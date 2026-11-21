@@ -1,5 +1,8 @@
 # Balance (Patch 21)
 
+> Status: done. The Patch 21 changes and the Patch 22 Minotaur fight are in the game; "Noted, not changed" lists what
+> was left.
+
 The team's balance changelog, as built. Tests: `node tests/run.mjs combat` (the "balance sheet" steps at the end of
 `tests/suites/combat.mjs`).
 

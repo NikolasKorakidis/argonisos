@@ -1,5 +1,7 @@
 # Light study: what Valheim does with light, and what we take from it
 
+> Status: done as far as "What we built from it"; "Not done, worth doing later" is still open.
+
 Our own summary, November 2026. The player asked for Valheim's forest light (rays through the trees, a little haze even
 by day), its blue moonlit nights, and fireflies on summer nights. No official breakdown of Valheim's rendering exists, so
 this relies on the game's own per-environment settings as mod tools expose them, on players' threads, and on Unity's
