@@ -130,7 +130,7 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   own distance; shrubs, logs and the like at the mist): both bands sink each one into the ground over its last
   `SHRINK` metres, measured from the player, so nothing pops. Screenshot tests that aim the camera far from the player
   see them gone.
-- **The player's mist** (`atmosphere.js`: clear to `MIST_R0` 60 m, 68% by `MIST_R1` 100 m, ceiling from `tallestNear`)
+- **The player's mist** (`atmosphere.js`: clear to `MIST_R0` 60 m, 50% on High by `MIST_R1` 100 m, the sky's colour, thinning up to a ceiling from `tallestNear`)
   lies over the grass's edge (`GRASS_R` 80 m, gone by `GRASS_END` 95 m: a dense near carpet hands over to a sparse far
   one at ~30 m in `grass.js`); all four live in `world/reach.js`. It hides how much less is drawn behind it (`farKeep`/`keepTo` in `vegetation.js`, `MID_R` 180 where impostors take over, `FAR_R`
   600, minor sites' `VIEW_R`). Change them together. The focus blur is the `focus` uniform.
