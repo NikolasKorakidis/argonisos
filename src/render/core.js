@@ -186,7 +186,12 @@ addEventListener('resize', () => {
 const gl = renderer.getContext(), timer = gl.getExtension('EXT_disjoint_timer_query_webgl2'), queries = [];
 export const GPU = { ms: 0, ok: !!timer, on: false };   // (on: timed only while the performance overlay shows it, main.js)
 renderer.info.autoReset = false;
+// (the first frame, under the loading screen, is drawn once more before it with the sun's shafts and the shade (AO) both
+// called for, so their passes' shaders are made then: made the first time the light called for them, mid-play, each
+// stalled a frame; warmUp in main.js compiles only the scene's)
+let postWarm = false;
 export function render() {
+  if (!postWarm && GFX.post) { postWarm = true; const k = [ATMO.shaftK.value, ATMO.ao.value]; ATMO.shaftK.value = 0.01; ATMO.ao.value = 1; composer.readBuffer = sceneRT; composer.writeBuffer = postRT; composer.render(); [ATMO.shaftK.value, ATMO.ao.value] = k; }
   renderer.info.reset();
   let q = null; if (timer && GPU.on && queries.length < 4) { q = gl.createQuery(); gl.beginQuery(timer.TIME_ELAPSED_EXT, q); }
   if (GFX.post) { composer.readBuffer = sceneRT; composer.writeBuffer = postRT; composer.render(); } else renderer.render(scene, camera);

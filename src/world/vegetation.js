@@ -174,7 +174,9 @@ const NF = 6, MF = 12;
 // (while blocks stream in, the mid band is rebuilt at most this often, seconds: each rebuild repacks every block in it,
 // and a teleport or a walk out of the woods brings several in a row; they come in behind the mist)
 const MID_WAIT = 0.4;
-const DITHER = 'float igN(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }\n';
+// (a plain per-pixel hash, not the interleaved gradient noise made for a temporal blend we don't have: on its own that
+// laid regular hatching over the crowns where the bands meet, reviewer 20 Nov; this reads as the leaves' own speckle)
+const DITHER = 'float igN(vec2 p) { p = mod(floor(p), 256.0); return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }\n';
 // (each cut copy shares its program with every other copy of a material whose shader is the same, the leaf cards of
 // every species one program: keyed by the material's own program key, not by the material, the woods compiled a program
 // per species and band, many of them only when that species first came into view, a hitch each time)
@@ -236,6 +238,16 @@ impMat.onBeforeCompile = (sh) => {
 impMat.customProgramCacheKey = () => 'vegImpostor';
 const quad = new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0);
 const _mid = { m: new Float32Array(16 * 256), n: 0 }, _far = { m: new Float32Array(16 * 256), n: 0 }, _farT = { m: new Float32Array(16 * 256), n: 0 }, _one = new Float32Array(16);   // (the stand-ins' leaves and trunks outside the near shadow box, gathered to go after those inside it)
+// Whether a tree's shade can fall anywhere in view: the stretch from its ball down along the sun's light to where the shade
+// of its top meets the ground (taken as the foot of its ball), as thick as the ball, against each side of the camera's
+// view. Wholly outside one side, it can't. The near map's stand-ins are only these (a tree behind you casting behind you
+// is drawn into it for nothing); the far map still has them all, so nothing changes there.
+const _sun = new THREE.Vector3();
+function shadeSeen(x, y, z, r, up) {
+  const t = 2 * r / up, ex = x - _sun.x * t, ey = y + r - _sun.y * t, ez = z - _sun.z * t;
+  for (const pl of _fr.planes) { const n = pl.normal; if (n.x * x + n.y * y + n.z * z + pl.constant < -r && n.x * ex + n.y * ey + n.z * ez + pl.constant < -r) return false; }
+  return true;
+}
 const _pm = new THREE.Matrix4(), _fr = new THREE.Frustum(), _sfr = new THREE.Frustum(), _snr = new THREE.Frustum(), _sp = new THREE.Sphere();
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
 // A tree stands a little into the ground, deeper on a slope, so its spreading roots don't stand clear of the land on the
@@ -462,6 +474,7 @@ export class Vegetation {
     // a rock or bush out of view is kept for its shadow only inside the near box, as it is drawn in full)
     for (const L of SHADOW.far ? [sun, sunFar] : [sun]) { L.updateMatrixWorld(); L.target.updateMatrixWorld(); L.shadow.updateMatrices(L); (L === sun ? _snr : _sfr).copy(L.shadow.getFrustum()); }
     if (!SHADOW.far) _sfr.copy(_snr);
+    _sun.subVectors(sun.position, sun.target.position).normalize(); const sunUp = Math.max(_sun.y, 0.15);
     for (const b of this.batches.values()) {
       const dst = b.near[0].instanceMatrix.array, dst2 = b.far[0]?.instanceMatrix.array, sdst = b.shade[0]?.instanceMatrix.array, split2 = dst2 ? SPLIT * SPLIT : Infinity; let m = 0, m2 = 0, s = 0;
       const cdst = b.shade[1]?.instanceMatrix.array; if (sdst && _far.m.length < sdst.length) { _mid.m = new Float32Array(sdst.length); _far.m = new Float32Array(sdst.length); _farT.m = new Float32Array(sdst.length); }
@@ -475,7 +488,7 @@ export class Vegetation {
           // only the far box holds. The near map draws the first two runs (by moonlight the first alone); the far map
           // draws the leaves of all three, but a trunk only where the tree has no leaf cards: it holds only what stands
           // still and is the same whatever your place in it, so it is drawn again only now and then, see core.js)
-          const near = _snr.intersectsSphere(_sp), d = Math.sqrt(d2);
+          const near = _snr.intersectsSphere(_sp) && shadeSeen(x, y, z, r, sunUp), d = Math.sqrt(d2);   // (in the near box, and its shade may fall in view)
           for (let e = 0; e < 16; e++) _one[e] = b.mats[k * 16 + e]; if (b.keep[k] < Infinity) shrink(_one, 0, b.keep[k] - d); if (sh) sway(_one, 0, sh, now - sh.t0);
           if (near && d < SHADOW.nightR) { cdst?.set(_one, s * 16); sdst.set(_one, s * 16); s++; }
           else if (near) _mid.m.set(_one, _mid.n++ * 16);
