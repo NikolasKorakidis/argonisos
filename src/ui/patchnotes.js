@@ -8,6 +8,16 @@ export const PATCHES = [
     intro: 'A long look over the whole island: a brighter sky and storm, clearer air, a smoother forest, fuller sound, fairer fights and building that keeps what you build.',
     sections: [
       { t: 'The look', icon: 'sun', items: [
+        '<b>Zeus\'s storm wall looks like a storm, not a hole in the sky.</b> By day it stands slate-blue across the island, its towering tops lit silver by the sun; by night and under a stormy sky it stays dark and menacing.',
+        '<b>Softer, brighter clouds.</b> Shaded smoothly, their tops lit white by the sun, their bases melting into the sky; the little puffs that looked like pebbles are gone, and by night the clouds take the night sky\'s colour.',
+        '<b>Clearer distance on High.</b> The haze round you is lighter and takes the sky\'s own colour, glowing towards the sun and thinning upward instead of stopping at a flat top, so distant woods and hills read as far away rather than behind a grey wall.',
+        'Rain and grey skies now drain the colour from the land and cool the light.',
+        'Shade is less blue: bark, marble and skin no longer turn lilac, the woods\' shade is a little green, and bare earth no longer looks like snow by moonlight.',
+        'Sun flecks on the forest floor are softer and warmer, and the forest\'s roots and needles no longer appear on beaches or on the summit.',
+        '<b>Firelight.</b> Campfires are brighter close by and fall off sooner, and on High and Ultra the nearest fire casts shadows: your hut, your workbench and you.',
+        'The sea is a deeper blue, the foam along the beach comes and goes in sets, and on Ultra its reflections are no longer speckled.',
+        'The focus blur at the edges of the screen is gentler and never blurs the sky. You can turn it off: Focus blur, in the settings.',
+        'A little more contrast in the picture; gold and bronze armour shines like metal; deer are a natural brown rather than orange.',
       ] },
       { t: 'Smoother', icon: 'sprint', items: [
         'Fixed: a short freeze every time the sky\'s light was refreshed, felt most in the woods and when time runs fast.',
