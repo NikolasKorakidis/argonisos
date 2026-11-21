@@ -9,7 +9,8 @@
 //   peak:     Olympos, one great snowy mountain in the far hills, kept clear of all the places above
 //   town:     an abandoned little town on level meadow, its streets, square and houses from the team's packs
 //   spots:    small scenes about the island (a roadside shrine, a lost cart, a shepherd's camp, a well...)
-import { heightAt, biomeWeights, addPad, hash2, WORLD, setPeak, routeAt, landness, setDetail, addCave, caveWorld, caveLocal, caveCut, CAVE_FORM } from './gen.js';
+//   mtn:      places to stop on the way up Olympos (a ledge with a bench and a shrine, a spring, votive columns, a nest)
+import { heightAt, biomeWeights, addPad, hash2, WORLD, setPeak, routeAt, landness, setDetail, addCave, caveWorld, caveLocal, caveCut, CAVE_FORM, PEAK } from './gen.js';
 
 const slopeAt = (x, z) => Math.hypot(heightAt(x + 2, z) - heightAt(x - 2, z), heightAt(x, z + 2) - heightAt(x, z - 2)) / 4;
 const _w = { p: 0, y: 0, v: 0, r: 0 };
@@ -25,7 +26,7 @@ function find({ r0, r1, a0 = 0, a1 = Math.PI * 2, n = 260, score, salt = 0 }) {
 }
 const far = (list, x, z, d) => list.every((s) => Math.hypot(s.x - x, s.z - z) > d);
 
-export const SITES = { temple: null, house: null, olives: [], labyrinth: null, caves: [], chimera: null, peak: null, town: null, spots: [] };
+export const SITES = { temple: null, house: null, olives: [], labyrinth: null, caves: [], chimera: null, peak: null, town: null, spots: [], mtn: [] };
 const clears = [];   // [x, z, r]: no trees or rocks inside
 // The temple's hill (below): how far its middle stands in front of the temple's (along the way it faces), the radius of
 // its flat top and of its foot, how much higher its top is than the temple's old pad, and how wide a strip the sacred
@@ -101,6 +102,23 @@ function pad(s, r0, r1, kind, y = s.y) { s.y = y; s.r = r1; s.kind = kind; addPa
   // (a small flat top for the altar and its ring of stones, the very top of the dome levelled; setPeak lays the path up
   // too, ending there: gen.js layRoute)
   if (pk) { setPeak(pk.x, pk.z); const y = heightAt(pk.x, pk.z) - 1.5; addPad(pk.x, pk.z, 8.5, 20, y); SITES.peak = { x: pk.x, z: pk.z, y, kind: 'peak', r: 12 }; clears.push([pk.x, pk.z, 22]); }
+  // (Patch 24) places to stop on the way up Olympos (structures.js mtnSpot), laid by the path's line, each a site of its
+  // own: a ledge at the hairpin nearest halfway up, levelled, with a bench and a little shrine looking out over the
+  // island; a spring in the cut of the path's uphill bank where it is deepest, a third of the way up; broken votive
+  // columns and prayer stones on a levelled stand beside the path where the crest begins; and an eagle's nest on the
+  // lesser summit. rot turns each so its +z looks out from the mountain (or, for the spring, from the bank onto the path).
+  if (pk) {
+    const R = PEAK.route, base = R[0].y, span = SITES.peak.y - base, side = (i) => { const a = R[Math.max(0, i - 1)], b = R[Math.min(R.length - 1, i + 1)], l = Math.hypot(b.x - a.x, b.z - a.z) || 1; return [(b.z - a.z) / l, -(b.x - a.x) / l]; };
+    const up = (i) => { const [nx, nz] = side(i), p = R[i]; return heightAt(p.x + nx * 9, p.z + nz * 9) > heightAt(p.x - nx * 9, p.z - nz * 9) ? 1 : -1; };   // (which side of the line the land rises on)
+    const spot = (x, z, y, v, rot) => ({ x, z, y, r: 6, kind: 'mtn', v, rot });
+    const t = PEAK.turns.filter((i) => i > 12 && i < PEAK.crest - 12).reduce((b, i) => (Math.abs(R[i].y - base - span * 0.45) < Math.abs(R[b].y - base - span * 0.45) ? i : b), PEAK.turns[1] ?? 20);
+    { const a = R[t - 8], b = R[t + 8], cx = (a.x + b.x) / 2, cz = (a.z + b.z) / 2, l = Math.hypot(R[t].x - cx, R[t].z - cz) || 1, ox = (R[t].x - cx) / l, oz = (R[t].z - cz) / l;
+      const s = spot(R[t].x + ox * 8.5, R[t].z + oz * 8.5, R[t].y, 0, Math.atan2(ox, oz)); SITES.mtn.push(pad(s, 4.5, 8, 'mtn', R[t].y)); }
+    { let best = -1, bi = 0; for (let i = Math.floor(R.length * 0.25); i < R.length * 0.42; i++) { if (PEAK.turns.some((q) => Math.abs(q - i) < 10)) continue; const [nx, nz] = side(i), u = up(i), cut = heightAt(R[i].x + nx * u * 8, R[i].z + nz * u * 8) - R[i].y; if (cut > best) { best = cut; bi = i; } }
+      const [nx, nz] = side(bi), u = up(bi), s = spot(R[bi].x + nx * u * 3.4, R[bi].z + nz * u * 3.4, R[bi].y, 1, Math.atan2(-nx * u, -nz * u)); s.r = 3; SITES.mtn.push(s); clears.push([s.x, s.z, 3.5]); }
+    { const i = Math.max(1, PEAK.crest - 6), [nx, nz] = side(i), u = -up(i), s = spot(R[i].x + nx * u * 8, R[i].z + nz * u * 8, R[i].y, 2, Math.atan2(nx * u, nz * u)); SITES.mtn.push(pad(s, 3.5, 7, 'mtn', R[i].y)); }
+    { const T = PEAK.towers[0]; if (T) { const s = spot(T.x, T.z, heightAt(T.x, T.z) - 0.4, 3, Math.atan2(SITES.peak.x - T.x, SITES.peak.z - T.z)); s.r = 3; SITES.mtn.push(s); } }
+  }
   setDetail(true);   // the ground's small bumps, now that nothing will be placed by its height (see detail() in gen.js)
 }
 // Nothing grows here (flora and ground pickups ask): the sites, and the path up Olympos (no boulder blocks it)

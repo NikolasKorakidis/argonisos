@@ -5,7 +5,7 @@
 //         odd great plane tree): no cypresses or firs, whose tall, slim shapes belong to the hills (reviewer, Patch 20).
 // Yleos:  dense dark forest of firs and cypresses, with figs among them, and clearings.
 // Valtos: dead and drowned trees, cypresses, sparse.
-import { heightAt, biomeWeights, fbm, hash2, slopeGrade, isRock, rockLimit, ROCK_GRADE } from './gen.js';
+import { heightAt, biomeWeights, fbm, hash2, slopeGrade, isRock, rockLimit, ROCK_GRADE, PEAK, routeAt } from './gen.js';
 import { smooth } from '../util/math.js';
 import { siteClear, ALL_SITES } from './sites.js';
 
@@ -71,7 +71,12 @@ const MIX = {
   wood: [['oak', 38], ['plane', 18], ['olive', 14], ['holm', 15], ['qtree', 12], ['pomegranate', 3]],           // the woods of the meadows
   forest: [['fir', 52], ['cypress', 30], ['fig', 18]],
   swamp: [['dead', 45], ['qdead', 30], ['cypress', 25]],
+  // (Patch 24) Olympos's own, by height: holm oaks, olives and cypresses on its lower slopes, then the pines and firs
+  mtnLow: [['holm', 32], ['olive', 20], ['cypress', 22], ['qpine', 14], ['fir', 12]],
+  mtnPine: [['qpine', 58], ['fir', 42]],
 };
+// How much of Olympos a point is (1 on the mountain, 0 off it): its own trees, shrubs, rocks and scree (mountainCover)
+export const mtnK = (x, z) => (PEAK.on ? smooth(PEAK.r * 0.92, PEAK.r * 0.72, Math.hypot(x - PEAK.x, z - PEAK.z)) : 0);
 const WOOD_THIN = 0.18;   // (with the lone trees and pairs that then go as well, a fifth fewer in all)
 const pick = (mix, r) => { let t = 0; for (const [, w] of mix) t += w; let a = r * t; for (const [n, w] of mix) { a -= w; if (a <= 0) return SP[n]; } return SP[mix[0][0]]; };
 
@@ -103,7 +108,7 @@ export function pediasWood(x, z, out = _pw) {
 }
 export function treeDensity(x, z, h, w) {
   if (h < 1.6 && w.v < 0.5) return 0;
-  if (h > 150) return smooth(205, 150, h) * treeDensity(x, z, 140, w);   // the treeline on Olympos
+  if (h > 150) { const m = mtnK(x, z); return smooth(205 + 95 * m, 150, h) * (1 - 0.3 * m) * treeDensity(x, z, 140, w); }   // the treeline on Olympos (on its shoulders the pines go higher, thinning out)
   // in a wood the crowns stand close enough to read as one mass from afar, a little thinner and more varied at the edges
   const pw = w.p > 0.05 ? pediasWood(x, z).wood : 0, pedias = pw * (1 / 34) * (0.75 + 0.5 * fbm(x * 0.05 + 7, z * 0.05 - 2, 2));
   const clearing = smooth(0.38, 0.28, fbm(x * 0.01 - 3, z * 0.01 + 6, 3));      // forest glades
@@ -214,14 +219,15 @@ function layoutRaw(cx, cz) {
     if (h > -0.5 && h < 1.4 && r1 < w.v * 0.09 * STEP * STEP / 4) { out.push(SP.reeds, Math.floor(r4 * 3), x, h, z, r3 * 6.283, 0.8 + r2 * 0.5); continue; }
     if (h < (w.v > 0.5 ? -0.25 : 0.6)) continue;
     const slope = slopeGrade(x, z);
-    // boulders and rocks: more on slopes and in the hills
+    // boulders and rocks: more on slopes and in the hills (not on Olympos, whose own lie where its rock falls, laid out in
+    // mountainCover: the scatter's dice are still thrown there, so nothing after them moves)
     if (r1 < (1 / 1100 + slope * 0.006 + w.y * 0.0012) * STEP * STEP) {
-      const big = r2 < 0.12 + w.y * 0.1, sp = big ? SP.boulder : SP.rock, S = SPECIES[sp].s;
-      out.push(sp, Math.floor(r3 * 3), x, h, z, r4 * 6.283, S[0] + (S[1] - S[0]) * rnd()); continue;
+      const big = r2 < 0.12 + w.y * 0.1, sp = big ? SP.boulder : SP.rock, S = SPECIES[sp].s, sc = S[0] + (S[1] - S[0]) * rnd();
+      if (mtnK(x, z) * 2 < r4) out.push(sp, Math.floor(r3 * 3), x, h, z, r4 * 6.283, sc); continue;
     }
     if (slope > rockLimit(x, z)) continue;   // bare rock: nothing grows (the shared slope rule, see gen.js)
     const d = treeDensity(x, z, h, w); if (r2 >= d * STEP * STEP) continue;
-    const mix = w.v > 0.5 ? MIX.swamp : w.y > w.p ? MIX.forest : pediasWood(x, z).orchard ? MIX.grove : MIX.wood;
+    const mix = w.v > 0.5 ? MIX.swamp : mtnK(x, z) > 0.5 ? (h + (hash2(cx * 16 + i + 911, cz * 16 + j - 577) - 0.5) * 40 < 140 ? MIX.mtnLow : MIX.mtnPine) : w.y > w.p ? MIX.forest : pediasWood(x, z).orchard ? MIX.grove : MIX.wood;
     const sp = pick(mix, r3), S = SPECIES[sp].s, rot = rnd() * 6.283, sc = S[0] + (S[1] - S[0]) * rnd();
     // (a fifth fewer trees in the meadows' woods and orchards, reviewer, Patch 20: each goes by a die of its own, thrown
     // for its place on the grid, after the shared dice have all been drawn, so every other tree keeps its place and look)
@@ -234,7 +240,8 @@ function layoutRaw(cx, cz) {
     const place = (k) => { const x = x0 + h2(k) * CELL, z = z0 + h2(k + 0.5) * CELL, h = heightAt(x, z); if (h < 1.6 || siteClear(x, z)) return null; return isRock(x, z) ? null : { x, z, h }; };   // (nothing on bare rock)
     if (cw.v < 0.4) {
       const n = Math.round(cw.p * 16 + cw.y * 5);
-      for (let k = 0; k < n; k++) { const q = place(k * 2 + 1); if (!q) continue; const r = h2(k * 2 + 1.3), sp = cw.p > cw.y ? (r < 0.42 ? SP.lavender : r < 0.58 ? SP.broom : SP.myrtle) : SP.myrtle, S = SPECIES[sp].s;
+      for (let k = 0; k < n; k++) { const q = place(k * 2 + 1); if (!q) continue; const r = h2(k * 2 + 1.3), mt = mtnK(q.x, q.z) > 0.5; if (mt && q.h > 300) continue;   // (on Olympos myrtle low down, broom higher, nothing over the turf)
+        const sp = mt ? (q.h > 190 || r < 0.35 ? SP.broom : SP.myrtle) : cw.p > cw.y ? (r < 0.42 ? SP.lavender : r < 0.58 ? SP.broom : SP.myrtle) : SP.myrtle, S = SPECIES[sp].s;
         out.push(sp, 0, q.x, q.h - 0.05, q.z, h2(k + 7) * 6.283, S[0] + (S[1] - S[0]) * h2(k + 9)); }
       if (h2(99) < cw.p * 0.4 + cw.y * 0.12) { const q = place(101); if (q) { const r = h2(103), sp = cw.y > cw.p ? (r < 0.6 ? SP.colfall : SP.wallruin) : r < 0.28 ? SP.colfall : r < 0.46 ? SP.colstand : r < 0.66 ? SP.herm : r < 0.82 ? SP.amphorae : SP.wallruin, S = SPECIES[sp].s;
         out.push(sp, Math.floor(h2(105) * 2), q.x, q.h - 0.04, q.z, h2(107) * 6.283, S[0] + (S[1] - S[0]) * h2(109)); } }
@@ -249,6 +256,7 @@ function layoutRaw(cx, cz) {
     for (let k = 0; k < nf; k++) { const q = place(400 + k * 2); if (!q || q.h > 160) continue; const S = SPECIES[SP.fern].s; out.push(SP.fern, 0, q.x, q.h - 0.05, q.z, h2(401 + k * 2) * 6.283, S[0] + (S[1] - S[0]) * h2(402 + k * 2)); }
     if (cw.y > 0.3 && cw.v < 0.3) for (let k = 0; k < 3; k++) { if (h2(500 + k) > cw.y * 0.5) continue; const q = place(510 + k * 2); if (!q || q.h > 160) continue; const S = SPECIES[SP.redbush].s; out.push(SP.redbush, 0, q.x, q.h - 0.05, q.z, h2(511 + k) * 6.283, S[0] + (S[1] - S[0]) * h2(512 + k)); }
     groundCover(out, x0, z0, cw, bc, h2);
+    if (PEAK.on && Math.hypot(x0 + 32 - PEAK.x, z0 + 32 - PEAK.z) < PEAK.r * 0.92 + 46) mountainCover(out, x0, z0, h2);
   }
   return new Float32Array(out);
 }
@@ -311,5 +319,54 @@ function groundCover(out, x0, z0, cw, bc, h2) {
   // dice of their own (k from 2100), last in the cell, so nothing laid out before them moves
   if (cw.p > 0.2 && cw.v < 0.4) for (let b = 0; b < Math.round(cw.p * 2); b++) { const k = 2100 + b, [x, z] = spot(k), h = dry(x, z);
     if (h !== null && h2(k + 0.3) < 0.6 && meadow(x, z, h) && wood(x, z) < 0.6 && clear(x, z, 1)) lay(SP.tomato, k, x, h - 0.05, z, 0); }
+}
+// (Patch 24) Olympos's rocks and its high ground, laid out after everything else in the cell with dice of their own (k
+// from 3000), so nothing laid out before them moves. The player found its boulders scattered anyhow, floating and out
+// of place: now rock lies where the mountain sheds it. Fans of fallen blocks at the foot of a cliff, big and small
+// together, spreading downhill; stones washed into the gullies, rounder; outcrops standing out of the ridges; now and
+// then a few stones fallen from the cut along the path's uphill side (never on it). Each sits on the lowest ground under
+// it and sunk a third of its height into it, so none floats on a slope. Up high a thin turf of tussocks and broom on the
+// shoulders, and scree on the bare rock.
+function mountainCover(out, x0, z0, h2) {
+  const inCell = (x, z) => x >= x0 && x < x0 + CELL && z >= z0 && z < z0 + CELL;
+  const offPath = (x, z, r) => { if (routeAt(x, z).k > 0) return false; for (let a = 0; a < 6; a++) if (routeAt(x + Math.cos(a * 1.047) * (r + 1), z + Math.sin(a * 1.047) * (r + 1)).k > 0) return false; return true; };
+  const clear = (x, z, r) => { for (let o = 0; o < out.length; o += STRIDE) { const sp = SPECIES[out[o]], q = Math.hypot(out[o + 2] - x, out[o + 4] - z); if (sp.res === 'tree' && q < sp.col * out[o + 6] + r) return false; if (sp.res === 'rock' && q < (sp.col * out[o + 6] + r) * 0.7) return false; } return true; };
+  // a stone at (x, z) of species sp, variant v, scale sc: on the lowest ground under it, a third of its height sunk in
+  const stone = (k, sp, v, x, z, sc) => {
+    if (!inCell(x, z) || siteClear(x, z) || mtnK(x, z) < 0.5 || slopeGrade(x, z) > (v === 3 ? 1.8 : 1.4)) return false; const S = SPECIES[sp], r = S.col * sc;   // (none rests on a cliff: only an outcrop stands out of one)
+    if (!offPath(x, z, r) || !clear(x, z, r)) return false;
+    let y = heightAt(x, z); for (let a = 0; a < 6; a++) y = Math.min(y, heightAt(x + Math.cos(a * 1.047 + 0.3) * r * 0.85, z + Math.sin(a * 1.047 + 0.3) * r * 0.85));
+    out.push(sp, v, x, y - S.h * sc * 0.33, z, h2(k + 0.37) * 6.283, sc); return true;
+  };
+  const down = (x, z) => { const gx = heightAt(x + 3, z) - heightAt(x - 3, z), gz = heightAt(x, z + 3) - heightAt(x, z - 3), l = Math.hypot(gx, gz) || 1; return [-gx / l, -gz / l]; };
+  for (let c = 0; c < 7; c++) {
+    const k = 3000 + c * 40, x = x0 + h2(k) * CELL, z = z0 + h2(k + 0.5) * CELL, h = heightAt(x, z); if (h < 70 || mtnK(x, z) < 0.5 || siteClear(x, z)) continue;
+    const g = slopeGrade(x, z), [dx, dz] = down(x, z), above = slopeGrade(x - dx * 10, z - dz * 10), cv = h - (heightAt(x + 10, z) + heightAt(x - 10, z) + heightAt(x, z + 10) + heightAt(x, z - 10)) / 4;
+    const talus = g < 0.9 && above > 1.2, gully = cv < -3 && g < 1.4, ridge = cv > 3 && g > 0.7;
+    if (h2(k + 0.9) > (talus ? 0.8 : gully ? 0.5 : ridge ? 0.35 : 0.06)) continue;
+    const n = talus ? 4 + Math.floor(h2(k + 1.1) * 5) : gully ? 3 + Math.floor(h2(k + 1.1) * 4) : ridge ? 3 : 1 + Math.floor(h2(k + 1.1) * 2);
+    for (let i = 0; i < n; i++) {
+      const q = k + 2 + i * 1.7, along = talus ? h2(q) * 14 : (h2(q) - 0.5) * (gully ? 20 : 8), across = (h2(q + 0.2) - 0.5) * (talus ? 4 + along : gully ? 5 : 8);
+      const px = x + dx * along - dz * across, pz = z + dz * along + dx * across, big = talus ? h2(q + 0.4) < 0.45 - along * 0.02 : ridge ? i === 0 : h2(q + 0.4) < 0.12;
+      if (big) stone(q, SP.boulder, ridge ? 3 : Math.floor(h2(q + 0.6) * 3), px, pz, 1.2 + h2(q + 0.8) * (talus ? 1.9 - along * 0.07 : 1.4));
+      else stone(q, SP.rock, gully ? (h2(q + 0.6) < 0.6 ? 3 : 0) : Math.floor(h2(q + 0.6) * 4), px, pz, 0.5 + h2(q + 0.8) * 1.1);
+    }
+  }
+  // stones fallen from the cut along the path's uphill side, a few metres off its edge
+  const R = PEAK.route;
+  for (let i = 5; i < R.length - 1; i += 11) {
+    const p = R[i]; if (!inCell(p.x, p.z) || h2(3400 + i) > 0.42) continue;
+    const a = R[i - 1], b = R[i + 1], l = Math.hypot(b.x - a.x, b.z - a.z) || 1, nx = (b.z - a.z) / l, nz = -(b.x - a.x) / l, up = heightAt(p.x + nx * 9, p.z + nz * 9) > heightAt(p.x - nx * 9, p.z - nz * 9) ? 1 : -1;
+    for (let j = 0; j < 2 + Math.floor(h2(3401 + i) * 3); j++) { const q = 3402 + i + j * 0.13, off = 7.2 + h2(q) * 3, t = (h2(q + 0.05) - 0.5) * 6; stone(q, SP.rock, Math.floor(h2(q + 0.07) * 4), p.x + nx * off * up + (b.x - a.x) / l * t, p.z + nz * off * up + (b.z - a.z) / l * t, 0.45 + h2(q + 0.09) * 0.8); }
+  }
+  // the high ground: tussocks in clumps and broom on the shoulders over the trees, scree on the bare rock
+  const lay = (sp, k, x, y, z, v) => { const S = SPECIES[sp]; out.push(sp, v ?? Math.floor(h2(k + 0.11) * (S.n || 1)), x, y, z, h2(k + 0.37) * 6.283, S.s[0] + (S.s[1] - S.s[0]) * h2(k + 0.53)); };
+  const soft = (x, z) => { if (!inCell(x, z) || siteClear(x, z) || mtnK(x, z) < 0.5 || isRock(x, z)) return null; return heightAt(x, z); };
+  for (let c = 0; c < 5; c++) {
+    const k = 3600 + c * 20, cx = x0 + h2(k) * CELL, cz = z0 + h2(k + 0.5) * CELL, h = soft(cx, cz); if (h === null || h < 200 || h > 380) continue;
+    for (let t = 0; t < 3 + Math.floor(h2(k + 1) * 5); t++) { const q = k + 2 + t * 0.9, x = cx + (h2(q) - 0.5) * 7, z = cz + (h2(q + 0.3) - 0.5) * 7, y = soft(x, z); if (y !== null) lay(SP.tallgrass, q + 0.2, x, y - 0.05, z); }
+  }
+  for (let c = 0; c < 3; c++) { const k = 3700 + c, x = x0 + h2(k) * CELL, z = z0 + h2(k + 0.5) * CELL, y = soft(x, z); if (y !== null && y > 170 && y < 320 && clear(x, z, 0.8)) lay(SP.broom, k, x, y - 0.05, z, 0); }
+  for (let c = 0; c < 6; c++) { const k = 3750 + c, x = x0 + h2(k) * CELL, z = z0 + h2(k + 0.5) * CELL; if (!inCell(x, z) || siteClear(x, z) || mtnK(x, z) < 0.5 || !isRock(x, z)) continue; const y = heightAt(x, z); if (y > 220) lay(SP.pebbles, k, x, y - 0.03, z); }
 }
 export const STRIDE = 7;

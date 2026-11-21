@@ -1,8 +1,8 @@
 // Terrain worker: builds terrain patches (positions, normals, colours, uvs, bare rock) off the main thread so streaming
 // the world never stutters. Also bakes the world height texture used by the water shader.
-import { heightAt, biomeWeights, groundColor, fbm, isRock, meadowPath, CAVE, CAVES } from './gen.js';
+import { heightAt, biomeWeights, groundColor, fbm, isRock, meadowPath, routeAt, CAVE, CAVES } from './gen.js';
 import { caveRock } from './cave.js';
-import { layoutCell, CELL, shadeAround, bakeShade, solidsAround, SPECIES, STRIDE, treeDensity } from './flora.js';
+import { layoutCell, CELL, shadeAround, bakeShade, solidsAround, SPECIES, STRIDE, treeDensity, mtnK } from './flora.js';
 // how wide a space to keep round the things that stand about but aren't solid (metres at scale 1)
 const CLEAR_R = { lavender: 0.5, broom: 0.7, myrtle: 0.8, fern: 0.6, redbush: 0.7, colfall: 1.4, colstand: 0.6, herm: 0.4, amphorae: 0.7, wallruin: 1.6, stump: 0.6, log: 1.6, driftwood: 1.2 };
 import './sites.js';   // registers the flattened ground under the trial's sites
@@ -85,10 +85,11 @@ self.onmessage = (e) => {
       let g = Math.min(1, Math.max(0, (h - 1.4) / 0.8)) * Math.min(1, Math.max(0, (1.15 - sl) / 0.45));
       g *= w.p * 1 + w.y * 0.45 + w.v * (h > 0.4 ? 0.55 : 0);
       g *= Math.min(1, Math.max(0, (fbm(x * 0.05 + 3, z * 0.05, 2) - 0.22) / 0.1));
-      g *= Math.min(1, Math.max(0, (190 - h) / 40));   // none on the bare rock and snow of the peak
+      g *= Math.min(1, Math.max(0, ((190 + 150 * mtnK(x, z)) - h) / (40 + 60 * mtnK(x, z)))) * (1 - 0.45 * mtnK(x, z) * smooth(170, 260, h));   // none on the bare rock and snow of the peak (on Olympos's shoulders a thin turf up to some 300 m: flora.js mtnK)
       g *= 1 - meadowPath(x, z, w) * 0.85;   // (thin on the meadows' worn paths: gen.js)
+      const onPath = smooth(0.25, 0.75, routeAt(x, z).k); g *= 1 - onPath;   // (and none on the path up Olympos: its bed is trodden bare)
       data[k] = h; data[k + 1] = g; data[k + 2] = Math.min(0.99, Math.max(0, fbm(x * 0.03 + 9, z * 0.03 - 4, 2))) + Math.round(Math.min(1, w.y + w.v * 0.6 + occ[j * N + i] * 1.3) * 15) * 2;   // tint, plus the forest shade packed above it
-      data[k + 3] = Math.min(1, Math.max(0, (fbm(x * 0.07, z * 0.07 + 5, 2) - 0.42) * 3)) * (w.p * 1 + w.y * 0.2);
+      data[k + 3] = Math.min(1, Math.max(0, (fbm(x * 0.07, z * 0.07 + 5, 2) - 0.42) * 3)) * (w.p * 1 + w.y * 0.2) * (1 - onPath);
       // taller grass: patches here and there, 20-40 m across, where it all grows to about 0.7x the hero's height (a crisp
       // edge, the same height throughout); mostly in the meadows, some in the marsh, fewer in the forest (packed into the
       // whole part of G)
