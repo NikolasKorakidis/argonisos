@@ -250,7 +250,7 @@ export function updateStormWall(time, dt, { light, focus, still, atmo, sun, sunD
   U.glow.value = 0.12 + light.night * 0.5 + light.dusk * 0.2;
   // (by a fair day it is lit as a cloud is, some three times as bright as by night or in a storm, where it stays dark and
   // heavy; and the light inside it, where no surface was met, lifted from near black to the sky's shade)
-  HAZE.day = light.day * (1 - atmo.overcast) * (1 - WEATHER.storm); U.lift.value = 0.4 * (1 + 2 * HAZE.day); U.floorK.value = 0.1 + 0.2 * HAZE.day;
+  HAZE.day = Math.min(1, light.day + light.dusk * 0.4) * (1 - atmo.overcast) * (1 - WEATHER.storm); U.lift.value = 0.4 * (1 + 2 * HAZE.day); U.floorK.value = 0.1 + 0.2 * HAZE.day;
   // how near the wall the player is: 1 at the border, nothing 350 m out
   const [D] = fieldAt(focus.x, focus.z), near = open ? 0 : Math.max(0, Math.min(1, 1 + D / 350)); STORM_WALL.near = near; STORM_WALL.away = open ? 9999 : Math.max(0, -D);
   // near it: the wind turns to blow in, harder; rain; the light darkens; dust and leaves are swept in

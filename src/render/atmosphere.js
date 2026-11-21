@@ -86,6 +86,7 @@ export const ATMO = {
   // the sea's reflections (Ultra only, SEA_SSR): the camera's view and projection, the water's ripple normals and their
   // clock (core.js and water.js set them), and how strong (less in rain, whose rings break the mirror up)
   viewProj: { value: new THREE.Matrix4() }, tWaterN: { value: null }, wT: { value: 0 }, seaK: { value: 1 },
+  night: { value: 0 },   // (how much it is night: the ground's bare earth darkens by it, terrain.js)
 };
 ATMO.mzSunDir = ATMO.sunDir;   // (the sun's glow in the mist: MIST_TONE)
 // The sky dome's own colours (sky.js paints the dome with these very colours, and the fog greys them: fogSky), for the
@@ -434,7 +435,7 @@ function grade(o) {
 export const AIR = { woodDay: 0.004, woodNight: 0.009, lit: 0.25, litNight: 0.12, amb: 0.15, ambNight: 1.0, shafts: 1.2, ao: 0.8, woodsDark: 0.3 };
 const clamp01 = (x) => Math.max(0, Math.min(1, x)), sstep = (a, b, x) => { const k = clamp01((x - a) / (b - a)); return k * k * (3 - 2 * k); };
 export function updateAtmosphere(camera, o) {
-  grade(o);
+  grade(o); ATMO.night.value = o.night;
   ATMO.cloudOff.value.x += o.dt * (3 + o.overcast * 9); ATMO.cloudOff.value.y += o.dt * 1.2;
   ATMO.cloudCover.value = 0.5 - o.overcast * 0.25; ATMO.cloudK.value = 0.28 * o.day * clamp01((o.sunDir.y - 0.05) / 0.2) * (1 - o.overcast * 0.7);
   ATMO.camNF.value.set(camera.near, camera.far);

@@ -143,15 +143,15 @@ const NOISE_GLSL = `float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.
 // and keep out of Zeus's storm)
 const RING = 32;
 // (the solid sky clouds melt away at their flat bases rather than ending in a hard sheet: the last of their height fades
-// into the sky behind, and out of the picture through the antialiasing's coverage, so no sorting is needed; seen from
-// straight below, where a cumulus does show its flat grey base, they keep it)
+// into the sky's colour behind, so no sorting is needed (a fade through the antialiasing's coverage showed as a stipple
+// on Ultra); seen from straight below, where a cumulus does show its flat grey base, they keep it)
 function cloudMat({ soft = false, mist = false, land = false, own = false, ring = false, tint = 1, tile = 0, haze = [1200, 4300] } = {}) {
   const fade = !soft && !land;
   const U = { ...CU, uCam: { value: new THREE.Vector3() }, uOff: { value: new THREE.Vector2() }, uTile: { value: tile }, uCover: { value: 1 }, uH: { value: 1 },
     uTint: { value: tint }, uHaze: { value: new THREE.Vector2(...haze) }, uRad: { value: new Array(RING).fill(100) }, uR0: { value: 0.4 }, uRW: { value: 0.05 } };
   const g = soft ? 'mix(0.7, 1.0, k)' : 'k';
   return new THREE.ShaderMaterial({
-    uniforms: U, transparent: soft, depthWrite: !soft, fog: false, side: mist ? THREE.DoubleSide : THREE.FrontSide, alphaToCoverage: fade,
+    uniforms: U, transparent: soft, depthWrite: !soft, fog: false, side: mist ? THREE.DoubleSide : THREE.FrontSide,
     vertexShader: `uniform vec3 uCam; uniform vec2 uOff; uniform float uTile, uCover, uH, uRad[${RING}], uR0, uRW; attribute vec3 aPos, aSize, aAo; attribute vec4 aMisc;${mist ? ' attribute float fade;' : ''}
       varying vec3 vN, vP; varying float vUp, vK, vFade, vAo; ${land ? '' : STORM_GLSL}
       void main() {
@@ -181,7 +181,7 @@ function cloudMat({ soft = false, mist = false, land = false, own = false, ring 
         ${land ? `c = mix(c, uFog, smoothstep(uFogR.x, uFogR.y, dist));   // (lying on the land, they're in its fog as the land is)` : ''}
         ${soft ? `// soft: the edges seen side-on thin away, and it fades as you walk into it (the fog takes over: cloudAt)
         float a = vK * ${mist ? 'vFade * 0.6' : 'smoothstep(0.0, 0.5, abs(dot(n, normalize(vP - cameraPosition))))'} * smoothstep(10.0, ${mist ? '45.0' : '110.0'}, dist);   // (mist: soft to its rims, whichever way it's seen)
-        if (a < 0.003) discard; gl_FragColor = vec4(c, a);` : fade ? `float side = 1.0 - smoothstep(0.25, 0.6, normalize(vP - cameraPosition).y), b = mix(1.0, smoothstep(0.0, 0.07, vUp), side); c = mix(c, mix(skyAt(vP), c, smoothstep(0.0, 0.3, vUp)), side); gl_FragColor = vec4(c, b);` : 'gl_FragColor = vec4(c, 1.0);'}
+        if (a < 0.003) discard; gl_FragColor = vec4(c, a);` : fade ? `float side = 1.0 - smoothstep(0.25, 0.6, normalize(vP - cameraPosition).y); c = mix(c, mix(skyAt(vP), c, smoothstep(0.0, 0.3, vUp)), side); gl_FragColor = vec4(c, 1.0);` : 'gl_FragColor = vec4(c, 1.0);'}
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
