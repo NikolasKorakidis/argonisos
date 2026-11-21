@@ -24,6 +24,7 @@ import { camera, composer } from '../render/core.js';
 import { ATMO } from '../render/atmosphere.js';
 import { mergeGeometries, mergeVertices } from '../../vendor/three/jsm/utils/BufferGeometryUtils.js';
 import { seeded, smooth } from '../util/math.js';
+import { STORM_AIR } from './storm-shader.js';
 
 // The bands: absolute height of the middle (m), half its thickness, how far out its lumps straggle (m), its turn (rad/s,
 // the sign its way), the room it leaves the storm (m), how much wider than the one below it is at least, its tilt (m) and
@@ -73,9 +74,10 @@ function lumpGeo() {
 // (COMMON: the wall's own border field, profile and turning, shared with its march)
 const vert = (COMMON) => `${COMMON}
   attribute vec4 aA, aB;   // (band, where along it (turns), how far out across it (0..1), how high in it; size, length, a turn of its own, shade)
-  uniform vec4 ringA[${NR}], ringB[${NR}]; uniform float fogV, fogMax; uniform vec4 flashP[4]; uniform float flashI[4];
-  varying vec3 vW; varying vec4 vK;   // (where it is; how high in its lump, its shade, how much sun reaches its band, the lightning on it)
-  varying float vA, vDist, vFog;
+  uniform vec4 ringA[${NR}], ringB[${NR}]; uniform vec4 flashP[4]; uniform float flashI[4];
+  ${STORM_AIR}
+  varying vec3 vW, vHaze, vMistC; varying vec4 vK;   // (where it is, the haze's and the mist's colours there; how high in its lump, its shade, how much sun reaches its band, the lightning on it)
+  varying float vA, vDist, vFog, vMist;
   // How much of the wall stands between the eye and a point: twelve looks along the line of sight at the wall's shape (the
   // border field, the profile and the great lobes, as the march finds them, the finer billows taken at half their
   // furthest), closer together towards the point, where a ring meets the cloud
@@ -109,8 +111,10 @@ const vert = (COMMON) => `${COMMON}
     vec3 w = mid + X * position.x * sc.x + vec3(0.0, position.y * sc.y, 0.0) + Z * position.z * sc.z;
     // the wall's lightning, lighting them from within over a long way
     float fl = 0.0; for (int k = 0; k < 4; k++) if (flashI[k] > 0.0) fl += flashI[k] * exp(-length(w - flashP[k].xyz) / (flashP[k].w * 3.0));
-    // hazed with distance as the wall is (stormwall.js: thinner than the fog, never closing in)
-    float t = length(w - cameraPosition); vFog = min(fogMax, 1.0 - exp(-t / fogV));
+    // in the same air as the wall (storm-shader.js STORM_AIR): its haze with distance, and the player's mist as high up
+    // it lies over the wall's towers (the player, 21 Nov: from Olympos the bands stood out of the haze as dark planks)
+    float t = length(w - cameraPosition); vec3 rd = (w - cameraPosition) / max(t, 1e-3); vFog = stormFog(t); vHaze = stormHaze(rd);
+    vMistC = mistTone(rd); vMist = stormMist(rd, w.y - fieldAt(w.xz).y);
     vW = w; vK = vec4(smoothstep(0.0, 1.1, position.y), aB.w, B.z, min(fl, 2.0)); vA = 1.0 - wallBefore(w); vDist = t;
     gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
   }`;
@@ -121,8 +125,8 @@ const vert = (COMMON) => `${COMMON}
 // lead, 21 Nov: once the wall was lit by day, its rings stood against it as black planks). Their flat undersides thin
 // away into the air, so a band seen from below or edge-on is soft beneath rather than cut.
 const FRAG = `
-  uniform sampler2D tLin; uniform vec2 fullRes; uniform vec3 sunDir, sunCol, ambCol, fogCol, flashCol, gTint; uniform float gSat, vigOffset, vigDark, lift, floorK;
-  varying vec3 vW; varying vec4 vK; varying float vA, vDist, vFog;
+  uniform sampler2D tLin; uniform vec2 fullRes; uniform vec3 sunDir, sunCol, ambCol, flashCol, gTint; uniform float gSat, vigOffset, vigDark, lift, floorK;
+  varying vec3 vW, vHaze, vMistC; varying vec4 vK; varying float vA, vDist, vFog, vMist;
   void main() {
     vec2 uv = gl_FragCoord.xy / fullRes; if (vA < 0.02 || texture2D(tLin, uv).r < vDist - 2.0) discard;
     vec3 n = normalize(cross(dFdy(vW), dFdx(vW))); float top = vK.x, sky = 0.5 + 0.5 * n.y, sun = max(dot(n, sunDir), 0.0);
@@ -130,9 +134,10 @@ const FRAG = `
     float day = lift / 0.4 - 1.0;   // (0 by night or in a storm, 2 on a fair day)
     vec3 c = vec3(0.085, 0.09, 0.105) * vK.y * (amb * (0.25 + 2.0 * floorK + (0.75 - 2.0 * floorK) * sky) * (0.3 + 0.7 * top) * 1.5 + sunCol * sun * top * 1.3 * vK.z) * (1.0 + day) + flashCol * vK.w * (0.12 + 0.2 * top);
     c += sunCol * smoothstep(0.3, 0.9, n.y) * sun * top * vK.z * 0.05 * day;   // (their sunlit tops a little silver)
-    c = mix(c, fogCol, vFog) * gTint; float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = max(mix(vec3(l), c, gSat), 0.0);
+    c = mix(mix(c, vHaze, vFog), vMistC, vMist) * gTint; float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = max(mix(vec3(l), c, gSat), 0.0);
     vec2 vu = (uv - 0.5) * vigOffset; c = mix(c, vec3(1.0 - vigDark), dot(vu, vu));
-    gl_FragColor = vec4(c, vA * mix(0.45, 1.0, smoothstep(0.0, 0.3, top)));
+    // (and the faces seen side-on thin away, so a band's outline against the sky is soft, as the wall's is)
+    gl_FragColor = vec4(c, vA * mix(0.45, 1.0, smoothstep(0.0, 0.3, top)) * mix(0.35, 1.0, smoothstep(0.05, 0.5, abs(dot(n, normalize(cameraPosition - vW))))));
     #include <colorspace_fragment>
   }`;
 

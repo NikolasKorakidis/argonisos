@@ -126,7 +126,7 @@ const U = {
   projInv: { value: new THREE.Matrix4() }, camWorld: { value: new THREE.Matrix4() }, camPos: { value: new THREE.Vector3() }, fullRes: { value: new THREE.Vector2(1, 1) }, halfRes: { value: new THREE.Vector2(1, 1) }, camNF: { value: new THREE.Vector2(0.15, 6000) },
   bounds: { value: new THREE.Vector4() }, field: { value: new THREE.Vector3(E, FS, FN) }, centre: { value: CENTRE }, uT: { value: 0 }, uTop: { value: TOP }, scale: { value: SCALE },
   sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color() }, ambCol: { value: new THREE.Color() }, fogCol: { value: new THREE.Color() },
-  flashCol: { value: new THREE.Color(0.55, 0.62, 1.0) }, glowCol: { value: new THREE.Color(0.35, 0.55, 1.0) }, fogV: { value: 2400 }, fogMax: { value: 0.62 }, glow: { value: 0.3 }, lift: { value: 0.4 }, floorK: { value: 0.1 },
+  flashCol: { value: new THREE.Color(0.55, 0.62, 1.0) }, glowCol: { value: new THREE.Color(0.35, 0.55, 1.0) }, fogV: { value: 2400 }, fogMax: { value: 0.62 }, glow: { value: 0.3 }, lift: { value: 0.4 }, floorK: { value: 0.1 }, hiK: { value: 0 },
   flashP: { value: flashP }, flashI: { value: flashI }, ...BOLT_U,
   caves: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 0, 0)) },
   mzR1: ATMO.mzR1, mzAmt: ATMO.mzAmt, mzTop: ATMO.mzTop, mzSoft: ATMO.mzSoft, mzCol: ATMO.mzCol, mzColUp: ATMO.mzColUp, mzSun: ATMO.mzSun, mzSunDir: ATMO.sunDir,   // (the player's mist, over the wall's foot as over the land)   // (x, floor, z, radius of the Giants' caves near the wall: no cloud in them)
@@ -152,6 +152,8 @@ class StormPass extends Pass {
     // the island it stands slate-blue and deepening towards its foot, never black against a bright sky; by night and in
     // bad weather the fog's, as it was)
     U.fogV.value = lerp(U.fogV.value, Math.min(U.fogV.value, 1300), HAZE.day); U.fogMax.value = 0.62 + 0.08 * HAZE.day;
+    // (how high the eye stands, as the fog clears with it in main.js: up there the wall takes the sky's haze, storm-shader.js)
+    U.hiK.value = Math.min(1, Math.max(0, (camera.position.y - 90) / 140));
     const veil = Math.min(1, Math.max(0, (60 - scene.fog.far) / 40)); U.fogV.value += (scene.fog.far * 0.5 - U.fogV.value) * veil; U.fogMax.value += (1 - U.fogMax.value) * veil; U.fogCol.value.multiplyScalar(1 + 0.25 * veil);   // (a thick fog veils the wall as it does the land, in the fog's own colour)
     U.tDepth.value = readBuffer.depthTexture; U.projInv.value.copy(camera.projectionMatrixInverse); U.camWorld.value.copy(camera.matrixWorld); U.camPos.value.copy(camera.position); U.camNF.value.set(camera.near, camera.far);
     const ac = renderer.autoClear; renderer.autoClear = false; renderer.getClearColor(_cc); const ca = renderer.getClearAlpha();
