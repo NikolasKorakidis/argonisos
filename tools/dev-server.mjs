@@ -3,6 +3,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');   // (the project, one up from tools/)
@@ -56,4 +57,9 @@ fs.watch(ROOT, { recursive: true }, (_, name) => {
 
 // (this machine only: the project holds private files, and anyone on the same network could otherwise read it; HOST=0.0.0.0
 // to try the game from a phone on purpose)
-server.listen(PORT, process.env.HOST || '127.0.0.1', () => console.log(`Argonisos dev server: http://localhost:${PORT}  (pages reload when files change)`));
+const HOST = process.env.HOST || '127.0.0.1';
+server.listen(PORT, HOST, () => {
+  console.log(`Argonisos dev server: http://localhost:${PORT}  (pages reload when files change)`);
+  // (open to the network on purpose, npm run dev:lan: say where other machines find it; concept/ and the git histories stay refused)
+  if (HOST !== '127.0.0.1') for (const list of Object.values(os.networkInterfaces())) for (const a of list) if (a.family === 'IPv4' && !a.internal) console.log(`  on your network: http://${a.address}:${PORT}`);
+});

@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "node tools/dev-server.mjs",
+    "dev:lan": "HOST=0.0.0.0 node tools/dev-server.mjs",
     "test": "node tests/run.mjs",
     "test:quick": "node tests/run.mjs --quick",
     "test:update": "node tests/run.mjs visual --update",
