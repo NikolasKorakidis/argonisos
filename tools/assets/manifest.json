@@ -4605,6 +4605,13 @@
           "len": 45
         }
       ]
+    },
+    "bedStream": {
+      "group": "fireBed",
+      "from": "pack",
+      "files": [
+        "96 General Library (Free Sample)/Samples/WATRFlow_InsJ_Stream_Water_01_LOOP.wav"
+      ]
     }
   },
   "soundGroups": {
