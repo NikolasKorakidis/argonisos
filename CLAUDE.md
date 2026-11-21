@@ -4,7 +4,8 @@ A Valheim-style open-world survival game in three.js r160, plain ES modules, no 
 `src/main.js`; an import map points `three` at `vendor/three/three.module.js` (add-ons in `vendor/three/jsm/`).
 Layout: `src/` the game · `assets/models/` models, textures and packed plant geometry · `vendor/` third-party code (never
 edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `game.js`: leave it alone unless asked) ·
-`tests/` · `tools/` the dev server and the Claude Code lint hook · `docs/` reviews and audits · `concept/` private.
+`tests/` · `tools/` the dev server, the checks (`check-*.mjs`), the Claude Code lint hook and the asset pipeline
+(`tools/assets/`) · `docs/` plans (`docs/plans/`, each with a status line) and reviews (`docs/reviews/`) · `concept/` private.
 
 ## Rules
 - **`concept/` is private.** The whole folder is git-ignored; its design docs must never be committed, pushed, quoted
@@ -36,7 +37,11 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
   still meets the carved shape, kept invisible); the hero (Synty Generic, a man or a woman, made in the character creator at a new game: `src/ui/creator.js`; hair, beards and wreaths from `heroLooks.glb`, colours recoloured from the palette in `hero.js`; the look saved with the game), dryads, dryadlings and giants are pack bodies fitted onto the Mixamo rig
   in three.js (`refit` in `tools/assets/fbx-page.mjs`: the rig's bones keep their rest rotations, so the Mixamo clips play
   unchanged; Blender's import turns them), with the armour from the pack's Greek characters as parts of their own
-  (`wear_<item>` in `heroArmour.glb`, moved onto the hero's bones by `dress` in `hero.js`, shown by `hero.wear`);
+  (`wear_<item>` in `heroArmour.glb`, moved onto the hero's bones by `dress` in `hero.js`, shown by `hero.wear`); the team's
+  own armour pieces (`incoming assets/audio/0. OLD/2.Armor`, a file each: helmet, body, left and right leg) are `shell`
+  wear items, worn over the body instead of in its place (`overBody` in `hero.js` pushes the piece clear and draws the body
+  in under it, a morph target); the hero sets kept for later rewards are `armour<Name>.glb` (`like: "heroArmour"`,
+  `wearOnly`), not loaded by the game yet; `flatColors` turns a painted texture into one colour per face (the OLD spear and hoe);
   animals come young, grown and (deer) stag by level, each in one of the pack's looks (`*Looks.glb`, bound to the body's bones); a `proportions` entry lengthens limbs and scales hands as it fits (the pack's
   people are stylised: short legs, long arms, big hands). Held things: `GRIP` in `hero.js` (in the fist, hand-bone space;
   tools come out centred on their handle, `normalizeHandle`, and turned so the head's edge leads, `headAlong` in `held.js`), shields strapped on the left forearm (`STRAP`). `tools/assets/lineup.py` lays every converted model out in one Blender file; `library.py` (with
@@ -49,22 +54,41 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
   Asset Browser under "Kind/Group"). Manifest entries
   with `compose` or `house` are put together in Blender from Ancient Empire pieces (`compose.py`: each material slot keeps
   its prefab's texture as `tex:<key>`; houses from a recipe on the kit's 2.5 m grid); the game places them with
-  `site-pack.js` `piece()`. Sounds: `node tools/assets/sounds.mjs` →
-  `assets/sounds/pack/` (also git-ignored), played by `sound.js` where it has a recording. Without the pack files the
+  `site-pack.js` `piece()`. Sounds: `node tools/assets/sounds.mjs [key…]` → `assets/sounds/pack/` (also git-ignored),
+  from the manifest's `sounds` (the first packs' lists, and the team's `incoming assets/audio` by `soundGroups`: each
+  group's loudness, blows cut from a file of several, beds looped with a crossfaded seam) and `music` (`pack/music/`,
+  stereo MP3), described in `sounds.json`; played by `sound.js` where it has a recording (map: `docs/plans/audio.md`). Without the pack files the
   world, buildings, tools, hero and sound fall back to the carved look; the animals and the bosses need the pack.
+- **Fonts:** titles, names and labels use **Stoix** (Eireni Moutoussi, SIL OFL; `assets/fonts/stoix/` with its `OFL.txt`, which must stay
+  beside it; its Latin letters are drawn the Greek way, S as Σ, D as Δ), falling back to Cinzel for the signs it lacks;
+  running text stays in Alegreya Sans. The source files are in `incoming assets/fonts/stoix/`.
 - Player-facing changes go in the patch notes (`src/ui/patchnotes.js`, the `PATCHES` list) in plain player language.
 
 ## Run and test
 - `npm run dev`: dev server on :8000 with live reload (`tools/dev-server.mjs`). `index.html?play` skips the title screen.
-- `npm run check`: lint (ESLint, mistakes only, no style rules), import cycles (Madge), unused files and dependencies
-  (Knip) and the world fingerprint, all without a browser. GitHub Actions runs it on every PR (`.github/workflows/ci.yml`);
-  its runners have no GPU, so the game suites below run here, not there. `/check` (a project skill) runs both.
+- `npm run check`, all without a browser: the repository guard (`tools/check-repo.mjs`: nothing under `concept/`,
+  `incoming assets/` or `assets/*/pack/` and no spreadsheet at the root is tracked or staged; every tracked JSON file
+  parses), lint (ESLint, mistakes only, no style rules), the stylesheet (`tools/check-css.mjs`), the tests' in-page
+  imports (`tools/check-snippets.mjs`: every `await import('/src/…')` in `tests/` names a file that exists and names it
+  exports, so a move or rename fails here and not only on the GPU), import cycles (Madge, from the game, the worker and
+  the dev pages), unused files and dependencies (Knip) and the world fingerprint. GitHub Actions runs it on every PR
+  (`.github/workflows/ci.yml`, which also refuses a PR not aimed at `main`); its runners have no GPU and no pack files,
+  so it must pass without them, and the game suites below run here, not there. `/check` (a project skill) runs both.
+- The deploy (`.github/workflows/pages.yml`, on every push to `main`) publishes only `index.html`, `src/`, `vendor/`,
+  `assets/` (with the packs from the team's private repo) and `legacy/`, and stamps the commit and date into
+  `index.html` for the title screen. Anything new the game fetches must live under one of those.
 - `npm run test:world`: the world's fingerprint (`tests/suites/world.mjs`): heights, biomes, slope rule, ground colours,
   sites, trees and pickups hashed in Node. Any refactor must leave it unchanged; when the world is *meant* to change,
   `node tests/run.mjs world --update`, paste the new fingerprint, and bump `WORLD_LAYOUT`.
 - Claude Code lints every JS file it edits (`.claude/settings.json` → `tools/lint-hook.mjs`) and gets the errors back.
-- `npm test`: every suite in `tests/suites` (about 6 min). `npm run test:quick` skips the slow ones (perf, visual,
-  creatures). `node tests/run.mjs loop build` runs suites by file-name prefix; `--headed` to watch.
+- `npm test`: every suite in `tests/suites`. `npm run test:quick` skips the ones marked `slow` (perf, visual,
+  creatures, combat, light, structures). Both take many minutes, far more on a busy machine: `tests/reports/results.json`
+  has each suite's `secs` (a full run is also kept as `results-all.json`). `node tests/run.mjs loop build` runs suites by
+  file-name prefix; `--headed` to watch.
+- `node tests/run.mjs sites`: the sites' fingerprint (`tests/suites/sites.mjs`): every site's meshes, solids, floors,
+  things to use and colliders, and every plant's geometry, hashed in the page. Run it before and after moving code in
+  `structures.js`, `town.js`, `greek.js`, `site-pack.js` or `trees.js`; when the sites are *meant* to change,
+  `--update` and paste the new fingerprint.
 - `npm run test:update`: accept new screenshot baselines after an intended look change (check
   `tests/reports/visual.html` first). Never to make a refactor pass: a changed picture means the game changed.
 - Timings depend on the machine: check `uptime` first; with another heavy app running, perf numbers mean nothing.
@@ -73,7 +97,10 @@ edit) · `legacy/` the old prologue prototype (`classic.html`, `play.html`, `gam
   software rendering at under 1 fps and every timing check is meaningless. They serve the project on their own port
   (no live reload) and talk to the game through `window.AG` (see the end of `src/main.js`).
 - A test step is a page snippet returning `true` or a reason string. In snippets `g` is `AG.game`, `P` the player, `B` the
-  build system, `C` crafting, `inv` the pack, `V` `THREE.Vector3`: don't redeclare those names.
+  build system, `C` crafting, `inv` the pack, `V` `THREE.Vector3`: don't redeclare those names. To wait, poll rather
+  than sleep (a fixed wait is too long on an idle machine and too short on a busy one): `await until(() => cond, ms)`
+  checks every frame and gives the first truthy value, or `false` after `ms`; `await frames(n)` waits n frames;
+  `sleep(ms)` is for waits that really are about time. From Node, `await t.until('expr', ms)` does the same in the page.
 - Test setup: saving off, `S.peaceful`, clear weather, `g.weatherRain = () => 0` (random rain puts fires out), the owl's
   talks marked heard (her dialogue pauses the world). Screenshot tests also set `S.still` (holds wind, water, clouds and
   the wind lines, which then use one fixed wind).
@@ -103,7 +130,7 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   own distance; shrubs, logs and the like at the mist): both bands sink each one into the ground over its last
   `SHRINK` metres, measured from the player, so nothing pops. Screenshot tests that aim the camera far from the player
   see them gone.
-- **The player's mist** (`atmosphere.js`: clear to `MIST_R0` 60 m, 68% by `MIST_R1` 100 m, ceiling from `tallestNear`)
+- **The player's mist** (`atmosphere.js`: clear to `MIST_R0` 60 m, 50% on High by `MIST_R1` 100 m, the sky's colour, thinning up to a ceiling from `tallestNear`)
   lies over the grass's edge (`GRASS_R` 80 m, gone by `GRASS_END` 95 m: a dense near carpet hands over to a sparse far
   one at ~30 m in `grass.js`); all four live in `world/reach.js`. It hides how much less is drawn behind it (`farKeep`/`keepTo` in `vegetation.js`, `MID_R` 180 where impostors take over, `FAR_R`
   600, minor sites' `VIEW_R`). Change them together. The focus blur is the `focus` uniform.
@@ -124,6 +151,12 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   lining up more points only breaks ties. Gaps between pieces of the same kind are found by the line passing through
   them; doors only go into door frames; pieces must stand on the ground or share a snap point. Overlap and contact tests
   use the pieces' real, turned outlines. **Run `node tests/run.mjs placement build structures` after any change to `build.js` or `pieces.js`.** Stairs snap and are aimed by the middles of their ends (`aimAt`); fences on the ground follow it.
+- **The bosses are giants** (`size` in trial.js `TYPES`: the Minotaur 10.5 m, the Chimera 23 m long; models.js `KitBody`
+  scales the body, its stride and `FootIK`, `pace` slows their clips, `BLOWS` holds). Their moves' ranges are written for
+  that size. Their coming (`Trial.stage`) breaks their site for good (`structures.ruin`, `trial.st.broken`, restored by
+  save.js): the walls that fall are their own collider group (`ruin:<site>`), swapped for low rubble (`rubble:<site>`,
+  `low`); a boss ignores low colliders and flora (creatures.js `BIG`), steers round what stands and strides over knee-high
+  stubs (`steer`, `STRIDE`), and is put free if stuck (`unstick`). `tests/suites/creatures.mjs` chases it round the ruin.
 - **Building pieces need support.** One not held up from the ground collapses on the next recompute; tests that need a
   roof build walls under it.
 - Vertex-coloured site models come out several times brighter under the lighting than their palette suggests: keep
@@ -152,10 +185,10 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
 - `src/world`: `gen.js` heights, biomes, the Olympos peak · `sites.js` site placement and pads · `flora.js` species and
   layout (the ground cover, `groundCover`, comes last in each cell with dice of its own: flowers, bushes, stumps,
   logs, moss, pebbles, lilies… whose pack models keep their own size, `natural`; each piece goes by the biome where it
-  stands, and some kinds pick their looks by land: `FLOWER_KINDS` per stretch of meadow, `BUSH`, `MUSHROOM`) · `reach.js` how far the mist and grass reach · `vegetation.js` near/mid/impostor bands · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
+  stands, and some kinds pick their looks by land: `FLOWER_KINDS` per stretch of meadow, `BUSH`) · `reach.js` how far the mist and grass reach · `vegetation.js` near/mid/impostor bands (`flora-pack.js` the pack's trees, rocks and shrubs in the carved species' places) · `trees.js` tree builders, wind and light uniforms · `grass.js` ·
   `terrain.js` + `terrain-worker.js` (worker pool, `pool.js`) · `structures.js` + `greek.js` the sites' buildings and
-  props · `town.js` the abandoned town and the small scenes about the island (`SITES.town`, `SITES.spots`) · `sky.js` (the sun crosses square to the Olympos–storm line, `SUN_RISE`), `clouds.js` (low-poly cumulus from the packs, the storm deck, Olympos's cap, banks and valley mist; `cloudAt` folds into the fog), `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`; a full fog closes to `FOG_FAR` 32 m), `lightning.js` (strikes, flashes, thunder delayed by distance; shared by the weather's storms and the wall), `water.js`, `giantwood.js`, `ambient.js` (+ `fireflies.js`, GPU), `stormwall.js` (+ `storm-shader.js`: Zeus's wall, a quarter-resolution ray-marched cloud volume composited in the atmosphere pass, skipped when out of view; its sound fades out by ~1.4 km) · `cave.js` the Giants' caves' rock (a worker-built field in the terrain's material; the hill and the cut in gen.js `CAVE_FORM`) · `groundcut.js` · `pickups.js`
-  (+ `pickup-layout.js`) · `colliders.js`. `src/util/math.js` shared helpers. `src/assets.js` model and texture loading.
+  props (`site-pack.js` the pack's props and pieces in their places) · `town.js` the abandoned town and the small scenes about the island (`SITES.town`, `SITES.spots`) · `sky.js` (the sun crosses square to the Olympos–storm line, `SUN_RISE`), `clouds.js` (low-poly cumulus from the packs, the storm deck, Olympos's cap, banks and valley mist; `cloudAt` folds into the fog), `weather.js` (+ `rain.js`, `wind.js`, `wetness.js`; a full fog closes to `FOG_FAR` 32 m), `lightning.js` (strikes, flashes, thunder delayed by distance; shared by the weather's storms and the wall), `water.js`, `giantwood.js`, `ambient.js` (+ `fireflies.js`, GPU), `stormwall.js` (+ `storm-shader.js` and `storm-rings.js`, the three rings of cloud spinning round it: Zeus's wall, a quarter-resolution ray-marched cloud volume composited in the atmosphere pass, skipped when out of view; its sound fades out by ~1.4 km) · `cave.js` the Giants' caves' rock (a worker-built field in the terrain's material; the hill and the cut in gen.js `CAVE_FORM`) · `groundcut.js` · `pickups.js`
+  (+ `pickup-layout.js`) · `colliders.js`. `src/util/math.js` shared helpers (`clamp`, `lerp`, `smooth`, `angDiff`, `seeded`, `hash21`, `tileNoise`). `src/assets.js` model and texture loading. `src/input.js` keyboard and mouse.
 - `src/render`: `core.js` renderer, composer, adaptive resolution, and the sun's shadows (`docs/plans/shadows-plan.md`):
   two cascades, a sharp near map (64 m, a little ahead of you, every frame) and a coarse far one (220 m: a second light
   that gives no light), blended in the `sunShadow` shader patch, which also cuts part of the sky's light in shade. The
@@ -167,7 +200,7 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   haze (a half-resolution march blended over frames, its thickness from a world texture of how wooded each place is, lit
   through the far shadow map) and the flecks of sun on the forest floor. None of it may depend on where the player stands
   (`tests/suites/light.mjs` walks out of a wood and back and fails on any jump; notes in `docs/plans/light-study.md`) ·
-  `occlusion.js` fades what blocks the camera · `fx.js`, `lights.js`.
+  `occlusion.js` fades what blocks the camera · `fx.js`, `lights.js` · `quality.js` the preset the game started with (Ultra's reach is built in at load) · `lensdirt.js` the lens dirt and the glow in the fog, folded into the bloom.
 - `src/player`: `player.js` controller and camera (`speeds.js` its speeds) · `hero.js` rig and clips: the old FBX clips plus the
   Mixamo library `moves.glb`/`acts.glb` (made by `tools/assets/moves.mjs` from `incoming assets/mixamo/`, retargeted onto
   our rig's rest pose); a base layer blending walk/run/sprint, backwards, strafes and sneak by speed and direction; the
@@ -178,8 +211,16 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   kick, emotes) and what cancels them · `items.js` items and recipes · `inventory.js` · `crafting.js` ·
   `harvest.js` · `combat.js` · `trial.js` bosses, clues, offerings · `guide.js` the guided steps · `owl.js` · `save.js`.
 - `src/build`: `pieces.js` piece definitions · `build.js` placement, snapping, support. `src/creatures`: `creatures.js`
-  AI and spawning · `models.js` bodies. `src/ui`: HUD, map, title, menus, patch notes, `perf.js` the performance overlay (F3), `icons.js` (+ the black-figure
-  `icon-set.js`, shared with the prototype). `src/audio/sound.js`: synthesised (its context opens while the world loads).
+  AI and spawning · `models.js` bodies. `src/ui`: `hud.js` the HUD and the inventory, `map.js` the map and compass, `title.js` the title and pause menu,
+  `buildmenu.js` the hammer's menu, `creator.js` the character creator, `settings.js`, `patchnotes.js`, `devmenu.js` the dev
+  tools (+ `script.js`, the trial's script they show), `perf.js` the performance overlay (F3), `icons.js` (+ the black-figure
+  `icon-set.js`, shared with the prototype). `src/audio/sound.js`: the team's recordings, synthesis where there are none (its context opens while the world
+  loads): effects, ambience and music each on a bus (the settings' sliders); `play()` picks a variant (never the last),
+  varies pitch and volume, places a sound with `at` (pan and fall-off from the camera, `listen()`; muffled indoors) and
+  skips a repeat in the same instant; beds load when first wanted (`bed()`), fires crackle where they burn (`fires()`);
+  `AUDIO.log` and `AUDIO.meters()` for the tests (`tests/suites/audio.mjs`). `src/audio/music.js`: the music, Valheim's
+  way (a land's track on coming into it, at dawn and dusk, then minutes of quiet; home by your fire; the bosses' fights;
+  the title's and the story's), streamed from `<audio>` when it first plays.
 
 ## Style
 Comments are full sentences that say why, in plain British English, often on the line they explain; dense one-line

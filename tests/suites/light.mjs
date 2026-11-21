@@ -28,7 +28,7 @@ const FIND = (dir, len, need) => `const F = await import('/src/world/flora.js'),
 // branch sweeping past the camera (which changes the picture, not the light) can be told from light switching on or
 // off. For each: the mean brightness, 48 big tiles and every 8×8 block, compared with the last capture's.
 const HOOK = `const RC = await import('/src/render/core.js'), AM = await import('/src/render/atmosphere.js'), gl = AG.renderer.getContext();
-  if (!window._cap) { const draw = RC.composer.render.bind(RC.composer); window._cap = { on: false };
+  if (!window._cap) { const draw = RC.composer.render.bind(RC.composer), _sv = new (await import('three')).Vector4(), _px = new Uint8Array(4); window._cap = { on: false };
     // (l: brightness per pixel, 0-255, w × h → its means per 8×8 block, per tile and over all, and the change from last time)
     const measure = (l, w, h, prev, out) => { const bw = Math.floor(w / 8), bh = Math.floor(h / 8), blk = new Float32Array(bw * bh); let all = 0;
       for (let y = 0; y < bh * 8; y++) for (let x = 0; x < bw * 8; x++) { const v = l[y * w + x]; blk[(y >> 3) * bw + (x >> 3)] += v; all += v; }
@@ -55,6 +55,10 @@ const HOOK = `const RC = await import('/src/render/core.js'), AM = await import(
         if (sh) shl[i] = 255 * sk * sh[((y >> 1) * qw + (x >> 1)) * 4]; }
       const hz = {}, sf = {}; c.prevHaze = measure(hl, hw, hh, c.prevHaze, hz); c.prevSh = measure(shl, hw, hh, c.prevSh, sf);
       if (hz.mean !== undefined) { row.haze = hz; row.shafts = sf; }
+      // whether the camera stands in the sun: its own spot looked up in the far shadow map the haze is lit through (one
+      // texel read back), as the haze's march does it
+      const F = A.far?.shadow?.map; if (F && U.woodK.value > 0.0001) { const q = _sv.set(AG.camera.position.x, AG.camera.position.y, AG.camera.position.z, 1).applyMatrix4(U.shadowMat.value); q.divideScalar(q.w);
+        if (q.x > 0 && q.x < 1 && q.y > 0 && q.y < 1) { AG.renderer.setRenderTarget(F); gl.readPixels(Math.floor(q.x * F.width), Math.floor(q.y * F.height), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, _px); row.sun = q.z - 0.0015 <= (_px[0] / 16777216 + _px[1] / 65536 + _px[2] / 256 + _px[3]) / 256 ? 1 : 0; } }
       AG.renderer.setRenderTarget(null);
       if (row.mean !== undefined) c.rows.push(row);
       if (c.keep && c.rows.length % c.keep === 0) { const cv = c.cv || (c.cv = document.createElement('canvas')); cv.width = w / 2; cv.height = h / 2; const x2 = cv.getContext('2d'), im = x2.createImageData(w / 2, h / 2);
@@ -84,15 +88,24 @@ async function walk(t, p, { time, back = false, frames }) {
 // is one such step; walking out of a wood into the open changes it steadily over many). The shafts follow the shapes
 // against the sky by their nature (a branch crossing the sun moves them), so they and the whole picture are reported
 // beside it; the picture's mean must never leap as far as a light switching on does, nor blow out white.
+// Nor is the haze judged on the step where the camera walks into or out of the sun's own line, nor on the steps either
+// side of it (the air just ahead of the camera, whose glare it is, passes into the shade a step before the camera does,
+// and the haze is blended over a few frames): walking towards a low sun, the glare of the lit air between you and it goes as a
+// crown comes between, and comes back in the next sunfleck, as it does in a real wood. That is the scene changing (a
+// branch crossing the sun, as for the shafts), not light switching with where you stand: the far shadow map, read at the
+// camera, says when it happens (since Patch 20's taller, thinner woods, the walk towards the sun crosses such a fleck).
 const SPIKE = 4, FLOOR = { mean: 0.3, tile: 2 }, PICTURE_STEP = 30, PICTURE_TOP = 220;
 const fmt = (S) => ['mean', 'tile', 'block'].map((k) => `${k} ${r1(S[k].median)}/${r1(S[k].p90)}/${r1(S[k].max)}`).join(' · ');
 // each step's change over the median of the six steps before and after it
-const local = (xs, floor) => Math.max(0, ...xs.map((x, i) => { const w = xs.slice(Math.max(0, i - 6), i).concat(xs.slice(i + 1, i + 7)).sort((a, b) => a - b); return x / Math.max(w[Math.floor(w.length / 2)] ?? 0, floor); }));
+const local = (xs, floor, skip = new Set()) => Math.max(0, ...xs.map((x, i) => { if (skip.has(i)) return 0; const w = xs.slice(Math.max(0, i - 6), i).concat(xs.slice(i + 1, i + 7)).sort((a, b) => a - b); return x / Math.max(w[Math.floor(w.length / 2)] ?? 0, floor); }));
+// the steps where the camera stepped into or out of the sun's line, and the ones either side of each
+const sunSteps = (rows) => { const s = new Set(); s.n = 0; rows.forEach((r, i) => { if (i && r.sun !== undefined && rows[i - 1].sun !== undefined && r.sun !== rows[i - 1].sun) { s.add(i - 1).add(i).add(i + 1); s.n++; } }); return s; };
 function judge(t, name, w) {
   const of = (rows) => ({ mean: stats(rows.map((r) => r.mean)), tile: stats(rows.map((r) => r.tile)), block: stats(rows.map((r) => r.block)) }), zero = { mean: 0, tile: 0, block: 0 };
   const haze = w.rows.map((r) => r.haze || zero), shafts = w.rows.map((r) => r.shafts || zero), S = of(w.rows), H = of(haze), F = of(shafts);
-  const jump = { haze: [local(haze.map((r) => r.mean), FLOOR.mean), local(haze.map((r) => r.tile), FLOOR.tile)], picture: local(w.rows.map((r) => r.mean), 0.5), top: Math.max(...w.rows.map((r) => r.lum)) };
-  t.metric(name, `${w.rows.length} steps, walked ${w.walked.toFixed(0)} m · picture ${fmt(S)}, brightest ${r1(jump.top)}, largest jump ${r1(jump.picture)}× · haze ${fmt(H)}, largest jump ${r1(jump.haze[0])}× (mean) ${r1(jump.haze[1])}× (tile) · shafts ${fmt(F)} (median/p90/max of the changes, 0-255)`);
+  const skip = sunSteps(w.rows), sunNo = skip.n;
+  const jump = { haze: [local(haze.map((r) => r.mean), FLOOR.mean, skip), local(haze.map((r) => r.tile), FLOOR.tile, skip)], picture: local(w.rows.map((r) => r.mean), 0.5), top: Math.max(...w.rows.map((r) => r.lum)) };
+  t.metric(name, `${w.rows.length} steps, walked ${w.walked.toFixed(0)} m · picture ${fmt(S)}, brightest ${r1(jump.top)}, largest jump ${r1(jump.picture)}× · haze ${fmt(H)}, largest jump ${r1(jump.haze[0])}× (mean) ${r1(jump.haze[1])}× (tile)${sunNo ? `, not judged where the camera stepped into or out of the sun (${sunNo}×)` : ''} · shafts ${fmt(F)} (median/p90/max of the changes, 0-255)`);
   t.check(`${name}: the woods' haze never jumps (no step over ${SPIKE}× the steps round it), the picture never leaps or blows out`,
     w.rows.length > 20 && jump.haze[0] <= SPIKE && jump.haze[1] <= SPIKE && S.mean.max <= PICTURE_STEP && jump.top <= PICTURE_TOP,
     `haze jumps ${r1(jump.haze[0])}× / ${r1(jump.haze[1])}×, picture step ${r1(S.mean.max)} (limit ${PICTURE_STEP}), brightest ${r1(jump.top)} (limit ${PICTURE_TOP})`);

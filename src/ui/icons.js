@@ -71,7 +71,7 @@ Object.assign(ICONS, {
 });
 // items with a model of their own share their kind's drawing
 for (const [k, of] of Object.entries({ axeLight: 'axe', daggerLight: 'dagger', spearLight: 'spear', cretanBow: 'bow', dandelion: 'flower', moonflower: 'flower', oliveScrap: 'scroll', caveCarving: 'scroll',
-  spoiledMeat: 'spoiled', spoiledFish: 'spoiled', throwerHelmet: 'helmet', cretanHelmet: 'helmet', throwerArmor: 'armor', cretanArmor: 'armor', throwerLegs: 'legs', cretanLegs: 'legs',
+  spoiledMeat: 'spoiled', spoiledFish: 'spoiled', throwerHelmet: 'helmet', cretanHelmet: 'helmet', corinthianHelmet: 'helmet', throwerArmor: 'armor', cretanArmor: 'armor', corinthianArmor: 'armor', throwerLegs: 'legs', cretanLegs: 'legs', corinthianLegs: 'legs',
   ...Object.fromEntries(['fox', 'deer', 'rabbit', 'boar', 'giant', 'minotaur', 'chimera'].map((a) => [a + 'Hide', 'hide'])) })) ICONS[k] = ICONS[of];
 
 // The pictured models and the interface's SharpUI sprites, if this copy of the game has them (the public one doesn't).

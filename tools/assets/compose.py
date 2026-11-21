@@ -214,6 +214,7 @@ if __name__ == '__main__':
     job = json.load(open(sys.argv[sys.argv.index('--') + 1]))
     bpy.ops.wm.read_factory_settings(use_empty=True)
     C = Composer(job)
+    if job.get('plaster'): C.stucco = 'Stucco_%s_01.png' % job['plaster'].capitalize()   # (one plaster all round, for a piece on its own too)
     if job.get('house'): house(C, job['kit'], job['house'])
     for p in job.get('compose', []):
         if 'scene' in p: scene(C, p)   # (an arrangement out of the pack's demo scene)

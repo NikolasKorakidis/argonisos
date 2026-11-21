@@ -10,13 +10,15 @@ import { askLight } from '../render/lights.js';
 import { heightAt, PEAK, CAVE_FORM, caveShade } from './gen.js';
 import { caveRock, densityAt, rayRock, surfaceFrom, roofAt, STEP } from './cave.js';
 import { rockGround } from './terrain.js';
-import { groundDetail } from '../render/core.js';
-import { clamp } from '../util/math.js';
+import { groundDetail, SHADOW } from '../render/core.js';
+import { dust, burst, addShake } from '../render/fx.js';
+import { clamp, seeded } from '../util/math.js';
 import { propGeo, propMat, leafMat } from './trees.js';
 import { GMAT, amphora, pithos, bowl, jug, tripod, acroterion, antefixes, cartWheel, firewood, leaves, mist, dice } from './greek.js';
 import { wettable } from './wetness.js';
 import { siteProp, sitePropAt, piece, pieceAt, hasPiece, chestParts } from './site-pack.js';
 import { buildTown, buildSpot } from './town.js';
+import { mergeGeometries } from '../../vendor/three/jsm/utils/BufferGeometryUtils.js';
 import { ULTRA } from '../render/quality.js';
 
 const rnd = (() => { let s = 77; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; })(), rr = (a, b) => a + rnd() * (b - a);
@@ -100,7 +102,7 @@ export const SMAT = {
   rock: new THREE.MeshStandardMaterial({ color: 0x7a7164, roughness: 0.95, flatShading: true, envMapIntensity: 0.5 }),
   wood: new THREE.MeshStandardMaterial({ color: 0x6e5238, roughness: 0.9 }),
   plaster: new THREE.MeshStandardMaterial({ color: 0xd8cbb0, roughness: 0.95, map: mossTex }),
-  flame: new THREE.MeshBasicMaterial({ map: flameTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),   // (on fire()'s crossed cards)
+  flame: new THREE.MeshBasicMaterial({ map: flameTex(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true }),   // (on fire()'s crossed cards; one pass, as light added up needs no back-then-front order: three draws a see-through two-sided mesh twice, and looked its program up again for each)
   glyph: new THREE.MeshStandardMaterial({ color: 0xffe7a0, emissive: 0xffc860, emissiveIntensity: 1.6, transparent: true, opacity: 0.9 }),
   flags: new THREE.MeshStandardMaterial({ map: flagTex, roughness: 0.95, color: 0xb9ab96 }),
   bone: new THREE.MeshStandardMaterial({ color: 0xd9cfb4, roughness: 0.75 }),
@@ -126,6 +128,8 @@ const BONES = ['all/pnb-swamp-marshland/sm-prop-bone-pile-01', 'all/pnb-swamp-ma
 // the pieces a Giant's cave takes from the packs (site-pack.js loads them): his fire, the bones of big beasts, skulls
 const CAVE_PK = { fire: 'all/polygonnature/sm-prop-campfire-01', bones: 'all/pnb-arid-desert/sm-prop-bones-01', bones2: 'all/pnb-arid-desert/sm-prop-bones-04', skull: 'all/polygonnature/sm-prop-skull-01', skull2: 'all/polygongeneric/sm-gen-prop-skull-01' };
 const MOSSY = new Map(), mossy = (m) => { if (!MOSSY.has(m)) MOSSY.set(m, wettable(new THREE.MeshStandardMaterial({ map: m.map, color: 0x7d8a6a, roughness: 0.95 }), { dark: 0.7, gloss: 0.4 })); return MOSSY.get(m); };
+// the Ancient Empire kit's grid, its storey, and how far one of its tiled roof panels rises over a bay (the old houses)
+const BAY = 2.5, STOREY = 3, PITCH = 0.75;
 // how far off each kind of site is drawn: the landmarks you find your way by far out under the mist, the minor sites
 // (the farmhouse, the olive markers, the caves) only a little way beyond it. On Ultra (render/quality.js) the mist lies
 // twice as far out, and so does where the minor sites go; the landmarks a little further than they already were.
@@ -158,9 +162,9 @@ function gableRoof(P, w, len, rise, y, mat = SMAT.tile) {   // two sloped slabs 
   for (const s of [-1, 1]) { const g = uvBox(sl + 0.5, 0.25, len, 1 / 3).translate(s * (sl / 2 + 0.05), 0, 0).rotateZ(-s * a).translate(0, y + rise + 0.12, 0); P.push([g, mat]); }   // from the ridge down past the eaves
   P.push([new THREE.CylinderGeometry(0.22, 0.22, len + 0.2, 8).rotateX(Math.PI / 2).translate(0, y + rise + 0.2, 0), mat]);
 }
-function rubble(P, x0, z0, x1, z1, h, mat = SMAT.stone, ruin = 0) {   // a dry-stone wall from block courses, optionally broken
+function rubble(P, x0, z0, x1, z1, h, mat = SMAT.stone, ruin = 0, r2 = rr) {   // a dry-stone wall from block courses, optionally broken (r2: dice)
   const len = Math.hypot(x1 - x0, z1 - z0), a = Math.atan2(z1 - z0, x1 - x0), n = Math.ceil(len / 0.9);
-  for (let i = 0; i < n; i++) { const t = (i + 0.5) / n, hh = ruin ? h * (1 - ruin * Math.abs(Math.sin(t * 7 + x0))) * rr(0.6, 1) : h; if (hh < 0.3) continue;
+  for (let i = 0; i < n; i++) { const t = (i + 0.5) / n, hh = ruin ? h * (1 - ruin * Math.abs(Math.sin(t * 7 + x0))) * r2(0.6, 1) : h; if (hh < 0.3) continue;
     const g = uvBox(len / n + 0.02, hh, 0.75, 1 / 2).rotateY(-a).translate(x0 + (x1 - x0) * t, hh / 2, z0 + (z1 - z0) * t); P.push([g, mat]); }
 }
 // a farmhouse wall: a dry-stone footing, whitewashed plaster above (ruin: a broken, uneven top)
@@ -195,6 +199,56 @@ function mergeByMat(P) {
   return out;
 }
 
+// ---- Far versions of the big sites (perf review, 20 Nov: from inside the forest the temple and the labyrinth, a kilometre
+// off behind the woods and the mist, were 172 draws and half a million triangles). Past FAR_SITE a site's standing parts
+// are drawn merged, one mesh for each look (material, or materials alike in every way that shows) and shadow, from what
+// stood when it was made: the same shapes, so it looks the same and casts the same shadow, in a dozen draws or so where
+// there were up to a hundred. Pieces too small to cover a pixel or two there (under PX_R across) are left out; the fires,
+// the glows and whatever moves (the statues, the instanced columns, already one draw each) stay as they are. Its
+// shapes are only on the card: nothing aims at or walks on it (the near meshes stay for that, hidden), so its copies in
+// memory are let go once sent.
+const FAR_SITE = ULTRA ? 450 : 350, PX_R = 0.4, PX_K = 1 / 600, FAR_MIN = 8;   // (PX_K: a merged part whose radius is under this share of its distance is about two pixels across at 720p, four at 1440p)
+const plainMat = (m) => m.onBeforeCompile === THREE.Material.prototype.onBeforeCompile;
+const matKey = (m) => (plainMat(m) ? [m.type, m.map?.uuid, m.normalMap?.uuid, m.color?.getHex(), m.emissive?.getHex(), m.emissiveIntensity, m.roughness, m.metalness, m.vertexColors, m.side, m.alphaTest, m.flatShading, m.fog].join('|') : m.uuid);
+function farVersion(grp) {
+  grp.updateMatrixWorld(true);   // (before its inverse is taken: a site made in the same frame hasn't been placed yet)
+  const by = new Map(), from = [], todo = [], inv = new THREE.Matrix4().copy(grp.matrixWorld).invert(), seen = (o) => { for (let p = o; p && p !== grp; p = p.parent) if (!p.visible) return false; return true; };
+  // (first what goes in and how it groups: a site whose every piece has a look of its own, the temple's each with its own
+  // picture, would gain nothing for the copy, and is left as it is)
+  grp.traverse((m) => {
+    if (!m.isMesh || m.isInstancedMesh || m.isSkinnedMesh || !seen(m) || m.onBeforeRender !== THREE.Object3D.prototype.onBeforeRender) return;
+    const mats = [].concat(m.material), geo = m.geometry; if (mats.some((x) => x.transparent || x.userData.decal)) return;
+    geo.boundingSphere || geo.computeBoundingSphere(); if (geo.boundingSphere.radius * m.matrixWorld.getMaxScaleOnAxis() < PX_R) { from.push(m); return; }   // (too small to see there: just hidden)
+    // (one part for each material it has: one with several is taken apart by its groups)
+    const parts = (Array.isArray(m.material) ? geo.groups.map((gr) => [gr, mats[gr.materialIndex]]) : [[null, m.material]]).map(([gr, mt]) => ({ gr, mt, want: ['position', 'normal', ...(mt.map || mt.normalMap ? ['uv'] : []), ...(mt.vertexColors ? ['color'] : [])] }));
+    if (!parts.every((q) => q.want.every((n) => geo.attributes[n]))) return;   // (something unlike the rest: left as it is)
+    for (const q of parts) q.key = matKey(q.mt) + '|' + q.want.join() + '|' + m.castShadow + m.receiveShadow;
+    from.push(m); todo.push([m, parts]); for (const q of parts) by.set(q.key, null);
+  });
+  if (from.length < FAR_MIN || by.size > todo.length * 0.6) { grp.userData.far = null; return; }
+  const mm = new THREE.Matrix4();
+  for (const [m, parts] of todo) {
+    const geo = m.geometry, flat = parts[0].gr ? geo.toNonIndexed() : null, src = flat || geo; mm.multiplyMatrices(inv, m.matrixWorld);
+    for (const { gr, mt, want, key } of parts) {
+      const g = new THREE.BufferGeometry(), i0 = gr ? gr.start : 0, cnt = gr ? gr.count : src.attributes.position.count;
+      for (const n of want) { const a = src.attributes[n], k = a.itemSize; let f;
+        if (!a.isInterleavedBufferAttribute && !a.normalized && a.array instanceof Float32Array) f = a.array.slice(i0 * k, (i0 + cnt) * k);   // (most: a plain copy)
+        else { f = new Float32Array(cnt * k); for (let i = 0; i < cnt; i++) for (let c = 0; c < k; c++) f[i * k + c] = a.getComponent(i0 + i, c); }
+        g.setAttribute(n, new THREE.BufferAttribute(f, k)); }
+      const ix = !gr && geo.index ? Uint32Array.from(geo.index.array) : new Uint32Array(cnt); if (gr || !geo.index) for (let i = 0; i < cnt; i++) ix[i] = i;
+      g.setIndex(new THREE.BufferAttribute(ix, 1)); g.applyMatrix4(mm);
+      (by.get(key) || by.set(key, { mt, cast: m.castShadow, recv: m.receiveShadow, gs: [] }).get(key)).gs.push(g);
+    }
+  }
+  const group = new THREE.Group(); group.visible = false;
+  for (const { mt, cast, recv, gs } of by.values()) {
+    const g = mergeGeometries(gs); for (const x of gs) x.dispose(); if (!g) continue; g.computeBoundingSphere(); g.computeBoundingBox();
+    for (const a of [...Object.values(g.attributes), g.index]) a.onUpload(function () { this.array = null; });   // (on the card only, see above)
+    const mesh = new THREE.Mesh(g, mt); mesh.castShadow = cast; mesh.receiveShadow = recv; mesh.raycast = () => {}; mesh.userData.r = g.boundingSphere.radius; group.add(mesh);
+  }
+  grp.add(group); grp.userData.far = { group, from, on: false };
+}
+
 // ---- a marble statue of Zeus: the hero's rigged figure, posed and dressed in marble, a gilded bolt in hand
 async function statue(group, x, y, z, s, rot, o = {}) {
   const obj = await loadFBX('hero_rig'); const size = new THREE.Box3().setFromObject(obj).getSize(new THREE.Vector3()); obj.scale.setScalar((1.95 / size.y) * s);
@@ -213,7 +267,7 @@ async function statue(group, x, y, z, s, rot, o = {}) {
 const beamTex = (() => { const W = 32, H = 256, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'), im = g.createImageData(W, H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const up = 1 - y / H, a = Math.exp(-((x / (W - 1) - 0.5) ** 2) / 0.045) * (up < 0.14 ? 0.35 + 0.65 * (up / 0.14) : Math.pow((1 - up) / 0.86, 1.3)) * Math.min(1, up / 0.02), i = (y * W + x) * 4; im.data.set([255, 236, 170, Math.round(a * 255)], i); }   // (gentler at its foot, brightest a few metres up)
   g.putImageData(im, 0, 0); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; })();
-const glow = (o) => ({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false, ...o });
+const glow = (o) => ({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, forceSinglePass: true, fog: false, ...o });   // (one pass: added light needs no order)
 const sparkMat = new THREE.PointsMaterial(glow({ color: 0xffe9a0, size: 0.16, side: THREE.FrontSide }));
 const SPARKS = 40;
 function beacon(scene, p, rot) {
@@ -232,15 +286,64 @@ function moveBeacon(b, t, cam) {
   p.needsUpdate = true;
 }
 
+// ---- Ruins (Patch 21): what a boss's coming breaks (trial.js stage). A breakable site keeps its parts in sets, all built
+// with it: what stands through it all (merged with the rest of the site), what falls (whole: merged too while it stands),
+// and the ruin (debris: rubble heaps at the walls' feet, blocks thrown across the floor, the crater where the boss came
+// down and the cracks running out from it; hidden till then). Each part that falls is also built on its own (falls: a
+// group turned about the foot it goes over, local +z the way it falls), shown only while it falls: a wall tips over and
+// breaks up into the dust as it lands, a column or a beam falls and lies where it fell (those lying baked into one more
+// merged set, fallen, for when they're down). The walls' colliders go with them and the rubble's come instead, low (a
+// giant boss steps over them, creatures.js BIG; you climb or jump them). Broken, a site stays so (trial.js st.broken).
+const ruinDice = (k) => { const x = Math.sin(k * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };   // (dice of their own: nothing else on the island changes)
+const _rm = new THREE.Matrix4(), _rq = new THREE.Quaternion(), _re = new THREE.Euler(), _rv = new THREE.Vector3(), ONE = new THREE.Vector3(1, 1, 1);
+// a fall's pose: at its foot, turned yaw, tipped tilt towards local +z, dropped y metres, rolled roll about its length
+const poseOf = (f, tilt, y = 0, roll = 0) => _rm.compose(_rv.set(f.pivot.x, f.pivot.y + y, f.pivot.z), _rq.setFromEuler(_re.set(tilt, f.yaw, roll, 'YXZ')), ONE);
+// The floor of a broken site (r: its radius, in site-local metres; at: where the boss came down, [x, z]): a crater there,
+// scorched black at the heart and ringed with dark earth, cracks running out from it across the flagstones to the walls,
+// branching as they go. glow: the Chimera's, its fissures lit from below (the core of each crack in the emissive map).
+// One cut-out sheet laid over the floor (alphaTest: no sorting, it takes shadows).
+function crackSheet(r, at, seed, glow) {
+  const N = 1024, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d'), e = glow ? document.createElement('canvas') : null; let sd = seed;
+  const rnd2 = () => ((sd = (sd * 16807) % 2147483647) - 1) / 2147483646, px = (x) => (x / r + 1) * N / 2, M = N / (2 * r), eg = e && (e.width = e.height = N, e.getContext('2d'));
+  const cx = px(at[0]), cz = px(at[1]);
+  // the crater: a black heart in a ragged blotch of scorched earth
+  for (const [rad, col] of [[5.6, 'rgba(46,36,28,1)'], [4.2, 'rgba(30,24,19,1)'], [2.6, 'rgba(14,11,9,1)']]) { g.fillStyle = col; g.beginPath(); for (let i = 0; i <= 28; i++) { const a = (i / 28) * Math.PI * 2, q = rad * M * (0.78 + 0.35 * rnd2()); g.lineTo(cx + Math.cos(a) * q, cz + Math.sin(a) * q); } g.fill(); }
+  if (eg) { const gr = eg.createRadialGradient(cx, cz, 0, cx, cz, 3.2 * M); gr.addColorStop(0, 'rgba(255,150,60,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); eg.fillStyle = gr; eg.fillRect(0, 0, N, N); }
+  // the cracks: jagged, narrowing as they run out, a branch now and then
+  const crack = (x, y, a, len, w) => {
+    const pts = [[x, y]]; for (let s = 0; s < len; s += 0.7) { a += (rnd2() - 0.5) * 0.7; x += Math.cos(a) * 0.7 * M; y += Math.sin(a) * 0.7 * M; pts.push([x, y]); if (Math.hypot(x - N / 2, y - N / 2) > N / 2 - 6) break;
+      if (rnd2() < 0.07 && w > 1.5) crack(x, y, a + (rnd2() < 0.5 ? -1 : 1) * (0.5 + rnd2() * 0.6), len * 0.45, w * 0.6); }
+    for (const [ctx2, col, k] of [[g, 'rgba(20,16,13,1)', 1], ...(eg ? [[eg, 'rgba(255,120,40,1)', 0.45]] : [])]) {
+      ctx2.strokeStyle = col; ctx2.lineCap = ctx2.lineJoin = 'round'; for (let i = 1; i < pts.length; i++) { ctx2.lineWidth = Math.max(1.2, w * k * (1 - i / pts.length * 0.75)); ctx2.beginPath(); ctx2.moveTo(...pts[i - 1]); ctx2.lineTo(...pts[i]); ctx2.stroke(); } }
+  };
+  for (let i = 0; i < 16; i++) crack(cx, cz, (i / 16) * Math.PI * 2 + rnd2() * 0.3, r * (0.45 + rnd2() * 0.65), 7 + rnd2() * 6);
+  for (let i = 0; i < 10; i++) { const a = rnd2() * 6.283, d = r * (0.3 + rnd2() * 0.6); crack(N / 2 + Math.cos(a) * d * M, N / 2 + Math.sin(a) * d * M, rnd2() * 6.283, 3 + rnd2() * 5, 4); }   // (and the floor split here and there, as the walls came down)
+  const tex = (cv) => { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; };
+  const mat = new THREE.MeshStandardMaterial({ map: tex(c), alphaTest: 0.5, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    ...(e ? { emissive: 0xffffff, emissiveMap: tex(e), emissiveIntensity: 2.2 } : {}) });
+  mat.userData.decal = true; return [new THREE.CircleGeometry(r, 72).rotateX(-Math.PI / 2).translate(0, 0.1, 0), mat];
+}
+
 export class Structures {
   constructor(g) {
     this.g = g; this.groups = []; this.solids = []; this.tops = []; this.roofs = []; this.uses = []; this.lights = []; this.flames = [];
+    this.anchors = [];   // (the edges of the holes in the old houses' roofs, where a roof patch snaps: anchorsNear)
     this.build();
   }
   // register helpers (site-local → world, sites only rotate about y)
   site(s, rot = 0) { const grp = new THREE.Group(); grp.position.set(s.x, s.y, s.z); grp.rotation.y = rot; grp.userData.viewR = VIEW_R[s.kind] ?? 800; this.g.scene.add(grp); this.groups.push(grp); return { grp, s, rot, P: [] }; }
-  // sites far off are not drawn at all (the haze has them long before): checked twice a second
-  cull(cam, dt) { this.cam = cam; this.cullT = (this.cullT || 0) - dt; if (this.cullT > 0) return; this.cullT = 0.5; for (const g of this.groups) g.visible = g.position.distanceTo(cam) < g.userData.viewR * (1 + Math.max(0, cam.y - 60) / 200); }
+  // sites far off are not drawn at all (the haze has them long before): checked twice a second. A big one further off than
+  // FAR_SITE is drawn as its far version (farVersion), made once, a site a check, from the first time it is wanted.
+  cull(cam, dt) {
+    this.cam = cam; this.cullT = (this.cullT || 0) - dt; if (this.cullT > 0) return; this.cullT = 0.5; let made = false;
+    for (const g of this.groups) { const d = g.position.distanceTo(cam); g.visible = d < g.userData.viewR * (1 + Math.max(0, cam.y - 60) / 200);
+      const F = g.userData.far; if (F === null || !g.visible) continue;   // (null: too small a site for one)
+      if (!F && d > FAR_SITE - 60 && !made) { made = true; farVersion(g); continue; }
+      if (F && F.on !== d > FAR_SITE) { F.on = d > FAR_SITE; F.group.visible = F.on; for (const m of F.from) m.visible = !F.on; }
+      if (F?.on) for (const m of F.group.children) m.visible = m.userData.r > d * PX_K; }   // (and what is under a couple of pixels across from here left out)
+  }
+  // a site broken (or put back) drops its far version, made again when next wanted from what stands then
+  dropFar(g) { const F = g.userData.far; if (!F) return; for (const m of F.from) m.visible = true; F.group.removeFromParent(); F.group.traverse((m) => m.geometry?.dispose()); g.userData.far = undefined; }
   // the top of the tallest site building within r of pos (for the mist's ceiling), or -Infinity
   tallestNear(pos, r) {
     let top = -Infinity;
@@ -260,6 +363,70 @@ export class Structures {
     else { const c = this.w(ctx, foot.x || 0, foot.z || 0); clearGrass(key, { x: c.x, z: c.z, hw: foot.w / 2, hd: foot.d / 2, rot: ctx.rot }); }
   }
   fire(ctx, x, y, z, big = 1) { const f = new THREE.Group(); f.position.set(x, y, z); const c1 = new THREE.Mesh(FLAME_GEO, SMAT.flame); c1.scale.setScalar(big); f.add(c1); ctx.grp.add(f); this.flames.push(f); this.lights.push(this.w(ctx, x, z, y + 0.6)); }
+  // ---- ruins (see above)
+  ruinOf(key, ctx) { return ((this.ruins ||= {})[key] = { key, ctx, whole: [], falls: [], debris: [], fallen: [], walls: [], rubble: [], broken: false, t: -1 }); }
+  // a part that falls: its pieces (site-local), the foot it goes over (pivot) and which way (yaw); o: { t0: when it goes
+  // (after the blast), dur: how long it takes, tilt: how far over, stay: it lies where it fell, drop: it falls that many
+  // metres straight down (rolling, roll), w and reach: how wide it is and how far out its top lands (for the dust), k: how big }
+  fallPart(R, parts, pivot, yaw, o) {
+    R.whole.push(...parts);
+    const inv = new THREE.Matrix4().compose(pivot, new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)), ONE).invert(), f = { pivot: pivot.clone(), yaw, t0: 0, dur: 1, tilt: Math.PI / 2, w: 2, reach: 3, k: 1, ...o };
+    f.local = parts.map(([g, m]) => [g.clone().applyMatrix4(inv), m]);
+    if (f.stay) { const F = poseOf(f, f.tilt, -(f.drop || 0), f.roll || 0); R.fallen.push(...f.local.map(([g, m]) => [g.clone().applyMatrix4(F), m])); }
+    R.falls.push(f); return f;
+  }
+  // once the site's parts are all in: the sets merged, each fall's own group, all but what stands hidden
+  finishRuin(R) {
+    const grp = R.ctx.grp, merged = (P) => { const g = new THREE.Group(); for (const m of mergeByMat(P)) { if (m.material.userData.decal) m.castShadow = false; g.add(m); } g.visible = false; grp.add(g); return g; };
+    R.wholeMeshes = mergeByMat(R.whole); for (const m of R.wholeMeshes) grp.add(m);   // (as the site's own meshes, so they fade in the camera's way)
+    R.debrisG = merged(R.debris); R.fallenG = merged(R.fallen);
+    for (const f of R.falls) { f.g = new THREE.Group(); for (const m of mergeByMat(f.local)) f.g.add(m); f.g.position.copy(f.pivot); f.g.rotation.set(0, f.yaw, 0, 'YXZ'); f.g.visible = false; grp.add(f.g); f.local = null; }
+    R.whole = R.debris = R.fallen = null;
+  }
+  // Break a site (live: as the boss lands, everything falling in turn; else at once, as a save loads into a broken one)
+  ruin(key, { live = true } = {}) {
+    const R = this.ruins?.[key]; if (!R || R.broken) return false; R.broken = true; const C = this.g.colliders; this.dropFar(R.ctx.grp);
+    for (const m of R.wholeMeshes) { m.removeFromParent(); m.geometry.dispose(); } R.wholeMeshes = [];
+    C.removeGroup('ruin:' + key); C.addGroup('rubble:' + key, R.rubble.map((c) => ({ ...c, low: true, ref: { site: true } })));
+    R.debrisG.visible = true; if (key === 'labyrinth' && this.lab) this.lab.broken = true;
+    if (live) { R.t = 0; for (const f of R.falls) { f.g.visible = true; f.g.userData.nearShadow = true; } (this.falling ||= []).push(R); R.onBreak?.(); }
+    else this.settle(R);
+    SHADOW.farDirty = true; return true;
+  }
+  settle(R) { this.dropFar(R.ctx.grp); for (const f of R.falls) { f.g.removeFromParent(); f.g.traverse((o) => o.geometry?.dispose()); } R.falls = []; R.fallenG.visible = true; SHADOW.farDirty = true; }
+  // Where a boss came down (at, site-local [x, z]): the cracked floor (crackSheet, over the site's floor of radius r), the
+  // flagstones round the crater heaved up on edge and broken, lumps of earth thrown up between them (glow: the Chimera's,
+  // fissures lit from below)
+  crater(R, at, r, seed, glow) {
+    const [cx, cz] = at, sheet = crackSheet(r, at, seed, glow); R.debris.push(sheet);
+    if (glow) R.glow = { m: sheet[1], p: this.w(R.ctx, cx, cz, 1.2) };
+    for (let i = 0; i < 18; i++) { const a = (i / 18) * Math.PI * 2 + ruinDice(seed + i) * 0.3, d = 3.6 + ruinDice(seed + i * 3) * 2.2, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d, w = 0.9 + ruinDice(seed + i * 5) * 0.8;
+      R.debris.push([uvBox(w, 0.22, 0.7 + ruinDice(seed + i * 7) * 0.5).rotateX(-(0.35 + ruinDice(seed + i * 9) * 0.6)).rotateY(-a + Math.PI / 2).translate(x, 0.22, z), glow ? GMAT.darkFlags : SMAT.flags]);   // (heaved up, leaning out)
+      if (i % 2) boulder(R.debris, cx + Math.cos(a + 0.17) * (d + 0.7), 0.05, cz + Math.sin(a + 0.17) * (d + 0.7), 0.45 + ruinDice(seed + i * 11) * 0.3, SMAT.dark, 1.4, 0.55, 1.2); }
+    for (let i = 0; i < 6; i++) { const a = ruinDice(seed + 50 + i) * 6.283, d = 1 + ruinDice(seed + 60 + i) * 2; boulder(R.debris, cx + Math.cos(a) * d, -0.1, cz + Math.sin(a) * d, 0.5 + ruinDice(seed + 70 + i) * 0.4, SMAT.dark, 1.2, 0.5, 1.1); }
+  }
+  // a part down: dust along where it landed, its crash, the ground jolting if you're near
+  fell(R, f) {
+    const dx = Math.sin(f.yaw), dz = Math.cos(f.yaw), P = this.g.player.pos; let at = null;
+    for (let i = -1; i <= 1; i++) { const x = f.pivot.x + dx * f.reach + dz * i * f.w * 0.4, z = f.pivot.z + dz * f.reach - dx * i * f.w * 0.4; at = this.w(R.ctx, x, z, 0.4);
+      dust(at, 3, 0x6e6254, 0.6 + 0.2 * f.k); burst(at, { color: 0x8f8678, n: 6, speed: 3, size: 0.18 * f.k, up: 3 }); }
+    this.g.sound?.('collapse', { at, k: f.k }); const near = Math.max(0, 1 - at.distanceTo(P) / 35); if (near > 0) addShake(0.35 * near * f.k);
+  }
+  // each frame while one falls (update)
+  falls(dt) {
+    for (const R of [...(this.falling || [])]) {
+      R.t += dt; let busy = false;
+      for (const f of R.falls) {
+        const e = R.t - f.t0, g = f.g; if (e < 0) { busy = true; continue; } const k = Math.min(1, e / f.dur);
+        if (f.drop) { g.position.y = f.pivot.y - f.drop * k * k; g.rotation.x = f.tilt * k; g.rotation.z = (f.roll || 0) * k; } else g.rotation.x = f.tilt * k ** 2.2;   // (slow to start going, then all at once)
+        if (k >= 1 && !f.hit) { f.hit = true; this.fell(R, f); }
+        if (k < 1) busy = true;
+        else if (!f.stay) { const s = e - f.dur; g.position.y = f.pivot.y - s * 1.5 - s * s * 6; if (s < 0.6) busy = true; else g.visible = false; }   // (a wall breaks up into the dust it raised)
+      }
+      if (!busy) { this.settle(R); this.falling.splice(this.falling.indexOf(R), 1); }
+      SHADOW.farDirty = true;
+    }
+  }
   build() {
     const S = SITES;
     if (S.temple) this.temple(S.temple);
@@ -272,6 +439,7 @@ export class Structures {
     if (S.town) buildTown(this, S.town);   // (last: they throw dice of their own, so the places above keep theirs)
     for (const sp of S.spots) buildSpot(this, sp);
     const col = this.solids.map((c) => ({ ...c, ref: { site: true } })); this.g.colliders.addGroup('sites', col);
+    for (const [k, R] of Object.entries(this.ruins || {})) this.g.colliders.addGroup('ruin:' + k, R.walls.map((c) => ({ ...c, ref: { site: true } })));   // (the walls that will fall, on their own)
   }
   // ---- the Ancient Temple of Zeus: a peripteros on its stepped platform (the pack's own, templeHall, or a carved one) on
   // the flat top of its hill (sites.js HILL), in a precinct paved with marble: the offering stands either side of the
@@ -491,7 +659,7 @@ export class Structures {
   // well, a clay oven, storage jars and an olive, a vine over the door. Inside: the hearth, a loom, shelves, a bed and the
   // chest someone left behind.
   house(s) {
-    if (hasPiece('plFarmhouse')) { this.farmhouse(s); return; }
+    if (hasPiece('plKitWall')) { this.farmhouse(s); return; }
     const ctx = this.site(s, 0.4), P = ctx.P, W = 8, D = 6, H = 2.8, t = 0.31;
     plasterWall(P, -W / 2, -D / 2, W / 2, -D / 2, H, 0, 1); plasterWall(P, -W / 2, -D / 2 + t, -W / 2, D / 2 - t, H, 0, 2); plasterWall(P, W / 2, -D / 2 + t, W / 2, D / 2 - t, H, 0.55, 3);
     plasterWall(P, -W / 2, D / 2, -0.8, D / 2, H, 0, 4); plasterWall(P, 0.8, D / 2, W / 2, D / 2, H, 0.25, 5);
@@ -565,47 +733,113 @@ export class Structures {
     this.solid(ctx, x, z, 0.55, 0.75, y);
     this.uses.push({ kind: 'loot', at: this.w(ctx, x, z, y), r: 1.8, lid, ...use });
   }
-  // The farmhouse from the pack (tools/assets/manifest.json plFarmhouse: the kit's whitewashed walls, three bays by two,
-  // 7.5 × 5 m), the roof still on over the western two bays and bare rafters over the third, its back corner fallen to
-  // a stump. Inside: the hearth, the loom, a couch for a bed, shelves, the chest; a table and the fallen tiles under the
-  // open sky. The yard: dry-stone walls with a gate, a vine over the door, the well, the bread oven, jars and firewood.
+  // ---- A house from the Ancient Empire kit's pieces (site-pack.js: one model each), laid out on the kit's 2.5 m grid the
+  // way compose.py lays out the town's whole, but piece by piece so a site can leave out what it likes. o: { x, z (its
+  // middle, site-local), rot (a quarter turn: its front, with the doorway, faces +z turned so), w, d (bays across and
+  // deep), door (the front's doorway bay), windows, fallen (a stump of wall), gone (nothing): [[side, bay]...] with the
+  // sides 0 front, 1 right, 2 back, 3 left, each running anticlockwise; roof: false, or { holes: [bay...] }: panels left
+  // out of its front slope }. Registers its walls (the doorway clear), its roof bay by bay less the holes, and each hole's
+  // edges, which a roof patch snaps to (anchorsNear; build.js).
+  kitHouse(ctx, o) {
+    const W = o.w * BAY, D = o.d * BAY, c = Math.cos(o.rot), s = Math.sin(o.rot), P = ctx.P, has = (k, sd, i) => (o[k] || []).some(([a, b]) => a === sd && b === i);
+    const at = (hx, hz) => { const u = hx - W / 2, v = hz + D / 2; return [o.x + u * c + v * s, o.z - u * s + v * c]; };
+    const put = (k, hx, y, hz, r) => { const [x, z] = at(hx, hz); P.push(...pieceAt(k, x, y, z, o.rot + r)); };
+    const wall = (a, b, h) => { const [x0, z0] = at(...a), [x1, z1] = at(...b); this.wall(ctx, x0, z0, x1, z1, h, 0.25); };
+    const box = (hx0, hx1, hz0, hz1, y) => { const [ax, az] = at(hx0, hz0), [bx, bz] = at(hx1, hz1); this.top(ctx, Math.min(ax, bx), Math.max(ax, bx), Math.min(az, bz), Math.max(az, bz), y, true); };
+    for (const [sd, n] of [[0, o.w], [1, o.d], [2, o.w], [3, o.d]]) for (let i = 0; i < n; i++) {
+      if (has('gone', sd, i)) continue;
+      // (where bay i of side sd starts and which way it runs: compose.py's, its y turned to our -z)
+      const [hx, hz, r] = [[i * BAY, 0, 0], [W, -i * BAY, Math.PI / 2], [W - i * BAY, -D, Math.PI], [0, -D + i * BAY, -Math.PI / 2]][sd], e = (t) => [hx + Math.cos(r) * t, hz - Math.sin(r) * t];
+      const fallen = has('fallen', sd, i), door = sd === 0 && i === o.door;
+      put(fallen ? 'plKitHalf' : door ? 'plKitDoor' : has('windows', sd, i) ? 'plKitWindow' : 'plKitWall', hx, 0, hz, r);
+      if (door) { wall(e(0), e(0.5), STOREY); wall(e(BAY - 0.5), e(BAY), STOREY); } else wall(e(0), e(BAY), fallen ? 1.5 : STOREY);   // (the doorway a metre clear)
+    }
+    for (const [hx, hz, r] of [[0, 0, Math.PI], [W, 0, -Math.PI / 2], [W, -D, 0], [0, -D, Math.PI / 2]]) put('plKitEnd', hx, 0, hz, r);
+    if (o.roof) {
+      const holes = o.roof.holes || [], up = STOREY + PITCH;
+      for (let j = 0; j < o.d; j++) { const front = j < o.d / 2, z0 = front ? -j * BAY : -(j + 1) * BAY;
+        for (let i = 0; i < o.w; i++) {
+          if (front && holes.includes(i)) { for (const t of [0, 0.5, 1]) for (const [y, hz] of [[STOREY, z0], [up, z0 - BAY]]) { const [x, z] = at((i + t) * BAY, hz), q = this.w(ctx, x, z, y); q.rot = ctx.rot + o.rot; this.anchors.push(q); } continue; }
+          put('plKitRoof', front ? i * BAY : (i + 1) * BAY, STOREY, z0, front ? 0 : Math.PI); box(i * BAY, (i + 1) * BAY, -j * BAY, -(j + 1) * BAY, STOREY);
+        }
+        for (const hx of [0, W]) put('plKitRoofSide', hx, STOREY, z0, front ? 0 : Math.PI);
+      }
+    }
+  }
+  // The farmhouse (tester, 20 Nov: "the pillars are in the middle of the house door... restructure it to be like an
+  // abandoned house, but also looking good, realistic"): a Greek farmstead from the kit's pieces. The house, three bays by
+  // two, its doorway in the middle of the front, under a porch (a pastas) of the same tiles on square piers that stand
+  // either side of the door, never in front of it; the porch's eastern bay has come down with its pier, the panel slid to
+  // lean on the wall under the window. The roof is whole but for one panel over the eastern end: a hole the rain comes in
+  // by, for you to patch (no house is ever perfect). Along the yard's west side the storeroom, roofless, its yard wall down
+  // to a stump and its back broken through; round the yard a dry-stone wall with a gateway, broken in the south-east. Inside:
+  // the old hearth, the loom by the west wall, a couch, shelves, the chest someone left behind, a table; tiles and a rafter
+  // fallen under the hole. In the yard: the well, the bread oven, a vine on its pergola, jars, firewood, an olive.
   farmhouse(s) {
-    const ctx = this.site(s, 0.4), P = ctx.P, W = 7.5, D = 5, H = 3, put = (k, x, z, rot = 0, sc = 1, y = 0) => P.push(...piece(k, x, y, z, rot, sc));
-    P.push(...pieceAt('plFarmhouse', -W / 2, 0, D / 2));
-    // its walls (the doorway a metre and a half in the middle of the front; the fallen back corner a stump too high to climb)
-    this.wall(ctx, -W / 2, -D / 2, W / 2, -D / 2, H, 0.25); this.wall(ctx, -W / 2, -D / 2, -W / 2, D / 2, H, 0.25); this.wall(ctx, W / 2, D / 2, W / 2, 0, H, 0.25); this.wall(ctx, W / 2, 0, W / 2, -D / 2, 1.5, 0.25);
-    this.wall(ctx, -W / 2, D / 2, -0.75, D / 2, H, 0.25); this.wall(ctx, 0.75, D / 2, W / 2, D / 2, H, 0.25);
-    this.top(ctx, -W / 2, 1.25, -D / 2, D / 2, H, true);   // (under the roof)
-    { const g = new THREE.PlaneGeometry(W - 0.3, D - 0.3), uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (W - 0.3) / 2.4, uv.getY(i) * (D - 0.3) / 2.4); P.push([g.rotateX(-Math.PI / 2).translate(0, 0.03, 0), SMAT.flags]); }   // its floor of worn flags
-    // the rafters left over the third bay, a broken one hanging, the ridge beam
-    const a = Math.atan2(0.75, D / 2), L = (D / 2 + 0.3) / Math.cos(a), slope = (g, sd, x) => g.translate(0, 0, sd * L / 2).rotateX(sd * a).translate(x, H + 0.06, 0);
-    for (const sd of [-1, 1]) for (let x = 1.6, k = 0; x < W / 2; x += 0.75, k++) { const broken = (k % 2 === 1) === (sd > 0); P.push([slope(uvBox(0.12, 0.14, broken ? L * 0.5 : L).translate(0, 0, broken ? -sd * L * 0.25 : 0), sd, x), GMAT.oldWood]); }
-    P.push([new THREE.CylinderGeometry(0.1, 0.1, W / 2 - 1.1, 8).rotateZ(Math.PI / 2).translate((W / 2 + 1.25) / 2, H + 0.72, 0), GMAT.oldWood]);
-    // inside: the hearth, the loom by the west wall, the couch, the shelves, the chest; the table, fallen tiles and a beam in the open
-    put('twFirepit', -1.0, 0.1, 0, 0.42); this.solid(ctx, -1.0, 0.1, 0.55, 0.4);
-    P.push([new THREE.CylinderGeometry(0.42, 0.45, 0.04, 14).translate(-1.0, 0.03, 0.1), GMAT.ash]); for (let k = 0; k < 3; k++) P.push([new THREE.CylinderGeometry(0.05, 0.06, 0.6, 6).rotateZ(Math.PI / 2).rotateY(k * 1.1).translate(-1.0, 0.08, 0.1), GMAT.ash]); for (let k = 0; k < 5; k++) P.push([new THREE.IcosahedronGeometry(0.05, 0).translate(-1.0 + Math.cos(k * 2.3) * 0.18, 0.06, 0.1 + Math.sin(k * 2.3) * 0.18), GMAT.ember]);
-    put('plLoom', -W / 2 + 0.55, -0.4, Math.PI / 2); this.solid(ctx, -W / 2 + 0.55, -0.9, 0.4, 2); this.solid(ctx, -W / 2 + 0.55, 0.1, 0.4, 2);
-    put('plBed', -2.3, D / 2 - 0.6, Math.PI); this.solid(ctx, -2.9, D / 2 - 0.6, 0.5, 0.9); this.solid(ctx, -1.8, D / 2 - 0.6, 0.5, 0.9);
-    P.push([uvBox(0.6, 0.1, 0.32).translate(-3.1, 0.62, D / 2 - 0.6), GMAT.linen]);
-    for (const y of [1.15, 1.7]) { P.push([uvBox(1.7, 0.05, 0.3).translate(-0.4, y, -D / 2 + 0.3), GMAT.wood]); for (let k = 0; k < 4; k++) (k % 2 ? jug : bowl)(P, -1.0 + k * 0.4, y + 0.025, -D / 2 + 0.3, 0.9); }   // shelves
-    this.oldChest(ctx, -2.7, -D / 2 + 0.6, 0);
-    put('plTable', 2.2, -1.3, 0.1); this.solid(ctx, 1.8, -1.3, 0.45, 0.8); this.solid(ctx, 2.6, -1.3, 0.45, 0.8);
-    put('plStool', 2.0, -0.55, 0.4); put('plStool', 3.0, -1.9, 2.2, 1, 0); jug(P, 2.0, 0.78, -1.25, 1.1); bowl(P, 2.5, 0.78, -1.4); bowl(P, 2.7, 0.78, -1.15, 0.8);
-    for (let k = 0; k < 12; k++) P.push([uvBox(0.32, 0.03, 0.4).rotateX(rr(-0.4, 0.4)).rotateY(rr(0, 3)).translate(rr(1.6, 3.4), 0.03 + rr(0, 0.1), rr(-0.4, 1.9)), SMAT.tile]);
-    P.push([uvBox(0.14, 0.14, 2.6).rotateX(0.35).rotateY(0.6).translate(2.7, 0.5, 0.9), GMAT.oldWood]);
-    pithos(P, 3.0, -0.25, 1.8, 0.7); P.push([new THREE.CylinderGeometry(0.5, 0.6, 0.03, 12).translate(2.5, 0.015, 1.9), new THREE.MeshStandardMaterial({ color: 0xc9a85a, roughness: 1 })]);   // a cracked jar, its grain spilt
-    // the yard: a low dry-stone wall with a gate, the vine on its pergola over the door, the well, the oven, jars, firewood
-    const yz = D / 2 + 6;
-    for (const [x0, z0, x1, z1] of [[-W / 2, D / 2 + 0.2, -W / 2, yz], [-W / 2, yz, -1.2, yz], [1.2, yz, W / 2, yz], [W / 2, yz, W / 2, D / 2 + 0.2]]) { rubble(P, x0, z0, x1, z1, 1.0, SMAT.stone, 0.25); this.wall(ctx, x0, z0, x1, z1, 1.0, 0.4); }
+    const ctx = this.site(s, 0.4), P = ctx.P, r = seeded(31), rr2 = (a, b) => a + r() * (b - a), put = (k, x, z, rot = 0, sc = 1, y = 0) => P.push(...piece(k, x, y, z, rot, sc));
+    for (let k = 0; k < 92; k++) rnd();   // (as many draws on the shared dice as the farmhouse before this one made, so every site after it comes out as it did)
+    this.kitHouse(ctx, { x: 0, z: -2, rot: 0, w: 3, d: 2, door: 1, windows: [[0, 0], [0, 2], [1, 0], [2, 2], [3, 1]], roof: { holes: [2] } });
+    this.kitHouse(ctx, { x: -5, z: 3, rot: Math.PI / 2, w: 2, d: 1, door: 1, fallen: [[0, 0], [2, 1], [3, 0]], roof: false });
+    { const flags = (x0, x1, z0, z1) => { const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0), uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (x1 - x0) / 2.4, uv.getY(i) * (z1 - z0) / 2.4); P.push([g.rotateX(-Math.PI / 2).translate((x0 + x1) / 2, 0.03, (z0 + z1) / 2), SMAT.flags]); };
+      flags(-3.65, 3.65, -4.4, 0.4); flags(-3.65, 3.75, 0.62, 3.0); flags(-6.15, -3.85, 0.6, 5.4); }   // (worn flags: the house, the porch, the storeroom)
+    // the porch: two piers either side of the doorway, a beam over them, its roof of two bays; the third bay fallen
+    const PZ = 2.8, PY = 2.25;
+    for (const x of [-1.25, 1.25]) { put('plKitPier', x, PZ, 0, [0.82, PY / 3, 0.82]); this.solid(ctx, x, PZ, 0.3, PY); }
+    P.push([uvBox(5.2, 0.2, 0.22).translate(-1.15, PY - 0.1, PZ), GMAT.oldWood]);
+    for (const x of [-3.75, -1.25]) P.push(...pieceAt('plKitRoof', x, PY, PZ + 0.2, 0));
+    P.push(...pieceAt('plKitRoofSide', -3.75, PY, PZ + 0.2, 0));
+    this.top(ctx, -3.75, 1.25, 0.5, PZ + 0.2, PY, true);
+    {   // (the fallen bay: its panel slid off the wall to lean against it under the window, its pier broken off at the knee and the rest lying where it fell)
+      for (const [g, m] of pieceAt('plKitRoof', 0, 0, 0, 0)) P.push([g.rotateX(0.52).rotateZ(0.05).rotateY(-0.06).translate(1.3, 0.05, 2.45), m]);
+      this.wall(ctx, 1.5, 1.6, 3.7, 1.6, 1.6, 0.6);
+      put('plKitPier', 3.55, PZ, 0, [0.82, 0.24, 0.82]); this.solid(ctx, 3.55, PZ, 0.3, 0.8);
+      for (const [g, m] of piece('plKitPier', 0, 0, 0, 0, [0.82, 0.5, 0.82])) P.push([g.rotateZ(-Math.PI / 2 + 0.08).rotateY(-0.12).translate(3.85, 0.2, 3.1), m]);
+      this.wall(ctx, 4.0, 3.1, 5.2, 3.25, 0.5, 0.3);
+      P.push([uvBox(0.2, 0.2, 2.2).rotateX(0.35).rotateY(1.2).translate(2.6, 0.35, 3.5), GMAT.oldWood]);   // (its stretch of beam)
+      for (let k = 0; k < 14; k++) P.push([uvBox(0.32, 0.03, 0.4).rotateX(rr2(-0.4, 0.4)).rotateY(rr2(0, 3)).translate(rr2(1.6, 4.6), 0.03 + rr2(0, 0.12), rr2(2.8, 4.6)), SMAT.tile]);
+      for (let k = 0; k < 6; k++) boulder(P, rr2(1.8, 4.8), 0.02, rr2(3.0, 4.4), rr2(0.12, 0.22), SMAT.stone, 1.3, 0.6, 1); }
+    // the hole: three old rafters across it under where the tiles were, one broken off and hanging, and what fell in
+    { const a = Math.atan2(PITCH, BAY), L = Math.hypot(PITCH, BAY);
+      for (const [x, k] of [[1.65, 1], [2.5, 0.42], [3.35, 1]]) P.push([uvBox(0.13, 0.13, L * k).translate(0, 0, -L * k / 2).rotateX(a).translate(x, STOREY - 0.09, 0.5), GMAT.oldWood]);
+      P.push([uvBox(0.13, 0.13, 1.4).rotateX(-1.1).translate(2.5, STOREY - 0.75, 0.0), GMAT.oldWood]);
+      for (let k = 0; k < 16; k++) P.push([uvBox(0.32, 0.03, 0.4).rotateX(rr2(-0.4, 0.4)).rotateY(rr2(0, 3)).translate(rr2(1.5, 3.5), 0.04 + rr2(0, 0.1), rr2(-1.8, 0.2)), SMAT.tile]);
+      P.push([uvBox(0.14, 0.14, 2.4).rotateX(0.32).rotateY(0.7).translate(2.3, 0.42, -0.9), GMAT.oldWood]); }
+    // inside: the cold hearth (a fire can be built on it again), the loom, the couch, the shelves, the chest, the table, a jar
+    { const hx = -0.5, hz = -2.1; P.push([new THREE.CylinderGeometry(0.55, 0.6, 0.04, 14).translate(hx, 0.04, hz), GMAT.ash]);
+      for (let k = 0; k < 3; k++) P.push([new THREE.CylinderGeometry(0.05, 0.06, 0.6, 6).rotateZ(Math.PI / 2).rotateY(k * 1.1).translate(hx, 0.09, hz), GMAT.ash]);
+      for (let k = 0; k < 8; k++) { const q = (k / 8) * Math.PI * 2; boulder(P, hx + Math.cos(q) * 0.72, 0.06, hz + Math.sin(q) * 0.72, 0.12, SMAT.rock); } }
+    put('plLoom', -3.2, -3.1, Math.PI / 2); this.solid(ctx, -3.2, -3.6, 0.4, 2); this.solid(ctx, -3.2, -2.6, 0.4, 2);
+    put('plBed', -2.15, -3.85, 0); this.solid(ctx, -2.75, -3.85, 0.5, 0.9); this.solid(ctx, -1.55, -3.85, 0.5, 0.9); P.push([uvBox(0.6, 0.1, 0.32).translate(-2.95, 0.62, -3.85), GMAT.linen]);
+    for (const y of [1.15, 1.7]) { P.push([uvBox(1.7, 0.05, 0.3).translate(0.2, y, -4.22), GMAT.wood]); for (let k = 0; k < 4; k++) (k % 2 ? jug : bowl)(P, -0.4 + k * 0.4, y + 0.025, -4.22, 0.9); }
+    this.oldChest(ctx, 2.95, -3.85, 0);
+    put('plTable', 2.95, -2.35, Math.PI / 2); this.solid(ctx, 2.95, -2.75, 0.45, 0.8); this.solid(ctx, 2.95, -1.95, 0.45, 0.8);
+    put('plStool', 2.2, -2.6, 0.4); jug(P, 2.9, 0.78, -2.6, 1.1); bowl(P, 3.0, 0.78, -2.1);
+    pithos(P, -3.05, -0.25, -0.2, 0.7); P.push([new THREE.CylinderGeometry(0.5, 0.6, 0.03, 12).translate(-2.5, 0.035, -0.4), new THREE.MeshStandardMaterial({ color: 0xc9a85a, roughness: 1 })]);   // a cracked jar, its grain spilt
+    // the storeroom: its jars, a heap of the roof that fell in, a beam across the breach, straw
+    for (const [x, z, sc] of [[-5.7, 1.2, 0.9], [-5.6, 2.1, 0.8], [-4.4, 1.0, 0.75]]) { pithos(P, x, -0.3, z, sc); this.solid(ctx, x, z, 0.5 * sc); }
+    amphora(P, -5.8, 0, 3.2, 1.0, 1.4, 0.4); amphora(P, -5.5, 0, 4.6, 0.9); put('twStrawBundle', -4.5, 4.7, 0.6);
+    for (let k = 0; k < 10; k++) boulder(P, rr2(-5.9, -4.2), 0.02, rr2(2.6, 4.2), rr2(0.15, 0.32), SMAT.stone, 1.3, 0.6, 1);
+    for (let k = 0; k < 12; k++) P.push([uvBox(0.32, 0.03, 0.4).rotateX(rr2(-0.5, 0.5)).rotateY(rr2(0, 3)).translate(rr2(-6.0, -4.0), 0.05 + rr2(0, 0.2), rr2(2.4, 4.8)), SMAT.tile]);
+    P.push([uvBox(0.16, 0.16, 3.0).rotateX(0.5).rotateY(0.15).translate(-5.0, 0.8, 3.4), GMAT.oldWood]); this.solid(ctx, -5.2, 3.6, 0.6, 1.2);
+    for (const [z, k] of [[1.3, 1], [2.4, 0.55]]) P.push([uvBox(2.7 * k, 0.16, 0.16).translate(-3.75 - 1.35 * k, STOREY - 0.12, z), GMAT.oldWood]);   // (the last of its roof beams, one broken off)
+    for (let k = 0; k < 14; k++) { const t = r(), [x, z] = t < 0.5 ? [-3.75 + rr2(-0.5, 0.6), rr2(3.1, 5.4)] : [rr2(-6.1, -3.9), 5.5 + rr2(-0.5, 0.6)]; boulder(P, x, 0.05, z, rr2(0.14, 0.3), SMAT.stone, 1.3, 0.7, 1); }   // (the fallen walls' stones)
+    // the porch: firewood stacked against the storeroom, a basket
+    put('twLogs', -3.2, 1.5, Math.PI / 2, 0.9); this.solid(ctx, -3.2, 1.5, 0.4, 1); put('twBasket', -2.2, 0.9, 0.5, 0.9);
+    // the yard's walls: dry stone, a gateway on the south, the south-east fallen half down
+    const yz = 9, wall = (a, b, c, d, h, ruin = 0) => { rubble(P, a, b, c, d, h, SMAT.stone, ruin, rr2); this.wall(ctx, a, b, c, d, h * (ruin ? 0.7 : 1), 0.4); };
+    wall(-6.25, 5.6, -6.25, yz, 1.0); wall(-6.25, yz, -1.2, yz, 1.0); wall(1.2, yz, 5.5, yz, 1.0, 0.55); wall(5.5, yz, 5.5, 0.6, 1.0); wall(5.5, 0.6, 3.95, 0.6, 1.0);
     for (const sx of [-1, 1]) { P.push([uvBox(0.55, 1.5, 0.55).translate(sx * 1.45, 0.75, yz), GMAT.ashlar], [uvBox(0.68, 0.14, 0.68).translate(sx * 1.45, 1.55, yz), GMAT.ashlar]); this.solid(ctx, sx * 1.45, yz, 0.4); }
-    put('twPergola', 0, D / 2 + 1.35, 0, 0.95); for (const sx of [-1, 1]) for (const dz of [0.25, 2.35]) this.solid(ctx, sx * 1.05, D / 2 + dz, 0.15);
-    leaves(P, 0, 2.95, D / 2 + 1.35, 2.8, 2.6, 0.35, 16, 5); for (let k = 0; k < 6; k++) P.push([new THREE.SphereGeometry(0.07, 6, 4).translate(rr(-1.1, 1.1), 2.86, D / 2 + rr(0.4, 2.3)), new THREE.MeshStandardMaterial({ color: 0x4a2a52, roughness: 0.6 })]);   // grapes
-    put('twWell', 2.3, D / 2 + 3.7, 0.3, 0.75); this.solid(ctx, 2.3, D / 2 + 3.7, 1.25);
-    put('twKiln', -2.4, D / 2 + 2.3, 1.2, 0.72); this.solid(ctx, -2.4, D / 2 + 2.3, 0.85, 1.3);
-    for (const [k, x, z, r, sc] of [['twJars', -2.7, yz - 1.2, 0.6, 0.9], ['twVase', 3.1, D / 2 + 0.7, 0.3, 0.9], ['twJar', 3.25, D / 2 + 1.4, 0.3, 1], ['twLogs', -1.4, D / 2 + 0.5, 0.3, 0.9], ['twBasket', 1.5, D / 2 + 0.5, 0.25, 0.9], ['twStrawBundle', 3.0, yz - 1.0, 0.35, 1]]) { put(k, x, z, (x * 7 + z) % 6.3, sc); this.solid(ctx, x, z, r, 1.2); }
-    cartWheel(P, W / 2 - 0.25, 0, D / 2 + 5.0, Math.PI / 2, 0.18);
-    this.plant(ctx, 'olive', 1, 2.7, 0, yz + 1.6, 1.15); this.solid(ctx, 2.7, yz + 1.6, 0.6);
-    this.finish(ctx, { w: W + 1.5, d: D + 1.5 });
+    // the yard: the vine on its pergola in the north-east corner with a table under it, the well, the oven, the jars
+    put('twPergola', 4.3, 4.9, 0, 0.95); for (const sx of [-1, 1]) for (const sz of [-1, 1]) this.solid(ctx, 4.3 + sx * 1.05, 4.9 + sz * 1.05, 0.15);
+    leaves(P, 4.3, 2.95, 4.9, 2.8, 2.6, 0.35, 16, 5); for (let k = 0; k < 6; k++) P.push([new THREE.SphereGeometry(0.07, 6, 4).translate(4.3 + rr2(-1.1, 1.1), 2.86, 4.9 + rr2(-1, 1)), new THREE.MeshStandardMaterial({ color: 0x4a2a52, roughness: 0.6 })]);   // grapes
+    put('twBench', 4.75, 4.9, Math.PI / 2, 0.9); this.solid(ctx, 4.75, 4.9, 0.5, 0.6);
+    put('twWell', 2.3, 7.6, 0.3, 0.75); this.solid(ctx, 2.3, 7.6, 1.2);
+    put('twKiln', -4.7, 7.5, 1.2, 0.72); this.solid(ctx, -4.7, 7.5, 0.85, 1.3);
+    for (const [k, x, z, rad, sc] of [['twJars', -2.6, 8.2, 0.6, 0.9], ['twVase', -5.6, 6.1, 0.3, 0.9], ['twJar', -5.0, 6.0, 0.3, 1]]) { put(k, x, z, (x * 7 + z) % 6.3, sc); this.solid(ctx, x, z, rad, 1.2); }
+    cartWheel(P, 5.2, 0, 1.6, Math.PI / 2, 0.18);
+    this.plant(ctx, 'olive', 1, 8.6, 0, 5.2, 0.85); this.solid(ctx, 8.6, 5.2, 0.5);   // (outside the yard's east wall)
+    { const c = this.w(ctx, -5, 3); clearGrass('farmWing', { x: c.x, z: c.z, hw: 1.35, hd: 2.65, rot: ctx.rot }); }   // (no grass in the storeroom)
+    this.finish(ctx, { x: 0, z: -0.8, w: 7.8, d: 7.9 });
   }
   // ---- the Labyrinth: the Minotaur's ruined arena. Three broken rings of wall with offset gaps, a ring of columns, a
   // raised altar in the middle; braziers, bones and fallen statues about the corridors. With the pack: ashlar walls between
@@ -617,23 +851,50 @@ export class Structures {
     let ls = 1234; const lr = (a, b) => a + (((ls = (ls * 16807) % 2147483647) - 1) / 2147483646) * (b - a), dr = dice(9090);
     // the gaps are remembered, so the Minotaur and the dead can find their way through the rings (navTarget)
     const gaps = { 22: [], 15: [], 9: [] };
+    // What the Minotaur's coming breaks (ruinOf, ruin): three breaches in the outer ring (the gate stands), most of the
+    // middle ring, nearly all the inner one; half the standing columns topple along the corridor. Each length of wall that
+    // falls tips outward over its foot in two pieces, and leaves a heap of rubble there and blocks thrown out across the
+    // floor. (Its own dice, ruinDice: the decoration's and the other sites' come out as they always have.)
+    const RU = this.ruinOf('labyrinth', ctx), FALLS = (R, i) => (R === 22 ? [4, 5, 6, 10, 11, 15, 16, 17].includes(i) : ruinDice(R * 7 + i) < (R === 15 ? 0.75 : 0.9));
+    const into = (list, fn) => { const keep = this.solids; this.solids = list; fn(); this.solids = keep; }, lump = (x, z, r, h = 0.9) => { const p = this.w(ctx, x, z); RU.rubble.push({ x: p.x, z: p.z, r, y: p.y, h }); };
     for (const [R, gap, ruin] of [[22, 0.3, 0.45], [15, 2.1, 0.35], [9, 4.2, 0.25]]) {
-      const n = Math.ceil(R * 0.9), hs = [], q = (a) => (Q[R + ':' + Math.floor(a / (Math.PI / 2)) % 4] ||= []);
+      const n = Math.ceil(R * 0.9), hs = [], q = (a) => (Q[R + ':' + Math.floor(a / (Math.PI / 2)) % 4] ||= []), segs = [];
       for (let i = 0; i < n; i++) { const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2; if (Math.abs(Math.sin((a0 - gap) / 2)) < 0.12) { gaps[R].push([a0, a1]); hs.push(0); continue; }
         const x0 = Math.cos(a0) * R, z0 = Math.sin(a0) * R, x1 = Math.cos(a1) * R, z1 = Math.sin(a1) * R, h = 3.2 * (1 - ruin * Math.abs(Math.sin(i * 1.7 + R))); hs.push(h);
+        const falls = FALLS(R, i), sg = falls ? (segs[i] = { x0, z0, x1, z1, h, a0, parts: [[], []] }) : null, len = Math.hypot(x1 - x0, z1 - z0), ang = -Math.atan2(z1 - z0, x1 - x0);
         if (pack) {   // (a 5 m length of ashlar stretched along the chord, sunk into the ground to its height: the courses stay true)
-          const len = Math.hypot(x1 - x0, z1 - z0); q(a0).push(...piece('plWall', (x0 + x1) / 2, h - 4.51, (z0 + z1) / 2, -Math.atan2(z1 - z0, x1 - x0), [len / 5 + 0.02, 1, 1.1]));
+          if (!falls) q(a0).push(...piece('plWall', (x0 + x1) / 2, h - 4.51, (z0 + z1) / 2, ang, [len / 5 + 0.02, 1, 1.1]));
+          else for (const k of [0, 1]) sg.parts[k].push(...piece('plWall', x0 + (x1 - x0) * (0.25 + k * 0.5), -0.4, z0 + (z1 - z0) * (0.25 + k * 0.5), ang, [len / 10 + 0.01, (h + 0.4) / 4.51, 1.1]));   // (falling: in two halves, standing on the floor)
           if (h < 2.6 && dr() < 0.7) { const t = dr(), out = dr() < 0.5 ? 0.95 : -0.95, rx = (x0 + (x1 - x0) * t) * (1 + out / R), rz = (z0 + (z1 - z0) * t) * (1 + out / R), block = dr() < 0.5;   // fallen blocks at its foot
             P.push(...piece(block ? 'plBlock' : 'twRubbleA', rx, 0.04, rz, dr() * 6.3, 0.6 + dr() * 0.3)); if (block) this.solid(ctx, rx, rz, 0.4, 0.9); }
-        } else rubble(P, x0, z0, x1, z1, h, SMAT.stone, 0.15);
-        this.wall(ctx, x0, z0, x1, z1, h, 0.42); }
-      if (pack) for (let i = 0; i < n; i++) { const h = Math.max(hs[i], hs[(i + n - 1) % n]), a = (i / n) * Math.PI * 2; if (h) q(a).push(...piece('plWallPost', Math.cos(a) * R, h + 0.2 - 4.55, Math.sin(a) * R, -a, [1, 1, 1.2])); }   // a post where two lengths meet
+        } else if (!falls) rubble(P, x0, z0, x1, z1, h, SMAT.stone, 0.15);
+        else { const L = []; rubble(L, x0, z0, x1, z1, h, SMAT.stone, 0.15); for (const pt of L) { const c = new THREE.Vector3(); pt[0].computeBoundingBox(); pt[0].boundingBox.getCenter(c); sg.parts[(c.x - x0) * (x1 - x0) + (c.z - z0) * (z1 - z0) > len * len / 2 ? 1 : 0].push(pt); } }
+        if (falls) into(RU.walls, () => this.wall(ctx, x0, z0, x1, z1, h, 0.42)); else this.wall(ctx, x0, z0, x1, z1, h, 0.42); }
+      // a post where two lengths meet: it goes with them if neither side still stands
+      if (pack) for (let i = 0; i < n; i++) { const j = (i + n - 1) % n, h = Math.max(hs[i], hs[j]), a = (i / n) * Math.PI * 2; if (!h) continue;
+        const sg = (segs[i] || !hs[i]) && (segs[j] || !hs[j]) ? segs[i] || segs[j] : null;
+        if (sg) sg.parts[segs[i] ? 0 : 1].push(...piece('plWallPost', Math.cos(a) * R, -0.4, Math.sin(a) * R, -a, [1, (h + 0.6) / 4.55, 1.2])); else q(a).push(...piece('plWallPost', Math.cos(a) * R, h + 0.2 - 4.55, Math.sin(a) * R, -a, [1, 1, 1.2])); }
+      // the lengths that fall: outward over their foot, the inner rings first, the outer as the blast reaches it; their
+      // rubble heaped at the foot, blocks flung further out
+      segs.forEach((sg, i) => { if (!sg) return; const { x0, z0, x1, z1, h } = sg, mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, l = Math.hypot(mx, mz), nx = mx / l, nz = mz / l, d0 = (R === 9 ? 0.05 : R === 15 ? 0.35 : 0.9) + ruinDice(R * 13 + i) * 1.1;
+        for (const k of [0, 1]) { const t = 0.25 + k * 0.5, px = x0 + (x1 - x0) * t + nx * 0.55, pz = z0 + (z1 - z0) * t + nz * 0.55;
+          this.fallPart(RU, sg.parts[k], new THREE.Vector3(px, 0, pz), Math.atan2(nx, nz) + (ruinDice(R * 5 + i * 2 + k) - 0.5) * 0.3, { t0: d0 + k * 0.12, dur: 0.9 + ruinDice(R + i * 3 + k) * 0.35, tilt: 1.35 + k * 0.12, w: 2.6, reach: h * 0.7, k: 0.8 + h / 8 }); }
+        // (the heap: broken lengths of its own ashlar lying every way at its foot, one a little further out)
+        for (let b = 0; b < 6; b++) { const d = (k) => ruinDice(R * 17 + i * 7 + b * 3 + k), t = d(0), o = 0.7 + d(1) * (b < 5 ? 2.6 : 5.5), x = x0 + (x1 - x0) * t + nx * o, z = z0 + (z1 - z0) * t + nz * o, s = 0.7 + d(2) * 0.6, tip = (d(3) - 0.5) * 1.2, rot = d(4) * 6.3;
+          const bits = pack ? piece('plWall', 0, -0.3 * s, 0, 0, [0.22 * s, 0.24 * s, 0.6 * s]) : [[uvBox(1.1 * s, 0.8 * s, 0.6 * s).translate(0, 0.1 * s, 0), SMAT.stone]];
+          RU.debris.push(...bits.map(([g, m]) => [g.rotateZ(tip).rotateX(tip * 0.6).rotateY(rot).translate(x, 0.05 + d(5) * 0.25 * (b < 5 ? 1 : 0), z), m]));
+          if (b % 2 === 0) lump(x, z, 0.75 * s); } });
     }
-    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2 + 0.3, x = Math.cos(a) * 18.5, z = Math.sin(a) * 18.5;
-      if (!pack) column(P, x, 0, z, 5.5, 0.5, SMAT.marble, i % 3 === 1 ? rr(0.25, 0.6) : 0);
-      else if (i % 3 !== 1) P.push(...piece('plColumn', x, 0, z, a, 0.92));
+    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2 + 0.3, x = Math.cos(a) * 18.5, z = Math.sin(a) * 18.5, topple = [0, 3, 5, 6, 9].includes(i);
+      // (one that topples falls along the corridor, its foot rolling over its edge, and lies across it)
+      const cp = topple ? [] : P;
+      if (!pack) column(cp, x, 0, z, 5.5, 0.5, SMAT.marble, i % 3 === 1 ? rr(0.25, 0.6) : 0);
+      else if (i % 3 !== 1) cp.push(...piece('plColumn', x, 0, z, a, 0.92));
       else { const px = Math.cos(a + 0.07) * 20.5, pz = Math.sin(a + 0.07) * 20.5; P.push(...piece('plColumnHalf', x, 0, z, a + i, 0.42), ...piece('plPile', px, 0, pz, a + Math.PI / 2, 0.7)); this.solid(ctx, px, pz, 0.75, 0.7); }   // a stump, its drums fallen outward (clear of the way round the inside)
-      this.solid(ctx, x, z, 0.55); }
+      if (!topple) { this.solid(ctx, x, z, 0.55); continue; }
+      const side = i % 2 ? 1 : -1, dx = -Math.sin(a) * side, dz = Math.cos(a) * side, yaw = Math.atan2(dx, dz) + (ruinDice(i * 11) - 0.5) * 0.4;
+      this.fallPart(RU, cp, new THREE.Vector3(x + Math.sin(yaw) * 0.5, 0, z + Math.cos(yaw) * 0.5), yaw, { t0: 0.5 + ruinDice(i * 23) * 1.4, dur: 1.5, tilt: Math.PI / 2 - 0.03, stay: true, drop: 0.05, w: 1, reach: 3.5, k: 1.1 });
+      into(RU.walls, () => this.solid(ctx, x, z, 0.55)); for (let k = 1; k <= 4; k++) lump(x + Math.sin(yaw) * k * 1.2, z + Math.cos(yaw) * k * 1.2, 0.55, 1.0); }
     let top;
     if (pack) { P.push(...pieceAt('plDais', 0, 0, 0)); top = 1.05; for (let i = 0; i < 3; i++) { const k = 2.625 - i * 0.583; this.top(ctx, -k, k, -k, k, 0.35 * (i + 1)); } }
     else { top = steps(P, 5, 5, 3, 0.35, 0, SMAT.stone); P.push([uvBox(2.2, 1.0, 1.4).translate(0, top + 0.5, 0), SMAT.marble]); this.stepTops(ctx, 5, 5, 3, 0.35); }
@@ -642,7 +903,7 @@ export class Structures {
     for (const sx of [-1, 1]) { if (pack) P.push(...piece('plBrazier', sx * 3.4, 0, 2, 0, 0.7)); else P.push([new THREE.CylinderGeometry(0.35, 0.2, 1.1, 10).translate(sx * 3.4, top + 0.55, 2), SMAT.bronze]);
       this.fire(ctx, sx * 3.4, pack ? 1.45 : top + 1.1, 2); if (pack) this.solid(ctx, sx * 3.4, 2, 0.6, 1.4); }
     this.solid(ctx, 0, 0, 1.3, top + 1);
-    this.uses.push({ kind: 'summon', boss: 'minotaur', at: this.w(ctx, 0, 1.4), r: 3.2, center: this.w(ctx, 0, 0) });
+    this.uses.push({ kind: 'summon', boss: 'minotaur', at: this.w(ctx, 0, 1.4), r: 3.2, center: this.w(ctx, 0, 0), land: this.w(ctx, 0, -7) });   // (land: where he comes down, behind the altar from you)
     // the arena floor: worn flagstones from the outer wall in
     const floor = new THREE.CylinderGeometry(23.4, 23.4, 0.08, 72, 1).translate(0, 0.04, 0), fu = floor.attributes.uv, fp = floor.attributes.position;
     for (let i = 0; i < fu.count; i++) fu.setXY(i, fp.getX(i) / 2.4, fp.getZ(i) / 2.4);
@@ -672,13 +933,16 @@ export class Structures {
       P.push([pk[0].rotateY(rot).translate(x, 0.08, z), pk[1]]); if (r) this.solid(ctx, x, z, r, 2);
     }
     for (const list of Object.values(Q)) for (const m of mergeByMat(list)) ctx.grp.add(m);
+    this.crater(RU, [0, -7], 23.4, 9091);
+    this.finishRuin(RU);
     this.lab = { c: this.w(ctx, 0, 0), gaps };
     this.labyrinthCtx = ctx; this.finish(ctx, { r: 23.5 });
   }
   // A waypoint for something inside the Labyrinth trying to reach a point on the other side of a ring of wall: the
-  // middle of that ring's gap (and once there, a step through it). Null when the way is open.
+  // middle of that ring's gap (and once there, a step through it). Null when the way is open, and always once a boss
+  // has broken the rings open (ruin): it comes straight for you, round what still stands (creatures.js steer).
   navTarget(from, to) {
-    const L = this.lab; if (!L) return null;
+    const L = this.lab; if (!L || L.broken) return null;
     const band = (p) => { const r = Math.hypot(p.x - L.c.x, p.z - L.c.z); return r < 9 ? 0 : r < 15 ? 1 : r < 22 ? 2 : r < 30 ? 3 : -1; };
     const bf = band(from), bt = band(to); if (bf < 0 || bt < 0 || bf === bt || (bf === 3 && bt === 3)) return null;
     const R = [9, 15, 22][bt > bf ? bf : bf - 1], [a0, a1] = L.gaps[R][0], a = (a0 + a1) / 2, gx = L.c.x + Math.cos(a) * R, gz = L.c.z + Math.sin(a) * R;
@@ -697,14 +961,26 @@ export class Structures {
     const floor = new THREE.CylinderGeometry(19, 19, 0.08, 64, 1).translate(0, 0.04, 0), fu = floor.attributes.uv, fp = floor.attributes.position;
     for (let i = 0; i < fu.count; i++) fu.setXY(i, fp.getX(i) / 2.6, fp.getZ(i) / 2.6); P.push([floor, GMAT.darkFlags]);
     for (const [r0, r1] of [[9.4, 10], [12.6, 12.9]]) P.push([new THREE.RingGeometry(r0, r1, 64).rotateX(-Math.PI / 2).translate(0, 0.085, 0), GMAT.basalt]);
+    // What the Chimera's coming breaks (ruinOf, ruin): half the standing columns topple out of the court into the forest,
+    // the beams they held come down, the beast in stone on the altar bursts apart, and the court's floor splits in glowing
+    // fissures round the crater where it lands (its own dice: ruinDice)
+    const RU = this.ruinOf('chimera', ctx), into = (list, fn) => { const keep = this.solids; this.solids = list; fn(); this.solids = keep; }, lump = (x, z, r, h = 1) => { const p = this.w(ctx, x, z); RU.rubble.push({ x: p.x, z: p.z, r, y: p.y, h }); };
     for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2, x = Math.cos(a) * 17, z = Math.sin(a) * 17, br = i % 4 === 2 ? rr(0.3, 0.6) : 0; this.solid(ctx, x, z, 0.6);
-      if (!pack) column(P, x, 0, z, 6, 0.55, SMAT.moss, br); else P.push(...moss(br ? piece('plColumnHalf', x, 0, z, a, [0.5, br * 1.3, 0.5]) : piece('plColumn', x, 0, z, a, [1.15, 1, 1.15])));
+      const a = (i / 12) * Math.PI * 2, x = Math.cos(a) * 17, z = Math.sin(a) * 17, br = i % 4 === 2 ? rr(0.3, 0.6) : 0, topple = !br && [0, 3, 4, 7, 8, 11].includes(i), cp = topple ? [] : P, t0 = 0.3 + ruinDice(i * 41 + 7) * 1.6;
+      if (topple) into(RU.walls, () => this.solid(ctx, x, z, 0.6)); else this.solid(ctx, x, z, 0.6);
+      if (!pack) column(cp, x, 0, z, 6, 0.55, SMAT.moss, br); else cp.push(...moss(br ? piece('plColumnHalf', x, 0, z, a, [0.5, br * 1.3, 0.5]) : piece('plColumn', x, 0, z, a, [1.15, 1, 1.15])));
       if (!br && i % 2 === 0) { const a2 = ((i + 2) / 12) * Math.PI * 2, len = Math.hypot(Math.cos(a2) * 17 - x, Math.sin(a2) * 17 - z) + 1.2, ang = -Math.atan2(Math.sin(a2) * 17 - z, Math.cos(a2) * 17 - x), mx = (x + Math.cos(a2) * 17) / 2, mz = (z + Math.sin(a2) * 17) / 2;
-        if (pack) P.push(...moss(piece('plBeam', mx, 5.95, mz, ang, [len / 10, 1, 1.1]))); else P.push([uvBox(len, 0.7, 1.1).rotateY(ang).translate(mx, 6.0, mz), SMAT.moss]); }
+        const bp = pack ? moss(piece('plBeam', mx, 5.95, mz, ang, [len / 10, 1, 1.1])) : [[uvBox(len, 0.7, 1.1).rotateY(ang).translate(mx, 6.0, mz), SMAT.moss]];
+        // (its beam comes down with it, rolling a little as it lands across the court's edge)
+        this.fallPart(RU, bp, new THREE.Vector3(mx, 0, mz), 0, { t0: t0 + 0.25, dur: 1.05, tilt: 0.06, roll: 0.25 * (i % 4 ? 1 : -1), stay: true, drop: 5.45, w: len, reach: 0, k: 1.3 });
+        for (let k = -2; k <= 2; k++) lump(mx + Math.cos(-ang) * k * len * 0.2, mz + Math.sin(-ang) * k * len * 0.2, 0.7); }
       if (br) for (let k = 0; k < 3; k++) { const t = a + Math.PI / 2 + (lr() - 0.5) * 0.5, d = 1.5 + k * 1.1, dx = x + Math.cos(a + 0.5) * d, dz = z + Math.sin(a + 0.5) * d;   // its drums, fallen in a line
         if (pack) P.push(...moss(piece('twDrum', dx, 0, dz, -t, [1.3, 1.3, 0.4]))); else P.push([new THREE.CylinderGeometry(0.5, 0.53, 0.95, 18).rotateZ(Math.PI / 2).rotateY(-t).translate(dx, 0.5, dz), SMAT.moss]); this.solid(ctx, dx, dz, 0.55, 1); }
-      if (i % 3 === 0) for (let k = 0; k < 9; k++) { const q = k * 0.85 + i; P.push([new THREE.IcosahedronGeometry(1, 0).scale(0.32, 0.45, 0.3).translate(x + Math.cos(q) * 0.55, 0.3 + k * 0.55, z + Math.sin(q) * 0.55), GMAT.ivy]); }   // ivy climbing
+      if (i % 3 === 0) for (let k = 0; k < 9; k++) { const q = k * 0.85 + i; cp.push([new THREE.IcosahedronGeometry(1, 0).scale(0.32, 0.45, 0.3).translate(x + Math.cos(q) * 0.55, 0.3 + k * 0.55, z + Math.sin(q) * 0.55), GMAT.ivy]); }   // ivy climbing
+      if (topple) {   // (it goes over with its ivy)
+        const yaw = Math.atan2(Math.cos(a), Math.sin(a)) + (ruinDice(i * 13) - 0.5) * 0.5;   // (outward, into the trees)
+        this.fallPart(RU, cp, new THREE.Vector3(x + Math.sin(yaw) * 0.65, 0, z + Math.cos(yaw) * 0.65), yaw, { t0, dur: 1.6, tilt: Math.PI / 2 - 0.04, stay: true, drop: 0.05, w: 1.2, reach: 4, k: 1.2 });
+        for (let k = 1; k <= 4; k++) lump(x + Math.sin(yaw) * k * 1.3, z + Math.cos(yaw) * k * 1.3, 0.6); }
     }
     const top = pack ? 1.4 : steps(P, 7, 7, 4, 0.4, 0, SMAT.moss); if (pack) P.push(...moss(pieceAt('plSteps', 0, 0, 0, 0, 4 / 3)));
     P.push([uvBox(3.2, 1.2, 2.4).translate(0, top + 0.6, 0), GMAT.basalt], [uvBox(3.4, 0.16, 2.6).translate(0, top + 1.28, 0), GMAT.basalt]);
@@ -722,7 +998,8 @@ export class Structures {
     Q.push([new THREE.TubeGeometry(tail, 30, 0.1, 7), GMAT.oldBronze], [new THREE.IcosahedronGeometry(0.15, 1).scale(0.9, 0.7, 1.5).translate(0.48, y0 + 2.14, -0.1), GMAT.oldBronze]);
     for (const sx of [-1, 1]) Q.push([new THREE.SphereGeometry(0.03, 6, 4).translate(0.48 + sx * 0.08, y0 + 2.2, 0.0), GMAT.eye]);
     for (let k = 0; k < 16; k++) { const q = (k / 16) * Math.PI * 2; Q.push([new THREE.ConeGeometry(0.13, 0.55, 5).rotateX(-Math.PI / 2 - 0.5).rotateZ(q).translate(Math.cos(q) * 0.42, y0 + 1.25 + Math.sin(q) * 0.42, 0.7), B]); }   // the mane
-    for (const [g, m] of Q) P.push([g.translate(0, -y0, 0).scale(1.35, 1.35, 1.35).rotateY(0.5).translate(0, y0, 0), m]);
+    for (const [g, m] of Q) RU.whole.push([g.translate(0, -y0, 0).scale(1.35, 1.35, 1.35).rotateY(0.5).translate(0, y0, 0), m]);   // (it bursts apart as the beast itself comes: onBreak)
+    RU.onBreak = () => { const p = this.w(ctx, 0, 0, y0 + 1.2); burst(p, { color: 0x2c2a28, n: 50, speed: 7, size: 0.3, life: 2, grav: 14, up: 6 }); dust(p, 10, 0x5a554e, 0.8); this.g.sound?.('collapse', { at: p, k: 1.2 }); };
     // tripods round the court, roots through the stones, the bones of the beast's meals, broken offerings
     for (const [x, z] of [[-7.2, 7.2], [7.2, 7.2], [-7.2, -7.2], [7.2, -7.2]]) { tripod(P, x, 0, z, 1.3, GMAT.oldBronze); this.fire(ctx, x, 1.45, z, 1.0); this.solid(ctx, x, z, 0.45); }
     for (let i = 0; i < 9; i++) { const a = rr(0, 6.28), r0 = rr(4, 12); P.push([new THREE.TorusGeometry(rr(1, 2.2), rr(0.12, 0.22), 5, 9, Math.PI * rr(0.5, 0.9)).rotateX(Math.PI / 2 + rr(-0.3, 0.3)).rotateY(a).translate(Math.cos(a) * r0, 0, Math.sin(a) * r0), SMAT.wood]); }
@@ -738,7 +1015,8 @@ export class Structures {
     mist(ctx.grp, 14, 15, 0x9fb0a6, 5);
     this.solid(ctx, 0, 0, 1.7, top + 1.2);
     if (pack) for (let i = 0; i < 3; i++) { const k = 3.5 - i * 0.778; this.top(ctx, -k, k, -k, k, (i + 1) * 0.467); } else this.stepTops(ctx, 7, 7, 4, 0.4);
-    this.uses.push({ kind: 'summon', boss: 'chimera', at: this.w(ctx, 0, 1.6), r: 3.4, center: this.w(ctx, 0, 0) });
+    this.uses.push({ kind: 'summon', boss: 'chimera', at: this.w(ctx, 0, 1.6), r: 3.4, center: this.w(ctx, 0, 0), land: this.w(ctx, 0, -9) });
+    this.crater(RU, [0, -9], 19, 4243, true); this.finishRuin(RU);
     this.finish(ctx, { r: 18.5 });
   }
   // ---- an ancient olive with marks cut into a little stele before it, offerings left at its foot and a small fire kept
@@ -987,7 +1265,9 @@ export class Structures {
   floorAt(x, z, y, step = 0.6) { let best = -Infinity; for (const t of this.tops) { if (Math.abs(x - t.ctx.s.x) > 75 || Math.abs(z - t.ctx.s.z) > 75) continue; const [lx, lz] = this.local(t, x, z); if (lx >= t.x0 && lx <= t.x1 && lz >= t.z0 && lz <= t.z1) { const ty = t.ctx.s.y + t.y; if (ty <= y + step && ty > best) best = ty; } }
     for (const k of this.caveRocks || []) { if (Math.abs(x - k.ctx.s.x) > 70 || Math.abs(z - k.ctx.s.z) > 70) continue; const [u, v] = this.local(k, x, z), ty = k.ctx.s.y + roofAt(k.R, u, v); if (ty <= y + step && ty > best) best = ty; }   // (the hill's rock over a cave)
     return best; }
-  underRoof(p) { if (this.inCave(p)) return true; for (const t of this.roofs) { if (Math.abs(p.x - t.ctx.s.x) > 75 || Math.abs(p.z - t.ctx.s.z) > 75) continue; const [lx, lz] = this.local(t, p.x, p.z); if (lx >= t.x0 && lx <= t.x1 && lz >= t.z0 && lz <= t.z1 && t.ctx.s.y + t.y > p.y + 1) return true; } return false; }
+  // (above: how far over p a roof must be; the old houses' roofs are registered bay by bay, less the holes in them)
+  underRoof(p, above = 1) { if (this.inCave(p)) return true; for (const t of this.roofs) { if (Math.abs(p.x - t.ctx.s.x) > 75 || Math.abs(p.z - t.ctx.s.z) > 75) continue; const [lx, lz] = this.local(t, p.x, p.z); if (lx >= t.x0 && lx <= t.x1 && lz >= t.z0 && lz <= t.z1 && t.ctx.s.y + t.y > p.y + above) return true; } return false; }
+  anchorsNear(x, z, r) { return this.anchors.filter((a) => Math.abs(a.x - x) < r && Math.abs(a.z - z) < r); }
   // in a cave, under its rock (out of the rain, the wind and the sky)
   inCave(p) { for (const k of this.caveRocks || []) { if (Math.abs(p.x - k.ctx.s.x) > 40 || Math.abs(p.z - k.ctx.s.z) > 40) continue; const [u, v] = this.local(k, p.x, p.z), y = p.y - k.ctx.s.y; if (densityAt(k.R, u, y + 1, v) <= 0 && surfaceFrom(k.R, [u, y + 1, v], [0, 1, 0], 16)) return true; } return false; }
   // how far along a → b the rock of a cave first lies (to keep the camera inside the cave with the hero), or null
@@ -999,6 +1279,8 @@ export class Structures {
   nearSacredFire(p) { return this.lights.some((l) => l.distanceTo(p) < 6); }
   update(dt) {
     const t = performance.now() * 0.001, P = this.g.player.pos;
+    if (this.falling?.length) this.falls(dt);
+    for (const R of Object.values(this.ruins || {})) if (R.broken && R.glow && R.glow.p.distanceToSquared(P) < 60 * 60) { R.glow.m.emissiveIntensity = 1.9 + 0.5 * Math.sin(t * 1.7) + 0.25 * Math.sin(t * 5.3); askLight(R.glow.p, 22, 26, 0xff7a30); }   // (the Chimera's fissures, glowing)
     this.flames.forEach((f, i) => { f.scale.set(1, 1 + Math.sin(t * 11 + i) * 0.12 + Math.sin(t * 5.3 + i * 2) * 0.08, 1); f.rotation.y = t * 0.6; });
     this.lights.forEach((p, i) => { if (p.distanceToSquared(P) < 80 * 80) askLight(p, 18 * (1 + Math.sin(t * 13 + i) * 0.08), 18); });
     for (const q of this.glows || []) if (q.p.distanceToSquared(P) < 40 * 40) askLight(q.p, q.k, q.d, q.c);   // (the caves' steles, lit cold)

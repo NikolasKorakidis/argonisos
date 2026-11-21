@@ -20,6 +20,9 @@ const CLIENT = `<script>(() => { let up = false; const c = () => { const es = ne
   es.onmessage = () => location.reload();
   es.onerror = () => { es.close(); setTimeout(c, 1000); }; }; c(); })();</script>`;
 
+// Never served: the private design docs and the git histories (the licensed packs' backup among them). Compared lower-cased,
+// since the Mac's disk ignores case and /Concept/ would otherwise walk straight past a plain prefix test
+const PRIVATE = new Set(['concept', '.git', '.assets-git']);
 const clients = new Set();
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -29,7 +32,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   let file = path.join(ROOT, decodeURIComponent(url.pathname));
-  if (!file.startsWith(ROOT) || file.startsWith(path.join(ROOT, 'concept'))) { res.writeHead(403).end(); return; }   // (the design docs are private)
+  if (!file.startsWith(ROOT) || PRIVATE.has(path.relative(ROOT, file).split(path.sep)[0].toLowerCase())) { res.writeHead(403).end(); return; }
   if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }).end('Not found'); return; }
@@ -51,4 +54,6 @@ fs.watch(ROOT, { recursive: true }, (_, name) => {
   }, 200);
 });
 
-server.listen(PORT, () => console.log(`Argonisos dev server: http://localhost:${PORT}  (pages reload when files change)`));
+// (this machine only: the project holds private files, and anyone on the same network could otherwise read it; HOST=0.0.0.0
+// to try the game from a phone on purpose)
+server.listen(PORT, process.env.HOST || '127.0.0.1', () => console.log(`Argonisos dev server: http://localhost:${PORT}  (pages reload when files change)`));

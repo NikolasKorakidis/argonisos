@@ -1,4 +1,7 @@
-# Publishes the game to GitHub Pages on every push to main.
+# Publishes the game to GitHub Pages on every push to main: only what the game needs (index.html, src, vendor, assets,
+# and the old prototype in legacy/), with the licensed packs added from the team's private repo, and stamped with the
+# commit so the title screen shows which build is live. Not tests, tools (the asset manifest lists the packs), docs,
+# dev pages, .claude or CLAUDE.md.
 name: Deploy to GitHub Pages
 on:
   push:
@@ -30,13 +33,22 @@ jobs:
           sparse-checkout: assets
           sparse-checkout-cone-mode: true
       - uses: actions/configure-pages@v5
-      - name: Stage site (skip source-only folders)
+      - name: Stage the site
         run: |
           mkdir _site
-          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' --exclude '_assets' --exclude 'concept' ./ _site/
+          cp index.html _site/
+          cp -r src vendor assets legacy _site/
           rsync -a _assets/assets/ _site/assets/
           test -f _site/assets/models/pack/hero.glb   # (without the packs the game falls back to its carved look: don't publish that by mistake)
           touch _site/.nojekyll
+          # the build stamp: short commit and date, shown on the title screen
+          stamp="$(git rev-parse --short HEAD) · $(date -u +'%d %b %Y %H:%M') UTC"
+          sed -i "s|<meta name=\"build\" content=\"\">|<meta name=\"build\" content=\"${stamp}\">|" _site/index.html
+          grep -q "content=\"${stamp}\"" _site/index.html
+          # the prototype's old addresses still work
+          for p in classic play; do
+            printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=legacy/%s.html"><link rel="canonical" href="legacy/%s.html">' "$p" "$p" > "_site/$p.html"
+          done
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

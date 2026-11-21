@@ -5,7 +5,7 @@ export default {
   async run(t) {
     const house = (order) => `AG.S.freeBuild = true; for (const q of [...B.placed]) B.remove(q, false);
       const x0 = 20 + (${order === 'gables' ? 30 : 0}), z0 = 10, y0 = AG.heightAt(x0, z0) + 0.05;   // (the floor rests on the ground at the middle corner all four tiles share; higher ground under it is pressed down)
-  P.spawn(x0, z0 + 1);
+  P.spawn(x0, z0 + 1); for (const q of [...g.colliders.near(x0, z0, 12)]) if (q.ref?.cx !== undefined) { AG.veg.remove(q.ref.cx, q.ref.cz, q.ref.i); g.colliders.removeOne(q); }   // (walls and furniture can't stand in a tree: the trees where the house goes are felled first)
       const out = []; const put = (id, x, y, z, r = 0) => { const def = B.piece(id), pos = new V(x0 + x, y0 + y, z0 + z); const why = B.invalid(def, pos, r, true, { terrain: false }); if (why) out.push(id + ': ' + why); else B.place(id, pos, r); };
       for (const [x, z] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) put('floor', x, 0, z);
       put('wall', -1.5, 0, -3); put('wall', 1.5, 0, -3); put('wall', -3, 0, -1.5, Math.PI / 2); put('wall', -3, 0, 1.5, Math.PI / 2); put('wall', 3, 0, -1.5, Math.PI / 2); put('wall', 3, 0, 1.5, Math.PI / 2); put('wall', -1.5, 0, 3); put('doorframe', 1.5, 0, 3); put('door', 0.8, 0, 3);

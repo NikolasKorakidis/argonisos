@@ -16,7 +16,7 @@ export const ITEMS = {
   leather: M('Leather Piece', { weight: 0.5, icon: 'leather' }),
   sharpBone: M('Sharp Bone', { weight: 0.5, icon: 'bone' }),
   lightstone: M('Lightstone', { weight: 2, icon: 'lightstone' }),
-  coal: M('Coal', { weight: 0.5, icon: 'coal' }),
+  coal: M('Coal', { weight: 0.5, icon: 'coal', note: 'What\'s left of meat left too long on a cooking stand.' }),
   resin: M('Resin', { weight: 0.2, icon: 'resin' }),
   feather: M('Feather', { weight: 0.1, icon: 'feather' }),
   dandelion: M('Dandelion', { weight: 0.1, icon: 'dandelion' }),
@@ -44,11 +44,12 @@ export const ITEMS = {
   acorn: F('Acorn', 15, 15, 1, 900, { icon: 'acorn' }),
   pomegranate: F('Pomegranate', 8, 25, 1, 900, { icon: 'pomegranate', effect: { cond: 'swift', time: 60 } }),
   tomato: F('Tomato', 7, 23, 1, 900, { icon: 'tomato' }),   // (picked from the meadows' tomato bushes, harvest.js)
-  rawMeat: F('Raw Meat', -10, -10, 0, 0, { icon: 'meat', spoil: 140, spoilTo: 'spoiledMeat', cook: { to: 'cookedMeat', time: 30 } }),
-  cookedMeat: F('Cooked Meat', 40, 30, 2, 1200, { icon: 'cookedMeat', spoil: 900, spoilTo: 'spoiledMeat' }),
+  // (food doesn't spoil yet: the spoiled kinds wait for it)
+  rawMeat: F('Raw Meat', -10, -10, 0, 0, { icon: 'meat', cook: { to: 'cookedMeat', time: 30 } }),
+  cookedMeat: F('Cooked Meat', 40, 30, 2, 1200, { icon: 'cookedMeat' }),
   spoiledMeat: F('Spoiled Meat', -25, -25, 0, 0, { icon: 'spoiledMeat' }),
-  rawFish: F('Raw Fish', -15, -15, 0, 0, { icon: 'fish', spoil: 90, spoilTo: 'spoiledFish', cook: { to: 'cookedFish', time: 20 } }),
-  cookedFish: F('Cooked Fish', 45, 25, 2, 1200, { icon: 'cookedFish', spoil: 750, spoilTo: 'spoiledFish' }),
+  rawFish: F('Raw Fish', -15, -15, 0, 0, { icon: 'fish', cook: { to: 'cookedFish', time: 20 } }),
+  cookedFish: F('Cooked Fish', 45, 25, 2, 1200, { icon: 'cookedFish' }),
   spoiledFish: F('Spoiled Fish', -30, -30, 0, 0, { icon: 'spoiledFish' }),
   // ---- tools
   hammer: { name: 'Wooden Hammer', type: 'tool', tool: 'build', stack: 1, weight: 2, dur: 200, dmg: [[3, 'blunt']], block: 2, speed: -0.05, icon: 'hammer' },
@@ -62,7 +63,7 @@ export const ITEMS = {
   crudeBow: { name: 'Crude Bow', type: 'weapon', skill: 'bow', bow: true, hands: 2, stack: 1, weight: 1.5, dur: 100, dmg: [[18, 'pierce']], block: 5, backstab: 3, speed: -0.05, icon: 'bow' },
   crudeSpear: { name: 'Crude Spear', type: 'weapon', skill: 'spear', hands: 2, stack: 1, weight: 1.5, dur: 100, dmg: [[20, 'pierce']], block: 6, parry: 2, backstab: 3, knock: 0.1, speed: -0.05, icon: 'spear', throwable: true },
   crudeShield: { name: 'Crude Shield', type: 'shield', skill: 'blocking', hands: 1, stack: 1, weight: 4, dur: 200, block: 20, parry: 1.5, speed: -0.05, icon: 'shield' },
-  crudeTowerShield: { name: 'Crude Tower Shield', type: 'shield', skill: 'blocking', hands: 1, stack: 1, weight: 4, dur: 250, block: 35, speed: -0.2, icon: 'towerShield' },
+  crudeTowerShield: { name: 'Crude Tower Shield', type: 'shield', skill: 'blocking', hands: 1, stack: 1, weight: 4, dur: 250, block: 35, parry: 0, speed: -0.2, icon: 'towerShield' },
   lightstoneSpear: { name: 'Lightstone Spear', type: 'weapon', skill: 'spear', hands: 2, stack: 1, weight: 1.5, dur: 150, dmg: [[26, 'pierce']], block: 10, parry: 2, backstab: 3, knock: 0.2, speed: -0.05, icon: 'spearLight', throwable: true },
   lightstoneAxe: { name: 'Lightstone Axe', type: 'weapon', skill: 'axe', chop: 2, hands: 1, stack: 1, weight: 1.5, dur: 100, dmg: [[20, 'slash']], block: 10, parry: 2, backstab: 3, knock: 0.15, speed: -0.05, icon: 'axeLight' },
   lightstoneDagger: { name: 'Lightstone Dagger', type: 'weapon', skill: 'dagger', hands: 1, stack: 1, weight: 0.3, dur: 100, dmg: [[6, 'slash'], [6, 'pierce']], block: 5, parry: 4, backstab: 10, knock: 0.1, speed: 0.05, icon: 'daggerLight' },
@@ -76,12 +77,28 @@ export const ITEMS = {
   cretanArmor: { name: 'Cretan Body Armour', type: 'armor', slot: 'body', set: 'cretan', armor: 16, stack: 1, weight: 12, dur: 800, warm: true, icon: 'cretanArmor' },
   cretanLegs: { name: 'Cretan Leg Armour', type: 'armor', slot: 'legs', set: 'cretan', armor: 12, stack: 1, weight: 9, dur: 650, speed: 0.05, icon: 'cretanLegs' },
   cretanCape: { name: 'Cretan Cape', type: 'armor', slot: 'cape', set: 'cretan', armor: 4, stack: 1, weight: 2, dur: 200, noFreeze: true, icon: 'cape' },
+  // (the Corinthian set: bronze over the tunic, the strongest yet; resist: damage of those kinds halved, regen: health
+  // regeneration raised by that share)
+  corinthianHelmet: { name: 'Corinthian Helmet', type: 'armor', slot: 'head', set: 'corinthian', armor: 8, stack: 1, weight: 4, dur: 300, resist: ['fire'], regen: 0.05, icon: 'corinthianHelmet' },
+  corinthianArmor: { name: 'Corinthian Body Armour', type: 'armor', slot: 'body', set: 'corinthian', armor: 32, stack: 1, weight: 16, dur: 1000, resist: ['fire'], warm: true, speed: -0.05, icon: 'corinthianArmor' },
+  corinthianLegs: { name: 'Corinthian Leg Armour', type: 'armor', slot: 'legs', set: 'corinthian', armor: 24, stack: 1, weight: 12, dur: 800, resist: ['fire'], speed: -0.05, icon: 'corinthianLegs' },
 };
 for (const [id, it] of Object.entries(ITEMS)) it.id = id;
 export const SET_BONUS = 1.05;    // full set: armour ×1.05
 
+// Where each material comes from, for the crafting panel (what you're short of, and where to find it)
+export const SOURCES = {
+  stone: 'Stones in the grass, and rocks broken with a pickaxe', wood: 'Branches on the ground; trees felled with an axe and their logs split; bushes, stumps and driftwood',
+  log: 'Giants carry them', rope: 'Twisted from fiber by hand, or cut from leather at a workbench', fiber: 'Fiber bushes in the meadows, and some bushes cut with an axe',
+  leather: 'Deer, hogs and rabbits', sharpBone: 'Piles of bones, and most creatures', lightstone: 'Rocks of the Yleos hills broken with a pickaxe, and pale stones lying there',
+  coal: 'Meat burnt on a cooking stand', resin: 'Pines, firs and cypresses felled, and dryads', feather: 'Feathers in the grass, and plane trees and other broadleaves felled',
+  dandelion: 'Dandelions in the meadows', moonflower: 'Moonflowers in the hills, glowing at night', foxHide: 'Foxes', deerHide: 'Deer', giantHide: 'Giants',
+  dryadHeart: 'Dryads', oliveSeed: 'Olive trees felled', acornSeed: 'Oaks felled', pomegranateSeed: 'Pomegranate trees felled', pineCone: 'Pines felled', firCone: 'Firs felled',
+  rawMeat: 'Hunted animals', minotaurHead: 'The Minotaur', chimeraHead: 'The Chimera',
+};
+
 // ---- Recipes. at: where it's made (null: anywhere, from the crafting menu; 'workbench': near a workbench).
-// n: how many you get. Known (shown in C) once you have held any one of its materials.
+// n: how many you get. Known (shown in C) once you have held every one of its materials (crafting.js learnable).
 export const RECIPES = [
   { id: 'hammer', mats: { wood: 4 } },
   { id: 'torch', mats: { wood: 1, resin: 1, rope: 1 } },
@@ -94,7 +111,7 @@ export const RECIPES = [
   { id: 'throwerLegs', mats: { leather: 6, rope: 2 } },
   { id: 'rope', n: 10, mats: { leather: 1 }, at: 'workbench' },
   { id: 'wood', n: 2, mats: { branch: 1 } },
-  { id: 'hoe', mats: { wood: 4, stone: 2, leather: 1, rope: 2 }, at: 'workbench' },
+  // (the hoe comes back with planting: it has nothing to do yet)
   { id: 'pickaxe', mats: { wood: 6, stone: 10, leather: 4, rope: 2 }, at: 'workbench' },
   { id: 'crudeBow', mats: { wood: 10, rope: 4, leather: 1 }, at: 'workbench' },
   { id: 'crudeSpear', mats: { wood: 6, stone: 2, rope: 2 }, at: 'workbench' },
@@ -109,5 +126,9 @@ export const RECIPES = [
   { id: 'cretanArmor', mats: { deerHide: 10, rope: 2 }, at: 'workbench', tier: 1 },
   { id: 'cretanLegs', mats: { deerHide: 8, rope: 2 }, at: 'workbench', tier: 1 },
   { id: 'cretanCape', mats: { foxHide: 20, rope: 2 }, at: 'workbench', tier: 1 },
+  // (lightstone stands in for electrum plate, which there is no way to make yet)
+  { id: 'corinthianHelmet', mats: { lightstone: 4, deerHide: 2, rope: 1 }, at: 'workbench', tier: 2 },
+  { id: 'corinthianArmor', mats: { lightstone: 10, deerHide: 10, rope: 2 }, at: 'workbench', tier: 2 },
+  { id: 'corinthianLegs', mats: { lightstone: 8, deerHide: 6, rope: 1 }, at: 'workbench', tier: 2 },
 ];
 // Placeable things made from the crafting menu go into the build menu (hammer) instead: see build/pieces.js

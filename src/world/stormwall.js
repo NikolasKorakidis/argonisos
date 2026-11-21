@@ -23,6 +23,7 @@ import { stormAmbience } from '../audio/sound.js';
 import { buildStormRings, updateStormRings } from './storm-rings.js';
 import { COMMON, NOISE_FRAG, MARCH_FRAG, BLUR_FRAG, KEEP_FRAG, BOLT_VERT, BOLT_FRAG, DUST_VERT, DUST_FRAG } from './storm-shader.js';
 import { ULTRA } from '../render/quality.js';
+import { lerp } from '../util/math.js';
 
 const WALL_V = 0.3, TOP = 790, SCALE = ULTRA ? 2 : 4;   // (the cloud is marched at a quarter of the resolution: it is soft, and it is costly. On Ultra at half: its billows' edges sharper)
 const E = 2600, FS = 20, FN = Math.round((2 * E) / FS) + 1;   // (the border field: ±E metres, a texel every FS)
@@ -125,12 +126,13 @@ const U = {
   projInv: { value: new THREE.Matrix4() }, camWorld: { value: new THREE.Matrix4() }, camPos: { value: new THREE.Vector3() }, fullRes: { value: new THREE.Vector2(1, 1) }, halfRes: { value: new THREE.Vector2(1, 1) }, camNF: { value: new THREE.Vector2(0.15, 6000) },
   bounds: { value: new THREE.Vector4() }, field: { value: new THREE.Vector3(E, FS, FN) }, centre: { value: CENTRE }, uT: { value: 0 }, uTop: { value: TOP }, scale: { value: SCALE },
   sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color() }, ambCol: { value: new THREE.Color() }, fogCol: { value: new THREE.Color() },
-  flashCol: { value: new THREE.Color(0.55, 0.62, 1.0) }, glowCol: { value: new THREE.Color(0.35, 0.55, 1.0) }, fogV: { value: 2400 }, fogMax: { value: 0.62 }, glow: { value: 0.3 },
+  flashCol: { value: new THREE.Color(0.55, 0.62, 1.0) }, glowCol: { value: new THREE.Color(0.35, 0.55, 1.0) }, fogV: { value: 2400 }, fogMax: { value: 0.62 }, glow: { value: 0.3 }, lift: { value: 0.4 }, floorK: { value: 0.1 },
   flashP: { value: flashP }, flashI: { value: flashI }, ...BOLT_U,
   caves: { value: [0, 1, 2, 3].map(() => new THREE.Vector4(0, 0, 0, 0)) },
-  mzR1: ATMO.mzR1, mzAmt: ATMO.mzAmt, mzTop: ATMO.mzTop, mzSoft: ATMO.mzSoft, mzCol: ATMO.mzCol,   // (the player's mist, over the wall's foot as over the land)   // (x, floor, z, radius of the Giants' caves near the wall: no cloud in them)
+  mzR1: ATMO.mzR1, mzAmt: ATMO.mzAmt, mzTop: ATMO.mzTop, mzSoft: ATMO.mzSoft, mzCol: ATMO.mzCol, mzColUp: ATMO.mzColUp, mzSun: ATMO.mzSun, mzSunDir: ATMO.sunDir,   // (the player's mist, over the wall's foot as over the land)   // (x, floor, z, radius of the Giants' caves near the wall: no cloud in them)
 };
 const quad = (fragmentShader) => new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: U, depthTest: false, depthWrite: false, vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }', fragmentShader }));
+const HAZE = { day: 1 };   // (how fair a day it is for the wall's light and haze: updateStormWall)
 const _frustum = new THREE.Frustum(), _m = new THREE.Matrix4(), _cc = new THREE.Color();
 class StormPass extends Pass {
   constructor() {
@@ -146,7 +148,11 @@ class StormPass extends Pass {
   render(renderer, writeBuffer, readBuffer) {
     ATMO.stormOn.value = 0; if (!U.tNoise.value) bakeNoise(renderer);
     U.fogCol.value.copy(scene.fog.color).multiplyScalar(0.8); U.fogV.value = Math.max(scene.fog.far * 2.2, 170);   // (the fog as it is drawn: high up it has opened out)
-    const veil = Math.min(1, Math.max(0, (60 - scene.fog.far) / 40)); U.fogV.value += (scene.fog.far * 0.5 - U.fogV.value) * veil; U.fogMax.value = 0.62 + 0.38 * veil; U.fogCol.value.multiplyScalar(1 + 0.25 * veil);   // (a thick fog veils the wall as it does the land, in the fog's own colour)
+    // (by a clear day its own aerial perspective, thicker than the land's: some 1300 m to blue it two thirds, so from across
+    // the island it stands slate-blue and deepening towards its foot, never black against a bright sky; by night and in
+    // bad weather the fog's, as it was)
+    U.fogV.value = lerp(U.fogV.value, Math.min(U.fogV.value, 1300), HAZE.day); U.fogMax.value = 0.62 + 0.08 * HAZE.day;
+    const veil = Math.min(1, Math.max(0, (60 - scene.fog.far) / 40)); U.fogV.value += (scene.fog.far * 0.5 - U.fogV.value) * veil; U.fogMax.value += (1 - U.fogMax.value) * veil; U.fogCol.value.multiplyScalar(1 + 0.25 * veil);   // (a thick fog veils the wall as it does the land, in the fog's own colour)
     U.tDepth.value = readBuffer.depthTexture; U.projInv.value.copy(camera.projectionMatrixInverse); U.camWorld.value.copy(camera.matrixWorld); U.camPos.value.copy(camera.position); U.camNF.value.set(camera.near, camera.far);
     const ac = renderer.autoClear; renderer.autoClear = false; renderer.getClearColor(_cc); const ca = renderer.getClearAlpha();
     if (this.wall) {
@@ -242,6 +248,9 @@ export function updateStormWall(time, dt, { light, focus, still, atmo, sun, sunD
   U.sunDir.value.copy(sunDir).normalize(); U.sunCol.value.copy(sun.color).multiplyScalar(Math.min(1.6, sun.intensity) * 0.55);
   U.ambCol.value.copy(hemi.color).multiplyScalar(hemi.intensity * 0.9).lerp(fogCol, 0.3);
   U.glow.value = 0.12 + light.night * 0.5 + light.dusk * 0.2;
+  // (by a fair day it is lit as a cloud is, some three times as bright as by night or in a storm, where it stays dark and
+  // heavy; and the light inside it, where no surface was met, lifted from near black to the sky's shade)
+  HAZE.day = Math.min(1, light.day + light.dusk * 0.4) * (1 - atmo.overcast) * (1 - WEATHER.storm); U.lift.value = 0.4 * (1 + 2 * HAZE.day); U.floorK.value = 0.1 + 0.2 * HAZE.day;
   // how near the wall the player is: 1 at the border, nothing 350 m out
   const [D] = fieldAt(focus.x, focus.z), near = open ? 0 : Math.max(0, Math.min(1, 1 + D / 350)); STORM_WALL.near = near; STORM_WALL.away = open ? 9999 : Math.max(0, -D);
   // near it: the wind turns to blow in, harder; rain; the light darkens; dust and leaves are swept in

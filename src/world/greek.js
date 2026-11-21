@@ -5,8 +5,8 @@
 import * as THREE from 'three';
 import { wettable } from './wetness.js';
 import { siteProp } from './site-pack.js';
+import { seeded as dice } from '../util/math.js';
 
-const dice = (seed) => { let s = seed; return () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646; };
 function tex(draw, w = 512, h = w, seed = 1) {
   const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h, dice(seed));
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;

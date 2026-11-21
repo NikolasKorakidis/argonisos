@@ -1,7 +1,7 @@
 // The player: third-person movement with momentum, sprinting and jumping that cost stamina, swimming, collisions with
 // trees, rocks and buildings, the storm wall's push-back, and the orbit camera.
 import * as THREE from 'three';
-import { camera } from '../render/core.js';
+import { camera, renderer } from '../render/core.js';
 import { groundAt } from '../world/groundcut.js';
 import { colliders } from '../world/colliders.js';
 import { stormWallDepth, stormWallOut } from '../world/stormwall.js';
@@ -12,15 +12,25 @@ import { RUN, SPRINT, SWIM, SNEAK, AIM, BLOCK_K, GRAV, JUMP_V } from './speeds.j
 import { SETTINGS } from '../ui/settings.js';
 import { Stats } from './stats.js';
 import { clamp, lerp } from '../util/math.js';
+import { GAIT } from '../audio/sound.js';
 
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const _lv = new THREE.Vector3();
 const SWIM_DEPTH = 1.35, RADIUS = 0.38;
-// The dodge roll (Space with the guard up, as in Valheim): its stamina, and the stretch of it no blow lands (seconds in)
+// The dodge roll (Space with RMB held, as in Valheim: with any weapon, the bow or bare hands): its stamina, and the
+// stretch of it no blow lands (seconds in)
 const DODGE = { cost: 12, safe: [0.05, 0.55] };
 // The free camera while seated (seat.look: sitting on the ground, game/acts.js): how far from the hero it may go (m), how fast WASD and Q / E move that point (m/s, Shift three times as fast), how close to the
 // ground it may come (m), the pitch it may reach either way (radians) and the wheel's range (m)
 const LOOK = { r: 30, speed: 3, low: 0.15, pitch: 1.5, near: 0.8, far: 14 };
+// The boss camera (Patch 21): in a fight with one of the giant bosses (bossCam, from trial.js) the follow camera eases back
+// and up so the beast fits in the view: at least dist metres back, the point it looks at lift metres higher, the view a
+// few degrees wider (fov); and while a boss arrives (focus: where it comes down) it turns to look that way
+const BOSS_CAM = { dist: 13, lift: 2.6, fov: 8, in: 0.9, out: 0.5 };
+// Stunned (a boss's roar, a guard broken): no moving, jumping or striking; the hero reels (the big stagger played slow and
+// whole) and sways dazed on his feet, and the view swims: blurred, greyed and wavering (DAZE: its blur in px, how much
+// colour goes and how far it wavers, in degrees), easing in at once and out over its last moments
+const DAZE = { blur: 1.6, grey: 0.45, wave: 0.7 };
 
 export class Player {
   constructor(scene) {
@@ -29,9 +39,10 @@ export class Player {
     this.pos = this.root.position; this.vel = new THREE.Vector3(); this.hv = new THREE.Vector3();
     this.yaw = 0; this.camYaw = 0; this.camPitch = -0.25; this.camDist = 5.5; this.camT = new THREE.Vector3(); this.camInit = false;
     this.lookK = 0; this.lookOff = new THREE.Vector3(); this.lookV = new THREE.Vector3(); this.home = null;   // (the free camera: updateCamera)
+    this.bossCam = false; this.bossK = 0; this.focus = null;   // (the boss camera: BOSS_CAM)
     this.onGround = true; this.swimming = false; this.sprinting = false; this.sneaking = false; this.jumped = false; this.jumpBuf = 0;
     this.speed = 0; this.winded = false; this.swing = 0; this.swingKind = 'punch'; this.swingHit = false; this.equip = null; this.bow = null;
-    this.strikeMove = null; this.combo = 0; this.comboT = 0; this.dodge = null;
+    this.strikeMove = null; this.combo = 0; this.comboT = 0; this.dodge = null; this.guardUp = false;
     this.stats = new Stats(); this.dead = false; this.deadT = 0; this.lean = 0; this.bank = 0; this.lastYaw = 0; this.swimD = 0; this.sprintD = 0;
     this.speedMod = 0;            // from equipment (-0.05 per heavy item etc.)
     this.overweight = false; this.frozen = false;  // frozen: no control (menus, cutscenes)
@@ -43,7 +54,7 @@ export class Player {
     this.seat = null;
     this.stats.onDeath = () => this.die();
     // a footstep each time a foot comes down in the stride the legs are playing (hero.update), on the ground
-    this.hero.onFootfall = () => { if (this.onGround && !this.swimming) this.onStep?.('step'); };
+    this.hero.onFootfall = () => { if (this.onGround && !this.swimming) { GAIT.k = this.sneaking ? 0.5 : this.sprinting ? 1.3 : 1; this.onStep?.('step'); } };   // (louder sprinting, softer sneaking: sound.js)
   }
   spawn(x, z) { this.seat = null; this.pos.set(x, Math.max(groundAt(x, z), -SWIM_DEPTH), z); this.vel.set(0, 0, 0); this.hv.set(0, 0, 0); this.camInit = false; this.lookK = 0; this.lookOff.set(0, 0, 0); this.home = null; }
   get camForward() { return new THREE.Vector3(-Math.sin(this.camYaw) * Math.cos(this.camPitch), Math.sin(this.camPitch), -Math.cos(this.camYaw) * Math.cos(this.camPitch)); }
@@ -51,10 +62,11 @@ export class Player {
   // partway through the swing (onStrike), where the move's weapon meets what's in front; blows that follow each other
   // closely go through the weapon's moves in turn (a combo)
   strike(kind, cost) {
-    if (this.swing > 0 || this.dead || this.swimming || this.equip || this.hero.moveK < 0.5) return false;
+    if (this.swing > 0 || this.dead || this.swimming || this.equip || this.hero.moveK < 0.5 || this.stats.has('stunned')) return false;
     if (!this.stats.use(cost, kind === 'punch' ? 'unarmed' : null)) { this.onToast?.('Too tired'); return false; }
     this.combo = this.comboT > 0 && this.swingKind === kind ? this.combo + 1 : 0; this.strikeMove = strikeOf(kind, this.combo);
     this.swing = 1; this.swingKind = kind; this.swingHit = false; this.stopT = 0; this.yaw = Math.atan2(-Math.sin(this.camYaw), -Math.cos(this.camYaw));
+    this.stats.learn(kind === 'punch' ? 'unarmed' : kind);   // (the first swing finds its skill, before any blow lands; a tool's has none)
     return true;
   }
   // A blow that lands hard holds the swing for a moment where the weapon meets what it hit (Valheim's freeze frame): t
@@ -64,7 +76,7 @@ export class Player {
   // no blow lands in the heart of a dodge roll
   get dodging() { return !!this.dodge && this.dodge.t > DODGE.safe[0] && this.dodge.t < DODGE.safe[1]; }
   update(dt) {
-    const S = this.stats;
+    const S = this.stats; this.daze(dt);
     // ---- camera input
     // (seated, lookK: the free camera reaches lower, higher and further, and the wheel's steps grow with the distance)
     if (input.locked && !input.uiOpen) {
@@ -112,7 +124,7 @@ export class Player {
     this.speed = speed;
     // stamina for sprinting and swimming, skill XP by distance (12.5 xp per 10 ft sprinted / 5 ft swum)
     if (this.sprinting && speed > 3) { S.drain(5 * (1 + clamp(this.slope || 0, 0, 0.8)), dt, 'sprinting'); this.sprintD += speed * dt; if (this.sprintD > 3.05) { this.sprintD = 0; S.train('sprinting', 12.5); } }
-    if (this.swimming && speed > 0.3) { S.drain(5, dt, 'swimming'); this.swimD += speed * dt; if (this.swimD > 1.52) { this.swimD = 0; S.train('swimming', 12.5); } }
+    if (this.swimming && speed > 0.3) { S.drain(5, dt, 'swimming'); this.swimD += speed * dt; if (this.swimD > 1.52) { this.swimD = 0; S.train('swimming', 12.5); this.onStep?.('swim'); } }   // (a stroke's sound each stretch swum)
     if (this.sneaking && speed > 0.3) { S.drain(5, dt, 'sneaking'); this.sneakD = (this.sneakD || 0) + speed * dt; if (this.sneakD > 3.05) { this.sneakD = 0; S.train('sneaking', 12.5); } }
     if (this.sneaking && S.stamina <= 0.5) this.sneaking = false;
     if (this.swimming) { S.add('wet'); if (S.stamina <= 0.5 && speed > 0.3) S.damage(5 * dt); }
@@ -147,12 +159,13 @@ export class Player {
     // ---- jump and gravity
     if (ctl && hit('Space')) this.jumpBuf = 0.15;
     if (this.jumpBuf > 0) this.jumpBuf -= dt;
-    // ...or, with the guard up, a dodge roll the way you're going (straight back with no direction held)
-    if (this.jumpBuf > 0 && this.blocking && this.onGround && !this.swimming && !this.dodge && held > 0.9 && H.has('roll')) {
+    // ...or, with RMB held (the guard up, the bow drawn, or bare hands: guardUp, combat.js), a dodge roll the way you're
+    // going (straight back with no direction held)
+    if (this.jumpBuf > 0 && (this.blocking || this.guardUp) && this.onGround && !this.swimming && !this.dodge && held > 0.9 && H.has('roll')) {
       this.jumpBuf = 0;
       const yaw = want.lengthSq() ? Math.atan2(want.x, want.z) : this.yaw + Math.PI;
       if (!S.use(DODGE.cost, 'jumping')) this.onToast?.('Too tired to roll');
-      else { H.action('roll', { upper: false, rate: 1.6, blend: 0.08, fade: 0.25, root: 'move', lock: true, feet: false, onDone: () => (this.dodge = null) }); this.dodge = { t: 0, yaw }; this.hv.set(0, 0, 0); this.onStep?.('jump'); }
+      else { H.action('roll', { upper: false, rate: 1.6, blend: 0.08, fade: 0.25, root: 'move', lock: true, feet: false, onDone: () => (this.dodge = null) }); this.dodge = { t: 0, yaw }; this.hv.set(0, 0, 0); this.onStep?.('roll'); }
     }
     if (this.dodge) { this.dodge.t += dt; if (this.dodge.t > 2) this.dodge = null; }
     if (this.jumpBuf > 0 && this.onGround && !this.swimming && this.swing <= 0 && held > 0.9) {
@@ -168,7 +181,7 @@ export class Player {
       // walk down slopes without bouncing: snap to the ground if it's just below
       if (this.onGround && this.vel.y <= 0 && this.pos.y - fl < 0.35 + speed * dt * 1.5) this.pos.y = fl;
       if (this.pos.y <= fl) {
-        if (wasAir) { this.onStep?.('land'); const fall = -this.vel.y; if (fall > 13) S.damage((fall - 13) * 2); H.landed(fall); }
+        if (wasAir) { GAIT.fall = -this.vel.y; this.onStep?.('land'); const fall = -this.vel.y; if (fall > 13) S.damage((fall - 13) * 2); H.landed(fall); }
         this.pos.y = fl; this.vel.y = 0; this.onGround = true; this.jumped = false;
       } else if (this.pos.y > fl + 0.05) this.onGround = false;
     }
@@ -183,13 +196,23 @@ export class Player {
     const yawRate = angDiff(this.yaw, this.lastYaw) / Math.max(dt, 1e-3); this.lastYaw = this.yaw;
     this.lean = lerp(this.lean, this.onGround ? clamp(speed / 8, 0, 1) * 0.09 + clamp(this.slope || 0, -0.6, 0.6) * 0.22 * clamp(speed / 3, 0, 1) : 0, Math.min(1, dt * 6));
     this.bank = lerp(this.bank, clamp(-yawRate * 0.03 * clamp(speed / 5, 0, 1), -0.12, 0.12), Math.min(1, dt * 6));
-    this.root.rotation.set(this.lean, this.yaw, this.bank);
+    this.root.rotation.set(this.lean, this.yaw, this.bank + (this.sway || 0));
     // ---- animation
     let moveRel = 0; if ((this.aiming || this.blocking) && speed > 0.3) moveRel = angDiff(Math.atan2(this.hv.x, this.hv.z), this.yaw);
     H.update(dt, { baseY: this.sneaking && !H.crouches ? -0.12 : 0, speed, sprinting: this.sprinting, onGround: this.onGround || this.swimming, jumped: this.jumped, vy: this.vel.y, moving: !!(ix || iz) || this.jumpBuf > 0, swimming: this.swimming, water: 0, moveRel,
       sneaking: this.sneaking && !this.swimming, guard: this.guard, blocking: this.blocking && !this.dodge, swing: this.swing, swingKind: this.swingKind, strike: this.strikeMove,
       equip: this.equip, bow: this.bow, aimPt: this.aimPt, ground: this.groundFn ||= (x, z, y) => this.groundHere(x, z, y), rootY: this.pos.y });
     this.updateCamera(dt);
+  }
+  // Stunned: the hero reels as it begins (the big stagger, slowed), then sways on his feet; the view swims (DAZE)
+  daze(dt) {
+    const on = this.stats.has('stunned') && !this.dead, left = this.stats.cond.stunned || 0;
+    if (on && !this.dazed && this.hero.has('hitLarge')) this.hero.action('hitLarge', { upper: false, rate: 0.7, root: 'keep', lock: true, blend: 0.08, fade: 0.5 });
+    this.dazed = on; this.dazeT = on ? (this.dazeT || 0) + dt : 0;
+    const k = on ? Math.min(1, this.dazeT * 8, left / 0.6) : 0, el = renderer.domElement;
+    if (k > 0.002) { const t = this.dazeT, w = Math.sin(t * 5.3) * DAZE.wave * k; el.style.filter = `blur(${(DAZE.blur * k).toFixed(2)}px) saturate(${(1 - DAZE.grey * k).toFixed(2)})`; el.style.transform = `scale(${1 + 0.025 * k}) rotate(${(w * 0.6).toFixed(3)}deg) skewX(${(Math.sin(t * 3.7) * DAZE.wave * k).toFixed(3)}deg)`; this.dazeOn = true; }
+    else if (this.dazeOn) { el.style.filter = el.style.transform = ''; this.dazeOn = false; }
+    this.sway = on && !this.seat ? Math.sin(this.dazeT * 2.6) * 0.07 * k : 0;   // (swaying on his feet)
   }
   // what you'd stand on at (x, z): the ground (pressed down under floors), or a floor, step or stair within reach of y
   groundHere(x, z, y = this.pos.y) { return Math.max(groundAt(x, z), -SWIM_DEPTH, this.floorAt ? this.floorAt({ x, z, y }) : -1e9); }
@@ -236,26 +259,31 @@ export class Player {
       this.home ||= { pitch: this.camPitch, dist: this.camDist };
       const on = !this.frozen, ix = on ? (down('KeyD') ? 1 : 0) - (down('KeyA') ? 1 : 0) : 0, iz = on ? (down('KeyW') ? 1 : 0) - (down('KeyS') ? 1 : 0) : 0, iy = on ? (down('KeyE') ? 1 : 0) - (down('KeyQ') ? 1 : 0) : 0;
       const fx = -Math.sin(this.camYaw), fz = -Math.cos(this.camYaw), sp = LOOK.speed * (down('ShiftLeft') || down('ShiftRight') ? 3 : 1), l = Math.hypot(ix, iz) || 1;
-      this.lookV.lerp(_lv.set(((fx * iz - fz * ix) / l) * sp, iy * sp, ((fz * iz + fx * ix) / l) * sp), e(6)); this.lookOff.addScaledVector(this.lookV, dt);
-      // (the point no further out than leaves the camera, behind it, within LOOK.r: drawn back in as the wheel takes it out)
-      const room = Math.max(0, LOOK.r - this.camDist - 1), o = this.lookOff.length(); if (o > room) this.lookOff.setLength(Math.max(room, o - Math.max(o - room, 1) * e(6)));
+      const o0 = this.lookOff.length(); this.lookV.lerp(_lv.set(((fx * iz - fz * ix) / l) * sp, iy * sp, ((fz * iz + fx * ix) / l) * sp), e(6)); this.lookOff.addScaledVector(this.lookV, dt);
+      // (the point no further out than leaves the camera, behind it, within LOOK.r: moving stops at that edge (eased back
+      // only, it ran on past it by up to 1.5 m at Shift's pace), and the wheel taking the camera out draws it back in eased)
+      const room = Math.max(0, LOOK.r - this.camDist - 1), cap = Math.max(room, o0); let o = this.lookOff.length(); if (o > cap) this.lookOff.setLength((o = cap));
+      if (o > room) this.lookOff.setLength(Math.max(room, o - Math.max(o - room, 1) * e(6)));
     } else {
       this.lookV.set(0, 0, 0); this.lookOff.multiplyScalar(1 - e(4));
+      if (this.focus && !this.dead) { const f = this.focus; this.camYaw += angDiff(Math.atan2(this.pos.x - f.x, this.pos.z - f.z), this.camYaw) * e(2.2); this.camPitch = lerp(this.camPitch, -0.12, e(1.5)); }
       if (this.home) { const k = e(4); this.camYaw += angDiff(this.yaw + Math.PI, this.camYaw) * k; this.camPitch = lerp(this.camPitch, this.home.pitch, k); this.camDist = lerp(this.camDist, this.home.dist, k); if (L < 0.02) this.home = null; }
     }
     const raw = this.pos.clone(); raw.y += (this.swimming ? 1.2 : this.sneaking ? (this.hero.crouches ? 1.35 : 1.45) : 1.65) - 0.8 * L;   // (seated, the body's middle)
-    if (!this.camInit || this.camT.distanceTo(raw) > 8) { this.camT.copy(raw); this.camInit = true; }
+    // (a jump of the hero (spawn, teleport) takes the camera along at once, not sweeping over from where it was)
+    const jump = !this.camInit || this.camT.distanceTo(raw) > 8; if (jump) { this.camT.copy(raw); this.camInit = true; }
     this.camT.x += (raw.x - this.camT.x) * Math.min(1, dt * 16); this.camT.z += (raw.z - this.camT.z) * Math.min(1, dt * 16); this.camT.y += (raw.y - this.camT.y) * Math.min(1, dt * 8);
     this.aimK = lerp(this.aimK || 0, this.aiming ? 1 : 0, Math.min(1, dt * 8));
-    const k = this.aimK, dist = lerp(this.camDist, 2.3, k), pitch = this.camPitch;
+    const want0 = this.bossCam && !L ? 1 : 0; this.bossK = lerp(this.bossK, want0, e(want0 > this.bossK ? BOSS_CAM.in : BOSS_CAM.out)); const bk = this.bossK * (1 - this.aimK);
+    const k = this.aimK, dist = lerp(lerp(this.camDist, Math.max(this.camDist, BOSS_CAM.dist), bk), 2.3, k), pitch = this.camPitch;
     const right = new THREE.Vector3(Math.cos(this.camYaw), 0, -Math.sin(this.camYaw));
-    const target = this.camT.clone().addScaledVector(right, (0.45 + 0.35 * k) * (1 - L)); target.y -= 0.15 * k;
+    const target = this.camT.clone().addScaledVector(right, (0.45 + 0.35 * k) * (1 - L)); target.y -= 0.15 * k; target.y += BOSS_CAM.lift * bk;
     if (L) {
       // the point looked at: moved off the hero, kept over the ground and out of walls (stopped where one stands between)
       target.add(this.lookOff); target.y = Math.max(target.y, this.groundHere(target.x, target.z, target.y) + LOOK.low);
       const b = target.distanceTo(this.camT) > 0.05 ? this.camBlock?.(this.camT, target) : null; if (b !== undefined && b !== null) { target.sub(this.camT).setLength(Math.max(0, b - 0.3)).add(this.camT); this.lookOff.copy(target).sub(this.camT); }
     }
-    const fov = lerp(60, 50, k); if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    const fov = lerp(60 + BOSS_CAM.fov * bk, 50, k); if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
     const off = new THREE.Vector3(Math.sin(this.camYaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(this.camYaw) * Math.cos(pitch)).multiplyScalar(dist);
     const want = target.clone().add(off), over = lerp(0.4, LOOK.low, L);
     // keep the camera out of hills between it and the player (free, it may come down close over the grass)
@@ -268,6 +296,6 @@ export class Player {
     }
     // ...and out of walls and roofs: pull in to just in front of whatever is between
     const block = this.camBlock?.(target, want); if (block !== undefined && block !== null) { const dir = want.clone().sub(target); want.copy(target).add(dir.setLength(Math.max(0.6 * (1 - L) + 0.2 * L, block - 0.25))); }
-    camera.position.lerp(want, Math.min(1, dt * lerp(14 + k * 10, 6, L))); camera.lookAt(target);
+    if (jump) camera.position.copy(want); else camera.position.lerp(want, Math.min(1, dt * lerp(14 + k * 10, 6, L))); camera.lookAt(target);
   }
 }

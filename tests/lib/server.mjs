@@ -12,10 +12,12 @@ const TYPES = {
   '.svg': 'image/svg+xml', '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav',
 };
 
+// (never served, compared lower-cased because the Mac's disk ignores case: the private design docs and the git histories)
+const PRIVATE = new Set(['concept', '.git', '.assets-git']);
 export function serve() {
   const server = http.createServer((req, res) => {
     let file = path.join(ROOT, decodeURIComponent(new URL(req.url, 'http://x').pathname));
-    if (!file.startsWith(ROOT) || file.startsWith(path.join(ROOT, 'concept'))) { res.writeHead(403).end(); return; }
+    if (!file.startsWith(ROOT) || PRIVATE.has(path.relative(ROOT, file).split(path.sep)[0].toLowerCase())) { res.writeHead(403).end(); return; }
     if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
     fs.readFile(file, (err, data) => {
       if (err) { res.writeHead(404).end(); return; }

@@ -4,13 +4,13 @@
 import * as THREE from 'three';
 import { scene, sun, hemi } from '../render/core.js';
 import { titanBand } from './flora.js';
+import { lerp, seeded } from '../util/math.js';
 
-const lerp = (a, b, t) => a + (b - a) * t;
 export const GIANTWOOD = { k: 0 };
 const motes = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(400 * 3), 3)),
   new THREE.PointsMaterial({ color: 0xfff0c8, size: 0.06, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
 motes.frustumCulled = false; scene.add(motes);
-let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+const rnd = seeded(7);
 
 // after the sky and weather have set the light for this frame: dim it under the canopy, move the motes
 export function updateGiantwood(dt, pos, cam, lightDir, day, still = false) {   // (still: screenshot tests, the shade settled at once and the dust held still)

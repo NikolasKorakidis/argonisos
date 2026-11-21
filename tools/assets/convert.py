@@ -34,9 +34,41 @@ if job.get('bindToArmature'):
     for o in bpy.data.objects:
         if o.type == 'MESH' and o.parent and o.parent.type == 'ARMATURE': o.matrix_parent_inverse.identity(); o.matrix_basis.identity()
 
+# Flat colours (manifest "flatColors"): each face takes one colour into its corners, the average of the texture under it
+# (job texture, a hand-painted one) or, with no texture, its own material's colour (the team's food models are coloured
+# by material). Painted, noisy surfaces then read as the game's flat-coloured low-poly look; the texture is left out.
+if job.get('flatColors'):
+    import numpy as np
+    fimg = bpy.data.images.load(job['texture']) if job.get('texture') else None
+    if fimg: W, H = fimg.size; px = np.empty(W * H * 4, np.float32); fimg.pixels.foreach_get(px); px = px.reshape(H, W, 4)
+    # (barycentric points spread over a triangle, to average the texels it covers)
+    N = 12; bary = np.array([(i / N, j / N, 1 - (i + j) / N) for i in range(N + 1) for j in range(N + 1 - i)], np.float32)
+    def mat_colour(m):
+        if not m: return (0.8, 0.8, 0.8)
+        b = next((n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None) if m.node_tree else None
+        return tuple(b.inputs['Base Color'].default_value[:3]) if b else tuple(m.diffuse_color[:3])
+    tint = np.array(job.get('tint', [1, 1, 1]), np.float32)
+    for o in bpy.data.objects:
+        if o.type != 'MESH': continue
+        me = o.data; uvl = me.uv_layers.active.data if (fimg and me.uv_layers) else None; vc = np.ones((len(me.loops), 4), np.float32)
+        for p in me.polygons:
+            if uvl:
+                uv = np.array([uvl[i].uv[:] for i in p.loop_indices], np.float32) % 1.0; acc = []
+                for k in range(1, len(uv) - 1):   # (a fan of triangles over the face)
+                    pts = bary[:, :1] * uv[0] + bary[:, 1:2] * uv[k] + bary[:, 2:] * uv[k + 1]
+                    acc.append(px[np.minimum((pts[:, 1] * H).astype(int), H - 1), np.minimum((pts[:, 0] * W).astype(int), W - 1), :3])
+                c = np.concatenate(acc).mean(0)
+            else:
+                # (material colours are linear: back to sRGB, as the corners are written)
+                lin = np.array(mat_colour(o.material_slots[p.material_index].material if o.material_slots else None), np.float32)
+                c = np.where(lin <= 0.0031308, lin * 12.92, 1.055 * np.power(np.maximum(lin, 0), 1 / 2.4) - 0.055)
+            vc[list(p.loop_indices), :3] = np.clip(c * tint, 0, 1)
+        ca = me.color_attributes.new('Col', 'BYTE_COLOR', 'CORNER'); ca.data.foreach_set('color_srgb', vc.ravel())
+        me.color_attributes.active_color = ca; me.color_attributes.render_color_index = me.color_attributes.find('Col')
+
 # one plain PBR material for the whole model, on the pack's texture (Unity materials don't survive the FBX). A shared
 # atlas isn't put in the file: the material is named after it ("tex:<key>") and the game puts the one copy on it.
-img = bpy.data.images.load(job['texture']) if job.get('texture') and not job.get('shared') else None
+img = bpy.data.images.load(job['texture']) if job.get('texture') and not job.get('shared') and not job.get('flatColors') else None
 mat = bpy.data.materials.new('tex:' + job['shared'] if job.get('shared') else job.get('name', 'Mat')); mat.use_nodes = True
 nt = mat.node_tree; bsdf = next(n for n in nt.nodes if n.type == 'BSDF_PRINCIPLED')
 bsdf.inputs['Roughness'].default_value = job.get('roughness', 0.85); bsdf.inputs['Metallic'].default_value = 0.0; bsdf.inputs['Base Color'].default_value = (1, 1, 1, 1)
@@ -243,5 +275,5 @@ if arm and arm.animation_data: arm.animation_data.action = None
 
 bpy.ops.export_scene.gltf(filepath=job['out'], export_format='GLB', export_animations=True, export_animation_mode='ACTIONS',
     export_force_sampling=True, export_frame_step=job.get('frameStep', 1), export_skins=True, export_morph=False,
-    export_image_format='AUTO', export_vertex_color='ACTIVE' if job.get('bakeColors') or job.get('plant') else 'MATERIAL', export_cameras=False, export_lights=False, export_yup=True, export_apply=False)
+    export_image_format='AUTO', export_vertex_color='ACTIVE' if job.get('bakeColors') or job.get('plant') or job.get('flatColors') else 'MATERIAL', export_cameras=False, export_lights=False, export_yup=True, export_apply=False)
 print('CONVERTED', job['out'], 'clips', [a.name for a in want])

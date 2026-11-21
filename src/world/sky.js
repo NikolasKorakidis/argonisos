@@ -7,15 +7,22 @@ import { Sky } from '../../vendor/three/jsm/objects/Sky.js';
 import { FullScreenQuad } from '../../vendor/three/jsm/postprocessing/Pass.js';
 import { scene, camera, renderer, sun, hemi } from '../render/core.js';
 import { clamp, lerp } from '../util/math.js';
+import { SKY_COL } from '../render/atmosphere.js';
 
 export const DAY_SECONDS = 32 * 60, DAY_FRACTION = 24 / 32;
 // The night's light (the reviewer, 16 Nov; Valheim's nights: deep blue-black, a silver moon, the land read by its cool
-// light): the moon's strength and colour as the key light, the sky's light by night (hemisphere), and the exposure
-export const MOON = { k: 0.8, col: 0xb8c4d8, sky: 0.36, exposure: 0.62 };
+// light): the moon's strength and colour as the key light; the sky's light by night (hemisphere: how strong, its colour
+// from above and from the ground); the night air (the fog's and the sky's colour round the horizon, a shade lighter than
+// the land, so hills and trees stand dark against it) and the dome's horizon; and the exposure (which tells only where the
+// picture is drawn without the post passes: they leave the tone mapping out). The first cut of Patch 20 left the land
+// black but for a pool round the hero, the sky's light a sixth of what it had been: a clear night now reads at about a
+// tenth of the day's brightness in the meadows and the woods (a mean of 25 to 35 of 255 on screen), cloud shuts it out
+export const MOON = { k: 1.1, col: 0xb0bccf, sky: 5.5, skyCol: 0x40547e, ground: 0x2a3242, air: 0x142240, horizon: 0x2a3a5a, exposure: 0.62 };
 
 export const skyDome = new THREE.Mesh(new THREE.SphereGeometry(5000, 48, 24), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
-  uniforms: { top: { value: new THREE.Color(0x3a78c8) }, hor: { value: new THREE.Color(0xb8dcf0) }, sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color(0xfff0c8) },
+  uniforms: { top: { value: SKY_COL.top }, hor: { value: SKY_COL.hor },   // (the very colours the player's mist takes: atmosphere.js)
+    sunDir: { value: new THREE.Vector3(0, 1, 0) }, sunCol: { value: new THREE.Color(0xfff0c8) },
     night: { value: 0 }, uT: { value: 0 }, moonDir: { value: new THREE.Vector3(0, 1, 0) }, aurora: { value: 0 }, dusk: { value: 0 }, glowCol: { value: new THREE.Color(0xff8a40) }, cover: { value: 0 } },
   vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `uniform vec3 top, hor, sunDir, sunCol, moonDir, glowCol; uniform float night, uT, aurora, dusk, cover; varying vec3 vDir;
@@ -85,12 +92,18 @@ let envRT = null, envRaw = null, envTimer = 0, envE = 9, envOv = 9, envK = 1, en
 // (the copy also scales it, k: how much of the sky's light reaches the land, less in the forest's shade; by night the
 // sky itself goes dark. Three r160 has no scene.environmentIntensity. The last bake is kept, so a new k needs only the
 // copy, not a bake)
-const envCopy = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: { src: { value: null }, k: { value: 1 } }, depthTest: false, depthWrite: false, blending: THREE.NoBlending,
-  vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }', fragmentShader: 'uniform sampler2D src; uniform float k; void main() { gl_FragColor = texelFetch(src, ivec2(gl_FragCoord.xy), 0) * vec4(vec3(k), 1.0); }' }));
+// (and takes some of its colour out: three's physical sky is a deep saturated blue, and brown bark, marble and skin lit by
+// it in the shade read lilac (the review of 20 Nov); in the woods, where the light comes down through the leaves, tinted
+// green, tint)
+const envCopy = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: { src: { value: null }, k: { value: 1 }, tint: { value: new THREE.Color(1, 1, 1) } }, depthTest: false, depthWrite: false, blending: THREE.NoBlending,
+  vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }',
+  fragmentShader: 'uniform sampler2D src; uniform float k; uniform vec3 tint; void main() { vec4 c = texelFetch(src, ivec2(gl_FragCoord.xy), 0); gl_FragColor = vec4(mix(vec3(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722))), c.rgb, 0.55) * tint * k, c.a); }' }));
+const WOODS_TINT = new THREE.Color(0.86, 1.0, 0.82);
 // (and three's bake draws a background box with a material it makes and throws away each time, which took its shader
 // program with it: compiled again at every bake, the worst hitch of a walk. A box like it, drawn once the same way and
-// kept, holds that program)
-const keepBg = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false })), keepRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false });
+// kept, holds that program. It must never be culled: drawn with the game's camera, which since Patch 22 starts at the hero
+// rather than the origin, it fell out of view, was never drawn, and every bake linked the program afresh: a freeze each time)
+const keepBg = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ side: THREE.BackSide, depthWrite: false, depthTest: false })), { frustumCulled: false }), keepRT = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false });
 function refreshEnvironment() {
   const fresh = pmrem.fromScene(envScene, 0.04);
   if (!envRT) { envRT = fresh; scene.environment = envRT.texture; const prev = renderer.getRenderTarget(); renderer.setRenderTarget(keepRT); renderer.render(keepBg, camera); renderer.setRenderTarget(prev); envRaw = pmrem.fromScene(envScene, 0.04); }
@@ -98,7 +111,7 @@ function refreshEnvironment() {
   scaleEnvironment();
 }
 function scaleEnvironment() {
-  const prev = renderer.getRenderTarget(); envCopy.material.uniforms.src.value = envRaw.texture; envCopy.material.uniforms.k.value = envKDone = envK;
+  const prev = renderer.getRenderTarget(); envCopy.material.uniforms.src.value = envRaw.texture; envCopy.material.uniforms.k.value = envKDone = envK; envCopy.material.uniforms.tint.value.setRGB(1, 1, 1).lerp(WOODS_TINT, clamp((1 - envK) / 0.4, 0, 1));
   renderer.setRenderTarget(envRT); envCopy.render(renderer); renderer.setRenderTarget(prev);
 }
 
@@ -131,22 +144,24 @@ export function updateSky(t, dt, time, overcast = 0, dark = 0) {
   sunDir.set(SUN_RISE.x * Math.cos(az) + SUN_LEAN.x * 0.2, y, SUN_RISE.y * Math.cos(az) + SUN_LEAN.y * 0.2).normalize();
   moonDir.set(-SUN_RISE.x * mz - SUN_LEAN.x * 0.4, Math.max(0.3, night * 0.75 + 0.15), -SUN_RISE.y * mz - SUN_LEAN.y * 0.4).normalize();
   const swap = sstep(0.06, -0.12, e); LIGHT.moon = swap > 0.5; lightDir.copy(sunDir).lerp(moonDir, swap).normalize(); if (lightDir.y < 0.08) { lightDir.y = 0.08; lightDir.normalize(); }
-  const skyCol = _c1.copy(skyNight).lerp(skyDay, day).lerp(skyDusk, dusk * 0.55);
+  skyNight.setHex(MOON.air); const skyCol = _c1.copy(skyNight).lerp(skyDay, day).lerp(skyDusk, dusk * 0.55);
   scene.fog.color.copy(skyCol); scene.background = skyCol;
   // the light fades right down while the shadows hand over from the sun to the moon, so they never swing across the ground.
   // By night the moon is the light (the reviewer, 16 Nov: the night darker because the light goes, not from an effect):
   // dim, a cool silver white, the land read by it and its shadows; under cloud hardly any
-  sun.intensity = lerp(0.15 + day * 2.9, MOON.k, night) * (1 - overcast * lerp(0.8, 0.9, night)) * (1 - dark * 0.75) * (1 - 0.92 * 4 * swap * (1 - swap));
+  const shut = lerp(1 - overcast * 0.8, (1 - overcast * 0.95) ** 2, night);   // (by night cloud shuts out the moon and the sky's light alike, a thick cover almost all of it)
+  sun.intensity = lerp(0.15 + day * 2.9, MOON.k, night) * shut * (1 - dark * 0.75) * (1 - 0.92 * 4 * swap * (1 - swap));
   sun.color.setHex(0xffe2b0).lerp(_c2.setHex(0xffa060), dusk * 0.85).lerp(_c2.setHex(0xff6a38), sstep(0.16, 0.0, e) * (t < DAY_FRACTION ? 0.7 : 0)).lerp(_c2.setHex(MOON.col), night);
   // morning mist: thick at first light, burning off through the morning; a little at dusk and through the night
   LIGHT.mist = (t < DAY_FRACTION ? sstep(0.17, 0.0, t) + sstep(0.62, 0.75, t) * 0.25 : 0.35 + sstep(0.85, 1, t) * 0.5) * (1 - overcast * 0.4);
-  // the sky's own light: by night it falls to a deep blue-black, only a little of the moon's light thrown back, so what
-  // the moon doesn't reach is dark and a fire is the only warm light
-  hemi.intensity = lerp(0.22 + day * 0.45, MOON.sky, night) * (1 - overcast * 0.5) * (1 - dark * 0.45);
-  hemi.color.setHex(0xbfdcff).lerp(_c2.setHex(0x2c3a58), night); hemi.groundColor.setHex(0x3f6a5a).lerp(_c2.setHex(0x0e121a), night);
+  // the sky's own light: by night a cool blue from above, a dark one from the ground, so what the moon doesn't reach (the
+  // floor of a wood) is dim but readable and a fire is the only warm light
+  hemi.intensity = lerp(0.22 + day * 0.45, MOON.sky, night) * lerp(1 - overcast * 0.5, (1 - overcast * 0.95) ** 2, night) * (1 - dark * 0.45);
+  // (the sky's light a paler blue and the ground's a warm earth rather than teal: the shade was blue to mauve)
+  hemi.color.setHex(0xc6d8ea).lerp(_c2.setHex(MOON.skyCol), night); hemi.groundColor.setHex(0x4a4a32).lerp(_c2.setHex(MOON.ground), night);
   const U = skyDome.material.uniforms;
   U.top.value.copy(skyNight).lerp(_c2.setHex(0x3a78c8), day).lerp(_c2.setHex(0x6a6fae), dusk * 0.4);
-  U.hor.value.setHex(0x151f36).lerp(_c2.setHex(0xb8dcf0), day).lerp(_c2.setHex(0xf2b27a), dusk * 0.7);
+  U.hor.value.setHex(MOON.horizon).lerp(_c2.setHex(0xb8dcf0), day).lerp(_c2.setHex(0xf2b27a), dusk * 0.7);
   U.sunDir.value.copy(sunDir); U.night.value = night; U.uT.value = time; U.moonDir.value.copy(moonDir); U.dusk.value = dusk * (1 - overcast * 0.8); U.cover.value = sstep(0.4, 0.9, overcast);
   U.sunCol.value.copy(sun.color).lerp(_c2.setHex(0xfff0c8), 0.4); U.glowCol.value.setHex(0xff8a40).lerp(_c2.setHex(0xff5a50), sstep(0.1, -0.05, e));
   skyDome.position.copy(camera.position);

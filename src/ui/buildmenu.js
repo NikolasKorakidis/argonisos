@@ -24,7 +24,7 @@ export class BuildMenu {
   }
   pieces() { const C = this.g.crafting; return this.g.build.pieces.filter((p) => C.known.has('b:' + p.id)); }
   toggle(on = !this.open) {
-    this.open = on; this.el.classList.toggle('hidden', !on); input.uiOpen = on;
+    if (on !== this.open) this.g.sound?.('ui', { open: on, kind: 'build' }); this.open = on; this.el.classList.toggle('hidden', !on); input.uiOpen = on;
     if (on) { unlock(); this.g.crafting.discover(true); const known = this.pieces(); if (!known.some((p) => (p.cat || 'Tools') === this.cat)) this.cat = CATS.find((c) => known.some((p) => (p.cat || 'Tools') === c)) || 'Crafting'; this.hover = this.g.build.sel; this.draw(); }
     else lock();
   }
@@ -45,7 +45,8 @@ export class BuildMenu {
     const box = this.el.querySelector('.bminfo'), p = this.g.build.piece(this.hover);
     if (!p) { box.innerHTML = '<p class="empty">Gather wood and stone to learn what you can build.</p>'; return; }
     const cost = Object.entries(p.mats).map(([m, n]) => { const have = this.g.inv.count(m); return `<div class="slot${have < n && !this.g.S.freeBuild ? ' no' : ''}" title="${ITEMS[m].name}">${icon(ITEMS[m].icon)}<em>${have}/${n}</em></div>`; }).join('');
-    box.innerHTML = `<div class="big">${icon(p.icon, '', 'p_' + p.id)}</div><div class="txt"><h3>${p.name}</h3><p>${p.desc || (p.hp ? `${p.hp} hit points` : '')}</p></div><div class="cost">${cost || '<span class="free">No cost</span>'}</div>`;
+    const need = this.missing(p) ? this.g.inv.need(p.mats) : '';   // (what's short, by how much)
+    box.innerHTML = `<div class="big">${icon(p.icon, '', 'p_' + p.id)}</div><div class="txt"><h3>${p.name}</h3><p>${p.desc || (p.hp ? `${p.hp} hit points` : '')}${need ? `<br><i class="need">${need}</i>` : ''}</p></div><div class="cost">${cost || '<span class="free">No cost</span>'}</div>`;
   }
   update() {
     if (!this.open) return;

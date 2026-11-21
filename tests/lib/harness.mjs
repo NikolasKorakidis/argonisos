@@ -16,6 +16,13 @@ const NOISE = [/favicon/i];
 
 // The snippet prelude every step runs with: short names for what tests touch most
 const H = 'const g = AG.game, P = g.player, B = g.build, V = AG.THREE.Vector3, inv = g.inv, C = g.crafting;';
+// ...and, one scope out (so a snippet may still declare its own), ways to wait for something instead of a fixed sleep:
+// until(f, ms) checks f (which may be async) every frame and gives its first truthy value, or false after ms;
+// frames(n) waits n frames of the game; sleep(ms) is the plain timer, for the waits that really are about time.
+const WAITS = 'const frames = async (n = 1) => { for (let i = 0; i < n; i++) await new Promise((r) => requestAnimationFrame(r)); },'
+  + ' sleep = (ms) => new Promise((r) => setTimeout(r, ms)),'
+  + ' until = async (f, ms = 10000) => { const t0 = performance.now(); for (;;) { const v = await f(); if (v) return v; if (performance.now() - t0 > ms) return false; await frames(1); } };';
+const wrap = (code) => `(async () => { ${WAITS} return (async () => { ${H} ${code} })(); })()`;
 
 export async function openGame(browser, base, { w = 1100, h = 620, setup = true, query = 'play' } = {}) {
   const ctx = await browser.newContext({ viewport: { width: w, height: h } });
@@ -46,13 +53,15 @@ export class Run {
   }
   async step(name, code) {
     const t0 = Date.now();
-    try { const r = await this.page.evaluate(`(async () => { ${H} ${code} })()`); return this.record(name, r === true, r, Date.now() - t0); }
+    try { const r = await this.page.evaluate(wrap(code)); return this.record(name, r === true, r, Date.now() - t0); }
     catch (e) { return this.record(name, false, 'threw: ' + e.message.split('\n')[0], Date.now() - t0); }
   }
   // a check decided on the Node side (e.g. from numbers a page snippet returned)
   check(name, ok, why) { return this.record(name, !!ok, why); }
-  eval(code) { return this.page.evaluate(`(async () => { ${H} ${code} })()`); }
+  eval(code) { return this.page.evaluate(wrap(code)); }
   wait(ms) { return this.page.waitForTimeout(ms); }
+  // wait in the page until an expression is truthy (checked every frame): its value, or false after ms
+  until(expr, ms = 10000) { return this.page.evaluate(wrap(`return until(async () => (${expr}), ${ms});`)); }
   metric(key, value) { this.metrics[key] = value; if (!this.quiet) console.log(`  · ${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`); }
   async shot(name, { hud = true } = {}) {
     if (!hud) await this.page.evaluate(() => { for (const e of document.querySelectorAll('body > *')) if (e.tagName !== 'CANVAS') e.dataset.vis = e.style.visibility, e.style.visibility = 'hidden'; });

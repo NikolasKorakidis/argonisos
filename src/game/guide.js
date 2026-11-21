@@ -25,7 +25,7 @@ export function steps(g) {
     { t: 'Make a crude axe', h: `${K('C')} → <b>Crude Axe</b>: 5 wood, 4 stone, 2 rope. Out of rope? Gather <b>fiber bushes</b> (3 fiber → 2 rope by hand), or 1 leather → 10 rope at the workbench.`, done: () => seen('crudeAxe') },
     { t: 'Fell a tree', h: 'Axe in hand, strike a tree until it falls, then split the log for wood.', done: () => g.harvest.stumps.length > 0 },
     { t: 'Build a campfire', h: `Build → <b>Campfire</b> (10 stone, 10 wood). It keeps you warm and cooks meat on a cooking stand.`, done: () => placed('campfire') },
-    { t: 'Put a roof over your workbench', h: 'Walls and thatch roofs need rope. Most workbench recipes need a roof over the bench.', done: () => g.build.placed.some((p) => p.id === 'workbench' && g.build.underRoof(p.pos, 1.2)) },
+    { t: 'Put a roof over your workbench', h: 'Walls and thatch roofs need rope. Most workbench recipes need a roof over the bench.', done: () => g.build.placed.some((p) => p.id === 'workbench' && g.build.sheltered(p.pos, 1.2)) },
     { t: 'Make a bed and sleep', h: 'Build → <b>Bed</b> (8 wood, 2 leather) under a roof. Use it (E) to set your spawn; at night you can sleep.', done: () => !!g.S.bed },
     { t: 'Make a bow and arrows', h: 'At the roofed workbench: <b>Crude Bow</b> (10 wood, 4 rope, 1 leather) and <b>Crude Arrows</b> (5 wood, 1 feather → 10). The Minotaur is weak to piercing.', done: () => seen('crudeBow') && seen('crudeArrow') },
     { t: 'Find the Ancient Temple and pray', h: 'It stands on a rise out in the meadows. The altar before its steps gives Zeus\'s Blessing, once a day.', done: () => tr().prayDay >= 1, go: () => SITES.temple },
@@ -34,7 +34,7 @@ export function steps(g) {
     { t: 'Call the Minotaur', h: `Go to the Labyrinth and lay the tribute on its altar (${K('E')}). Eat well first.`, done: () => !!g.trial.boss || tr().down.minotaur, go: () => SITES.labyrinth },
     { t: 'Defeat the Minotaur', h: 'Arrows and spears hurt him most. Skeletons rise every 30 seconds. Don\'t leave the arena.', done: () => tr().down.minotaur, go: () => SITES.labyrinth },
     { t: 'Bring the Minotaur\'s head to Zeus\'s temple', h: `Pick up his head, then lay it on its stand before the temple's steps, the one on the left with the bull in gold and the light over it (${K('E')}).`, done: () => tr().offered.minotaur, go: () => stand('minotaur') },
-    { t: 'Enter the forest of Yleos', h: `The dark forest ring around the meadows. Try the Minotaur's Roar (${K('F')}). Dryads fear fire; giants hit very hard.`, done: () => g.owl.st.done.includes('yleos') || biomeWeights(P().x, P().z).y > 0.75 },
+    { t: 'Enter the forest of Yleos', h: `The dark forest ring around the meadows. Try the Minotaur's Roar (${K('F')}). Dryads fear no fire (only dryadlings shy from a campfire); giants hit very hard.`, done: () => g.owl.st.done.includes('yleos') || biomeWeights(P().x, P().z).y > 0.75 },
     { t: 'Take rubbings in three Giant caves', h: () => `Each cave on the forest's edge has a giant guard and a carving inside. <b>${tr().carvings.length} / 3</b>`, done: () => tr().carvings.length >= 3 || tr().revealed.chimera, go: () => nearest(P(), left('carvings')) },
     { t: 'Gather the Chimera\'s tribute', h: () => `<b>${Math.min(3, inv.count('dryadHeart'))} / 3</b> dryad hearts (some dryads carry one) · <b>${Math.min(10, inv.count('pomegranate'))} / 10</b> pomegranates (meadow groves).`, done: () => (has('dryadHeart', 3) && has('pomegranate', 10)) || !!g.trial.boss || tr().down.chimera },
     { t: 'Call the Chimera', h: `Lay the tribute on the altar of its shrine (${K('E')}). Lightstone gear and Cretan armour help.`, done: () => (g.trial.boss?.type === 'chimera') || tr().down.chimera, go: () => SITES.chimera },
@@ -54,7 +54,7 @@ export class Guide {
     const S = this.steps, done = this.st.done;
     // a step counts as done once its condition was met while it (or a later one) was current
     let i = 0; while (i < S.length && (done.includes(i) || S[i].done())) { if (!done.includes(i)) { done.push(i); if (i === this.cur) this.g.hud.toast(`Step done: <b>${S[i].t}</b>`); } i++; }
-    if (i !== this.cur) { this.cur = i; if (i < S.length && this.shown) this.g.sound?.('reveal'); this.shown = true; }
+    if (i !== this.cur) { this.cur = i; if (i < S.length && this.shown) this.g.sound?.('chime'); this.shown = true; }
     const s = S[i];
     this.g.map.guideTarget = s?.go ? { ...s.go(), label: s.t } : null;
     const P = this.g.player.pos, tgt = this.g.map.guideTarget, dist = tgt ? Math.round(Math.hypot(tgt.x - P.x, tgt.z - P.z)) : null;

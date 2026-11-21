@@ -8,12 +8,14 @@ import { piece } from './site-pack.js';
 import { clearGrass } from './grass.js';
 import { seeded } from '../util/math.js';
 
-const BAY = 2.5, STOREY = 3, R90 = Math.PI / 2;
+const BAY = 2.5, STOREY = 3, PITCH = 0.75, R90 = Math.PI / 2;
 // the houses as tools/assets/manifest.json builds them: bays across the front (w) and deep (d), the doorway's front bay,
-// the bays gone altogether ([side, bay]: sides run front, right, back, left) and how much roof is left
+// the bays gone altogether ([side, bay]: sides run front, right, back, left) and how much roof is left. hole: the bay of
+// the front slope whose panel has fallen in (tester, 20 Nov: no house is ever perfect), for a roof patch to close; the
+// peaked roofs one bay deep (C, the shed) can't take a patch, so they stay whole
 const HOUSE = {
-  twHouseA: { w: 3, d: 2, door: 1, roof: 'full' }, twHouseB: { w: 2, d: 2, door: 0, gone: [[1, 1]], roof: 'half' }, twHouseC: { w: 2, d: 1, door: 0, roof: 'full' },
-  twHouseD: { w: 4, d: 2, door: 1, gone: [[0, 3]], roof: 'half' }, twHouseE: { w: 3, d: 2, door: 1, gone: [[2, 1], [3, 1]], roof: 'none' }, twHouseF: { w: 2, d: 2, door: 1, roof: 'full' },
+  twHouseA: { w: 3, d: 2, door: 1, roof: 'full', hole: 2 }, twHouseB: { w: 2, d: 2, door: 0, gone: [[1, 1]], roof: 'half' }, twHouseC: { w: 2, d: 1, door: 0, roof: 'full' },
+  twHouseD: { w: 4, d: 2, door: 1, gone: [[0, 3]], roof: 'half' }, twHouseE: { w: 3, d: 2, door: 1, gone: [[2, 1], [3, 1]], roof: 'none' }, twHouseF: { w: 2, d: 2, door: 1, roof: 'full', hole: 0 },
   twShed: { w: 1, d: 1, door: 0, roof: 'full' }, twShell: { w: 3, d: 1, door: 1, gone: [[2, 1], [2, 2]], roof: 'none' },
 };
 // a point of a piece (its own lx, lz) placed at x, z turned rot, in the site's frame
@@ -23,7 +25,11 @@ function roofOf(st, ctx, x, z, rot, a, b, c, d, y) { const [x0, z0] = at(x, z, r
 
 // a house at x, z, its front (and door) turned to face rot (0: +z)
 function house(st, ctx, k, x, z, rot) {
-  const H = HOUSE[k], W = H.w * BAY, D = H.d * BAY; ctx.P.push(...piece(k, x, 0, z, rot));
+  const H = HOUSE[k], W = H.w * BAY, D = H.d * BAY, hole = H.hole;
+  // (the hole: that bay's front panel left out of the model, a box in its own frame from the left front corner, short of
+  // the gable's trim; its edges are where a roof patch snaps, structures.js anchorsNear)
+  ctx.P.push(...piece(k, x, 0, z, rot, 1, hole === undefined ? null : [[hole * BAY + 0.16, (hole + 1) * BAY - 0.16, STOREY + 0.02, STOREY + 1.2, -BAY + 0.02, 0.8]]));
+  if (hole !== undefined) for (const t of [0, 0.5, 1]) for (const [y, lz] of [[STOREY, D / 2], [STOREY + PITCH, D / 2 - BAY]]) { const q = st.w(ctx, ...at(x, z, rot, -W / 2 + (hole + t) * BAY, lz), y); q.rot = ctx.rot + rot; st.anchors.push(q); }
   for (const [s, n] of [[0, H.w], [1, H.d], [2, H.w], [3, H.d]]) for (let i = 0; i < n; i++) {
     if ((H.gone || []).some(([gs, gi]) => gs === s && gi === i)) continue;
     const [a, b, c, d] = s === 0 ? [-W / 2 + i * BAY, D / 2, -W / 2 + (i + 1) * BAY, D / 2] : s === 1 ? [W / 2, D / 2 - i * BAY, W / 2, D / 2 - (i + 1) * BAY]
@@ -31,7 +37,10 @@ function house(st, ctx, k, x, z, rot) {
     if (s === 0 && i === H.door) { wallOf(st, ctx, x, z, rot, a, b, a + 0.5, d); wallOf(st, ctx, x, z, rot, c - 0.5, b, c, d); }   // (the doorway: a metre clear in the middle of its bay)
     else wallOf(st, ctx, x, z, rot, a, b, c, d);
   }
-  if (H.roof !== 'none') roofOf(st, ctx, x, z, rot, -W / 2, H.roof === 'full' ? W / 2 : -W / 2 + Math.max(1, Math.floor(H.w / 2)) * BAY, -D / 2, D / 2, STOREY);
+  if (hole !== undefined) {   // (sheltered everywhere but under the hole)
+    roofOf(st, ctx, x, z, rot, -W / 2, W / 2, -D / 2, 0, STOREY);
+    for (let i = 0; i < H.w; i++) if (i !== hole) roofOf(st, ctx, x, z, rot, -W / 2 + i * BAY, -W / 2 + (i + 1) * BAY, 0, D / 2, STOREY);
+  } else if (H.roof !== 'none') roofOf(st, ctx, x, z, rot, -W / 2, H.roof === 'full' ? W / 2 : -W / 2 + Math.max(1, Math.floor(H.w / 2)) * BAY, -D / 2, D / 2, STOREY);
   return { W, D };
 }
 // the stoa: six columns along the front, a lean-to roof rising to a back wall (12.5 × 5 m)

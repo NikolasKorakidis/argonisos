@@ -8,6 +8,8 @@
 // and an anvil spreading out at the top some 800 m up. Noise (Perlin-Worley, as in Horizon Zero Dawn's clouds) pushes
 // that surface in and out into billows and towers, turning slowly round the marsh and rolling upward as it goes.
 
+import { MIST_TONE } from '../render/atmosphere.js';
+
 // ---- The noise, baked into a 64³ texture that tiles: r Perlin-Worley (billows with soft gaps), g and b Worley at two
 // finer scales (cauliflower detail), a Perlin fBm (to warp the others)
 export const NOISE_FRAG = `
@@ -54,7 +56,8 @@ export const COMMON = `
   vec3 turn(vec3 p, float a) { vec2 c = p.xz - centre; float s = sin(a), k = cos(a); vec2 r = centre + vec2(k * c.x - s * c.y, s * c.x + k * c.y); return vec3(r.x, p.y, r.y); }`;
 
 export const MARCH_FRAG = `${COMMON}
-  uniform vec3 sunDir, sunCol, ambCol, fogCol, flashCol, glowCol, mzCol; uniform float fogV, fogMax, glow, mzR1, mzAmt, mzTop, mzSoft;
+  uniform vec3 sunDir, sunCol, ambCol, fogCol, flashCol, glowCol; uniform float fogV, fogMax, glow, mzR1, mzAmt, mzTop, mzSoft, lift, floorK;
+  ${MIST_TONE}
   uniform vec4 flashP[4]; uniform float flashI[4]; uniform vec4 caves[4];
   // The cloud's surface at a point: how far inside it the point lies (metres; negative outside). The border field and
   // the profile give the smooth wall; on it great lobes and towers (taller than wide, warped), turning slowly round the
@@ -82,7 +85,7 @@ export const MARCH_FRAG = `${COMMON}
     float t = t0, T = 1.0; vec3 L = vec3(0.0), surf = vec3(0.0); bool first = true, lit0 = false;
     // the player's mist, laid as the atmosphere pass lays it on what lies past its far edge (by where the line of sight is
     // when it reaches that edge), but only over the storm's foot: its towers rise clear of it, however high you stand
-    float mist = mzAmt * (1.0 - smoothstep(mzTop - mzSoft, mzTop + mzSoft, camPos.y + rd.y * (mzR1 / max(length(rd.xz), 1e-3))));
+    float mist = mzAmt * mistUp(camPos.y + rd.y * (mzR1 / max(length(rd.xz), 1e-3))); vec3 mzc = mistTone(rd);
     for (int i = 0; i < 64; i++) {
       if (t >= t1 || T < 0.04) break;
       vec3 p = camPos + rd * t; vec2 fg = fieldAt(p.xz); float h = p.y - fg.y;
@@ -119,16 +122,19 @@ export const MARCH_FRAG = `${COMMON}
           vec3 g = vec3(envAt(p + vec3(e, 0.0, 0.0), hh, l2, m2), envAt(p + vec3(0.0, e, 0.0), hh, l2, m2), envAt(p + vec3(0.0, 0.0, e), hh, l2, m2)) - env;
           vec3 N = -normalize(g + 1e-4), hz = vec3(0.0, smoothstep(-30.0, uTop, h), 0.0);
           float sun = clamp(dot(N, sunDir) * 0.6 + 0.4, 0.0, 1.0), sky = clamp(0.5 + 0.5 * N.y, 0.0, 1.0);
-          surf = ambCol * sky * (0.06 + 0.94 * hz.y * hz.y) + sunCol * sun * sun * (0.05 + 0.95 * hz.y * hz.y);   // (the lower half sunk in its own shadow)
+          surf = ambCol * sky * (floorK * 0.6 + (1.0 - floorK * 0.6) * hz.y * hz.y) + sunCol * sun * sun * (0.05 + 0.95 * hz.y * hz.y);   // (the lower half sunk in its own shadow: by night and in a storm near black)
+          // a silver lining on the billows' sunlit tops, brightest where they turn away from the eye: what makes a dark
+          // cloud read as cloud rather than as a hole in the sky
+          surf += sunCol * pow(1.0 - abs(dot(N, rd)), 3.0) * max(dot(N, sunDir), 0.0) * smoothstep(0.15, 0.6, hz.y) * 1.6;
         }
         // and within that, each billow lit on its upper side and in shade below, darker the deeper in
         float skin = exp(-max(env, 0.0) / 45.0), bump = 0.55 + (mid - 0.5) * 1.4 + (lo - 0.5) * 0.6;
-        vec3 c = (lit0 ? surf : ambCol * 0.1) * max(bump, 0.05) * max(bump, 0.05) * 1.6 * (0.2 + 0.8 * skin) * 0.4;
+        vec3 c = (lit0 ? surf : ambCol * floorK) * max(bump, 0.05) * max(bump, 0.05) * 1.6 * (0.2 + 0.8 * skin) * lift;   // (lift: brighter by day, stormwall.js)
         c = mix(c, ambCol * 0.35, rain / max(rain + dens, 1e-3) * 0.7);
         // lightning inside the cloud, lighting it from within
         float fl = 0.0; for (int k = 0; k < 4; k++) if (flashI[k] > 0.0) fl += flashI[k] * exp(-length(p - flashP[k].xyz) / flashP[k].w);
         float fk = min(fogMax, 1.0 - exp(-t / fogV));
-        c = mix(mix(c, fogCol, fk), mzCol, mist * (1.0 - smoothstep(60.0, 220.0, h))) + flashCol * fl * (0.3 + 0.7 * skin) * max(bump, 0.2) * (1.0 - fk * 0.7);
+        c = mix(mix(c, fogCol, fk), mzc, mist * (1.0 - smoothstep(60.0, 220.0, h))) + flashCol * fl * (0.3 + 0.7 * skin) * max(bump, 0.2) * (1.0 - fk * 0.7);
         L += T * (a * c + glowCol * zap * dt * 0.01 * (1.0 - fk));
         T *= 1.0 - a;
       }

@@ -30,12 +30,15 @@ import { updateAtmosphere, setWoodsTexture } from './render/atmosphere.js';
 import { HUD } from './ui/hud.js';
 import { installGame } from './game/game.js';
 import { titleScreen, pauseMenu } from './ui/title.js';
-import { devMenu } from './ui/dev.js';
+import { devMenu } from './ui/devmenu.js';
 import { wettable, updateShelter, WET } from './world/wetness.js';
 import { updateWindLines } from './world/wind.js';
 import { perfBegin, perfEnd, lap, PERF } from './ui/perf.js';
 import { SETTINGS, setPerfOverlay } from './ui/settings.js';
 import { fadeAhead } from './render/occlusion.js';
+import { updateMusic, MUSIC } from './audio/music.js';
+import { AUDIO } from './audio/sound.js';
+import { timeK } from './render/fx.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -57,7 +60,7 @@ veg.onCell = (key, items, cx, cz) => {
   if (!items) { colliders.removeGroup('v' + key); return; }
   const list = [];
   for (let i = 0; i < items.length / STRIDE; i++) {
-    const o = i * STRIDE, sp = SPECIES[items[o]]; if (!sp.col || veg.removed.has(`${cx},${cz},${i}`)) continue;
+    const o = i * STRIDE, sp = SPECIES[items[o]]; if (!sp.col || !(items[o + 6] > 0) || veg.removed.has(`${cx},${cz},${i}`)) continue;   // (nor the slots the layout left empty, at no size: review, an axe felled them from thin air)
     const s = items[o + 6]; list.push({ x: items[o + 2], z: items[o + 4], y: items[o + 3], r: sp.col * s, h: sp.h ? sp.h * s * 1.4 : undefined, ref: { cx, cz, i, sp: items[o], s } });
   }
   colliders.addGroup('v' + key, list);
@@ -74,12 +77,13 @@ player.spawn(SPAWN.x, SPAWN.z); player.camYaw = Math.PI * 0.8; player.yaw = play
 const inv = new Inventory(), hud = new HUD();
 hud.bind(player, inv);
 player.onToast = (m) => hud.toast(m);
-player.stats.onLevel = (s, L) => hud.toast(`<b>${s[0].toUpperCase() + s.slice(1)}</b> skill is now level ${L}`);
+player.stats.onLevel = (s, L) => hud.skill(s, L); player.stats.onLearn = (s, L) => hud.skill(s, L, true);   // (a skill found, and each level after it: a banner and a chime)
 const baseDeath = player.stats.onDeath;
-player.stats.onDeath = () => { baseDeath(); hud.death(true); game.onDeath?.(); setTimeout(respawn, 5500); };
+// (death costs every skill you have used a share of what you've learned of it, as in Valheim: stats.js deathPenalty, told
+// on the death screen; taken at once, so a save made on the death screen has it: game.js)
+player.stats.onDeath = () => { baseDeath(); hud.death(true, player.stats.deathPenalty()); game.onDeath?.(); setTimeout(respawn, 5500); };
 function respawn() {
   hud.death(false);
-  const skills = Object.values(player.stats.skills), k = skills[Math.floor(Math.random() * skills.length)]; k.xp *= 0.95;   // death costs 5% of one skill's progress
   const bed = S.bed || SPAWN; player.revive(bed.x, bed.z); snapWeather();
   hud.toast('Zeus lifts you up again. <b>Zeus\'s Favour</b> carries you for a while.');
 }
@@ -121,7 +125,7 @@ function updateConditions() {
   st.set('cold', (night || st.has('wet')) && !fire && !(game.warmArmor?.() ?? false));
 }
 // Game systems (crafting, building, creatures...) plug in here
-export const game = { player, inv, hud, veg, colliders, scene, S, pool, useSlot };
+export const game = { player, inv, hud, veg, colliders, scene, S, pool, useSlot, spawnAt: SPAWN };
 installGame(game);
 // Free flight (F9 or the dev menu): the camera flies; leaving it sets the hero down on the ground below
 game.setFly = (on) => {
@@ -154,19 +158,19 @@ const clock = new THREE.Clock(); let fpsT = 0, frames = 0, fps = 60, atmo = { ov
 function loop() {
   requestAnimationFrame(loop); perfBegin(renderer);   // (the performance overlay, F3: ui/perf.js; nothing while it's off)
   if (!warmed && loaded() >= 1) warmUp();   // (also when the title screen is skipped)
-  const dt = Math.min(clock.getDelta(), 0.05), t = S.still ? 100 : clock.elapsedTime;
+  const raw = Math.min(clock.getDelta(), 0.05), dt = raw * timeK(raw), t = S.still ? 100 : clock.elapsedTime;   // (a moment of slow motion as a boss lands: render/fx.js slowMo)
   if (!game.paused) S.time += dt * S.timeScale / DAY_SECONDS; if (S.time >= 1) { S.time -= 1; S.day++; hud.toast(`<b>Day ${S.day}</b> dawns`); }
   // keys
   const busy = !game.started || game.paused;
   const pauseKey = hit('KeyP') || (hit('Escape') && performance.now() - (game.pausedAt || 0) > 400);   // (the Esc that just paused us via the mouse release doesn't unpause)
-  if (game.started && pauseKey && !hud.open && !game.map?.open && !game.owl?.open && !game.buildMenu?.open && !(game.build?.sel && !game.paused)) game.pause(!game.paused);
+  if (game.started && pauseKey && !hud.open && !game.map?.open && !game.owl?.open && !game.owl?.reading && !game.buildMenu?.open && !(game.build?.sel && !game.paused)) game.pause(!game.paused);
   if (!busy && !game.buildMenu?.open && (hit('Tab') || hit('KeyI') || (hit('Escape') && hud.open))) hud.toggle();
   if (!busy && !input.uiOpen) for (let k = 1; k <= 8; k++) if (hit('Digit' + k)) useSlot(k - 1);
   if (hit('F3')) setPerfOverlay(!SETTINGS.perf);
   if (S.debug !== PERF.on) { S.debug = GPU.on = PERF.on; $('dbg').classList.toggle('hidden', !S.debug); }   // (the overlay and the old debug line together)
   if (hit('F9') && !busy) game.setFly(!S.fly);
   if (S.debug && hit('KeyT')) S.timeScale = S.timeScale === 1 ? 60 : 1;
-  lap('input'); if (!busy) game.update?.(dt, t); lap('game');
+  lap('input'); if (!busy) game.update?.(dt, t); updateMusic(dt, game); lap('game');   // (the music on the title screen too: audio/music.js)
   player.frozen = S.fly || hud.open || busy; player.hero.still = S.still; if (!game.paused) player.update(dt);
   if (S.fly) updateFly(dt); lap('player');
   if (!busy) { updateConditions(); player.stats.update(dt); updateRegion(); }
@@ -215,6 +219,6 @@ function loop() {
   }
 }
 loop();
-window.AG = { game, player, inv, hud, STORM_WALL, setWeather, snapWeather, WEATHER, THREE, scene, camera, renderer, terrain, veg, pool, S, heightAt, biomeWeights, sun, render, fly,
+window.AG = { game, player, inv, hud, AUDIO, MUSIC, STORM_WALL, setWeather, snapWeather, WEATHER, THREE, scene, camera, renderer, terrain, veg, pool, S, heightAt, biomeWeights, sun, render, fly,
   teleport(x, z, yaw = player.camYaw, pitch = player.camPitch) { player.spawn(x, z); player.camYaw = yaw; player.yaw = yaw + Math.PI; player.camPitch = pitch; snapWeather(); },
   get fps() { return fps; } };

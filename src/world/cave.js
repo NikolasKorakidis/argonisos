@@ -9,7 +9,7 @@
 // what it builds is plain arrays, and the field is kept for what needs the rock's shape later (walls to bump into, the
 // roof to walk on, the camera, things on the walls).
 import { CAVE, CAVE_FORM as F, caveWorld, caveRho, caveCut, caveCliff, caveFloor, caveShade, heightAt, groundColor, biomeWeights } from './gen.js';
-import { smooth, clamp, lerp } from '../util/math.js';
+import { smooth, clamp, lerp, seeded } from '../util/math.js';
 
 export const STEP = 0.5;   // (the grid: the terrain's own mesh is 2 m, so this is four times as fine)
 const P = 2.4;            // (the chamber's and the passage's sections: squarer than an ellipse, walls steep at the floor)
@@ -57,7 +57,7 @@ export function caveRock(c, o = {}) {
   // blocks of the same rock fallen from it: big ones at the cliff's foot (o.fallen: [u, how far out from the foot, size]),
   // rubble along the chamber's walls
   const at2 = (u, v) => clamp(Math.round((v - v0) / STEP), 0, nv - 1) * nu + clamp(Math.round((u - u0) / STEP), 0, nu - 1), blocks = [];
-  let rs = (sd * 7919 + 13) % 2147483647; const rnd = () => ((rs = (rs * 16807) % 2147483647) - 1) / 2147483646;
+  const rnd = seeded((sd * 7919 + 13) % 2147483647);
   const ground = (n) => (CD[n] >= F.RAMP ? HS[n] : lerp(FL[n], HS[n], smooth(0, F.RAMP, CD[n])));   // (the land as the terrain has it: gen.js caveGround)
   const block = (u, v, s, out) => { const a = rnd() * 6.28, b = { u, v, y: ground(at2(u, v)) + s * (0.15 + rnd() * 0.2), sx: s * (0.9 + rnd() * 0.5), sy: s * (0.55 + rnd() * 0.3), sz: s * (0.75 + rnd() * 0.4), cs: Math.cos(a), sn: Math.sin(a), out }; b.r = Math.max(b.sx, b.sz) * 1.5 + 0.5; blocks.push(b); };
   for (const [bu, out, s] of o.fallen || []) { let v = caveCliff(c, bu) + 9; while (v > v0 + 1 && TOP[at2(bu, v)] - FL[at2(bu, v)] < 1.4) v -= 0.25; block(bu, v + out, s, true); }

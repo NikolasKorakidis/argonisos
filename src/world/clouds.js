@@ -77,7 +77,8 @@ function mistGeo(seed) {
 const CUMULUS = [
   ['clouds/cumulus-wide-1', 30, 240, 520, 0], ['clouds/cumulus-wide-2', 30, 220, 480, 0], ['clouds/cumulus-wide-3', 26, 260, 560, 0.1], ['clouds/cumulus-long', 26, 300, 640, 0],
   ['clouds/cumulus-tower-1', 8, 320, 560, 0.35], ['clouds/cumulus-tower-2', 10, 280, 520, 0.25],
-  ['clouds/cumulus-puff-1', 44, 80, 190, 0], ['clouds/cumulus-puff-2', 44, 70, 170, 0], ['clouds/cumulus-puff-3', 40, 90, 200, 0],
+  // (the puffs fewer and none small: the review of 20 Nov found the many little ones read as pebbles in the sky)
+  ['clouds/cumulus-puff-1', 14, 160, 280, 0], ['clouds/cumulus-puff-2', 12, 150, 260, 0], ['clouds/cumulus-puff-3', 10, 170, 300, 0],
 ];
 
 // ---- Light. Shared by every cloud material: the uniforms the sky (sky.js) and the lightning (lightning.js) already keep
@@ -86,7 +87,7 @@ const DOME = skyDome.material.uniforms;
 const CU = {
   uLightDir: { value: lightDir }, uLit: { value: new THREE.Color() }, uAmb: { value: new THREE.Color() }, uTop: DOME.top, uHor: DOME.hor, uFog: { value: scene.fog.color },
   uFlashP: { value: flashP }, uFlashI: { value: flashI }, uFlashCol: { value: new THREE.Color(0.78, 0.84, 1.0) }, uGlow: { value: 0 }, uHide: { value: 0 }, uFogR: { value: new THREE.Vector2(300, 2400) },
-  uStorm: { value: null }, uStormOn: { value: 0 },
+  uStorm: { value: null }, uStormOn: { value: 0 }, uNight: { value: 0 },
 };
 // ---- Zeus's storm: no cloud of the sky's may stand in its wall, nor show beyond it (the wall is drawn over the frame
 // afterwards, so one there shows through it, or is cut off as the wall's own pass comes and goes). How far each place
@@ -110,7 +111,7 @@ const STORM_GLSL = `uniform sampler2D uStorm; uniform float uStormOn;
     for (int i = 1; i < 8; i++) k = min(k, smoothstep(0.0, 250.0, stormD(mix(cameraPosition.xz, c, float(i) / 8.0))));
     return k;
   }`;
-const LIGHT_GLSL = `uniform vec3 uLightDir, uLit, uAmb, uTop, uHor, uFog, uFlashCol; uniform vec4 uFlashP[4]; uniform float uFlashI[4], uGlow, uHide; uniform vec2 uFogR;
+const LIGHT_GLSL = `uniform vec3 uLightDir, uLit, uAmb, uTop, uHor, uFog, uFlashCol; uniform vec4 uFlashP[4]; uniform float uFlashI[4], uGlow, uHide, uNight; uniform vec2 uFogR;
   // lightning: each flash lights the cloud round it, out to a share of its reach, and the whole sky a little
   vec3 flashAt(vec3 p, float spread) { vec3 c = vec3(0.0); for (int i = 0; i < 4; i++) { if (uFlashI[i] < 0.001) continue;
     float d = distance(p, uFlashP[i].xyz) / (uFlashP[i].w * spread); c += uFlashCol * uFlashI[i] * exp(-d * d); } return c + uFlashCol * uGlow * 0.3; }
@@ -122,9 +123,12 @@ const LIGHT_GLSL = `uniform vec3 uLightDir, uLit, uAmb, uTop, uHor, uFog, uFlash
   vec3 cloudLight(vec3 n, vec3 p, float up, float ao) {
     vec3 V = normalize(p - cameraPosition); float base = mix(0.6, 1.0, smoothstep(0.0, 0.6, up)), o = mix(0.5, 1.0, ao);
     float w = dot(n, uLightDir), l = clamp((w + 0.45) / 1.45, 0.0, 1.0);
-    vec3 amb = uAmb * (0.64 + 0.36 * n.y) * o * mix(0.78, 1.0, base);
+    vec3 amb = uAmb * (0.8 + 0.2 * n.y) * mix(0.75, 1.0, o) * mix(0.85, 1.0, base);   // (the shade never far below the sky's own: a cloud is lit from all round)
     vec3 c = mix(amb, amb * vec3(0.86, 0.94, 1.08), clamp(-w, 0.0, 1.0) * 0.7) + uLit * l * l * base * mix(0.7, 1.0, ao);
     c += uLit * pow(max(dot(V, uLightDir), 0.0), 6.0) * (0.15 + 1.2 * pow(1.0 - abs(dot(n, V)), 3.0));   // (lit through towards the sun, brightest at the rim)
+    // by night a cloud is the night sky's own colour, a shade lighter, with the moon only on its rim: lit grey shapes
+    // against the stars read as rocks
+    c = mix(c, skyAt(p) * 1.25 + uLit * pow(1.0 - abs(dot(n, V)), 3.0) * 0.6, uNight * 0.6);
     return c + flashAt(p, 1.8);
   }`;
 const NOISE_GLSL = `float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -138,7 +142,11 @@ const NOISE_GLSL = `float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.
 // its height, and aMisc.x turns its billows round it. land: lying on Olympos, in the land's fog; the rest are the sky's,
 // and keep out of Zeus's storm)
 const RING = 32;
+// (the solid sky clouds melt away at their flat bases rather than ending in a hard sheet: the last of their height fades
+// into the sky's colour behind, so no sorting is needed (a fade through the antialiasing's coverage showed as a stipple
+// on Ultra); seen from straight below, where a cumulus does show its flat grey base, they keep it)
 function cloudMat({ soft = false, mist = false, land = false, own = false, ring = false, tint = 1, tile = 0, haze = [1200, 4300] } = {}) {
+  const fade = !soft && !land;
   const U = { ...CU, uCam: { value: new THREE.Vector3() }, uOff: { value: new THREE.Vector2() }, uTile: { value: tile }, uCover: { value: 1 }, uH: { value: 1 },
     uTint: { value: tint }, uHaze: { value: new THREE.Vector2(...haze) }, uRad: { value: new Array(RING).fill(100) }, uR0: { value: 0.4 }, uRW: { value: 0.05 } };
   const g = soft ? 'mix(0.7, 1.0, k)' : 'k';
@@ -173,7 +181,7 @@ function cloudMat({ soft = false, mist = false, land = false, own = false, ring 
         ${land ? `c = mix(c, uFog, smoothstep(uFogR.x, uFogR.y, dist));   // (lying on the land, they're in its fog as the land is)` : ''}
         ${soft ? `// soft: the edges seen side-on thin away, and it fades as you walk into it (the fog takes over: cloudAt)
         float a = vK * ${mist ? 'vFade * 0.6' : 'smoothstep(0.0, 0.5, abs(dot(n, normalize(vP - cameraPosition))))'} * smoothstep(10.0, ${mist ? '45.0' : '110.0'}, dist);   // (mist: soft to its rims, whichever way it's seen)
-        if (a < 0.003) discard; gl_FragColor = vec4(c, a);` : 'gl_FragColor = vec4(c, 1.0);'}
+        if (a < 0.003) discard; gl_FragColor = vec4(c, a);` : fade ? `float side = 1.0 - smoothstep(0.25, 0.6, normalize(vP - cameraPosition).y); c = mix(c, mix(skyAt(vP), c, smoothstep(0.0, 0.3, vUp)), side); gl_FragColor = vec4(c, 1.0);` : 'gl_FragColor = vec4(c, 1.0);'}
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
@@ -212,7 +220,7 @@ CUMULUS.forEach(([name, n, w0, w1, floor], v) => {
     a.aPos.set([(r() - 0.5) * TILE, BASE + (r() - 0.5) * 60, (r() - 0.5) * TILE], i * 3); a.aSize.set([w, w * (0.85 + r() * 0.3), w * (0.85 + r() * 0.3)], i * 3);
     a.aMisc.set([r() * 6.28, floor + r() * (0.9 - floor), 1, 0], i * 4);
   }).byDice();
-  cumulus.push(K); shapes[name] = loadPack(name).then((gl) => { const g = norm(bake(gl.scene, true)); K.swap(g); return g; });   // (with their baked colours; without the pack files: the heaps)
+  cumulus.push(K); shapes[name] = loadPack(name).then((gl) => { const g = soften(norm(bake(gl.scene, true)), 0.7); K.swap(g); return g; });   // (with their baked colours, shaded smoothly with the outline still low-poly; without the pack files: the heaps)
   shapes[name].catch(() => {});   // (the others that reuse a shape catch on their own)
 });
 // ---- Out at the horizon, always round you like the sky itself (the tile's own thin out into the haze long before): a few
@@ -382,10 +390,10 @@ export function updateClouds(dt, { time = 0, still = false, dayT = 0.3, dayN = 1
     for (const [o, T] of [[cuOff, TILE], [scudOff, SCUD_TILE]]) { o.x %= T; o.y %= T; } }   // (they wrap by whole tiles: kept small, so the GPU's floats stay exact)
   // the light: the sun's (or moon's) own colour and strength, as the sky has set it (a flash already in it), and the sky's
   const day = LIGHT.day;
-  CU.uLit.value.copy(sun.color).multiplyScalar(Math.min(3.2, sun.intensity) * 0.36).lerp(_c.copy(sun.color).multiplyScalar(0.5).multiply(WARM), LIGHT.dusk * 0.35);
+  CU.uLit.value.copy(sun.color).multiplyScalar(Math.min(3.2, sun.intensity) * 0.36 * (1 + 0.4 * day)).lerp(_c.copy(sun.color).multiplyScalar(0.5).multiply(WARM), LIGHT.dusk * 0.35);
   CU.uAmb.value.copy(DOME.hor.value).multiplyScalar(0.55).add(_c.copy(DOME.top.value).multiplyScalar(0.25)).add(_c.setScalar(0.03 + day * 0.3)).lerp(_c.copy(scene.fog.color).multiplyScalar(1.1), ov * 0.75);   // (the sky's colour, paled: a cloud's shade is grey-blue, not blue; under a heavy sky the weather's grey)
   CU.uAmb.value.lerp(DOME.hor.value, LIGHT.dusk * 0.35 * (1 - ov));   // (at dawn and dusk the shade takes the glow of the horizon)
-  CU.uGlow.value = LIGHTNING.glow;
+  CU.uGlow.value = LIGHTNING.glow; CU.uNight.value = LIGHT.night;
   for (const m of [mistMat, ...MTN.rings.map((R) => R.K.mat)]) m.uniforms.uTint.value = lerp(1, 0.62, ov);   // (the mountain's clouds as grey as the sky in bad weather)
   // Zeus's storm, once the land is there to find it (and none once it's open)
   if (!CU.uStorm.value) CU.uStorm.value = stormMap();

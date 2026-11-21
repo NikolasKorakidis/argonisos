@@ -1,5 +1,12 @@
 # Making Argonisos more beautiful: the plan
 
+> Status: partly done, and its "Where we are" is as of 17 October. Built since: most of phase 1 (one wetness with
+> puddles and ripples, GPU rain kept off under cover, one wind, real lightning: `wetness.js`, `rain.js`, `wind.js`,
+> `lightning.js`), the clouds and fog banks of phase 2 (`clouds.js`), grass clumps (4.1), the trees' leaf flutter (5.1),
+> the far shadow cascade and ambient occlusion of phases 6 and 7 (`shadows-plan.md`, `light-study.md`), the team's
+> recordings placed in the world (phase 9, `audio.md`) and the parchment map (10.1). Not built: splashes, a cirrus
+> layer, weathering on buildings, flipbook particles, the three.js upgrade (11.1).
+
 A plan to raise the look and sound of the game another level, from what other games do that we don't. It is ordered
 by what the player will notice most for the least cost, with the **weather first**.
 

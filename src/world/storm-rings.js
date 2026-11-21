@@ -20,7 +20,7 @@
 //   post passes on (on Low the wall is a plain curtain), and gone once the wall opens.
 import * as THREE from 'three';
 import { OutputPass } from '../../vendor/three/jsm/postprocessing/OutputPass.js';
-import { camera, scene, composer } from '../render/core.js';
+import { camera, composer } from '../render/core.js';
 import { ATMO } from '../render/atmosphere.js';
 import { mergeGeometries, mergeVertices } from '../../vendor/three/jsm/utils/BufferGeometryUtils.js';
 import { seeded, smooth } from '../util/math.js';
@@ -105,7 +105,7 @@ const vert = (COMMON) => `${COMMON}
     // where a band runs into the wall it thins and frays: each lump shrinks as the cloud closes in front of it, some sooner
     // than others
     float fray = smoothstep(0.0, 0.7, 1.0 - wallBefore(mid) + (fract(aA.y * 97.31) - 0.5) * 0.5); s *= mix(0.25, 1.0, fray);
-    sc = vec3(s * aB.y, s * 0.6, s * 0.75); mid.y += (aB.x - s) * 0.35;
+    sc = vec3(s * aB.y, s * 0.8, s * 0.75); mid.y += (aB.x - s) * 0.35;   // (as deep as they are broad across: seen edge-on, flatter read as planks)
     vec3 w = mid + X * position.x * sc.x + vec3(0.0, position.y * sc.y, 0.0) + Z * position.z * sc.z;
     // the wall's lightning, lighting them from within over a long way
     float fl = 0.0; for (int k = 0; k < 4; k++) if (flashI[k] > 0.0) fl += flashI[k] * exp(-length(w - flashP[k].xyz) / (flashP[k].w * 3.0));
@@ -116,18 +116,23 @@ const vert = (COMMON) => `${COMMON}
   }`;
 // Lit per pixel, each face by its own slope: storm grey, lighter on top (the sky's light on what faces up, the sun on what
 // faces it, the undersides in shade); hidden behind the land (the scene's depth, kept as distance for the bolts and for
-// these); graded as the frame is
+// these); graded as the frame is. Lit as the wall is (lift, floorK, stormwall.js): by a fair day some three times as
+// bright, their sunlit tops a little silver, and hazed as far as the wall is; by night and in a storm as dark as before (the
+// lead, 21 Nov: once the wall was lit by day, its rings stood against it as black planks). Their flat undersides thin
+// away into the air, so a band seen from below or edge-on is soft beneath rather than cut.
 const FRAG = `
-  uniform sampler2D tLin; uniform vec2 fullRes; uniform vec3 sunDir, sunCol, ambCol, fogCol, flashCol, gTint; uniform float gSat, vigOffset, vigDark;
+  uniform sampler2D tLin; uniform vec2 fullRes; uniform vec3 sunDir, sunCol, ambCol, fogCol, flashCol, gTint; uniform float gSat, vigOffset, vigDark, lift, floorK;
   varying vec3 vW; varying vec4 vK; varying float vA, vDist, vFog;
   void main() {
     vec2 uv = gl_FragCoord.xy / fullRes; if (vA < 0.02 || texture2D(tLin, uv).r < vDist - 2.0) discard;
     vec3 n = normalize(cross(dFdy(vW), dFdx(vW))); float top = vK.x, sky = 0.5 + 0.5 * n.y, sun = max(dot(n, sunDir), 0.0);
     vec3 amb = mix(ambCol, vec3(dot(ambCol, vec3(0.3, 0.5, 0.2))) * vec3(0.86, 0.92, 1.05), 0.8);   // (the sky's light greyed and cooled a little: the wall's palette, not the meadow's)
-    vec3 c = vec3(0.085, 0.09, 0.105) * vK.y * (amb * (0.25 + 0.75 * sky) * (0.3 + 0.7 * top) * 1.5 + sunCol * sun * top * 1.3 * vK.z) + flashCol * vK.w * (0.12 + 0.2 * top);
+    float day = lift / 0.4 - 1.0;   // (0 by night or in a storm, 2 on a fair day)
+    vec3 c = vec3(0.085, 0.09, 0.105) * vK.y * (amb * (0.25 + 2.0 * floorK + (0.75 - 2.0 * floorK) * sky) * (0.3 + 0.7 * top) * 1.5 + sunCol * sun * top * 1.3 * vK.z) * (1.0 + day) + flashCol * vK.w * (0.12 + 0.2 * top);
+    c += sunCol * smoothstep(0.3, 0.9, n.y) * sun * top * vK.z * 0.05 * day;   // (their sunlit tops a little silver)
     c = mix(c, fogCol, vFog) * gTint; float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = max(mix(vec3(l), c, gSat), 0.0);
     vec2 vu = (uv - 0.5) * vigOffset; c = mix(c, vec3(1.0 - vigDark), dot(vu, vu));
-    gl_FragColor = vec4(c, vA);
+    gl_FragColor = vec4(c, vA * mix(0.45, 1.0, smoothstep(0.0, 0.3, top)));
     #include <colorspace_fragment>
   }`;
 
@@ -137,8 +142,7 @@ const FRAG = `
 // sRGB step, as the output pass gives it.
 const SCENE = new THREE.Scene(), RINGS = { on: false };
 function drawRings(renderer) {
-  const R = MESH.material.uniforms; R.fogCol.value.copy(scene.fog.color).multiplyScalar(0.8); R.fogV.value = Math.max(scene.fog.far * 2.2, 170);   // (the wall's haze, from the fog as it is drawn, as its pass takes it)
-  const veil = Math.min(1, Math.max(0, (60 - scene.fog.far) / 40)); R.fogV.value += (scene.fog.far * 0.5 - R.fogV.value) * veil; R.fogCol.value.multiplyScalar(1 + 0.25 * veil);   // (and a thick fog's: stormwall.js)
+  // (the wall's haze, its fog and its fair day's own, are the wall's uniforms, set as its pass ran this frame: stormwall.js)
   const ac = renderer.autoClear; renderer.autoClear = false; renderer.setRenderTarget(null); renderer.clearDepth(); renderer.render(SCENE, camera); renderer.autoClear = ac;
 }
 
@@ -169,7 +173,7 @@ export function buildStormRings(field, U, COMMON) {
   g.setAttribute('aA', new THREE.InstancedBufferAttribute(new Float32Array(A), 4)); g.setAttribute('aB', new THREE.InstancedBufferAttribute(new Float32Array(B), 4)); g.instanceCount = A.length / 4;
   const ringA = BANDS.map((b) => new THREE.Vector4(b.h, b.th, b.w, b.spin)), ringB = BANDS.map((b, k) => new THREE.Vector4(b.tilt, b.tiltA, b.lit, RING_RADII[k]));
   const mat = new THREE.ShaderMaterial({ vertexShader: vert(COMMON), fragmentShader: FRAG, transparent: true, toneMapped: false, uniforms: {
-    ...U, ringA: { value: ringA }, ringB: { value: ringB }, fogV: { value: 2400 }, fogCol: { value: new THREE.Color() },
+    ...U, ringA: { value: ringA }, ringB: { value: ringB },
     gTint: ATMO.gTint, gSat: ATMO.gSat, vigOffset: ATMO.vigOffset, vigDark: ATMO.vigDark } });
   MESH = new THREE.Mesh(g, mat); MESH.frustumCulled = false; MESH.name = 'stormRings'; SCENE.add(MESH);
   const out = composer.passes.find((p) => p instanceof OutputPass), put = out.render.bind(out);

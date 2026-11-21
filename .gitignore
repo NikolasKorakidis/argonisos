@@ -15,3 +15,6 @@ assets/sounds/pack/
 assets/ui/pack/
 # The private backup of the above (tools/assets/backup.mjs): its own git history, pushed to the team's private repo
 .assets-git/
+
+# The team's asset list (a working spreadsheet): kept on this machine only
+Argonisos asset list.xlsx

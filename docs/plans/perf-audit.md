@@ -1,5 +1,8 @@
 # Performance audit: the plan and what we fixed
 
+> Status: done (14-16 November). "Proposals that would change the picture" were not taken up; the perf round of
+> November 2026 (`docs/reviews/2026-11-perf.md`) carries on from here.
+
 Our own summary, 14 November 2026. A player on a high-end Windows PC (RTX 5080, 64 GB, Chrome, a 60 Hz screen, Ultra)
 reported the game "lagging here and there": hitches, not a low frame rate. We measured every preset, found what made
 the hitches, and fixed what could be fixed without changing the picture. The visual suite stays within its noise and

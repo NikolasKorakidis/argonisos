@@ -2,6 +2,9 @@
 // clips themselves, every attacker's damage comes when its clip is at that moment (never at the start of the swing),
 // stepping aside from a committed swing makes it miss, the bosses' moves keep time with theirs, and a dryad's thorn is
 // thrown from her hand as her throw lets go, glows in her hand first and flies as a visible bolt you can react to.
+// The team's balance sheet (docs/plans/balance.md): a grown hog takes four or five crude-axe blows, hogs keep clear of fire
+// and your torch until hit, a dryadling backs off from your torch once, a dryad doesn't mind it, the Minotaur's charge
+// gores for 42-46 and his dead come in waves on time.
 // Screenshot sequences: a dryad's throw (wind-up, in flight, impact) and a hog's and a giant's blows at impact. All in
 // the meadow's clearing (tests/lib/places.mjs), where no tree stands in the way of a swing, a thorn or the camera.
 import { visit } from '../lib/places.mjs';
@@ -115,6 +118,135 @@ export default {
     await t.step('dryad: hitting her as she winds up breaks off the throw', `${H} clear(); const c = place('dryad', 12, 0.9); if (!(await ready(c))) return 'body never came in'; const n0 = g.combat.thorns.length; c.rangedCd = 0;
       if (!(await until(() => c.state === 'throw', 3000))) return 'no throw'; g.creatures.hurt(c, [[1, 'blunt']], P.pos); await until(() => false, 1200);
       return (g.combat.thorns.length === n0 && !g.combat.glows.has(c)) || 'thrown anyway';`);
+
+    // ---- the balance sheet. A level-0 grown hog, at skill 1, aware (no sneak attack): four or five crude-axe blows, at
+    // either end of its health and for a few rolled at random
+    const hog = await t.eval(`${H} clear(); const S = P.stats.skills.axe, out = [];
+      for (const hp of [50, 65, 0, 0, 0, 0, 0, 0]) {
+        const c = place('hog', 1.2); if (hp) c.hp = c.max = hp; const h0 = c.hp; let hits = 0;
+        if (c.young || c.level || h0 < 50 || h0 > 65) return 'not a grown level-0 hog of 50-65: ' + JSON.stringify({ young: c.young, level: c.level, hp: h0 });
+        while (!c.dead && hits < 20) { S.level = 1; S.xp = 0; c.aware = true; c.pos.set(P.pos.x + Math.sin(P.yaw) * 1.2, c.pos.y, P.pos.z + Math.cos(P.yaw) * 1.2); if (!g.combat.strike(g.ITEMS.crudeAxe)) return 'the axe missed'; hits++; }
+        out.push({ hp: +h0.toFixed(1), hits }); g.creatures.remove(c);
+      }
+      S.level = 1; S.xp = 0; return out;`);
+    if (typeof hog === 'string') t.check('a hog takes four or five crude-axe blows', false, hog);
+    else { t.metric('crude-axe blows to kill a level-0 hog', hog); t.check('a level-0 hog (50-65 health) takes four or five crude-axe blows at skill 1', hog.every((q) => q.hits >= 4 && q.hits <= 5), JSON.stringify(hog)); }
+    // (the torch in the hand and out of it; how near a creature comes over a while, and whether its blow landed)
+    const TORCH = `const torch = (on) => { const i = inv.slots.findIndex((s) => s?.id === 'torch'); if (on && i < 0) { g.give('torch', 1); return torch(on); } if (i >= 0 && !!inv.slots[i].worn !== on) g.equip(i); return g.torchLit() === on; };
+      const watch = async (c, ms, from = 0, stop = false) => { let near = 99, blow = false; const t0 = performance.now(); window._rec = null; await until(() => { if (performance.now() - t0 > from) near = Math.min(near, c.pos.distanceTo(P.pos)); blow ||= window._rec?.c === c; return stop && blow; }, ms); return { near: +near.toFixed(2), blow }; };`;
+    await t.step('a hog keeps out of a campfire\'s light while you stand by it, and away from the torch in your hand, until you hit it: then it attacks through the torch', `${H} ${TORCH} clear(); if (!torch(false)) return 'torch still lit';
+      AG.S.freeBuild = true; const fx = P.pos.x + Math.sin(P.yaw + 1.6) * 1.2, fz = P.pos.z + Math.cos(P.yaw + 1.6) * 1.2, f = B.place('campfire', new V(fx, AG.heightAt(fx, fz), fz), 0); f.state.lit = true; f.state.fuel = 30;
+      let c = place('hog', 4); c.atkCd = 0; const byFire = await watch(c, 3500, 1500); B.remove(f, false); f.state.lit = false; clear();
+      if (byFire.blow || byFire.near < 4) return 'it came at you by the fire: ' + JSON.stringify(byFire);
+      if (!torch(true)) return 'no lit torch'; c = place('hog', 4); c.atkCd = 0; const byTorch = await watch(c, 3500, 1500);
+      if (byTorch.blow || byTorch.near < 4) { torch(false); return 'it came at your torch: ' + JSON.stringify(byTorch); }
+      g.creatures.hurt(c, [[1, 'slash']], P.pos); c.atkCd = 0; const hit = await watch(c, 10000, 0, true); torch(false); window._hogT = { byFire, byTorch, hit };
+      return (c.angered && hit.blow) || 'after the hit it never struck through the torch: ' + JSON.stringify({ angered: c.angered, ...hit });`);
+    t.metric('a hog by a campfire, by your torch, and after you hit it (nearest it came in metres, whether it struck)', await t.eval(`return window._hogT || null;`));
+    await t.step('…a hit on one of a family angers them all, and a hog that has lost you minds the fire again', `${H} clear(); const M = g.creatures.spawnFamily('hog', P.pos.x + 30, P.pos.z, false, 3); if (!M.brood.length) return 'no piglets';
+      g.creatures.hurt(M.brood[0], [[1, 'slash']], P.pos); const all = [M, ...M.brood].every((k) => k.angered); M.state = 'idle'; g.paused = true; g.creatures.update(0.016); g.paused = false; const calmed = !M.angered; clear();
+      return (all && calmed) || JSON.stringify({ all, calmed });`);
+    await t.step('a dryadling backs off for about 2 s at its first sight of your torch, then comes on and strikes, and doesn\'t back off again', `${H} ${TORCH} clear(); if (!torch(true)) return 'no lit torch'; const c = place('dryadling', 9); c.atkCd = 0; if (!(await ready(c))) return 'body never came in';
+      let t0 = null, t1 = null, again = false, blow = false; window._rec = null;
+      await until(() => { const now = performance.now(); if (c.state === 'flee' && t0 === null) t0 = now; else if (t0 !== null && t1 === null && c.state !== 'flee') t1 = now; else if (t1 !== null && c.state === 'flee') again = true; blow ||= window._rec?.c === c; return t1 !== null && blow && now - t1 > 3000; }, 20000); torch(false);
+      const back = t0 !== null && t1 !== null ? +((t1 - t0) / 1000).toFixed(2) : null; window._lingT = { back, again, blow };
+      return (back >= 1.7 && back <= 2.4 && !again && blow && c.torchSeen) || JSON.stringify(window._lingT);`);
+    t.metric('a dryadling at the sight of your torch (seconds backing off, backed off again, struck)', await t.eval(`return window._lingT || null;`));
+    await t.step('a dryad fears no torch: she comes at you and strikes', `${H} ${TORCH} clear(); if (!torch(true)) return 'no lit torch'; const c = place('dryad', 6); c.atkCd = 0; if (!(await ready(c))) return 'body never came in';
+      let fled = false; window._rec = null; const ok = await until(() => { fled ||= c.state === 'flee'; return window._rec?.c === c; }, 10000); torch(false); return (ok && !fled) || JSON.stringify({ ok, fled, d: +c.pos.distanceTo(P.pos).toFixed(1) });`);
+    // the Minotaur's charge: what reaches you before armour (no armour worn, no guard, no roll: the blow as it is struck)
+    const gore = await t.eval(`${H} clear(); if (g.armor() !== 0) return 'armour worn'; const out = [], sd = P.stats.damage; let got = null; P.stats.damage = (n) => { got = n; };
+      for (let n = 0; n < 3; n++) {
+        clear(); const c = place('minotaur', 22); if (!(await ready(c))) return 'body never came in'; c.boss = true; c.cd = { charge: 99, slam: 99, roar: 99, throw: 99 }; got = null; window._rec = null;
+        c.move = { k: 'charge', ph: 0, dir: c.yaw, ...g.trial.timed(c, 'charge', 0.75) }; const ok = await until(() => got !== null, 12000); c.boss = false; c.move = null; c.ctl = null;
+        if (!ok) { P.stats.damage = sd; return 'the charge never gored (' + c.pos.distanceTo(P.pos).toFixed(1) + ' m)'; } out.push({ dmg: +got.toFixed(2), dmgK: c.dmgK, enraged: !!c.enraged });
+      }
+      P.stats.damage = sd; clear(); return out;`);
+    if (typeof gore === 'string') t.check('the Minotaur\'s charge gores', false, gore);
+    else { t.metric('the Minotaur\'s charge before armour', gore); t.check('the Minotaur\'s charge gores for 42-46 pierce before armour', gore.every((q) => q.dmg >= 42 && q.dmg <= 46), JSON.stringify(gore)); }
+    // his dead in waves: the fight's clock run by hand (the world paused, the trial stepped a tenth of a second at a time)
+    // (Zeus's storm held off meanwhile: its bolts would fall on you with the world paused, and the staggers they leave play
+    // out once it runs again, carrying you metres off for the tests after)
+    const waves = await t.eval(`${H} clear(); g.paused = true; const Tr = g.trial, out = {}, storm = Tr.storm; Tr.storm = () => {};
+      const fight = () => { for (const c of [...g.creatures.list]) g.creatures.remove(c); const a = new V(P.pos.x + 20, P.pos.y, P.pos.z), c = g.creatures.spawn('minotaur', a.x, a.z, { level: 0, boss: true, aware: true }); c.arena = a; Tr.begin(c, 'minotaur'); return c; };
+      const run = (s) => { for (let i = 0, n = Math.round(s / 0.1); i < n; i++) Tr.update(0.1); }, at = (c) => ({ waves: Tr.waves, skeletons: g.creatures.list.filter((k) => k.summoned && k.type === 'skeleton').length, near: +Math.min(99, ...g.creatures.list.filter((k) => k.summoned).map((k) => k.pos.distanceTo(P.pos))).toFixed(1) });
+      let c = fight(); c.hp = 301; run(29.8); out.by30 = at(c); run(0.4); out.at30 = at(c); run(29.6); out.by60 = at(c); run(0.4); out.at60 = at(c);
+      c = fight(); run(10); out.by10 = at(c); c.hp = 300; run(0.1); out.at300 = at(c); run(29.7); out.by300and30 = at(c); run(0.4); out.at300and30 = at(c);
+      c = fight(); run(29.9); out.before = at(c); c.hp = 300; Tr.update(Tr.helperT); out.both = at(c); run(29.8); out.bothAnd30 = at(c); run(0.4); out.bothAnd30b = at(c);
+      for (const k of [...g.creatures.list]) g.creatures.remove(k); Tr.boss = null; Tr.storm = storm; Tr.calm(); g.paused = false; return out;`);
+    t.metric('the Minotaur\'s waves of dead', waves);
+    const W = (k) => waves[k]?.waves;
+    t.check('Minotaur, health above 300: no wave before 30 s, one at 30 s (two skeletons, not beside you), the next 30 s later', W('by30') === 0 && W('at30') === 1 && waves.at30.skeletons === 2 && waves.at30.near > 6 && W('by60') === 1 && W('at60') === 2, JSON.stringify(waves));
+    t.check('Minotaur brought to 300 health at 10 s: a wave at once, the next 30 s after it', W('by10') === 0 && W('at300') === 1 && W('by300and30') === 1 && W('at300and30') === 2, JSON.stringify(waves));
+    t.check('Minotaur at 300 health just as 30 s come up: one wave, not two, and the next 30 s after it', W('before') === 0 && W('both') === 1 && waves.both.skeletons === 2 && W('bothAnd30') === 1 && W('bothAnd30b') === 2, JSON.stringify(waves));
+
+    // ---- the Minotaur against a small hero (Patch 22). His moves made by hand, the hero standing still unless a step
+    // says otherwise (damage still counted through hitPlayer, window._rec, but none taken: P.stats.damage is off)
+    const MINO = `const mino = async (d, turn = 0) => { const c = place('minotaur', d, turn); if (!(await ready(c))) return null; c.boss = true; c.cd = { charge: 99, slam: 99, roar: 99, throw: 99, sweep: 99 }; c.spent = 99; c.fatigue = 0; return c; };
+      const done = (c) => { c.boss = false; c.move = null; c.ctl = null; };`;
+    // the roar: stunned for 2 s within its reach (and unable to strike), not outside it (the stun's length in the game's
+    // seconds as it starts, and that it's over within 3 s of real time, whatever the frame rate)
+    const roar = await t.eval(`${H} ${MINO} const out = {};
+      for (const [k, d] of [['near', 10], ['far', 21]]) {
+        clear(); P.stats.remove('stunned'); await until(() => false, 300); const c = await mino(d); if (!c) return 'body never came in'; window._rec = null;
+        c.move = { k: 'roar', ph: 0, ...g.trial.timed(c, 'roar', 1.3) }; let t0 = null, t1 = null, strike = null; const s0 = performance.now();
+        await until(() => { const on = P.stats.has('stunned'); if (on && t0 === null) { t0 = performance.now(); strike = P.strike('punch', 0); window._len = P.stats.cond.stunned; } if (!on && t0 !== null && t1 === null) t1 = performance.now(); return t1 !== null || (t0 === null && performance.now() - s0 > 4500); }, 9000);
+        out[k] = { stunned: t0 !== null, len: t0 !== null ? +window._len.toFixed(2) : null, secs: t0 !== null && t1 !== null ? +((t1 - t0) / 1000).toFixed(2) : null, struck: strike }; done(c);
+      }
+      return out;`);
+    if (typeof roar === 'string') t.check('the Minotaur\'s roar', false, roar);
+    else {
+      t.metric('the Minotaur\'s roar (near: 10 m, far: 21 m)', roar);
+      t.check('the Minotaur\'s roar stuns you within its reach for 2 s (and you can\'t strike meanwhile)', roar.near.stunned && Math.abs(roar.near.len - 2) < 0.1 && roar.near.secs > 1.8 && roar.near.secs < 3 && roar.near.struck === false, JSON.stringify(roar));
+      t.check('…and not from outside it', !roar.far.stunned, JSON.stringify(roar));
+    }
+    // the charge: a lead-in of pawing, a top speed a hero can step out of, and a step aside late in it makes him miss; then
+    // he skids on and turns round
+    const charge = await t.eval(`${H} ${MINO} clear(); const c = await mino(26); if (!c) return 'body never came in'; window._rec = null;
+      c.move = { k: 'charge', ph: 0, dir: c.yaw, ...g.trial.timed(c, 'charge', 1.3) }; const s0 = performance.now(); let run = null, top = 0, side = null, skid = false;
+      await until(() => { const m = c.move; if (m?.ph === 1 && run === null) run = performance.now(); top = Math.max(top, c.speed);
+        if (side === null && m?.ph === 1 && c.pos.distanceTo(P.pos) < 10) { side = +c.speed.toFixed(1); const s = new V(Math.cos(c.yaw), 0, -Math.sin(c.yaw)); P.pos.addScaledVector(s, 4.5); }
+        skid ||= m?.ph === 3; return skid && performance.now() - s0 > 1000; }, 12000);
+      const r = { paw: run && +((run - s0) / 1000).toFixed(2), top: +top.toFixed(1), stepAt: side, hit: window._rec?.c === c, skid }; done(c); return r;`);
+    if (typeof charge === 'string') t.check('the Minotaur\'s charge', false, charge);
+    else {
+      t.metric('the Minotaur\'s charge (pawing s, top speed m/s, speed when you stepped aside, hit, skidded)', charge);
+      t.check('the Minotaur paws the ground a second or more before he charges', charge.paw >= 1, JSON.stringify(charge));
+      t.check('…charges no faster than 12.5 m/s (a giant\'s weight), and a step aside late in it makes him miss and skid on', charge.top <= 12.5 && charge.top >= 9 && !charge.hit && charge.skid, JSON.stringify(charge));
+    }
+    // ...into a wall (one put in his way): he reels, then is spent; spent, he takes blows half again as hard (each blow
+    // struck while he isn't chasing, so his guard can't take any of it)
+    const wall = await t.eval(`${H} ${MINO} clear(); const c = await mino(26); if (!c) return 'body never came in'; const f = new V(P.pos.x - c.pos.x, 0, P.pos.z - c.pos.z).normalize();
+      g.colliders.addGroup('testWall', [-3, -1.5, 0, 1.5, 3].map((o) => ({ x: P.pos.x + f.x * 6 + f.z * o, z: P.pos.z + f.z * 6 - f.x * o, r: 1, h: 8 })));
+      c.move = { k: 'charge', ph: 0, dir: c.yaw, ...g.trial.timed(c, 'charge', 1.3) }; let side = false, dazed = false;
+      const ok = await until(() => { if (!side && c.move?.ph === 1 && c.pos.distanceTo(P.pos) < 10) { side = true; const s = new V(Math.cos(c.yaw), 0, -Math.sin(c.yaw)); P.pos.addScaledVector(s, 5); } dazed ||= c.move?.ph === 2; return c.move?.k === 'tired' && c.tired > 0; }, 12000);
+      g.colliders.removeGroup('testWall'); if (!ok) { done(c); return 'never spent: ' + JSON.stringify({ move: c.move?.k, ph: c.move?.ph, dazed }); }
+      c.state = 'idle'; const hp0 = c.hp; g.creatures.hurt(c, [[100, 'force']], P.pos); const tiredHit = hp0 - c.hp, glow = c.glow;
+      c.move = null; c.tired = 0; c.glow = 0; c.state = 'idle'; const hp1 = c.hp; g.creatures.hurt(c, [[100, 'force']], P.pos); const fresh = hp1 - c.hp;
+      c.fatigue = c.spent = 2; c.move = null; c.rest = 0; c.state = 'chase'; await until(() => c.move?.k === 'tired', 1500); const again = c.move?.k; done(c);
+      return { dazed, tiredHit: +tiredHit.toFixed(1), fresh: +fresh.toFixed(1), glow: +glow.toFixed(2), afterMoves: again };`);
+    if (typeof wall === 'string') t.check('the Minotaur into a wall', false, wall);
+    else {
+      t.metric('the Minotaur into a wall, and spent (a blow of 100 spent and not)', wall);
+      t.check('the Minotaur charging into a wall reels, dazed, then is spent', wall.dazed, JSON.stringify(wall));
+      t.check('…spent, he glows and takes blows half again as hard', Math.abs(wall.tiredHit / wall.fresh - 1.5) < 0.01 && wall.glow > 0.05, JSON.stringify(wall));
+      t.check('…and after his run of big moves he is spent too', wall.afterMoves === 'tired', JSON.stringify(wall));
+    }
+    // his dead: they claw up out of the ground over about a second and a half, and no more than two come at you at once
+    // while the others keep a few metres off; and they keep apart
+    const dead = await t.eval(`${H} clear(); const sk = [0, 1, 2, 3].map((i) => { const a = i * 1.57 + 0.4, c = g.creatures.spawn('skeleton', P.pos.x + Math.cos(a) * 9, P.pos.z + Math.sin(a) * 9, { level: 0, summoned: true, aware: true }); c.state = 'chase'; return c; });
+      let y0 = 0; const t0 = performance.now(); await until(() => { y0 = Math.min(y0, ...sk.map((c) => c.pos.y - AG.heightAt(c.pos.x, c.pos.z))); return sk.every((c) => !(c.rise > 0)); }, 4000); const risen = sk.every((c) => !(c.rise > 0)), took = +((performance.now() - t0) / 1000).toFixed(2);
+      for (const c of sk) if (!(await ready(c))) return 'body never came in';
+      let most = 0, gap = 99, blows = 0; const s0 = performance.now(); window._rec = null; let last = null;
+      await until(() => { const atk = sk.filter((c) => c.state === 'attack').length; most = Math.max(most, atk); for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) gap = Math.min(gap, sk[i].pos.distanceTo(sk[j].pos));
+        if (window._rec && window._rec !== last) { last = window._rec; blows++; } P.hv.set(0, 0, 0); return performance.now() - s0 > 12000; }, 13000);
+      const far = sk.filter((c) => !c.engaged).map((c) => +c.pos.distanceTo(P.pos).toFixed(1)); clear(); return { sunk: +y0.toFixed(2), risen, took, most, gap: +gap.toFixed(2), blows, waiting: far };`);
+    if (typeof dead === 'string') t.check('the Minotaur\'s dead', false, dead);
+    else {
+      t.metric('the Minotaur\'s dead (how deep they start, risen, most attacking at once, closest two, blows in 12 s, how far the waiting ones stand)', dead);
+      t.check('his dead rise out of the ground, up within two seconds', dead.sunk < -0.5 && dead.risen && dead.took < 2, JSON.stringify(dead));
+      t.check('…no more than two of them attack at once, the rest waiting a few metres off, and they keep apart', dead.most <= 2 && dead.blows >= 1 && dead.waiting.every((d) => d > 3) && dead.gap > 1.2, JSON.stringify(dead));
+    }
 
     // ---- pictures: the throw (wind-up, in flight, impact), and a hog's and a giant's blows at impact
     const freeze = (cond) => t.eval(`${H} window._frozen = false; const ok = await until(() => ${cond}, 8000); if (ok) { g.paused = true; window._frozen = true; } return ok || 'never came';`);

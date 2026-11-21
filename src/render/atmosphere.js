@@ -37,12 +37,17 @@ export const ATMO = {
   texel: { value: new THREE.Vector2(1 / 1280, 1 / 720) }, blurNear: { value: 600 }, blurFar: { value: 1100 }, blurAmt: { value: 1 },
   // the focus (tester feedback, 15 Oct): sharp round the crosshair, softening toward the edges of the screen, so the
   // cheaper detail at the edges of your view isn't noticed (focus: the blur radius in pixels at the screen's edge)
-  focus: { value: 3 }, aspect: { value: 16 / 9 },
+  focus: { value: 1.25 }, aspect: { value: 16 / 9 },
   // the player's mist (tester feedback, 15 and 16 Oct): clear for MIST_R0 round the hero, thickening to mzAmt by MIST_R1
-  // (hiding about two thirds of what lies behind) and staying there, half grown where the grass ends (GRASS_R); up to a
-  // ceiling (mzTop) a little over the tallest thing standing near, above which the sky stays clear. It hides how much
-  // less is drawn out there (see vegetation.js).
-  mzC: { value: new THREE.Vector2() }, mzR0: { value: MIST_R0 }, mzR1: { value: MIST_R1 }, mzAmt: { value: ULTRA ? 0.42 : 0.68 }, mzTop: { value: 30 }, mzSoft: { value: 10 }, mzCol: { value: new THREE.Color(0.7, 0.75, 0.8) },
+  // (hiding half of what lies behind) and staying there, half grown where the grass ends (GRASS_R); up to a ceiling
+  // (mzTop) a little over the tallest thing standing near, above which the sky stays clear: it thins out gradually over
+  // the mzSoft metres below the ceiling, so it reads as air thinning with height rather than a band with a lid. Its
+  // colour is the sky's own along the line of sight (mzCol at the horizon, mzColUp higher), with the sun's glow towards
+  // it (mzSun), so it reads as distance, not as a grey wall (the review of 20 Nov: on High a flat milky band of one colour
+  // hid every view past 100 m; Valheim's distance is a soft blue). It hides how much less is drawn out there (see
+  // vegetation.js).
+  mzC: { value: new THREE.Vector2() }, mzR0: { value: MIST_R0 }, mzR1: { value: MIST_R1 }, mzAmt: { value: ULTRA ? 0.42 : 0.5 }, mzTop: { value: 30 }, mzSoft: { value: 22 },
+  mzCol: { value: new THREE.Color(0.7, 0.75, 0.8) }, mzColUp: { value: new THREE.Color(0.5, 0.6, 0.8) }, mzSun: { value: new THREE.Color() },
   // the grade (white balance, saturation, a tint in the shadows) and the cloud shadows drifting over the land
   gTint: { value: new THREE.Color(1, 1, 1) }, gSat: { value: 1 }, gShadow: { value: new THREE.Color(0, 0, 0) },
   cloudOff: { value: new THREE.Vector2() }, cloudCover: { value: 0.4 }, cloudK: { value: 0 },
@@ -54,7 +59,7 @@ export const ATMO = {
   // throws back (woodLit), its colour lit only from the sky round it (woodAmb), and how strong the flecks of sun on the
   // floor are; the woods texture (how wooded and how high the ground is, everywhere: setWoodsTexture)
   // (the haze reads the far shadow map, which reaches past its march wherever you stand; the flecks the near one, sharper)
-  tShadow: { value: LIT }, shadowMat: { value: new THREE.Matrix4() }, tShadowN: { value: LIT }, shadowMatN: { value: new THREE.Matrix4() }, lightDir: { value: new THREE.Vector3(0, 1, 0) }, lightCol: { value: new THREE.Color() },
+  tShadow: { value: LIT }, shadowMat: { value: new THREE.Matrix4() }, tShadowN: { value: LIT }, shadowMatN: { value: new THREE.Matrix4() }, shNSize: { value: new THREE.Vector2(1, 1) }, lightDir: { value: new THREE.Vector3(0, 1, 0) }, lightCol: { value: new THREE.Color() },
   woodK: { value: 0 }, woodLit: { value: 0.1 }, woodAmb: { value: new THREE.Color() }, fleckK: { value: 0 },
   tWoods: { value: BARE }, woodsExt: { value: 4096 },
   uCanopy: WET_U.uCanopy, uShelter: WET_U.uShelter, uShelterBox: WET_U.uShelterBox, uShelterNF: WET_U.uShelterNF,
@@ -72,7 +77,7 @@ export const ATMO = {
   // graphics setting), how strong, its navy tint (Valheim's AO is a deep navy, not black), how far round each point it
   // looks (metres) and the camera's scale for that; the half-sized result (r: how open, g: the depth it was found at) and
   // the size of one of its texels. And the floor of the far woods, past the shadow maps, kept in shade (woodsDark).
-  ao: { value: 1 }, aoK: { value: 0 }, aoTint: { value: new THREE.Color(0.3, 0.34, 0.52) }, aoRad: { value: 0.9 }, aoProj: { value: 1 },
+  ao: { value: 1 }, aoK: { value: 0 }, aoTint: { value: new THREE.Color(0.32, 0.36, 0.46) }, aoRad: { value: 0.9 }, aoProj: { value: 1 },
   tAO: { value: null }, aoTexel: { value: new THREE.Vector2(1 / 640, 1 / 360) }, woodsDark: { value: 0 },
   // Zeus's storm wall (stormwall.js), marched at a fraction of the resolution before this pass and laid over the frame
   // here, in the same pass (a pass of its own into the frame cost a whole extra resolve): whether there is any, the
@@ -81,7 +86,18 @@ export const ATMO = {
   // the sea's reflections (Ultra only, SEA_SSR): the camera's view and projection, the water's ripple normals and their
   // clock (core.js and water.js set them), and how strong (less in rain, whose rings break the mirror up)
   viewProj: { value: new THREE.Matrix4() }, tWaterN: { value: null }, wT: { value: 0 }, seaK: { value: 1 },
+  night: { value: 0 },   // (how much it is night: the ground's bare earth darkens by it, terrain.js)
 };
+ATMO.mzSunDir = ATMO.sunDir;   // (the sun's glow in the mist: MIST_TONE)
+// The sky dome's own colours (sky.js paints the dome with these very colours, and the fog greys them: fogSky), for the
+// player's mist and the storm wall's haze to take the sky's colour where they lie over it
+export const SKY_COL = { top: new THREE.Color(0x3a78c8), hor: new THREE.Color(0xb8dcf0) };
+// The player's mist as both the atmosphere pass and the storm wall's march (storm-shader.js) lay it: its colour along a
+// line of sight, and how much of it there is at a height (all of it low down, thinning smoothly to nothing a few metres
+// over the ceiling). (mzTop and mzSoft are declared by each shader with its other uniforms, before this.)
+export const MIST_TONE = `uniform vec3 mzCol, mzColUp, mzSun, mzSunDir;
+  vec3 mistTone(vec3 rd) { return mix(mzCol, mzColUp, pow(clamp(rd.y, 0.0, 1.0), 0.55)) + mzSun * pow(max(dot(rd, mzSunDir), 0.0), 6.0); }
+  float mistUp(float h) { float k = clamp((mzTop + 4.0 - h) / mzSoft, 0.0, 1.0); return k * k * (3.0 - 2.0 * k); }`;
 // The woods texture, baked once by the worker pool (terrain-worker.js woodsTexture)
 export function setWoodsTexture({ data, N, extent }) {
   const t = new THREE.DataTexture(data, N, N, THREE.RGFormat, THREE.FloatType); t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
@@ -94,7 +110,7 @@ export const AQ = { aoFull: false, shaftsHalf: false };
 const VERT = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }';
 // what the passes need to know about where a pixel lies and what the light reaches
 const LIGHT_PARS = `${SHELTER} uniform sampler2D tDepth, tShadow, tShadowN, tWoods; uniform mat4 projInv, camWorld, shadowMat, shadowMatN; uniform vec3 camPos, lightDir, lightCol, woodAmb;
-  uniform float woodK, woodLit, woodsExt; varying vec2 vUv;
+  uniform float woodK, woodLit, woodsExt; uniform vec2 shNSize; varying vec2 vUv;
   vec3 worldAt(vec2 uv, float d) { vec4 v = projInv * vec4(uv * 2.0 - 1.0, d * 2.0 - 1.0, 1.0); v /= v.w; return (camWorld * v).xyz; }
   // how wooded a place is (r) and how high its ground lies (g): fixed in the world
   vec2 woodsAt(vec2 xz) { return texture2D(tWoods, xz / woodsExt + 0.5).rg; }
@@ -105,10 +121,14 @@ const LIGHT_PARS = `${SHELTER} uniform sampler2D tDepth, tShadow, tShadowN, tWoo
   float sunLit(vec3 p, float usual) { vec4 s = shadowMat * vec4(p, 1.0); s.xyz /= s.w;
     float k = smoothstep(0.0, 0.12, min(min(s.x, 1.0 - s.x), min(s.y, 1.0 - s.y))) * step(s.z, 1.0); if (k <= 0.0) return usual;
     return mix(usual, step(s.z - 0.0015, dot(texture2D(tShadow, s.xy), vec4(255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0))), k); }
-  // the same from the near shadow map (sharper, round the player), easing into the far one at its edge
+  // the same from the near shadow map (sharper, round the player), easing into the far one at its edge; filtered over
+  // the four texels round the point, as the materials' own shadow is (core.js sunBil), so the flecks' edges are as soft
+  // as the shade they lie in rather than stepped texel by texel
+  float shTap(vec2 uv, float z) { return step(z, dot(texture2D(tShadowN, uv), vec4(255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0))); }
   float nearLit(vec3 p, float usual) { vec4 s = shadowMatN * vec4(p, 1.0); s.xyz /= s.w;
     float k = smoothstep(0.0, 0.1, min(min(s.x, 1.0 - s.x), min(s.y, 1.0 - s.y))) * step(s.z, 1.0), far = sunLit(p, usual); if (k <= 0.0) return far;
-    return mix(far, step(s.z - 0.0008, dot(texture2D(tShadowN, s.xy), vec4(255.0 / 256.0) / vec4(16777216.0, 65536.0, 256.0, 1.0))), k); }
+    vec2 q = s.xy * shNSize - 0.5, f = fract(q), t = 1.0 / shNSize, b = (floor(q) + 0.5) * t; float z = s.z - 0.0008;
+    return mix(far, mix(mix(shTap(b, z), shTap(b + vec2(t.x, 0.0), z), f.x), mix(shTap(b + vec2(0.0, t.y), z), shTap(b + t, z), f.x), f.y), k); }
   // how much the crowns' map counts at a place (it covers 112 m round the player: faded out towards its edge)
   float canopyK(vec2 xz) { vec2 uv = (xz - uShelterBox.xy) / uShelterBox.z; return smoothstep(0.0, 0.18, min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y))); }
 `;
@@ -199,7 +219,7 @@ const AO_FRAG = `uniform sampler2D tDepth; uniform mat4 projInv; uniform vec2 te
 const SEA_SSR = `uniform mat4 viewProj; uniform sampler2D tWaterN; uniform float wT, seaK;
   vec4 seaReflect(vec3 W, vec3 rd) {
     vec2 nn = texture2D(tWaterN, W.xz * 0.02 + vec2(wT * 0.012, wT * 0.008)).rg * 2.0 - 1.0;   // (only the broad swell: the fine ripples scatter neighbouring pixels onto different things, a speckle)
-    vec3 R = reflect(rd, normalize(vec3(nn.x * 0.025, 1.0, nn.y * 0.025))); R.y = max(R.y, 0.002);
+    vec3 R = reflect(rd, normalize(vec3(nn.x * 0.015, 1.0, nn.y * 0.015))); R.y = max(R.y, 0.002);
     float s = 0.8, s0 = 0.0, hit = 0.0;
     for (int i = 0; i < 44; i++) { vec4 q = viewProj * vec4(W + R * s, 1.0); if (q.w <= 0.0) break; vec2 u = q.xy / q.w * 0.5 + 0.5;
       if (u.x < 0.0 || u.x > 1.0 || u.y < 0.0 || u.y > 1.0) break;
@@ -208,7 +228,7 @@ const SEA_SSR = `uniform mat4 viewProj; uniform sampler2D tWaterN; uniform float
     if (hit < 0.5) return vec4(0.0);
     float a = s0, b = s; for (int k = 0; k < 5; k++) { float m = 0.5 * (a + b); vec4 q = viewProj * vec4(W + R * m, 1.0); if (q.w > linD(texture2D(tDepth, q.xy / q.w * 0.5 + 0.5).x)) b = m; else a = m; }
     vec4 q = viewProj * vec4(W + R * b, 1.0); vec2 u = q.xy / q.w * 0.5 + 0.5, e = smoothstep(vec2(0.0), vec2(0.07), u) * smoothstep(vec2(1.0), vec2(0.93), u);
-    vec2 o = texel * (1.5 + b * 0.03);   // (softened a little, more the further the reflected thing: the march finds edges in steps)
+    vec2 o = texel * (2.0 + b * 0.07);   // (softened, more the further the reflected thing: the march finds edges in steps, which speckled the far tree line)
     vec3 c = texture2D(tDiffuse, u + vec2(o.x, o.y)).rgb + texture2D(tDiffuse, u + vec2(-o.x, o.y)).rgb + texture2D(tDiffuse, u + vec2(o.x, -o.y)).rgb + texture2D(tDiffuse, u - o).rgb;
     return vec4(c * 0.25, e.x * e.y * (1.0 - smoothstep(350.0, 800.0, b)));
   }`;
@@ -225,10 +245,11 @@ export class AtmospherePass extends Pass {
     const quad = (fragmentShader) => new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: ATMO, depthTest: false, depthWrite: false, vertexShader: VERT, fragmentShader }));
     this.material = new THREE.ShaderMaterial({
       uniforms: ATMO, depthTest: false, depthWrite: false, vertexShader: VERT, defines: ULTRA ? { SEA_SSR: '' } : {},
-      fragmentShader: `${LIGHT_PARS} uniform sampler2D tDiffuse, tHaze, tShafts; uniform vec3 sunDir, sunCol, mistCol, hazeCol, mzCol, lowCol; uniform vec2 hTexel, camNF; uniform float lowAmt, lowDen, lowH, lowSky;
+      fragmentShader: `${LIGHT_PARS} uniform sampler2D tDiffuse, tHaze, tShafts; uniform vec3 sunDir, sunCol, mistCol, hazeCol, lowCol; uniform vec2 hTexel, camNF; uniform float lowAmt, lowDen, lowH, lowSky;
         uniform float fleckK, shaftK, ao, aoK, woodsDark; uniform sampler2D tAO; uniform vec2 aoTexel; uniform vec3 aoTint;
         uniform vec2 sunUV, cloudOff, texel, mzC; uniform vec3 fogHide; uniform float blurNear, blurFar, blurAmt, focus, aspect, mzR0, mzR1, mzAmt, mzTop, mzSoft, mistAmt, mistBase, mistH, mistDen, hazeAmt, vigOffset, vigDark, gSat, cloudCover, cloudK;
         uniform vec3 gTint, gShadow; uniform sampler2D tStorm; uniform float stormOn, stormScale; uniform vec2 stormRes;
+        ${MIST_TONE}
         float h12(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h12(i), h12(i + vec2(1, 0)), f.x), mix(h12(i + vec2(0, 1)), h12(i + vec2(1, 1)), f.x), f.y); }
         // the woods' haze spread back over the screen: nine looks round the pixel in the half-sized haze, each counted as
@@ -258,9 +279,10 @@ export class AtmospherePass extends Pass {
           return acc / tot; }
         void main() {
           vec4 col = texture2D(tDiffuse, vUv); float d = texture2D(tDepth, vUv).x;
-          // the blur: the focus (growing from the crosshair toward the edges of the screen) and, far off, a little more
-          // with distance; eight taps round a ring that widens with both
-          float bk = focus * smoothstep(0.15, 0.85, length((vUv - 0.5) * vec2(aspect, 1.0)));
+          // the blur: the focus (growing from the crosshair toward the edges of the screen; never on the sky, whose clouds
+          // and storm went soft as if drawn small) and, far off, a little more with distance; eight taps round a ring that
+          // widens with both
+          float bk = d < 0.99999 ? focus * smoothstep(0.15, 0.85, length((vUv - 0.5) * vec2(aspect, 1.0))) : 0.0;
           vec3 P = worldAt(vUv, min(d, 0.9999)); float dist = length(P - camPos);
           if (d < 0.99999) bk = max(bk, 2.4 * blurAmt * smoothstep(blurNear, blurFar, dist));
           if (bk > 0.05) { vec3 acc = col.rgb; float n = 1.0; for (int i = 0; i < 8; i++) { float a = float(i) * 0.7854 + 0.39; acc += texture2D(tDiffuse, vUv + vec2(cos(a), sin(a)) * texel * bk).rgb; n += 1.0; }
@@ -288,11 +310,12 @@ export class AtmospherePass extends Pass {
             if (woodsDark > 0.001 && dist > ${WD0}.0) { vec2 w = woodsAt(P.xz); col.rgb *= 1.0 - woodsDark * smoothstep(0.2, 0.7, w.r) * (1.0 - smoothstep(3.0, 9.0, P.y - w.g)) * smoothstep(${WD0}.0, ${WD0 + 45}.0, dist); }
             // the sun on the forest floor: where it gets through the leaves (the shadow map, fixed in the world) it glows a
             // little warmer and the shade beside it is a little deeper, so the floor under the crowns reads as pools of sun
-            // in the shade; as much as the place is wooded, fading out with distance
+            // in the shade; as much as the place is wooded, fading out with distance. A warm accent, not a second sun (the
+            // review of 20 Nov: at twice this they read lime-bright)
             if (fleckK > 0.001 && dist < 36.0) {
               vec3 fn = normalize(cross(dFdx(P), dFdy(P)));   // (only the ground: the hero and the trunks take the sun as it falls)
               float k = fleckK * smoothstep(0.15, 0.6, woodsAt(P.xz).r) * (1.0 - smoothstep(24.0, 36.0, dist)) * smoothstep(0.6, 0.85, abs(fn.y));
-              if (k > 0.001) { float lit = nearLit(P + lightDir * 0.12, 0.5); col.rgb *= (1.0 - 0.18 * k * (1.0 - lit)) * (1.0 + lit * k * 0.35 * normalize(lightCol + 1e-4) * 1.7); }
+              if (k > 0.001) { float lit = nearLit(P + lightDir * 0.12, 0.5); col.rgb *= (1.0 - 0.12 * k * (1.0 - lit)) * (1.0 + lit * k * 0.17 * normalize(lightCol + 1e-4) * 1.7); }
             }
             // mist: density falling off with height above the valley floor, averaged along the ray from the camera's height
             // to the point's (the exact integral of an exponential), so it pools in hollows and thins up on the hills
@@ -319,9 +342,14 @@ export class AtmospherePass extends Pass {
           // is covered and nothing far off (a giant tree on a ridge) stands out of the mist above its ceiling
           vec3 rd = normalize(P - camPos); float mpEdge = camPos.y + rd.y * (mzR1 / max(length(rd.xz), 1e-3)), mh = mzR1, mp = mpEdge;
           if (d < 0.99999) { mh = length(P.xz - mzC); mp = mix(P.y, mpEdge, smoothstep(mzR1 * 0.9, mzR1 * 1.1, mh)); }
-          col.rgb = mix(col.rgb, mzCol, mzAmt * smoothstep(mzR0, mzR1, mh) * (1.0 - smoothstep(mzTop - mzSoft, mzTop + mzSoft, mp)));
+          col.rgb = mix(col.rgb, mistTone(rd), mzAmt * smoothstep(mzR0, mzR1, mh) * mistUp(mp));
           // the storm wall, over what lies behind it (with the player's mist on its foot already: stormwall.js)
-          if (stormOn > 0.5) { vec4 s = stormAt(vUv, d); col.rgb = col.rgb * (1.0 - s.a) + s.rgb; }
+          if (stormOn > 0.5) { vec4 s = stormAt(vUv, d); col.rgb = col.rgb * (1.0 - s.a) + s.rgb;
+            // (an edge against it: the antialiasing has mixed the bright sky behind into the pixel's colour while its depth
+            // says leaf or roof, so it stood out as a pale fringe round every crown against the dark wall; as much of the
+            // wall over it as the share of sky round it)
+            if (d < 0.99999) { float sk = 0.0; for (int i = 0; i < 4; i++) { vec2 o = vec2(i == 0 ? -1.0 : i == 1 ? 1.0 : 0.0, i == 2 ? -1.0 : i == 3 ? 1.0 : 0.0) * texel; sk += step(0.99999, texture2D(tDepth, vUv + o).x); }
+              if (sk > 0.0) { vec4 e = stormAt(vUv, 1.0); float f = sk * 0.125; col.rgb = col.rgb * (1.0 - e.a * f) + e.rgb * f; } } }
           // shafts of sun (blurred outward from the sun at a quarter of the resolution: see MASK_FRAG and BLUR_FRAG); light
           // scattered by the air between you and what you see, so the hero and the trunk beside you take little of it, and
           // the open sky (which has the sun's own glow) only a little
@@ -343,7 +371,7 @@ export class AtmospherePass extends Pass {
     // (the sun or moon, and its shadow maps: the haze marches through the far one where there is one, the flecks look in
     // the near one; each map's matrix is the one it was drawn with)
     const L = this.light, F = this.far?.visible && this.far.shadow.map ? this.far : L;
-    if (L?.shadow?.map) { ATMO.tShadowN.value = L.shadow.map.texture; ATMO.shadowMatN.value.copy(L.shadow.matrix); ATMO.lightDir.value.subVectors(L.position, L.target.position).normalize(); ATMO.lightCol.value.copy(L.color).multiplyScalar(L.intensity); }
+    if (L?.shadow?.map) { ATMO.tShadowN.value = L.shadow.map.texture; ATMO.shNSize.value.set(L.shadow.map.width, L.shadow.map.height); ATMO.shadowMatN.value.copy(L.shadow.matrix); ATMO.lightDir.value.subVectors(L.position, L.target.position).normalize(); ATMO.lightCol.value.copy(L.color).multiplyScalar(L.intensity); }
     if (F?.shadow?.map) { ATMO.tShadow.value = F.shadow.map.texture; ATMO.shadowMat.value.copy(F.shadow.matrix); }
     ATMO.tDiffuse.value = readBuffer.texture; ATMO.tDepth.value = readBuffer.depthTexture; ATMO.texel.value.set(1 / readBuffer.width, 1 / readBuffer.height); ATMO.aspect.value = readBuffer.width / readBuffer.height;
     const size = (t, w, h) => { if (t.width === w && t.height === h) return false; t.setSize(w, h); return true; };
@@ -387,20 +415,27 @@ const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _vp = new THREE.Matrix
 // little less colour as the eye sees by moonlight: the night's darkness and its silver-blue are the moon's light
 // (sky.js), not a tint laid over the picture (the reviewer, 16 Nov)
 const G = { pedias: [1.04, 1.0, 0.93, 1.08, [0.02, 0.0, -0.02]], yleos: [0.94, 1.01, 0.98, 0.93, [-0.03, 0.02, 0.025]], dusk: [1.1, 0.97, 0.84, 1.12, [0.03, -0.01, -0.03]], night: [0.98, 1.0, 1.02, 0.86, [0.0, 0.0, 0.0]], giant: [0.92, 1.03, 0.94, 0.94, [-0.03, 0.02, 0.0]] };
+// Under a grey sky and in the rain the colour drains, the picture cools and dims a little and the blacks lift (the review
+// of 20 Nov: a downpour left the meadow sunny lime): laid over the place's and the hour's look by how overcast it is
+const LEAFY = new THREE.Color(0.9, 1.0, 0.82);
+const WET_G = [0.9, 0.94, 0.99, 0.72, [0.25, 0.3, 0.38]];
 const _t = new THREE.Color(), _sh = new THREE.Vector3();
 function grade(o) {
   const w = { pedias: o.wp * (1 - o.dusk) * (1 - o.night), yleos: o.wy * (1 - o.dusk) * (1 - o.night), dusk: o.dusk * (1 - o.night), night: o.night, giant: o.giant * 1.2 }; let tot = 0;
   _t.setRGB(0, 0, 0); _sh.set(0, 0, 0); let sat = 0;
   for (const k in w) { const g = G[k], a = w[k]; if (a <= 0) continue; tot += a; _t.r += g[0] * a; _t.g += g[1] * a; _t.b += g[2] * a; sat += g[3] * a; _sh.x += g[4][0] * a; _sh.y += g[4][1] * a; _sh.z += g[4][2] * a; }
   tot = Math.max(tot, 1e-3); ATMO.gTint.value.setRGB(_t.r / tot, _t.g / tot, _t.b / tot); ATMO.gSat.value = sat / tot; ATMO.gShadow.value.setRGB(_sh.x / tot, _sh.y / tot, _sh.z / tot);
+  const k = sstep(0.3, 0.95, o.overcast) * (1 - 0.6 * o.night), [r, g, b, sw, sh] = WET_G;
+  if (k > 0) { ATMO.gTint.value.lerp(_t.setRGB(r, g, b), k); ATMO.gSat.value += (sw - ATMO.gSat.value) * k; ATMO.gShadow.value.lerp(_t.setRGB(...sh), k); }
 }
 // How strong the light in the air is (kept together here, so they can be weighed against each other): the woods' air,
 // per metre at the ground in a full wood, by day and by night; how much sun and moonlight it scatters; how much of the
-// sky's light round it; and the shafts of sun
-export const AIR = { woodDay: 0.004, woodNight: 0.004, lit: 0.25, litNight: 0.12, amb: 0.15, ambNight: 0.35, shafts: 1.2, ao: 0.8, woodsDark: 0.3 };
+// sky's light round it (by night a moonlit blue haze among the trunks, so a wood reads by night as Valheim's do, gone
+// under cloud); and the shafts of sun
+export const AIR = { woodDay: 0.004, woodNight: 0.009, lit: 0.25, litNight: 0.12, amb: 0.15, ambNight: 1.0, shafts: 1.2, ao: 0.8, woodsDark: 0.3 };
 const clamp01 = (x) => Math.max(0, Math.min(1, x)), sstep = (a, b, x) => { const k = clamp01((x - a) / (b - a)); return k * k * (3 - 2 * k); };
 export function updateAtmosphere(camera, o) {
-  grade(o);
+  grade(o); ATMO.night.value = o.night;
   ATMO.cloudOff.value.x += o.dt * (3 + o.overcast * 9); ATMO.cloudOff.value.y += o.dt * 1.2;
   ATMO.cloudCover.value = 0.5 - o.overcast * 0.25; ATMO.cloudK.value = 0.28 * o.day * clamp01((o.sunDir.y - 0.05) / 0.2) * (1 - o.overcast * 0.7);
   ATMO.camNF.value.set(camera.near, camera.far);
@@ -417,7 +452,8 @@ export function updateAtmosphere(camera, o) {
   if (o.fogNear !== undefined) ATMO.fogHide.value.set(o.fogNear, o.fogFar, 1 - sstep(60, 200, o.fogFar));
   if (o.player) ATMO.mzC.value.set(o.player.x, o.player.z);
   if (o.mistTop !== undefined) ATMO.mzTop.value = o.mistTop;
-  ATMO.mzCol.value.copy(o.fogCol).lerp(o.sunCol, 0.08 * o.day * (1 - ATMO.fogHide.value.z));   // (in a thick fog the fog's own colour, as the sky is)
+  // (the sky's colours as the dome is painted: in a thick fog the fog's own, as fogSky has greyed the dome)
+  ATMO.mzCol.value.copy(SKY_COL.hor); ATMO.mzColUp.value.copy(SKY_COL.top); ATMO.mzSun.value.copy(o.sunCol).multiplyScalar(0.3 * o.sunK * o.day * (1 - o.overcast) * (1 - ATMO.fogHide.value.z));
   ATMO.mistAmt.value = o.mist * (1 - ATMO.lowSky.value * 0.8); ATMO.mistBase.value = o.ground - 6; ATMO.mistDen.value = o.mistDen;   // (in a deep fog the low fog is the air: the valley mist would pale the crowns too)
   ATMO.hazeCol.value.copy(o.sunCol).multiplyScalar(0.35 * o.sunK); ATMO.hazeAmt.value = (0.25 + o.dusk * 0.9) * o.day;
   // the woods' air: thin by day, a little thicker with the sun low, thicker in rain or fog; by night thinner still and
@@ -426,7 +462,8 @@ export function updateAtmosphere(camera, o) {
   const low = 1 - sstep(0.15, 0.6, o.sunDir.y), wet = o.wetAir || 0;
   ATMO.woodK.value = (AIR.woodDay * (1 + 0.4 * low) * o.day + AIR.woodNight * o.night) * (1 + wet * 0.8) * (1 - 0.85 * ATMO.fogHide.value.z) * (1 - 0.7 * ATMO.lowSky.value);   // (in a thick fog the fog itself is the air: its haze would show the hidden trunks)
   ATMO.woodLit.value = AIR.lit * o.day + AIR.litNight * o.night;
-  ATMO.woodAmb.value.copy(o.fogCol).lerp(o.sunCol, 0.3 * o.day).multiplyScalar(AIR.amb * o.day + AIR.ambNight * o.night);
+  ATMO.woodAmb.value.copy(o.fogCol).lerp(o.sunCol, 0.3 * o.day + 0.6 * o.night).multiplyScalar(AIR.amb * o.day + AIR.ambNight * o.night * (1 - o.overcast * 0.85));
+  ATMO.woodAmb.value.multiply(_t.setRGB(1, 1, 1).lerp(LEAFY, o.day));   // (by day the light under the leaves is green: the meadow's blue air over brown trunks made them lilac)
   ATMO.fleckK.value = o.day * (1 - o.overcast * 0.85);
   // the shade in corners: a little stronger by night (Valheim's grows towards night), when there's no sun to soften it;
   // the far woods' floor kept in shade by day, less under cloud

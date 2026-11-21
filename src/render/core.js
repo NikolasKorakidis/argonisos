@@ -14,7 +14,11 @@ THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars
   `vec3 CustomToneMapping( vec3 color ) {
     float l = dot(color, vec3(0.2126, 0.7152, 0.0722));
     color = max(mix(vec3(l), color, 1.12) * vec3(1.04, 1.0, 0.93) + (1.0 - smoothstep(0.0, 0.5, l)) * vec3(-0.012, 0.01, 0.03), 0.0);
-    return AgXToneMapping(color * 1.15); }`);   // (AgX: holds bright snow, marble and sky without burning out, and keeps the grass's depth)
+    color = AgXToneMapping(color * 1.15);
+    // (and after it a gentle S-curve about the middle grey, a tenth more contrast there with black and white left where
+    // they are, as AgX's own 'punchy' look: three's plain AgX left the midtones flat and the distance grey; review, 20 Nov)
+    vec3 g = clamp(pow(max(color, 0.0), vec3(1.0 / 2.2)), 0.0, 1.0); g = mix(g, g * g * (3.0 - 2.0 * g), 0.22); l = dot(g, vec3(0.2126, 0.7152, 0.0722));
+    return pow(max(mix(vec3(l), g, 1.05), 0.0), vec3(2.2)); }`);   // (AgX: holds bright snow, marble and sky without burning out, and keeps the grass's depth)
 
 export const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -44,7 +48,7 @@ export const hemi = new THREE.HemisphereLight(0xbfdcff, 0x3f6a5a, 0.9); scene.ad
 export const SHADOW = { nearR: ULTRA ? 48 : 32, farR: ULTRA ? 260 : 110, ahead: 0.35, depth: ULTRA ? 520 : 400, soft: 0.05, far: true, sky: 0.4,
   farStep: ULTRA ? 8 : 6, farTurn: 0.2,   // (the far map is drawn again only when you are this many metres from where it was drawn, or the sun has turned this many degrees)
   nightR: 20, nightFade: 14,  // (by moonlight trees cast only this near you, their shadows fading out by this far from the camera: faint, and cheap)
-  night: false };
+  night: false, farDirty: false };   // (farDirty: what casts into the far map has changed, vegetation.js: draw it again)
 export const sun = new THREE.DirectionalLight(0xffdca0, 2.6);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -SHADOW.nearR, right: SHADOW.nearR, top: SHADOW.nearR, bottom: -SHADOW.nearR, near: 1, far: SHADOW.depth });
@@ -182,7 +186,12 @@ addEventListener('resize', () => {
 const gl = renderer.getContext(), timer = gl.getExtension('EXT_disjoint_timer_query_webgl2'), queries = [];
 export const GPU = { ms: 0, ok: !!timer, on: false };   // (on: timed only while the performance overlay shows it, main.js)
 renderer.info.autoReset = false;
+// (the first frame, under the loading screen, is drawn once more before it with the sun's shafts and the shade (AO) both
+// called for, so their passes' shaders are made then: made the first time the light called for them, mid-play, each
+// stalled a frame; warmUp in main.js compiles only the scene's)
+let postWarm = false;
 export function render() {
+  if (!postWarm && GFX.post) { postWarm = true; const k = [ATMO.shaftK.value, ATMO.ao.value]; ATMO.shaftK.value = 0.01; ATMO.ao.value = 1; composer.readBuffer = sceneRT; composer.writeBuffer = postRT; composer.render(); [ATMO.shaftK.value, ATMO.ao.value] = k; }
   renderer.info.reset();
   let q = null; if (timer && GPU.on && queries.length < 4) { q = gl.createQuery(); gl.beginQuery(timer.TIME_ELAPSED_EXT, q); }
   if (GFX.post) { composer.readBuffer = sceneRT; composer.writeBuffer = postRT; composer.render(); } else renderer.render(scene, camera);
@@ -224,6 +233,10 @@ export function setScale() { const s = GFX.scale * ADAPT.k; renderer.setPixelRat
 // once you are SHADOW.farStep metres from where it was drawn or the sun has turned SHADOW.farTurn degrees: about once a
 // second walking, not at all standing still. Each map keeps the box it was drawn with, so the two never disagree, and
 // its texels stay put in the world, so a redraw changes nothing that was already in it.
+// It is drawn again too when the trees in it change (SHADOW.farDirty: cells and blocks streaming in or dropped, a tree
+// felled), at most four times a second: drawn at a teleport, a respawn or daybreak, before the cells round you had come
+// in, it held none of their trees until you had walked six metres, so the far land lay in full sun and the woods' haze,
+// lit through it, glowed eight times as bright as it should and then dimmed at once.
 // By the moon (farOn false) the far map is left empty, drawn once with nothing in it, and the trees cast into the near
 // map only close by (SHADOW.night: vegetation.js; the shaders fade the shadows out, setShadowSky): moonlit shadows
 // further off can't be seen in the dark. The switch comes as the sun hands over to the moon, when there's no light.
@@ -236,14 +249,14 @@ function boxAt(L, target, dir) {
   const centre = _d.copy(right).multiplyScalar(r).addScaledVector(up, u).addScaledVector(fwd, f);
   L.target.position.copy(centre); L.position.copy(centre).addScaledVector(dir, SHADOW.depth / 2);
 }
-const FAR_LAYERS = sunFar.shadow.camera.layers, farAt = new THREE.Vector3(1e9, 0, 0), farDir = new THREE.Vector3(); let farMask = null;
+const FAR_LAYERS = sunFar.shadow.camera.layers, farAt = new THREE.Vector3(1e9, 0, 0), farDir = new THREE.Vector3(); let farMask = null, farT = 0;
 export function followShadow(target, dir, farOn = true) {
   camera.getWorldDirection(_e); _e.y = 0; const l = _e.length();
   boxAt(sun, _e.multiplyScalar(l > 1e-3 ? SHADOW.nearR * SHADOW.ahead / l : 0).add(target), dir);
   SHADOW.night = !farOn; sunFar.visible = SHADOW.far; if (!SHADOW.far) return;
   farMask ??= FAR_LAYERS.mask; const mask = farOn ? farMask : 0, switched = FAR_LAYERS.mask !== mask; FAR_LAYERS.mask = mask;
-  const moved = Math.hypot(target.x - farAt.x, target.z - farAt.z) > SHADOW.farStep, turned = mask && dir.angleTo(farDir) > SHADOW.farTurn * Math.PI / 180;
-  if (switched || !sunFar.shadow.map || (mask && (moved || turned))) { boxAt(sunFar, target, dir); sunFar.shadow.needsUpdate = true; farAt.copy(target); farDir.copy(dir); }
+  const now = performance.now(), moved = Math.hypot(target.x - farAt.x, target.z - farAt.z) > SHADOW.farStep, turned = mask && dir.angleTo(farDir) > SHADOW.farTurn * Math.PI / 180, changed = SHADOW.farDirty && now - farT > 250;
+  if (switched || !sunFar.shadow.map || (mask && (moved || turned || changed))) { boxAt(sunFar, target, dir); sunFar.shadow.needsUpdate = true; farAt.copy(target); farDir.copy(dir); farT = now; SHADOW.farDirty = false; }
 }
 
 // ---- Procedural textures

@@ -126,7 +126,7 @@ export class Acts {
     const g = this.g, P = this.P, s = g.inv.slots[i], d = s && ITEMS[s.id]; if (!d?.food || P.dead) return;
     if (this.eating) return;   // (one mouthful at a time)
     const why = P.stats.canEat(s.id, d.food); if (why) { g.hud.toast(`${d.name}: ${why}`); return; }
-    this.eating = { id: s.id, def: d, t: 0, h: this.H.action('drink', { upper: true, layer: true, from: EAT.from, to: EAT.to, rate: (EAT.to - EAT.from) / EAT.time, lock: EAT.lock, blend: 0.25, fade: 0.35, quiet: true }) };
+    this.eating = { id: s.id, def: d, t: 0, h: this.H.action('drink', { upper: true, layer: true, from: EAT.from, to: EAT.to, rate: (EAT.to - EAT.from) / EAT.time, lock: EAT.lock, blend: 0.25, fade: 0.35, quiet: true }) }; g.sound?.('eat', { food: d.food });
   }
   stopEat(why) {
     const e = this.eating; if (!e) return; this.eating = null; e.h.stop(0.3); this.g.hud.progress(null);
@@ -242,7 +242,7 @@ export class Acts {
     g.sound?.('jump');
     this.later.push({ t: KICK.at, fn: () => {
       if (P.dead) return; const c = g.creatures.inArc(P.pos, P.yaw, KICK.reach, 0.8)[0]; if (!c) return;
-      g.creatures.hurt(c, KICK.dmg, P.pos, { k: P.stats.damageK('unarmed') }); P.stats.train('unarmed', 6); punch(0.2, { x: Math.sin(P.yaw), z: Math.cos(P.yaw) }); g.sound?.('hit');
+      g.creatures.hurt(c, KICK.dmg, P.pos, { k: P.stats.damageK('unarmed') }); P.stats.train('unarmed', 6); punch(0.2, { x: Math.sin(P.yaw), z: Math.cos(P.yaw) }); g.sound?.('hit', { at: c.pos });
       if (!c.T.heavy && !c.boss && c.T.r <= 0.9 && !c.dead) { c.hitT = 0.7; const d = c.pos.clone().sub(P.pos).setY(0).normalize(); this.shoves.push({ c, d, left: KICK.shoveT }); }
     } });
   }

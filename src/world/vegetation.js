@@ -35,21 +35,22 @@ const sinks = (sp) => SMALL.has(SPECIES[sp].name) || TINY.has(SPECIES[sp].name);
 // Only the instances packed to the front of a batch are drawn, so only those are sent to the card each frame (sending
 // the whole buffer, sized for every tree in reach, was megabytes a frame on Ultra and stalled the browser's GPU process)
 function send(attr, n) { if (n <= 0) return; attr.clearUpdateRanges(); attr.addUpdateRange(0, n * 16); attr.needsUpdate = true; }
-// A ray against a near batch (the camera's view of the hero, aiming an axe): as three's own instanced ray test, but an
-// instance too far from the ray's start to be reached within its length is passed over without being looked at closely,
-// and the whole batch's bounding ball isn't worked out again first (it is thrown away each frame as the batch is packed).
-// The same hits come back (a point of the instance lies no further from its origin than its geometry's reach times the
-// matrix's size), for a fraction of the time with thousands of trees in a batch.
+// A ray against a near batch (the camera's view of the hero, aiming an axe): as three's own instanced ray test, but each
+// instance is first tried by its ball (its tree's, kept with the batch: vegetation's batches stand at the origin) against
+// the ray's own length, and only one the ray passes through is looked at closely; and the whole batch's bounding ball isn't
+// worked out again first (it is thrown away each frame as the batch is packed). The same hits come back, for a fraction of
+// the time: the fader's two rays from the camera to the hero every 80 ms took up to 1.7 ms (4.5 on Ultra) in the woods,
+// testing every leaf of every tree within a ray's length of the camera, on either side of it.
 const _rim = new THREE.Matrix4(), _rmesh = new THREE.Mesh(), _rhits = [];
 function batchRaycast(raycaster, out) {
-  const n = this.count, geo = this.geometry, a = this.instanceMatrix.array, o = raycaster.ray.origin, far = raycaster.far; if (!n) return;
-  if (!geo.boundingSphere) geo.computeBoundingSphere(); const R0 = geo.boundingSphere.radius + geo.boundingSphere.center.length();
+  const n = this.count, geo = this.geometry, a = this.instanceMatrix.array, b = this.userData.batch, slot = this.userData.far ? b.slot2 : b.slot, cen = b.cen; if (!n) return;
+  const { origin: o, direction: d } = raycaster.ray, far = raycaster.far;
   _rmesh.geometry = geo; _rmesh.material = this.material;
   for (let i = 0; i < n; i++) {
-    const e = i * 16, s2 = a[e] * a[e] + a[e + 1] * a[e + 1] + a[e + 2] * a[e + 2] + a[e + 4] * a[e + 4] + a[e + 5] * a[e + 5] + a[e + 6] * a[e + 6] + a[e + 8] * a[e + 8] + a[e + 9] * a[e + 9] + a[e + 10] * a[e + 10];   // (an upper bound of the matrix's size)
-    const dx = a[e + 12] - o.x, dy = a[e + 13] - o.y, dz = a[e + 14] - o.z, reach = far + R0 * Math.sqrt(s2);
-    if (dx * dx + dy * dy + dz * dz > reach * reach) continue;
-    _rim.fromArray(a, e); _rmesh.matrixWorld.multiplyMatrices(this.matrixWorld, _rim); _rmesh.raycast(raycaster, _rhits);
+    const k = slot[i] * 4, cx = cen[k] - o.x, cy = cen[k + 1] - o.y, cz = cen[k + 2] - o.z, r = cen[k + 3] * 1.1 + 2;   // (a little over: a tree on a slope stands sunk up to two metres below its ball, matrixOf, and a shaking one leans out of it)
+    const t = Math.min(far, Math.max(0, cx * d.x + cy * d.y + cz * d.z)), px = cx - d.x * t, py = cy - d.y * t, pz = cz - d.z * t;
+    if (px * px + py * py + pz * pz > r * r) continue;
+    const e = i * 16; _rim.fromArray(a, e); _rmesh.matrixWorld.multiplyMatrices(this.matrixWorld, _rim); _rmesh.raycast(raycaster, _rhits);
     for (const h of _rhits) { h.instanceId = i; h.object = this; out.push(h); } _rhits.length = 0;
   }
 }
@@ -170,6 +171,11 @@ const cutMats = new Map();
 // Between bands a tree doesn't pop from one version to the next: across a few metres each pixel is drawn by exactly
 // one of them, chosen by a fixed screen pattern, so one dissolves into the other.
 const NF = 6, MF = 12;
+// (while blocks stream in, the mid band is rebuilt at most this often, seconds: each rebuild repacks every block in it,
+// and a teleport or a walk out of the woods brings several in a row; they come in behind the mist)
+const MID_WAIT = 0.4;
+// (interleaved gradient noise. A plain per-pixel hash looked finer on the crowns where the bands meet, but its rougher
+// depth there made the woods' haze, marched from the depth, jump as you walked out of a wood: tests/suites/light.mjs)
 const DITHER = 'float igN(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }\n';
 // (each cut copy shares its program with every other copy of a material whose shader is the same, the leaf cards of
 // every species one program: keyed by the material's own program key, not by the material, the woods compiled a program
@@ -232,6 +238,16 @@ impMat.onBeforeCompile = (sh) => {
 impMat.customProgramCacheKey = () => 'vegImpostor';
 const quad = new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0);
 const _mid = { m: new Float32Array(16 * 256), n: 0 }, _far = { m: new Float32Array(16 * 256), n: 0 }, _farT = { m: new Float32Array(16 * 256), n: 0 }, _one = new Float32Array(16);   // (the stand-ins' leaves and trunks outside the near shadow box, gathered to go after those inside it)
+// Whether a tree's shade can fall anywhere in view: the stretch from its ball down along the sun's light to where the shade
+// of its top meets the ground (taken as the foot of its ball), as thick as the ball, against each side of the camera's
+// view. Wholly outside one side, it can't. The near map's stand-ins are only these (a tree behind you casting behind you
+// is drawn into it for nothing); the far map still has them all, so nothing changes there.
+const _sun = new THREE.Vector3();
+function shadeSeen(x, y, z, r, up) {
+  const t = 2 * r / up, ex = x - _sun.x * t, ey = y + r - _sun.y * t, ez = z - _sun.z * t;
+  for (const pl of _fr.planes) { const n = pl.normal; if (n.x * x + n.y * y + n.z * z + pl.constant < -r && n.x * ex + n.y * ey + n.z * ez + pl.constant < -r) return false; }
+  return true;
+}
 const _pm = new THREE.Matrix4(), _fr = new THREE.Frustum(), _sfr = new THREE.Frustum(), _snr = new THREE.Frustum(), _sp = new THREE.Sphere();
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
 // A tree stands a little into the ground, deeper on a slope, so its spreading roots don't stand clear of the land on the
@@ -257,7 +273,7 @@ export class Vegetation {
     this.bare = new Set();                               // "cx,cz,i" of the tomato bushes picked bare: drawn as their variant 1 (setBare)
     this.batches = new Map(); this.nearDirty = false;   // the near band, batched (see rebuildNear)
     this.shaken = new Set();                             // near cells with a tree shaking (shake)
-    this.mids = new Map(); this.midDirty = false;        // and the mid band, batched the same way (rebuildMid)
+    this.mids = new Map(); this.midDirty = false; this.midT = 0;   // and the mid band, batched the same way (rebuildMid; midT: when last rebuilt)
     this.onCell = null;            // callback(cellKey, items, cx, cz, added) so gameplay can index harvestable things
     SHADOW.onPass = (L) => this.shadowPass(L);
   }
@@ -320,17 +336,22 @@ export class Vegetation {
     for (const [key, c] of this.near) { const [cx, cz] = key.split(',').map(Number); if (Math.hypot((cx + 0.5) * CELL - pos.x, (cz + 0.5) * CELL - pos.z) > NEAR_KEEP + CELL) this.dropCell(this.near, key); void c; }
     // far blocks (further out the higher you stand: from the top of Olympos the forests reach to the coast)
     const farR = FAR_R + Math.min(1, Math.max(0, (pos.y - 60) / 220)) * 700; VEG_U.uFarR.value = farR;
-    const R = Math.ceil(farR / FAR), fcx = Math.floor(pos.x / FAR), fcz = Math.floor(pos.z / FAR), per = FAR / CELL;
+    const R = Math.ceil(farR / FAR), fcx = Math.floor(pos.x / FAR), fcz = Math.floor(pos.z / FAR), per = FAR / CELL, want = [];
     for (let j = -R; j <= R; j++) for (let i = -R; i <= R; i++) {
-      const bx = fcx + i, bz = fcz + j, key = bx + ',' + bz;
-      if (this.far.has(key) || Math.hypot((bx + 0.5) * FAR - pos.x, (bz + 0.5) * FAR - pos.z) > farR + FAR * 0.7) continue;
+      const bx = fcx + i, bz = fcz + j, key = bx + ',' + bz, d = Math.hypot((bx + 0.5) * FAR - pos.x, (bz + 0.5) * FAR - pos.z);
+      if (!this.far.has(key) && d <= farR + FAR * 0.7) want.push([d, bx, bz, key]);
+    }
+    // (the nearest asked for first: they wait in one queue, and in a corner-to-corner order the mid band's own blocks, round
+    // you, came in last, its trees missing for many seconds after a jump on a busy machine)
+    want.sort((a, b) => a[0] - b[0]);
+    for (const [, bx, bz, key] of want) {
       const blk = { meshes: null }; this.far.set(key, blk);
       this.pool.post({ type: 'flora', cx: bx * per, cz: bz * per, n: per }, PRIORITY.background).then((m) => {
         if (this.far.get(key) !== blk) return;
         // items come cell by cell, in order: recover each one's "cx,cz,i" id
         const ids = new Map(), cnt = new Map();
         for (let i = 0; i < m.items.length / STRIDE; i++) { const ck = Math.floor(m.items[i * STRIDE + 2] / CELL) + ',' + Math.floor(m.items[i * STRIDE + 4] / CELL), k = cnt.get(ck) || 0; cnt.set(ck, k + 1); ids.set(ck + ',' + k, i); }
-        blk.items = m.items; blk.ids = ids; blk.bx = bx; blk.bz = bz; blk.idOf = []; for (const [id, i] of ids) blk.idOf[i] = id; this.midDirty = true;
+        blk.items = m.items; blk.ids = ids; blk.bx = bx; blk.bz = bz; blk.idOf = []; for (const [id, i] of ids) blk.idOf[i] = id;   // (the mid band is rebuilt only for a block that comes into it, below: every block arriving, out to the horizon, rebuilt it all, 5-9 ms a time on Ultra)
         const hidden = new Set(); for (const [id, i] of ids) if (this.removed.has(id)) hidden.add(i); blk.imp = this.buildImpostors(m.items, hidden);
       });
     }
@@ -357,7 +378,7 @@ export class Vegetation {
   // list is rebuilt when cells come and go or a tree falls; each frame the trees in view, and every tree within the
   // shadow box round you (so shadows still fall from behind the camera), are packed to the front and only those drawn.
   rebuildNear() {
-    this.nearDirty = false;
+    this.nearDirty = false; SHADOW.farDirty = true;   // (the far shadow map is drawn again with them: core.js followShadow)
     const groups = new Map(), rmCells = new Set(), bareCells = new Set(); for (const id of this.removed) rmCells.add(id.slice(0, id.lastIndexOf(','))); for (const id of this.bare) bareCells.add(id.slice(0, id.lastIndexOf(',')));
     for (const cell of this.near.values()) {
       const it = cell.items; if (!it) continue;
@@ -402,7 +423,7 @@ export class Vegetation {
   // The mid band (light versions, out to MID_R): every block in reach together, one batch per species (the variants share
   // the light mesh unless their leaves show that far), packed per frame like the near band
   rebuildMid() {
-    this.midDirty = false;
+    this.midDirty = false; SHADOW.farDirty = true;
     const groups = new Map();
     for (const blk of this.far.values()) {
       if (!blk.mid || !blk.items) continue; const it = blk.items;
@@ -453,6 +474,7 @@ export class Vegetation {
     // a rock or bush out of view is kept for its shadow only inside the near box, as it is drawn in full)
     for (const L of SHADOW.far ? [sun, sunFar] : [sun]) { L.updateMatrixWorld(); L.target.updateMatrixWorld(); L.shadow.updateMatrices(L); (L === sun ? _snr : _sfr).copy(L.shadow.getFrustum()); }
     if (!SHADOW.far) _sfr.copy(_snr);
+    _sun.subVectors(sun.position, sun.target.position).normalize(); const sunUp = Math.max(_sun.y, 0.15);
     for (const b of this.batches.values()) {
       const dst = b.near[0].instanceMatrix.array, dst2 = b.far[0]?.instanceMatrix.array, sdst = b.shade[0]?.instanceMatrix.array, split2 = dst2 ? SPLIT * SPLIT : Infinity; let m = 0, m2 = 0, s = 0;
       const cdst = b.shade[1]?.instanceMatrix.array; if (sdst && _far.m.length < sdst.length) { _mid.m = new Float32Array(sdst.length); _far.m = new Float32Array(sdst.length); _farT.m = new Float32Array(sdst.length); }
@@ -466,7 +488,7 @@ export class Vegetation {
           // only the far box holds. The near map draws the first two runs (by moonlight the first alone); the far map
           // draws the leaves of all three, but a trunk only where the tree has no leaf cards: it holds only what stands
           // still and is the same whatever your place in it, so it is drawn again only now and then, see core.js)
-          const near = _snr.intersectsSphere(_sp), d = Math.sqrt(d2);
+          const near = _snr.intersectsSphere(_sp) && shadeSeen(x, y, z, r, sunUp), d = Math.sqrt(d2);   // (in the near box, and its shade may fall in view)
           for (let e = 0; e < 16; e++) _one[e] = b.mats[k * 16 + e]; if (b.keep[k] < Infinity) shrink(_one, 0, b.keep[k] - d); if (sh) sway(_one, 0, sh, now - sh.t0);
           if (near && d < SHADOW.nightR) { cdst?.set(_one, s * 16); sdst.set(_one, s * 16); s++; }
           else if (near) _mid.m.set(_one, _mid.n++ * 16);
@@ -489,7 +511,7 @@ export class Vegetation {
       if (sdst) { b.shade[0].count = b.tAll; send(b.shade[0].instanceMatrix, b.tAll); } if (cdst) { b.shade[1].count = b.sAll; send(b.shade[1].instanceMatrix, b.sAll); }
       send(b.near[0].instanceMatrix, m); if (dst2) send(b.far[0].instanceMatrix, m2);
     }
-    if (this.midDirty) this.rebuildMid();
+    if (this.midDirty && now - this.midT > MID_WAIT) { this.midT = now; this.rebuildMid(); }
     const lo = NEAR_R - NF, hi = MID_R + MF;
     for (const b of this.mids.values()) {
       const dst = b.meshes[0].instanceMatrix.array, sdst = b.shade[0]?.instanceMatrix.array; let m = 0, s = 0;
@@ -533,5 +555,8 @@ export class Vegetation {
     if (P.cards) { const l = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, false), 1); l.setMatrixAt(0, I); l.castShadow = true; l.frustumCulled = false; g.add(l); }
     return g;
   }
+  // ...and done with: its instances' buffers freed on the card (the shape and materials are the species', shared). Each tree
+  // the camera's view faded or an axe felled left one or two behind for good otherwise, hundreds an hour in the woods.
+  dropSingle(g) { g.parent?.remove(g); g.traverse((m) => { if (m.isInstancedMesh) m.dispose(); }); }
 }
 void mergeParts;

@@ -34,18 +34,22 @@ for (const [name, K] of Object.entries(KINDS)) {
     transparent: true, depthWrite: false, blending: K.add ? THREE.AdditiveBlending : THREE.NormalBlending,
   });
   const pts = new THREE.Points(g, mat); pts.frustumCulled = false; pts.visible = false; pts.renderOrder = 4; scene.add(pts);
-  systems[name] = { K, pts, pos, a, vel: new Float32Array(K.n * 3), ph: Float32Array.from({ length: K.n }, () => rnd() * 6.28), init: false };
+  systems[name] = { K, pts, pos, a, vel: new Float32Array(K.n * 3), ph: Float32Array.from({ length: K.n }, () => rnd() * 6.28), gy: new Float32Array(K.n), init: false };
 }
 const respawn = (S, i, c, top) => {
   const K = S.K, x = c.x + (rnd() - 0.5) * 2 * K.R, z = c.z + (rnd() - 0.5) * 2 * K.R, g = groundAt(x, z);
-  S.pos[i * 3] = x; S.pos[i * 3 + 2] = z; S.pos[i * 3 + 1] = top ? Math.max(g, c.y) + K.H * (0.6 + rnd() * 0.4) : g + 0.3 + rnd() * K.H;
+  S.pos[i * 3] = x; S.pos[i * 3 + 2] = z; S.pos[i * 3 + 1] = top ? Math.max(g, c.y) + K.H * (0.6 + rnd() * 0.4) : g + 0.3 + rnd() * K.H; S.gy[i] = g;
 };
+// (each falling leaf or flake knows the ground under it, looked up again for an eighth of them each frame in turn, so a
+// leaf has drifted a few centimetres between looks, a flake blown off the summit half a metre: every one of them every frame
+// made the woods' largest share of garbage after three's own, the land's height worked out from scratch hundreds of times)
+const REGROUND = 8; let frame = 0;
 
 // amounts 0..1 per kind; c: the camera position; t: seconds. With dt 0 (screenshot tests hold everything still) each
 // amount is taken at once rather than eased, so a still picture never keeps what an earlier place had.
 let fireflies = 0;
 export function updateAmbient(dt, c, amounts, t) {
-  const scale = renderer.domElement.height / 2, ease = dt === 0 ? 1 : Math.min(1, dt * 0.8);
+  frame = (frame + 1) % REGROUND; const scale = renderer.domElement.height / 2, ease = dt === 0 ? 1 : Math.min(1, dt * 0.8);
   // fireflies want a clear night: fewer under cloud, none in the rain (the amount brings that)
   fireflies += (Math.max(0, Math.min(1, amounts.firefly || 0)) * (1 - WEATHER.k.overcast * 0.7) - fireflies) * ease; updateFireflies(fireflies, c, t);
   updateDrift(dt, c, t);
@@ -62,7 +66,8 @@ export function updateAmbient(dt, c, amounts, t) {
       else { x += (3.5 + Math.sin(t + ph) * 1.5) * dt; y -= (0.6 + (ph % 1) * 0.6) * dt; z += Math.sin(t * 2 + ph * 7) * 0.8 * dt; S.a[i] = 0.85; }
       p[i * 3] = x; p[i * 3 + 1] = y; p[i * 3 + 2] = z;
       // drifted out of the box round the camera, or fallen to the ground: start again somewhere else in the box
-      if (Math.abs(x - c.x) > K.R || Math.abs(z - c.z) > K.R || y < c.y - K.H || y > c.y + K.H * 1.5 || ((name === 'leaf' || name === 'snow') && y < groundAt(x, z))) respawn(S, i, c, name === 'leaf' || name === 'snow');
+      const falls = name === 'leaf' || name === 'snow'; if (falls && i % REGROUND === frame) S.gy[i] = groundAt(x, z);
+      if (Math.abs(x - c.x) > K.R || Math.abs(z - c.z) > K.R || y < c.y - K.H || y > c.y + K.H * 1.5 || (falls && y < S.gy[i])) respawn(S, i, c, falls);
     }
     S.pts.geometry.attributes.position.needsUpdate = true; S.pts.geometry.attributes.aA.needsUpdate = true;
   }

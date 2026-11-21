@@ -26,11 +26,39 @@ export const TEX_N = ULTRA ? 710 : 400, TEX_SIZE = ULTRA ? 440 : 248;      // 0.
 const NEAR_TILE = ULTRA ? 100 : 76, FAR_TILE = 2 * GRASS_END, AREA = (NEAR_TILE / 76) ** 2, DENSE = Math.round(160000 * AREA), FAR_COUNT = Math.round(100000 * (FAR_TILE / 190) ** 2);
 const HAND = ULTRA ? [36, 48] : [26, 37], THIN = ULTRA ? [14, 46] : [10, 34];
 const FAR_KEEP = (FAR_COUNT / FAR_TILE ** 2) / (DENSE / NEAR_TILE ** 2);   // how sparse the far carpet is next to the near one
+// (Ultra's far carpet thins to half again, each blade wider, from 110 to 140 m: deep in the mist there, a third of its
+// blades for nobody to tell apart. [from, to, share kept])
+const FAR_THIN = ULTRA ? [110, 140, 0.5] : null;
+// Wet, the blades darken to about two thirds (reviewer 20 Nov: in heavy rain the meadow stayed sunny lime), glossy but not
+// mirror-like: they face mostly up in the shader, and any more gloss mirrored the sky white
+const WET = { dark: 0.65, gloss: 0.7, shine: 0 };
 export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { value: new THREE.Vector2() }, uTile: { value: NEAR_TILE }, uHeight: { value: null },
   uMeadow: { value: null }, uClumps: { value: 0 },   // (how much of Pedias each place is, and whether its clumps are in: the blades give way to them there)
   uOrigin: { value: new THREE.Vector2(-1e6, -1e6) }, uSize: { value: TEX_SIZE },
   uBaseA: { value: new THREE.Color(0x1d3a24) }, uBaseB: { value: new THREE.Color(0x3a4a1e) },
-  uTipA: { value: new THREE.Color(0x7fae45) }, uTipB: { value: new THREE.Color(0xc9c35a) } };
+  uTipA: { value: new THREE.Color(0x6f9a40) }, uTipB: { value: new THREE.Color(0xa9a85c) } };   // (tips muted from lime and near-yellow, reviewer 20 Nov: the meadow read as one sea of lime)
+// The carpets' blades and clumps are instances of one shape, each placed by its own spot in the tile alone (aOff: x and z,
+// eight bytes where a whole matrix took sixty-four, fetched four times over for every vertex for the one column used). A
+// mesh of an instanced geometry, with an InstancedMesh's count (settings.js draws a share of them by it).
+class Carpet extends THREE.Mesh {
+  get count() { return this.geometry.instanceCount; }
+  set count(n) { this.geometry.instanceCount = n; }
+  get instanceMatrix() { return this.geometry.attributes.aOff; }   // (how many there are, as settings.js asks an InstancedMesh)
+  raycast() { /* (nothing to hit: the blades stand where the shader puts them) */ }
+}
+const carpetGeo = (shape, at) => { const g = new THREE.InstancedBufferGeometry().copy(shape); g.setAttribute('aOff', new THREE.InstancedBufferAttribute(at, 2)); g.instanceCount = at.length / 2; return g; };
+// A blade or clump's own facing, a little of it (BLADE_N) mixed into the meadow's upward light, turned to the camera's side:
+// lit straight up, as a painted field, no blade was shaded apart from its neighbour; and a two-sided blade seen from its
+// back took the upward light turned down, out of the sun (three turns a back face's normal over: undone in the fragment).
+const BLADE_N = 0.3, UNFLIP = { from: '#include <normal_fragment_begin>', to: '#include <normal_fragment_begin>\n  normal *= faceDirection; nonPerturbedNormal = normal;   // (the normal was made to face the camera already)' };
+// Before anything else is worked out for a blade (two looks into the ground textures, its wind, its light), one that isn't
+// drawn here is put out of sight and left: most blades of each carpet aren't, somewhere in its tile (the near one's past
+// its hand-over and thinned further out, the far one's inside it and past the grass's edge, both under the meadow's clumps)
+const DROP = 'if (fade <= 0.0) { gl_Position = vec4(0.0, 0.0, -2.0, 1.0); return; }';
+// Nothing grows where the ground texture doesn't reach: just after a jump (a teleport, a respawn) the carpet is round the
+// new place a moment before the worker has baked its texture, and the old one, clamped at its edge, stood every blade at the
+// old place's height, green streaks across the sky (graphics review, 21 Nov)
+const COVERED = '{ vec2 tc = (wp - uOrigin) / uSize; fade *= step(0.0, min(tc.x, tc.y)) * step(max(tc.x, tc.y), 1.0); }';
 {
   const H = 0.5, bladeGeo = (segs) => {   // a tapered blade (one bend for the far carpet: nobody sees it bow out there)
     const g = new THREE.PlaneGeometry(0.14, H, 1, segs); g.translate(0, H / 2, 0);
@@ -40,28 +68,35 @@ export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { va
     const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 }); mat.defines = { SUN_SHADOW_CHEAP: '' };   // (one bilinear look into the sun's shadow: the blades are most of the pixels on screen)
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, U);
-      sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr, uClumps; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight, uMeadow; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.vertexShader
-        .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0.0, 1.0, 0.0);')   // soft, uniform lighting like a painted field
-        .replace('#include <begin_vertex>', `
-          vec3 ip = instanceMatrix[3].xyz;
+      sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr, uClumps; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight, uMeadow; attribute vec2 aOff; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.vertexShader
+        .replace('#include <beginnormal_vertex>', `
+          vec3 ip = vec3(aOff.x, 0.0, aOff.y);
           vec2 wp = ip.xz + uTile * floor((uCenter - ip.xz) / uTile + 0.5);
-          vec4 hm = texture2D(uHeight, (wp - uOrigin) / uSize);
           float rnd = fract(sin(dot(ip.xz, vec2(12.9898, 78.233))) * 43758.5453);
           // further out fewer blades, each a little wider, so the meadow reads the same with far less to draw (Ghost of
           // Tsushima's trick); a blade seen edge-on is widened so it doesn't thin away to a line. Between 26 and 37 m the
           // near carpet hands over to the far one blade by blade (by count, not by shrinking them), and the far one thins
           // away the same way at the edge of the grass.
           float dc = length(wp - uCenter), hand = smoothstep(${HAND[0].toFixed(1)}, ${HAND[1].toFixed(1)}, dc), r2 = fract(rnd * 91.73), r3 = fract(rnd * 53.17);
-          ${far ? `float keep = ${FAR_KEEP.toFixed(4)}, fade = step(r3, hand * (1.0 - smoothstep(${GRASS_R.toFixed(1)}, ${GRASS_END.toFixed(1)}, dc)));`
+          ${far ? `float keep = ${FAR_KEEP.toFixed(4)}${FAR_THIN ? ` * mix(1.0, ${FAR_THIN[2].toFixed(2)}, smoothstep(${FAR_THIN[0].toFixed(1)}, ${FAR_THIN[1].toFixed(1)}, dc))` : ''}, fade = step(r3, hand * (1.0 - smoothstep(${GRASS_R.toFixed(1)}, ${GRASS_END.toFixed(1)}, dc)))${FAR_THIN ? ` * step(r2, keep / ${FAR_KEEP.toFixed(4)})` : ''};`
                 : `float keep = mix(1.0, 0.42, smoothstep(${THIN[0].toFixed(1)}, ${THIN[1].toFixed(1)}, dc)), fade = step(r2, keep) * step(r3, 1.0 - hand);`}
-          ${far ? '' : 'fade *= step(texture2D(uMeadow, (wp - uOrigin) / uSize).r * uClumps, fract(rnd * 27.31));   // (in Pedias the clumps grow instead, one for one as the meadow comes in)'}
+          ${COVERED}
+          ${DROP}
+          ${far ? '' : `fade *= step(texture2D(uMeadow, (wp - uOrigin) / uSize).r * uClumps, fract(rnd * 27.31));   // (in Pedias the clumps grow instead, one for one as the meadow comes in)
+          ${DROP}`}
+          float a = rnd * 6.2831; vec2 bn = vec2(sin(a), cos(a)), tv = normalize(cameraPosition.xz - wp + 1e-4);
+          vec3 objectNormal = normalize(vec3(bn.x, 0.0, bn.y) * (dot(bn, tv) < 0.0 ? -${BLADE_N.toFixed(2)} : ${BLADE_N.toFixed(2)}) + vec3(0.0, ${(1 - BLADE_N).toFixed(2)}, 0.0));`)
+        .replace('#include <begin_vertex>', `
+          vec4 hm = texture2D(uHeight, (wp - uOrigin) / uSize);
           // the grass amount, and whether it's a tall patch (there it all stands about 0.7x the hero's height, 1.35 m: the
           // amount only says whether a blade grows, not how tall, and the blades barely differ)
           float gg = max(hm.g, 0.0), tl = floor(gg * 0.5) / 7.0, amt = gg - floor(gg * 0.5) * 2.0;
           float sc = fade * mix(amt * (0.55 + rnd * 0.62), step(0.3, amt) * (0.94 + rnd * 0.12) * 2.35, smoothstep(0.0, 0.15, tl));
           sc *= mix(1.0, smoothstep(1.5, 4.0, length(wp - cameraPosition.xz)), smoothstep(0.1, 0.4, tl));   // (tall grass shrinks away round the camera, so you look over it, not into it)
-          vec3 p = position; p.y *= sc; p.x *= step(0.01, sc) / sqrt(keep) * (1.0 + tl * 0.4); vTall = tl;
-          float a = rnd * 6.2831; vec2 bn = vec2(sin(a), cos(a)), tv = normalize(cameraPosition.xz - wp + 1e-4);
+          // (in the woods and the marsh, where the grass is short and thin, a short blade is narrower too and a little lower:
+          // shortened alone, it kept its width and read as a fat green cone, row on row of them, reviewer 20 Nov)
+          float fk = floor(hm.b * 0.5), wood = fk / 15.0; sc *= 1.0 - wood * 0.15;
+          vec3 p = position; p.y *= sc; p.x *= step(0.01, sc) / sqrt(keep) * (1.0 + tl * 0.4) * mix(1.0, clamp(sc * 1.1, 0.45, 1.0), wood); vTall = tl;
           p.x *= 1.0 + (1.0 - abs(dot(bn, tv))) * 0.9;
           p.xz = mat2(cos(a), -sin(a), sin(a), cos(a)) * p.xz;
           float gh = position.y / ${H.toFixed(2)};
@@ -75,8 +110,8 @@ export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { va
         float lean = gh * gh * min(sc, 1.6) * uWindStr * (0.3 + gust * 0.25 + wave * 0.45) * 0.42; p.xz += uWindDir * lean; p.y -= lean * 0.35;
           vec2 away = wp - uCenter; float pd = length(away), push = (1.0 - smoothstep(0.12, 0.75, pd)) * gh * sc;   // blades part around your legs (in a ring half as wide as it was: reviewer, 16 Nov)
           p.xz += away / max(pd, 0.001) * push * 0.55; p.y *= 1.0 - push * 0.35;
-          vec3 transformed = p + vec3(wp.x, hm.r - 0.03, wp.y) - ip;
-          vGH = gh; float fk = floor(hm.b * 0.5); vVar = hm.b - fk * 2.0; vShade = fk / 15.0;
+          vec3 transformed = p + vec3(wp.x, hm.r - 0.03, wp.y);
+          vGH = gh; vVar = hm.b - fk * 2.0; vShade = wood;
           vVar = clamp(vVar + (fract(sin(dot(floor(wp / 2.7), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.3, 0.0, 1.0);   // colour in clumps
           vGust = wave; vWorld = p + vec3(wp.x, hm.r, wp.y);`);
       // each blade takes the sun's shadow from low on its stem (a quarter of its height up), so the shade of a tree, a rock
@@ -85,6 +120,7 @@ export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { va
           #include <shadowmap_vertex>
           worldPosition = wSaved; }`);
       sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.fragmentShader
+        .replace(UNFLIP.from, UNFLIP.to)
         .replace('#include <tonemapping_fragment>', `gl_FragColor.rgb *= 1.0 + vGust * 0.2 * vGH;   // the gust's lighter band
           float shine = pow(max(dot(normalize(vWorld - cameraPosition), uSunDir), 0.0), 4.0) * vGH * vGH;   // sun through the blade tips
           gl_FragColor.rgb += diffuseColor.rgb * uSunCol * shine * 0.32 / (1.0 + vTall * 2.0);   // (less glow through tall grass: a lot of blade catches the light)
@@ -95,9 +131,9 @@ export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { va
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.55, 0.68, 0.6), vShade);   // deep forest and marsh: darker, bluer grass`);
     };
     mat.customProgramCacheKey = () => 'grass' + far;
-    wettable(mat, { dark: 0.82, gloss: 0.7, shine: 0 });   // (blades face up in the shader: any more gloss mirrors the sky white)   // (wetness.js)
-    const grass = new THREE.InstancedMesh(bladeGeo(far ? 1 : 2), mat, COUNT), gm = new THREE.Matrix4();
-    for (let i = 0; i < COUNT; i++) grass.setMatrixAt(i, gm.makeTranslation(rr(0, T), 0, rr(0, T)));
+    wettable(mat, WET);   // (wetness.js)
+    const at = new Float32Array(COUNT * 2); for (let i = 0; i < COUNT * 2; i++) at[i] = rr(0, T);
+    const grass = new Carpet(carpetGeo(bladeGeo(far ? 1 : 2), at), mat); grass.userData.max = COUNT;
     grass.frustumCulled = false; grass.receiveShadow = true; scene.add(grass); return grass;
   };
   GRASS.mesh = carpet(false); GRASS.far = carpet(true);
@@ -113,6 +149,7 @@ export const grassU = { ...LIGHT_U, ...WIND_U, uWind: windUniform, uCenter: { va
         vec4 hm = texture2D(uHeight, (wp - uOrigin) / uSize);
         float rnd = fract(sin(dot(ip.xz, vec2(39.3, 11.7))) * 43758.5453);
         float fade = 1.0 - smoothstep(0.6, 1.0, length(wp - uCenter) / (uTile * 0.5));
+        ${COVERED}
         float gg = max(hm.g, 0.0), on = step(rnd, hm.a) * step(0.5, gg - floor(gg * 0.5) * 2.0) * step(gg, 1.99) * fade;   // (the amount, unpacked; none in tall grass)
         vec3 p = position * on * ${size.toFixed(2)} * (0.8 + rnd * 0.5);
         float bend = max(position.y, 0.0) * 0.12;
@@ -171,22 +208,28 @@ const clumpCarpet = (geo, map, tall) => {
   const mat = new THREE.MeshStandardMaterial({ map, side: THREE.DoubleSide, roughness: 0.9, alphaTest: 0.5 }); mat.defines = { SUN_SHADOW_CHEAP: '' };
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, U);
-    sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr, uCount; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight, uMeadow; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.vertexShader
-      .replace('#include <beginnormal_vertex>', 'vec3 objectNormal = vec3(0.0, 1.0, 0.0);')   // (lit as the blades are, like a painted field)
-      .replace('#include <begin_vertex>', `
-        vec3 ip = instanceMatrix[3].xyz;
+    sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr, uCount; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight, uMeadow; attribute vec2 aOff; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.vertexShader
+      .replace('#include <beginnormal_vertex>', `
+        vec3 ip = vec3(aOff.x, 0.0, aOff.y);
         vec2 wp = ip.xz + uTile * floor((uCenter - ip.xz) / uTile + 0.5);
-        vec4 hm = texture2D(uHeight, (wp - uOrigin) / uSize);
         float rnd = fract(sin(dot(ip.xz, vec2(12.9898, 78.233))) * 43758.5453), r2 = fract(rnd * 91.73), r3 = fract(rnd * 53.17) * 0.85, r4 = (float(gl_InstanceID) + 0.5) / uCount;   // (r4 by the clump's place in the list: see showCarpets)
         // thinning further out and handing over to the far carpet clump by clump as the blades do, but each sinking into the
         // ground over a stretch rather than vanishing whole
         float dc = length(wp - uCenter), hand = smoothstep(${HAND[0].toFixed(1)}, ${HAND[1].toFixed(1)}, dc);
         float keep = mix(1.0, 0.6, smoothstep(${THIN[0].toFixed(1)}, ${THIN[1].toFixed(1)}, dc)), fade = step(r2, keep) * smoothstep(r3, r3 + 0.15, 1.0 - hand);
+        ${COVERED}
+        ${DROP}
         fade *= step(r4, texture2D(uMeadow, (wp - uOrigin) / uSize).r);   // (only in Pedias: where it fades into the next land, clumps give way to blades one for one)
+        ${DROP}
+        // (lit as the blades are: mostly from above, a little by the card's own facing, turned to the camera's side)
+        float a = rnd * 6.2831; vec2 cn = mat2(cos(a), -sin(a), sin(a), cos(a)) * normal.xz, tv = normalize(cameraPosition.xz - wp + 1e-4);
+        vec3 objectNormal = normalize(vec3(cn.x, 0.0, cn.y) * (dot(cn, tv) < 0.0 ? -${BLADE_N.toFixed(2)} : ${BLADE_N.toFixed(2)}) + vec3(0.0, ${(1 - BLADE_N).toFixed(2)}, 0.0));`)
+      .replace('#include <begin_vertex>', `
+        vec4 hm = texture2D(uHeight, (wp - uOrigin) / uSize);
         float gg = max(hm.g, 0.0), tl = floor(gg * 0.5) / 7.0, amt = gg - floor(gg * 0.5) * 2.0;
         ${tall ? `float sc = fade * step(0.3, amt) * step(0.5, tl) * (1.06 + rnd * 0.14) * smoothstep(1.5, 4.0, length(wp - cameraPosition.xz));   // (only in the tall patches, all about as tall as the tall blades; shrinking away round the camera as they do)`
                : `float sc = fade * smoothstep(0.0, 0.3, amt) * (0.75 + rnd * 0.45) * (0.7 + amt * 0.3) * (1.0 + step(0.5, tl) * 0.3);   // (a little taller under the tall clumps, filling in below them)`}
-        float a = rnd * 6.2831; vec3 p = position * sc; p.xz = mat2(cos(a), -sin(a), sin(a), cos(a)) * p.xz * ${f(WIDE)} / sqrt(keep);
+        vec3 p = position * sc; p.xz = mat2(cos(a), -sin(a), sin(a), cos(a)) * p.xz * ${f(WIDE)} / sqrt(keep);
         vec2 vp = wp + p.xz; vec4 hv = texture2D(uHeight, (vp - uOrigin) / uSize);   // this corner's own ground
         float gv = max(hv.g, 0.0), gh = clamp(position.y / ${f(HM)}, 0.0, 1.0), se = min(sc * ${f(HM / 0.5)}, 1.6);   // (se: its height against a blade's)
         p.y *= smoothstep(0.02, 0.25, gv - floor(gv * 0.5) * 2.0);   // (folded down where the grass stops)
@@ -198,8 +241,8 @@ const clumpCarpet = (geo, map, tall) => {
         float lean = gh * gh * se * uWindStr * (0.3 + gust * 0.25 + wave * 0.45) * 0.42; p.xz += uWindDir * lean; p.y -= lean * 0.35;
         vec2 away = vp - uCenter; float pd = length(away), push = (1.0 - smoothstep(0.12, 0.75, pd)) * gh * se;   // (parting round your legs, as the blades do)
         p.xz += away / max(pd, 0.001) * push * 0.55; p.y *= 1.0 - push * 0.35;
-        vec3 transformed = vec3(wp.x + p.x, hv.r - 0.03 + p.y, wp.y + p.z) - ip;
-        vGH = gh; float fk = floor(hm.b * 0.5); vVar = hm.b - fk * 2.0; vShade = fk / 15.0; vTall = tl; vGust = wave; vWorld = transformed + ip;
+        vec3 transformed = vec3(wp.x + p.x, hv.r - 0.03 + p.y, wp.y + p.z);
+        vGH = gh; float fk = floor(hm.b * 0.5); vVar = hm.b - fk * 2.0; vShade = fk / 15.0; vTall = tl; vGust = wave; vWorld = transformed;
         vVar = clamp(vVar + (fract(sin(dot(floor(wp / 2.7), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.3, 0.0, 1.0);`)
       .replace('#include <shadowmap_vertex>', `{ vec4 wSaved = worldPosition; worldPosition.y = hv.r + (worldPosition.y - hv.r) * 0.25;
         #include <shadowmap_vertex>
@@ -208,6 +251,7 @@ const clumpCarpet = (geo, map, tall) => {
     // and shade of its blades; and its cut-out kept as solid in the distance as near (the picture's smaller copies blur
     // the edges into half-seen, which a cut-out drops: the clumps would thin away with distance)
     sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.fragmentShader
+      .replace(UNFLIP.from, UNFLIP.to)
       .replace('#include <alphatest_fragment>', `{ vec2 ts = vec2(textureSize(map, 0)), du = dFdx(vMapUv) * ts, dv = dFdy(vMapUv) * ts; diffuseColor.a *= 1.0 + max(0.0, 0.5 * log2(max(dot(du, du), dot(dv, dv)))) * 0.25; }
         #include <alphatest_fragment>`)
       .replace('#include <color_fragment>', `#include <color_fragment>
@@ -220,14 +264,13 @@ const clumpCarpet = (geo, map, tall) => {
         #include <tonemapping_fragment>`);
   };
   mat.customProgramCacheKey = () => 'grassClump' + tall;
-  wettable(mat, { dark: 0.82, gloss: 0.7, shine: 0 });
+  wettable(mat, WET);
   // spread over the tile on a jittered grid (an even cover from few clumps), in a shuffled order so that drawing fewer
   // (a lower graphics preset) thins them evenly
   const rnd = seeded(313 + (tall ? 1 : 0)), g = Math.ceil(Math.sqrt(COUNT)), k = T / g, at = [];
   for (let j = 0; j < g; j++) for (let i = 0; i < g; i++) at.push([(i + rnd()) * k, (j + rnd()) * k]);
   for (let i = at.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [at[i], at[j]] = [at[j], at[i]]; }
-  const im = new THREE.InstancedMesh(geo, mat, COUNT), mm = new THREE.Matrix4();
-  for (let i = 0; i < COUNT; i++) im.setMatrixAt(i, mm.makeTranslation(at[i][0], 0, at[i][1]));
+  const im = new Carpet(carpetGeo(geo, new Float32Array(at.slice(0, COUNT).flat())), mat);
   im.frustumCulled = false; im.receiveShadow = true; im.userData = { max: COUNT, U };
   GRASS.clumps.push(im); return im;
 };

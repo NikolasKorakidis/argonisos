@@ -42,7 +42,8 @@ const TEX = {
 export const BLOWS = {
   hog: { attack: [['Attack', { hit: 0.6, to: 1.1 }]] },
   rig: { attack: [['attack', { hit: 0.85, to: 1.5 }]], throw: [['throw', { from: 0.2, hit: 0.87, to: 1.6 }]] },
-  minotaur: { attack: [['Attack2', { hit: 1.5, to: 2.45, rate: 1.1 }], ['Attack3', { hit: 0.62, to: 1.35, rate: 1.1 }]], slam: [['Attack1', { hit: 1.25, to: 2, rate: 1.15 }]],
+  // (the Minotaur's sweep: the labrys drawn back and swung flat across in front of him, Attack2)
+  minotaur: { attack: [['Attack2', { hit: 1.5, to: 2.45, rate: 1.1 }], ['Attack3', { hit: 0.62, to: 1.35, rate: 1.1 }]], slam: [['Attack1', { hit: 1.25, to: 2, rate: 1.15 }]], sweep: [['Attack2', { hit: 1.5, to: 2.45, rate: 1.1 }]],
     throw: [['Attack3', { hit: 0.62, to: 1.35, rate: 1.1 }]], roar: [['Taunt', { hit: 0.9, to: 2, rate: 1.2 }]] },
   skeleton: { attack: [['Attack1', { hit: 0.85, to: 1.45, rate: 1.1 }], ['Attack2', { hit: 0.88, to: 1.6, rate: 1.1 }], ['Attack3', { hit: 0.75, to: 1.9, rate: 1.1 }]] },
   // (breath: the lion's head drawn low, then held there while the fire pours out, hold)
@@ -66,8 +67,8 @@ const at = (bone) => (bone ? bone.getWorldPosition(new THREE.Vector3()) : null);
 // red markings, which have no place on a Greek island (and the black-and-white, blue-grey, purple-striped and red-striped
 // coats of the does and the young, now that mothers and young go about together and are seen close). The pack's palette
 // is bright in our light, so its colours are taken down a little (tint).
-const PACK = { calf: { file: 'pack/calf', looks: 'pack/calfLooks', drop: [6, 8, 9, 10, 12], len: 0.94, walk: 0.95, run: 4.5 }, deer: { file: 'pack/doe', looks: 'pack/doeLooks', drop: [6, 8, 12], len: 1.6, walk: 1.6, run: 7.6 },
-  stag: { file: 'pack/stag', looks: 'pack/stagLooks', len: 1.9, walk: 1.7, run: 7.6 },
+const PACK = { calf: { file: 'pack/calf', looks: 'pack/calfLooks', drop: [6, 8, 9, 10, 12], len: 0.94, walk: 0.95, run: 4.5, tint: 0.68 }, deer: { file: 'pack/doe', looks: 'pack/doeLooks', drop: [6, 8, 12], len: 1.6, walk: 1.6, run: 7.6, tint: 0.68 },
+  stag: { file: 'pack/stag', looks: 'pack/stagLooks', len: 1.9, walk: 1.7, run: 7.6, tint: 0.68 },   // (deer darker still: their red-brown coats read a vivid orange in the sun)
   foxCub: { file: 'pack/foxCub', looks: 'pack/foxCubLooks', drop: [8, 9, 10], len: 0.55, walk: 0.7, run: 3.5 }, fox: { file: 'pack/fox', looks: 'pack/foxLooks', drop: [8, 9, 10], len: 0.95, walk: 1.2, run: 6 },
   // (hares: drawn a size up from life, or the meadow's grass swallows them, and in their brown, grey and sandy coats only,
   // without the pack's near-black, blue-grey and snow-white ones, and not darkened as much: they're meant to be spotted)
@@ -133,12 +134,13 @@ class PackBody {
 
 // Feet on the ground (see FootIK), after animate(), with the ground under the creature. The IK bends the legs it's
 // given: put back first to the clip's pose, which the mixer skips re-applying when nothing changed, and to rest for a
-// bone the clip doesn't move at all.
-function plantFeet(body, dt, ground, rootY, active, legs) {
-  if (!body.ik) { body.ik = new FootIK(body.bones, ground, legs); body.legRest = body.ik.legs.flatMap((L) => [L.up, L.knee, L.foot]).map((b) => [b, b.quaternion.clone()]); }
+// bone the clip doesn't move at all. Only the bindings a playing clip drives are put back: the others' buffers still
+// hold the last pose some clip gave them long ago (a leg of the Minotaur's charge, held up off the ground in his idle).
+function plantFeet(body, dt, ground, rootY, active, legs, k = 1, lock = false) {
+  if (!body.ik) { body.ik = new FootIK(body.bones, ground, legs, k, lock); body.legRest = body.ik.legs.flatMap((L) => [L.up, L.knee, L.foot]).map((b) => [b, b.quaternion.clone()]); }
   for (const [b, q] of body.legRest) b.quaternion.copy(q);
-  const off = body.mixer._accuIndex + 1; for (const b of body.mixer._bindings) b.binding.setValue(b.buffer, off * b.valueSize);
-  const m = body.obj.children[0]; m.position.y = body.ik.plan(dt, rootY, active); body.obj.updateMatrixWorld(true); body.ik.solve(rootY);
+  const M = body.mixer, off = M._accuIndex + 1; for (let i = 0; i < M._nActiveBindings; i++) { const b = M._bindings[i]; b.binding.setValue(b.buffer, off * b.valueSize); }
+  const m = body.obj.children[0]; m.position.y = body.ik.plan(dt, rootY, active); body.obj.updateMatrixWorld(true); body.ik.solve(rootY, dt);
 }
 
 // ---- humanoids on the hero's rig: each kind's own body from the team's packs fitted onto it (tools/assets/fbx-page.mjs
@@ -216,18 +218,26 @@ class RigBody {
 // don't slide. A one-shot clip is [name, the moment in it that matters (a stagger's jolt, the charge's lunge, the paws
 // landing)]: it's started early or played quicker to put that moment where the game wants it (WHEN). The blows, roars and
 // the fire are BLOWS's, played whole.
+// fix: clips whose body wanders off its place (a bone's travel across the ground, [bone, share kept, from the idle's
+// place]): the Minotaur's pawing drew his hips back three of his own metres (ten in the game) and snapped them home, and
+// his crash into a wall was posed five metres ahead of him, so he jumped forward as it began; the skeleton's walk carried
+// it forward a stride and a half and back every cycle. Kept: a little of the pawing's rock back, the crash's stagger.
+// walk, run: measured from the clips once they stand in place (the planted foot's speed back along the ground).
+// tired: the breathing he stands in while spent (trial.js), its clip and how fast it plays
 const KIT = {
-  minotaur: { file: 'pack/minotaur', legs: (s) => [`${s}UpLeg`, `${s}Leg`, `${s}Foot`], h: 3.2, walk: 1.85, run: 5.75, clips: { idle: 'Idle', walk: 'Walk', run: 'RamRun', dead: 'Death',
-    attack: [['Attack2', 1.53], ['Attack3', 0.53]], slam: [['Attack1', 1.17]], roar: [['Taunt', 0.93]], paw: [['RamStart', 1.3]], hit: [['GotHit', 0.2]], dazed: [['RamWall', 0.17]] } },
-  skeleton: { file: 'pack/skeleton', legs: (s) => [`Base Human${s[0]}Thigh1`, `Base Human${s[0]}Calf`, `Base Human${s[0]}Foot`], h: 1.9, walk: 1.1, run: 1.1, clips: { idle: 'Idle', walk: 'Walk', run: 'Walk', dead: 'Death',
-    attack: [['Attack1', 0.8], ['Attack2', 0.8], ['Attack3', 0.67]], roar: [['Taunt', 0.87]], hit: [['GotHit', 0.2]] } },
+  minotaur: { file: 'pack/minotaur', legs: (s) => [`${s}UpLeg`, `${s}Leg`, `${s}Foot`], feet: ['LeftFoot', 'RightFoot'], h: 3.2, walk: 1.32, run: 4.4, fix: { RamStart: ['Hips', 0.2], RamWall: ['Hips', 1, true] },
+    clips: { idle: 'Idle', walk: 'Walk', run: 'RamRun', dead: 'Death', tired: 'Idle',
+      attack: [['Attack2', 1.53], ['Attack3', 0.53]], slam: [['Attack1', 1.17]], sweep: [['Attack2', 1.53]], roar: [['Taunt', 0.93]], paw: [['RamStart', 1.3]], hit: [['GotHit', 0.2]], dazed: [['RamWall', 0.17]] } },
+  skeleton: { file: 'pack/skeleton', legs: (s) => [`Base_Human${s[0]}Thigh1`, `Base_Human${s[0]}Calf`, `Base_Human${s[0]}Foot`], h: 1.9, walk: 1.02, run: 1.02, fix: { Walk: ['base_sk', 0, false, 'all'] },
+    clips: { idle: 'Idle', walk: 'Walk', run: 'Walk', dead: 'Death', attack: [['Attack1', 0.8], ['Attack2', 0.8], ['Attack3', 0.67]], roar: [['Taunt', 0.87]], rise: [['Taunt', 0.87]], hit: [['GotHit', 0.2]] } },
   // the Chimera: a great spined beast six metres long; its fire, claws and sting are the boss's moves (trial.js)
-  chimera: { file: 'pack/chimera', len: 6, walk: 2.4, run: 2.4, clips: { idle: 'Idle', walk: 'Walk', run: 'Walk', dead: 'Death',
+  chimera: { file: 'pack/chimera', len: 6, tall: 0.39, feet: ['Leg_L_F5', 'Leg_R_F5', 'Leg_L_B5', 'Leg_R_B5'], walk: 2.4, run: 2.4, clips: { idle: 'Idle', walk: 'Walk', run: 'Walk', dead: 'Death', tired: 'Idle',
     attack: [['Attack1', 1.1]], roar: [['Roar', 1.3]], crouch: [['Block', 0.4]], leap: [['Attack1', 1.02]], hit: [['GotHit', 0.2]] } },
 };
 // when in the clip the game's moment falls (s after the state starts) for each one-shot state (leap: the paws come down
 // as the pounce lands, trial.js)
-const WHEN = { paw: 0.75, hit: 0.1, dazed: 0.1, crouch: 0.3, leap: 0.8 };
+// (paw: the lunge into the charge as the pawing ends, trial.js MOVE.charge.paw)
+const WHEN = { paw: 1.1, hit: 0.1, dazed: 0.1, crouch: 0.3, leap: 0.8, rise: 0.9 };
 const kits = {};
 function kitTemplate(kind) {
   const K = KIT[kind];
@@ -235,12 +245,21 @@ function kitTemplate(kind) {
     const root = gl.scene; root.updateMatrixWorld(true);
     const size = new THREE.Box3().setFromObject(root).getSize(new THREE.Vector3()); root.scale.multiplyScalar(K.len ? K.len / Math.max(size.x, size.z) : K.h / size.y);
     root.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; } }); share(root);
-    return { root, clips: Object.fromEntries(gl.animations.map((c) => [c.name, c])) };
+    const clips = Object.fromEntries(gl.animations.map((c) => [c.name, c]));
+    for (const [name, [bone, keep, home, axes]] of Object.entries(K.fix || {})) {   // (the clips put back in their place: K.fix)
+      const tr = clips[name]?.tracks.find((t) => t.name === bone + '.position'), rest = home && clips[K.clips.idle].tracks.find((t) => t.name === bone + '.position'); if (!tr) continue;
+      const v = tr.values, ax = axes === 'all' ? [0, 1, 2] : [0, 2];
+      for (const k of ax) { const v0 = v[k], to = rest ? rest.values[k] : v0; for (let i = k; i < v.length; i += 3) v[i] = to + (v[i] - v0) * keep; }
+    }
+    return { root, clips };
   }));
 }
+// A boss is drawn giant (size: creatures.js TYPES), its walk and run as much faster as it is bigger so its feet keep to
+// the ground, and its blows and roars played a little slower (pace) for their weight: the blows' moments in the game's
+// seconds come out of cue() with the pace in them, so BLOWS holds as it is.
 class KitBody {
-  constructor(kind, scale = 1) {
-    this.kind = kind; this.K = KIT[kind]; this.obj = new THREE.Group(); this.mixer = null; this.acts = {}; this.mats = []; this.cur = null; this.once = null; this.onceT = 0;
+  constructor(kind, scale = 1, pace = 1) {
+    this.kind = kind; this.K = KIT[kind]; this.s = scale; this.pace = pace; this.obj = new THREE.Group(); this.mixer = null; this.acts = {}; this.mats = []; this.cur = null; this.once = null; this.onceT = 0;
     kitTemplate(kind).then((T) => {
       if (this.gone) return; const m = cloneSkinned(T.root); m.scale.multiplyScalar(scale);
       this.bones = {}; m.traverse((o) => { if (o.isBone) this.bones[o.name] = o; if (o.isMesh) { o.material = o.material.clone(); o.material.userData.shared = false; this.mats.push(o.material); } });
@@ -272,17 +291,42 @@ class KitBody {
     const m = this.move; if (m?.hold && this.once === m.st) { if (st === m.st && m.a.time >= m.hit) { m.a.timeScale = 0.05; this.onceT = Math.max(this.onceT, 0.3); } else if (st !== m.st) { m.a.timeScale = m.rate; m.hold = false; } }
     if (this.once && (this.onceT -= dt) > 0) { this.mixer.update(dt); return; }
     this.once = null;
-    // walking and running, drawn at the speed it's going
-    const v = speed;
-    if (v > this.K.walk * 1.6 && C.run !== C.walk) this.play(C.run).timeScale = clamp(v / this.K.run, 0.6, 1.5);
-    else if (v > 0.12) this.play(C.walk).timeScale = clamp(v / this.K.walk, 0.5, C.run === C.walk ? 2.4 : 1.6);
-    else this.play(C.idle).timeScale = 1;
+    // spent (trial.js): standing heaving for breath, the idle slowed and the chest and shoulders rising and falling over it
+    this.heave = st === 'tired' && !!C.tired; if (this.heave) { this.play(C.tired, 0.4).timeScale = 0.55; this.mixer.update(dt); return; }
+    // walking and running, drawn at the speed it's going (a giant's stride as long as it is big); turning where it stands
+    // (turn: how fast it's turning, set by creatures.js) it steps round, its feet walking it about rather than sliding
+    const v = Math.max(speed / this.s, Math.abs(this.turn || 0) * (this.K.h ?? 1) * 0.3);
+    if (v > this.K.walk * 1.6 && C.run !== C.walk) this.play(C.run, 0.3).timeScale = clamp(v / this.K.run, 0.45, 1.5);
+    else if (v > (this.cur === C.walk ? 0.08 : 0.16)) this.play(C.walk, 0.3).timeScale = clamp(v / this.K.walk, 0.4, C.run === C.walk ? 2.4 : 1.6);
+    else this.play(C.idle, 0.35).timeScale = 1;
     this.mixer.update(dt);
   }
-  feet(dt, ground, rootY, active) { if (this.mixer) plantFeet(this, dt, ground, rootY, active, this.K.legs); }
-  cue(st) { return cueMove(this, BLOWS[this.kind]?.[st], st); }
+  // Heaving for breath, over the clip's pose (after the feet, which put every bone back to the clip first): the chest
+  // swelling and the head and shoulders rising on each long breath in, sagging on the way out (a breath every second and
+  // a half), its own time kept in breathT
+  breathe(dt) {
+    const B = this.bones; if (!B) return; this.breathT = (this.breathT || 0) + dt; const s = Math.sin(this.breathT * 4.2), k = 0.5 + 0.5 * s;
+    if (B.Spine1) B.Spine1.rotation.x -= 0.07 * k; if (B.Spine2) B.Spine2.rotation.x -= 0.05 * k; if (B.Neck) B.Neck.rotation.x += 0.12 * k - 0.06;
+    for (const n of ['LeftShoulder', 'RightShoulder']) if (B[n]) B[n].rotation.z += (n[0] === 'L' ? 1 : -1) * 0.06 * k;
+    return s;
+  }
+  // (a giant's feet are held where they come down: FootIK lock)
+  feet(dt, ground, rootY, active) { if (this.mixer) { plantFeet(this, dt, ground, rootY, active, this.K.legs, this.s, this.s > 2); if (this.heave) this.breathe(dt); } }
+  // Its feet coming down (a boss's footsteps: creatures.js): each foot's height over the lowest it has lately been, a foot
+  // that has lifted a little way (a thirtieth of its height) landing as it comes back to it. Returns where each foot that
+  // landed since the last call is in the world. (K.tall: a long body's height for its length)
+  footfalls(dt) {
+    const F = this.K.feet; if (!F || !this.bones) return null;
+    const h = (this.K.h ?? this.K.len * this.K.tall) * this.s, up = 0.03 * h, down = 0.01 * h, out = [];
+    this.ff ||= F.map(() => ({ lo: Infinity, up: false }));
+    F.forEach((n, i) => { const b = this.bones[n], f = this.ff[i]; if (!b) return; const p = b.getWorldPosition(new THREE.Vector3()), y = p.y - this.obj.position.y;
+      f.lo = Math.min(f.lo + dt * up * 0.5, y); const lift = y - f.lo; if (lift > up) f.up = true; else if (f.up && lift < down) { f.up = false; out.push(p); } });
+    return out;
+  }
+  cue(st) { return cueMove(this, BLOWS[this.kind]?.[st], st, this.pace); }
   point(name) { return at(this.bones?.[name]); }
-  flash(k) { for (const m of this.mats) m.emissive?.setRGB(k * 0.6, 0, 0); }
+  // (glow: a warm light over it, a boss spent and open to blows: trial.js)
+  flash(k, glow = 0) { for (const m of this.mats) m.emissive?.setRGB(k * 0.6 + glow * 0.42, glow * 0.26, glow * 0.05); }
   dispose() { this.gone = true; this.mixer?.stopAllAction(); free(this.obj); }
 }
 
@@ -290,9 +334,8 @@ class KitBody {
 // unless the spawner says (young: a sow's piglets and a doe's fawn are young, the mothers and lone hogs and deer grown).
 // The body says which it is (body.young).
 const YOUNG = 0.25;
-export function makeBody(kind, level = 0, x = 0, z = 0, young) {
-  if (kind === 'chimera') return new KitBody('chimera');
-  if (kind === 'minotaur' || kind === 'skeleton') return new KitBody(kind);
+export function makeBody(kind, level = 0, x = 0, z = 0, young, size = 1, pace = 1) {
+  if (kind === 'chimera' || kind === 'minotaur' || kind === 'skeleton') return new KitBody(kind, size, pace);
   if (kind === 'dryadling') return new RigBody('dryadling', 1 + level * 0.1);
   if (kind === 'dryad' || kind === 'giant') return new RigBody(kind);
   const ages = AGES[kind] || AGES.rabbit, lv = clamp(level, 0, 2), small = young ?? (lv === 0 && hash21(Math.round(x * 10) + 0.5, Math.round(z * 10) - 0.5) < YOUNG);

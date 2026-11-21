@@ -18,10 +18,12 @@ export class Colliders {
     const x0 = Math.floor((x - r - 4) / G), x1 = Math.floor((x + r + 4) / G), z0 = Math.floor((z - r - 4) / G), z1 = Math.floor((z + r + 4) / G);
     for (let j = z0; j <= z1; j++) for (let i = x0; i <= x1; i++) { const a = this.grid.get(i + ',' + j); if (a) yield* a; }
   }
-  // Push a circle (radius r, feet at y) out of everything it overlaps. Returns true if it hit something
-  resolve(p, r, y = p.y) {
+  // Push a circle (radius r, feet at y) out of everything it overlaps (that filter, if given, lets count). Returns true
+  // if it hit something
+  resolve(p, r, y = p.y, filter) {
     let hit = false;
     for (const c of this.near(p.x, p.z, r)) {
+      if (filter && !filter(c)) continue;
       if (c.h !== undefined && (y > (c.y ?? -1e9) + c.h - 0.3 || y + 1.7 < (c.y ?? -1e9))) continue;     // stepped over it, or under it
       const dx = p.x - c.x, dz = p.z - c.z, d = Math.hypot(dx, dz), m = r + c.r;
       if (d < m && d > 1e-4) { p.x = c.x + (dx / d) * m; p.z = c.z + (dz / d) * m; hit = true; }

@@ -86,9 +86,13 @@ export function updateWeather(dt, pos, light, { still = false } = {}) {
   // ease the weather amounts towards the current type; the fog at an even pace, rolling in or lifting over some fifty
   // seconds and closing or opening a level in thirty (as far as you see shrinks by the same share every second: the
   // far edge comes in geometrically, below)
-  const T = TYPES[WEATHER.type], e = first ? 1 : Math.min(1, dt * 0.08), toward = (k, to, rate) => (first ? to : k + clamp(to - k, -rate * dt, rate * dt));
+  // (a boss's storm gathering or broken (gatherStorm, breakStorm): the sky turns in seconds rather than a minute; broken,
+  // it stays clear a while)
+  if (WEATHER.rush > 0) WEATHER.rush -= dt;
+  if (WEATHER.release > 0 && (WEATHER.release -= dt) <= 0 && WEATHER.forced === 'clear') { WEATHER.forced = null; WEATHER.biome = here; WEATHER.timer = 180; }
+  const fast = WEATHER.rush > 0 ? 6 : 1, T = TYPES[WEATHER.type], e = first ? 1 : Math.min(1, dt * 0.08 * fast), toward = (k, to, rate) => (first ? to : k + clamp(to - k, -rate * dt, rate * dt));
   for (const k of ['overcast', 'rain']) WEATHER.k[k] = lerp(WEATHER.k[k], T[k], e);
-  WEATHER.k.fog = toward(WEATHER.k.fog, T.fog, 1 / 50); WEATHER.k.close = toward(WEATHER.k.close, T.close || 0, 1 / 30); WEATHER.k.low = toward(WEATHER.k.low, T.low || 0, 1 / 50);
+  WEATHER.k.fog = toward(WEATHER.k.fog, T.fog, fast / 50); WEATHER.k.close = toward(WEATHER.k.close, T.close || 0, 1 / 30); WEATHER.k.low = toward(WEATHER.k.low, T.low || 0, 1 / 50);
   WEATHER.storm = lerp(WEATHER.storm, T.storm ? 1 : 0, e);
   // biome mood, blended by where you stand
   const m = WEATHER.mood;
@@ -141,9 +145,14 @@ export function updateWeather(dt, pos, light, { still = false } = {}) {
   }
   // what the sky and lights need: how overcast (a thick fog scatters the sun as a heavy sky does: soft light, faint
   // shadows), and how much light the biome lets through
-  return { overcast: Math.max(WEATHER.k.overcast, w.v * 0.6, WEATHER.k.fog * 0.85), dark: (1 - m.light) * (1 - night * 0.55) };   // (by night the woods shut out a little less: the moonlight is all there is)
+  return { overcast: Math.max(WEATHER.k.overcast, w.v * 0.6, WEATHER.k.fog * 0.85), dark: (1 - m.light) * (1 - night * 0.75) };   // (by night the woods shut out less: the moonlight and the sky's are all there is)
 }
-export function setWeather(type) { WEATHER.forced = type || null; if (type) WEATHER.type = type; }
+export function setWeather(type) { WEATHER.forced = type || null; if (type) WEATHER.type = type; WEATHER.rush = WEATHER.release = 0; }
+// A boss's storm (trial.js): called up with its tribute, it rolls in over a few seconds, dark, the rain driving and the
+// wind up; broken as the beast dies, the rain stops and the clouds part as fast, the sun breaking through, and the sky
+// is kept clear for hold seconds before the weather goes its own way again
+export function gatherStorm({ fast = 6 } = {}) { setWeather('thunder'); WEATHER.rush = fast; }
+export function breakStorm({ fast = 9, hold = 90 } = {}) { setWeather('clear'); WEATHER.rush = fast; WEATHER.release = hold; WEATHER.boltT = 99; }
 // After a teleport (respawn, fast travel): jump straight to the new place's air instead of easing into it
 export function snapWeather() { first = true; WEATHER.timer = 0; }
 // A brief white flash of the sky (thunder when a creature vanishes, lightning)

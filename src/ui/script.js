@@ -48,7 +48,7 @@ export const SCRIPT = `
 <li><b>Clues:</b> four Giant caves on the forest's outer edge, each guarded by a Giant (550–650 health, blows of 50–70). Take a rubbing of each carving; each points to the next; <b>three</b> reveal the <b>Chimera's Shrine</b>.</li>
 <li><b>Tribute:</b> <b>3 dryad hearts + 10 pomegranates</b> (some dryads carry a heart).</li>
 <li><b>The fight:</b> 2,500 health. Bite, claws, and a venomous tail sting for anyone behind it. Dryads join every 30 seconds.</li>
-<li><b>Offering:</b> <b>Chimera's Claws</b> (${K('F')}: your bare hands strike like claws for 5 minutes) and <b>tier 2</b>: the Cretan bow.</li>
+<li><b>Offering:</b> <b>Chimera's Claws</b> (${K('F')}: your bare hands strike like claws for 5 minutes) and <b>tier 2</b>: the Cretan bow and Corinthian armour.</li>
 </ul>
 
 <h3>6 · The end of this trial</h3>

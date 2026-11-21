@@ -42,19 +42,27 @@ export default {
       ${guide(12)}`);
     await t.step('13 a bed sets the spawn point', `AG.S.bed = { x: window._wb.x, z: window._wb.z }; ${guide(13)}`);
     await t.step('14 a bow and arrows at the roofed bench', `P.spawn(window._wb.x - 2, window._wb.z); g.give('wood', 20); g.give('rope', 6); g.give('leather', 2); g.give('feather', 2); C.discover(true); C.make('crudeBow'); C.make('crudeArrowx10'); g.guide.update(1); return g.guide.cur >= 14 || 'bow ' + inv.count('crudeBow') + ' arrows ' + inv.count('crudeArrow') + ': ' + C.blocker(C.list().find((r) => r.key === 'crudeBow'));`);
-    // (praying takes a few seconds on your knees before Zeus answers: game/acts.js)
-    await t.step('15 pray at the temple altar', `${at('altar')} await new Promise((r) => setTimeout(r, 4500)); ${guide(15)}`);
+    // (praying takes a few seconds on your knees before Zeus answers, in the game's time, slower than the clock's when
+    // frames come slowly: game/acts.js)
+    await t.step('15 pray at the temple altar', `${at('altar')} const t0 = performance.now(); while (g.trial.st.prayDay < 1 && performance.now() - t0 < 15000) await new Promise((r) => setTimeout(r, 200)); ${guide(15)}`);
+    // (the first prayer shows the way on: the nearest marked olive on the map and compass, Patch 23)
+    await t.step('15 …and Zeus shows you a marked olive', `const t0 = performance.now(); while (!g.SITES.olives.some((s) => g.map.isKnown(s)) && performance.now() - t0 < 15000) await new Promise((r) => setTimeout(r, 200)); return (g.trial.st.shown && g.SITES.olives.some((s) => g.map.isKnown(s))) || 'no olive shown';`);
     await t.step('16 copy the marks of three olives', `for (let i = 0; i < 3; i++) { ${at('scrap', " && !g.trial.st.scraps.includes(u.id)")} } g.guide.update(1); return g.guide.cur >= 16 || 'copied ' + g.trial.st.scraps.join(',');`);
     await t.step('17 the Minotaur’s tribute', `g.give('deerHide', 5); g.give('olive', 10); ${guide(17)}`);
+    // a fight left without the kill (fled) keeps the tribute on the altar: the beast is called again for nothing (Patch 23)
+    await t.step('17 lay the tribute at the Labyrinth', `window._hides = inv.count('deerHide'); ${at('summon', " && u.boss === 'minotaur'")} window._u = u; return (g.trial.st.fight === 'minotaur' && inv.count('deerHide') === window._hides - 5) || JSON.stringify({ fight: g.trial.st.fight, hides: inv.count('deerHide') });`);
+    await t.page.waitForFunction(() => AG.game.trial.boss && !AG.game.trial.arrival, null, { timeout: 20000 }).catch(() => {});
+    await t.step('17 …flee: the beast goes, the tribute stays on the altar', `const c = g.trial.boss; if (!c) return 'no boss came'; P.spawn(c.arena.x + 90, c.arena.z); g.trial.update(0.016); const u = window._u; P.spawn(u.at.x, u.at.z + 0.6); P.pos.y = u.at.y; const lbl = g.trial.interactable(P.pos)?.label;
+      return (!g.trial.boss && g.trial.st.paid?.minotaur && !g.trial.st.fight && inv.count('deerHide') === window._hides - 5 && /again/.test(lbl)) || JSON.stringify({ boss: !!g.trial.boss, paid: g.trial.st.paid, lbl, hides: inv.count('deerHide') });`);
     await t.step('18 call the Minotaur at the Labyrinth', `${at('summon', " && u.boss === 'minotaur'")} return true;`);
-    await t.wait(3600);
+    await t.page.waitForFunction(() => AG.game.trial.boss && !AG.game.trial.arrival?.c?.fall, null, { timeout: 15000 }).catch(() => {});   // (the beast down out of the sky: its coming keeps the game's time, slower than the clock's when frames come slowly)
     await t.step('19 defeat the Minotaur', `if (!g.trial.boss) return 'no boss came'; ${kill('g.trial.boss')} ${guide(19)}`);
     await t.step('20 offer his head: the Roar is yours', `if (!inv.count('minotaurHead')) g.give('minotaurHead'); ${at('offering', " && u.boss === 'minotaur'")} g.guide.update(1); return (g.guide.cur >= 20 && g.trial.st.power === 'roar' && AG.S.tier >= 1) || 'step ' + g.guide.cur + ' power ' + g.trial.st.power + ' tier ' + AG.S.tier;`);
     await t.step('21 enter Yleos', `g.owl.st.done.push('yleos'); ${guide(21)}`);
     await t.step('22 rubbings in three giant caves', `for (let i = 0; i < 3; i++) { ${at('carving', " && !g.trial.st.carvings.includes(u.id)")} } g.guide.update(1); return g.guide.cur >= 22 || 'carvings ' + g.trial.st.carvings.join(',');`);
     await t.step('23 the Chimera’s tribute', `g.give('dryadHeart', 3); g.give('pomegranate', 10); ${guide(23)}`);
     await t.step('24 call the Chimera at its shrine', `for (const c of [...g.creatures.list]) g.creatures.remove(c); ${at('summon', " && u.boss === 'chimera'")} return true;`);
-    await t.wait(3600);
+    await t.page.waitForFunction(() => AG.game.trial.boss && !AG.game.trial.arrival?.c?.fall, null, { timeout: 15000 }).catch(() => {});   // (the beast down out of the sky: its coming keeps the game's time, slower than the clock's when frames come slowly)
     await t.step('25 defeat the Chimera', `if (!g.trial.boss) return 'no boss came'; ${kill('g.trial.boss')} ${guide(25)}`);
     await t.step('26 offer its head: the trial is complete', `if (!inv.count('chimeraHead')) g.give('chimeraHead'); ${at('offering', " && u.boss === 'chimera'")} g.guide.update(1); return (g.guide.cur === g.guide.steps.length && AG.S.tier >= 2) || 'step ' + g.guide.cur + ' tier ' + AG.S.tier;`);
     // save, then reload the page as a player would: the new game loads the save at start-up
@@ -63,12 +71,33 @@ export default {
     await t.page.reload(); await t.page.waitForFunction(() => window.AG?.player.hero.model && AG.terrain.pending === 0, null, { timeout: 120000 });
     const after = await t.eval(`const r = { loaded: g.loaded, ...(() => { ${snap} })() }; g.save = () => false; localStorage.removeItem('argonisos.world.v1'); return r;`);
     const diff = before ? Object.keys(before).filter((k) => before[k] !== after[k]) : ['(save failed)'];
-    t.check('save, reload: the pack (with durability), the trial, the buildings, stumps and spawn point come back', after.loaded && !diff.length, `loaded ${after.loaded}; ` + diff.map((k) => `${k}: ${String(before?.[k]).slice(0, 150)} → ${String(after[k]).slice(0, 150)}`).join(' ; '));
+    t.check('save, reload: the pack (with durability), the trial, the buildings, stumps and spawn point come back', after.loaded && !diff.length, `loaded ${after.loaded}; ` + diff.map((k) => { const x = String(before?.[k]), y = String(after[k]); let i = 0; while (i < x.length && x[i] === y[i]) i++; i = Math.max(0, i - 60); return `${k}: …${x.slice(i, i + 150)} → …${y.slice(i, i + 150)}`; }).join(' ; '));
     // an older save (from before the woods and bare rock, 15 Oct) keeps the pack, but its felled trees and gathered
     // pickups pointed at a land that has changed: they come back
     const old = await t.eval(`const { save } = await import('/src/game/save.js'); g.save = () => false; save(g); const d = JSON.parse(localStorage.getItem('argonisos.world.v1')); d.world = undefined; d.harvest.removed = ['0,0,3']; d.pickups.taken = [['0,0,1', 1]]; localStorage.setItem('argonisos.world.v1', JSON.stringify(d)); return JSON.stringify(inv.toJSON());`);
     await t.page.reload(); await t.page.waitForFunction(() => window.AG?.player.hero.model && AG.terrain.pending === 0, null, { timeout: 120000 });
     const later = await t.eval(`const r = { inv: JSON.stringify(inv.toJSON()), removed: AG.veg.removed.size, taken: g.pickups.taken.size }; g.save = () => false; localStorage.removeItem('argonisos.world.v1'); return r;`);
     t.check('an older save keeps the pack, while its felled trees and gathered pickups come back', later.inv === old && later.removed === 0 && later.taken === 0, JSON.stringify({ sameInv: later.inv === old, removed: later.removed, taken: later.taken }));
+    // an old save holding what this version no longer knows (an item gone from the game, in the pack, worn, in a chest, a
+    // grave, on the ground and eaten; a skill added since; a fight on as it was saved) loads, leaving those out (Patch 23)
+    await t.eval(`const { save } = await import('/src/game/save.js'); g.save = () => false; inv.slots.fill(null); inv.slots[5] = { id: 'crudeAxe', n: 1, dur: 50 }; save(g); const d = JSON.parse(localStorage.getItem('argonisos.world.v1'));
+      d.inv.slots[6] = { id: 'goldenFleece', n: 1, worn: 'cape' }; d.inv.slots[7] = { id: 'stone', n: 3, worn: 'hand' }; d.inv.seen.push('goldenFleece'); delete d.player.stats.skills.sneaking;
+      d.player.stats.food = [{ id: 'nectar', t: 1000 }, { id: 'cookedMeat', t: 1000 }]; d.graves = [{ x: P.pos.x + 5, y: P.pos.y, z: P.pos.z, slots: [{ id: 'goldenFleece', n: 1 }, { id: 'wood', n: 2 }] }];
+      d.pickups.drops.push({ id: 'dx', kind: 'drop', item: 'goldenFleece', n: 1, x: P.pos.x + 0.8, y: P.pos.y, z: P.pos.z, rot: 0 }); d.S.trial.fight = 'chimera';
+      d.build.push({ uid: 'pc900', id: 'chest', x: P.pos.x + 9, y: AG.heightAt(P.pos.x + 9, P.pos.z), z: P.pos.z, rot: 0, hp: 200, state: { slots: [{ id: 'goldenFleece', n: 1 }, { id: 'wood', n: 4 }, null, null, null, null, null, null, null, null] } });
+      localStorage.setItem('argonisos.world.v1', JSON.stringify(d)); return true;`);
+    await t.page.reload(); await t.page.waitForFunction(() => window.AG?.player.hero.model && AG.terrain.pending === 0, null, { timeout: 120000 });
+    const odd = await t.eval(`const f0 = AG.renderer.info.render.frame; await new Promise((r) => setTimeout(r, 600)); const chest = g.build.placed.find((p) => p.uid === 'pc900' || p.id === 'chest');
+      const r = { loaded: g.loaded, inv: inv.slots.filter(Boolean).map((s) => s.id + (s.worn ? ':' + s.worn : '')), sneak: P.stats.skills.sneaking, food: P.stats.food.map((f) => f.id), grave: g.graves.list.at(-1)?.slots.map((s) => s.id), drops: g.pickups.drops.filter((q) => q.item === 'goldenFleece').length,
+        chest: chest?.inv?.slots.filter(Boolean).map((s) => s.id), paid: g.trial.st.paid?.chimera, fight: g.trial.st.fight, frames: AG.renderer.info.render.frame !== f0 };
+      g.save = () => false; localStorage.removeItem('argonisos.world.v1'); return r;`);
+    t.check('an old save with an item gone from the game and a skill added since loads: the unknown left out, the skill at level 1, the game running', odd.loaded && odd.inv.join() === 'crudeAxe,stone' && odd.sneak?.level === 1 && odd.food.join() === 'cookedMeat' && odd.grave?.join() === 'wood' && !odd.drops && (!odd.chest || odd.chest.join() === 'wood') && odd.frames, JSON.stringify(odd));
+    t.check('…and a fight that was on when it was saved leaves its tribute on the altar', odd.paid && !odd.fight, JSON.stringify(odd));
+    // a save that can't be read at all is kept beside it (.bak), and the game starts a new trial and says so (one that
+    // may have saved itself meanwhile)
+    await t.eval(`g.save = () => false; localStorage.setItem('argonisos.world.v1', '{"v":1,"S":{"day":3},"player":'); return true;`);
+    await t.page.reload(); await t.page.waitForFunction(() => window.AG?.game.saveLost && AG.player.hero.model && AG.terrain.pending === 0, null, { timeout: 150000 }).catch(() => {});
+    const lost = await t.eval(`const r = { lost: !!g.saveLost, loaded: g.loaded, bak: localStorage.getItem('argonisos.world.v1.bak'), saveDay: JSON.parse(localStorage.getItem('argonisos.world.v1') || 'null')?.S?.day ?? null, day: AG.S.day }; g.save = () => false; localStorage.removeItem('argonisos.world.v1.bak'); localStorage.removeItem('argonisos.world.v1'); return r;`);
+    t.check('a save that can\'t be read is kept as a backup, and a new trial starts, saying so', lost.lost && !lost.loaded && lost.bak === '{"v":1,"S":{"day":3},"player":' && (lost.saveDay === null || lost.saveDay === 1) && lost.day === 1, JSON.stringify(lost));
   },
 };

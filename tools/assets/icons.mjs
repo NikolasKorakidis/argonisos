@@ -45,9 +45,10 @@ const ICONS = {
   spoiledMeat: { pack: 'all/polygongeneric/sm-gen-prop-food-meat-01', tint: 0x8a9a60 },
   fish: { pack: 'all/polygonvikings/sm-prop-fish-01', pitch: 40 }, cookedFish: { pack: 'all/polygonvikings/sm-prop-fish-01', pitch: 40, tint: 0xc08050 },
   spoiledFish: { pack: 'all/polygonvikings/sm-prop-fish-01', pitch: 40, tint: 0x7a8a58 },
-  pomegranate: { pack: 'all/polygongeneric/sm-gen-prop-food-vegetable-01', tint: 0xd06a78 },
+  // (the team's olive on its twig, acorn and pomegranate: flat-coloured, their size whatever it is: the frame fits them)
+  olive: { pack: 'foodOlive', yaw: 70, pitch: 30, tint: 0x6a9a3c, fill: 0.95 }, acorn: { pack: 'foodAcorn', yaw: 30, pitch: 20, tilt: 180 }, pomegranate: { pack: 'foodPomegranate', yaw: 30, pitch: 20, tilt: 180, tint: 0xa05058 },
   // tools and weapons, as held
-  hammer: T({ held: 'hammer' }), hoe: T({ held: 'hoe' }), torch: T({ held: 'torch' }), pickaxe: T({ held: 'pickaxe' }),
+  hammer: T({ held: 'hammer' }), hoe: T({ held: 'hoe', spin: 90 }), torch: T({ held: 'torch' }), pickaxe: T({ held: 'pickaxe' }),
   axe: T({ held: 'crudeAxe' }), axeLight: T({ held: 'lightstoneAxe' }), dagger: T({ held: 'crudeDagger' }), daggerLight: T({ held: 'lightstoneDagger' }),
   club: T({ held: 'crudeClub' }), bow: T({ held: 'crudeBow' }), cretanBow: T({ held: 'cretanBow' }),
   spear: T({ held: 'crudeSpear' }), spearLight: T({ held: 'lightstoneSpear' }), arrow: T({ pack: 'arrow' }),
@@ -57,6 +58,8 @@ const ICONS = {
   throwerLegs: { pack: 'heroArmour', only: ['wear_throwerLegs'], yaw: 25, pitch: 15 },
   cretanHelmet: { pack: 'heroArmour', only: ['wear_cretanHelmet'] }, cretanArmor: { pack: 'heroArmour', only: ['wear_cretanArmor'], arms: 12, yaw: 25, pitch: 15 },
   cretanLegs: { pack: 'heroArmour', only: ['wear_cretanLegs'], yaw: 25, pitch: 15 },
+  corinthianHelmet: { pack: 'heroArmour', only: ['wear_corinthianHelmet'] }, corinthianArmor: { pack: 'heroArmour', only: ['wear_corinthianArmor'], arms: 12, yaw: 25, pitch: 15 },
+  corinthianLegs: { pack: 'heroArmour', only: ['wear_corinthianLegs'], yaw: 25, pitch: 15 },
   cape: { pack: 'all/polygonancientempire/sk-chr-attach-cape-01', yaw: 200, pitch: 15 },
   // building pieces (the build menu shows these by piece; crafting's Build list by their shared icon names below, which
   // the conditions, the map and the patch notes keep drawn: ui/icons.js glyph)

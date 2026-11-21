@@ -1,9 +1,11 @@
 // HUD and the inventory screen. The HUD redraws its bars every frame and everything else when it changes.
 import { icon, glyph } from './icons.js';
 import { ITEMS } from '../game/items.js';
+import { usedIn } from '../game/crafting.js';
 import { COLS, ROWS, MAX_WEIGHT } from '../game/inventory.js';
 import { CONDITIONS, SKILLS, xpForLevel, Stats } from '../player/stats.js';
 import { input, lock, unlock } from '../input.js';
+import { sound } from '../audio/sound.js';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
@@ -17,16 +19,16 @@ export class HUD {
       <div id="hurt"></div><div id="hurtDir" style="position:absolute;inset:0;pointer-events:none;opacity:0"></div>
       <div id="hotbar"></div>
       <div id="status"><div id="clock"></div><div id="conds"></div></div>
-      <div id="toasts"></div><div id="pickups"></div>
+      <div id="toasts"></div><div id="pickups"></div><div id="skillPops"></div>
       <div id="region"><div class="rname"></div><div class="rsub"></div></div>
       <div id="cross"></div>
       <div id="prompt" class="hidden"></div>
       <div id="act" class="hidden"><i></i><span></span></div>
-      <div id="stam" class="full"><div class="vbar"><i class="ghost"></i><i class="val"></i></div></div>
+      <div id="stam" class="full"><div class="vbar"><i class="ghost"></i><i class="val"></i></div><u></u></div>
       <div id="vitals"><div id="foods"></div><div class="vbar" id="hpBar"><span>${icon('health')}</span><i class="ghost"></i><i class="val"></i><u></u></div></div>`;
     document.body.appendChild(hud);
     const death = el('div', '', '<h1>You have fallen</h1><p>Zeus is not done with you yet…</p>'); death.id = 'death'; document.body.appendChild(death);
-    this.inv = null; this.player = null; this.last = {}; this.open = false; this.sel = -1;
+    this.inv = null; this.player = null; this.last = {}; this.open = false; this.sel = -1; this.skillQ = []; this.skillT = null;
     // inventory screen
     const p = el('div'); p.id = 'invPanel'; p.className = 'hidden';
     p.innerHTML = `<div class="pnl"><h2>Pack</h2><button class="xbtn" id="invX">${icon('close')}</button><div class="pbody"><div class="grid" id="invGrid"></div><div id="invInfo"></div><div id="invFoot"></div></div></div>
@@ -50,6 +52,21 @@ export class HUD {
     if (cur) { cur.dataset.n = +cur.dataset.n + n; cur.querySelector('em').textContent = '×' + cur.dataset.n; cur.style.animation = 'none'; void cur.offsetWidth; cur.style.animation = ''; cur.dataset.t = Date.now(); return; }
     const e = el('div', 'pick', `${icon(def.icon || 'stone')}<span>${def.name}</span><em>×${n}</em>`); e.dataset.id = id; e.dataset.n = n; e.dataset.t = Date.now();
     box.appendChild(e); setTimeout(() => e.remove(), 3000); while (box.children.length > 6) box.firstChild.remove();
+  }
+  // A skill found (learned) or up a level: a banner on the right that rises in and fades, its glyph, name and level, and
+  // a soft chime. Several at once wait their turn a beat apart, three on screen at most, so none lands on another; one
+  // still waiting that goes up again is told once, at its newest level
+  skill(s, level, learned = false) {
+    const q = this.skillQ.find((x) => x.s === s); if (q) { q.level = level; return; }
+    this.skillQ.push({ s, level, learned }); this.nextSkill();
+  }
+  nextSkill() {
+    const box = $('skillPops'); if (!this.skillQ.length || this.skillT || box.children.length >= 3) return;
+    const { s, level, learned } = this.skillQ.shift(), d = SKILLS[s];
+    const e = el('div', 'skillPop' + (learned ? ' new' : ''), `<i>${glyph(d.icon || 'star')}</i><div><small>${learned ? 'Skill learned' : 'Skill improved'}</small><span><b>${d.name}</b>, level ${level}</span></div>`);
+    e.dataset.s = s; box.appendChild(e); sound('skill', { learned });
+    setTimeout(() => { e.remove(); this.nextSkill(); }, 4600);
+    this.skillT = setTimeout(() => { this.skillT = null; this.nextSkill(); }, 450);
   }
   region(name, sub) { const r = $('region'); r.querySelector('.rname').textContent = name; r.querySelector('.rsub').textContent = sub || ''; r.classList.remove('show'); void r.offsetWidth; r.classList.add('show'); }
   prompt(key, text, sub, alt) {
@@ -75,7 +92,12 @@ export class HUD {
   // moment and fading
   hurtFrom(x, y, k = 0.5) { const e = $('hurtDir'), n = Math.hypot(x, y) || 1; e.style.transition = 'none'; e.style.background = `radial-gradient(ellipse 60% 60% at ${50 + (x / n) * 60}% ${50 - (y / n) * 60}%, rgba(215,24,16,${Math.min(0.85, 0.35 + k * 0.5)}) 0%, rgba(215,24,16,0) 70%)`; e.style.opacity = 1; void e.offsetWidth; e.style.transition = 'opacity .8s ease-in .2s'; e.style.opacity = 0; }
   hurt(k) { $('hurt').style.boxShadow = `inset 0 0 160px rgba(200,20,20,${Math.min(0.75, k)})`; clearTimeout(this.hurtT); this.hurtT = setTimeout(() => ($('hurt').style.boxShadow = ''), 250); }
-  death(on) { $('death').classList.toggle('show', on); }
+  // The death screen; lost: what death took of each skill (stats.js deathPenalty), named under the title, the most first
+  death(on, lost = []) {
+    const d = $('death'); d.classList.toggle('show', on); let el = d.querySelector('.toll'); if (!el) { el = document.createElement('div'); el.className = 'toll'; d.appendChild(el); }
+    const top = on ? lost.slice().sort((a, b) => b[3] - a[3]).slice(0, 6) : [];
+    el.innerHTML = top.length ? `<small>Death takes 5% of all you have learned</small>${top.map(([n, a, b]) => `<span>${n} ${b < a ? `<b>${a} → ${b}</b>` : a}</span>`).join('')}` : '';
+  }
   // Fade out, let the night pass, fade back in
   sleep(cb) {
     const d = $('death'); d.querySelector('h1').textContent = 'You sleep'; d.querySelector('p').textContent = 'The night passes…'; d.classList.add('show');
@@ -93,6 +115,7 @@ export class HUD {
     st.querySelector('.vbar').style.width = Math.min(240 + (ms - 50) * 1.4, 480) + 'px';
     st.querySelector('.val').style.width = sk * 100 + '%'; st.querySelector('.ghost').style.width = sk * 100 + '%';
     st.classList.toggle('full', sk > 0.995); st.classList.toggle('low', sk < 0.2);
+    const stn = `${Math.ceil(S.stamina)} / ${Math.round(ms)}`; if (stn !== this.last.stam) { this.last.stam = stn; st.querySelector('u').textContent = stn; }   // (the number under the bar, as the health bar has its own)
     this.t = (this.t || 0) - dt; if (this.t > 0 && !this.dirtyInv) return; this.t = 0.2;
     // food slots
     const fk = S.food.map((f) => `${f.id}:${Math.round(Stats.foodK(f) * 20)}`).join() + S.food.length;
@@ -115,12 +138,12 @@ export class HUD {
   slotHTML(s, i, hot) {
     if (!s) return `<div class="slot empty" data-i="${i}">${hot ? `<b>${i + 1}</b>` : ''}</div>`;
     const d = ITEMS[s.id], dur = d.dur ? `<div class="dur"><i style="width:${(s.dur / d.dur) * 100}%;${s.dur / d.dur < 0.25 ? 'background:#d65446' : ''}"></i></div>` : '';
-    return `<div class="slot${s.worn ? ' worn' : ''}${i === this.sel ? ' sel' : ''}" data-i="${i}" title="${d.name}">${hot ? `<b>${i + 1}</b>` : ''}${icon(d.icon || 'stone')}${s.n > 1 ? `<em>${s.n}</em>` : ''}${dur}</div>`;
+    return `<div class="slot${s.worn ? ' worn' : ''}${i === this.sel ? ' sel' : ''}${d.dur && s.dur <= 0 ? ' broken' : ''}" data-i="${i}" title="${d.name}${d.dur && s.dur <= 0 ? ' (broken: mend it at a workbench)' : ''}">${hot ? `<b>${i + 1}</b>` : ''}${icon(d.icon || 'stone')}${s.n > 1 ? `<em>${s.n}</em>` : ''}${dur}</div>`;
   }
   drawHotbar() { $('hotbar').innerHTML = this.inv.slots.slice(0, COLS).map((s, i) => this.slotHTML(s, i, true)).join(''); }
   // ---- inventory screen
   toggle(on = !this.open) {
-    this.open = on; this.panel.classList.toggle('hidden', !on); input.uiOpen = on;
+    if (on !== !!this.open) sound('ui', { open: on, kind: 'pack' }); this.open = on; this.panel.classList.toggle('hidden', !on); input.uiOpen = on;
     if (on) { unlock(); this.drawGrid(); this.drawChar(); } else { lock(); this.sel = -1; this.onClose?.(); }
     this.onToggle?.(on);
     if (on) this.fit();
@@ -180,14 +203,15 @@ export class HUD {
     if (d.food) bits.push(d.food.health >= 0 ? `+${d.food.health} health, +${d.food.stamina} stamina, ${d.food.regen} hp/s for ${fmtT(d.food.duration)}` : `Inedible like this (${d.food.health} health)`);
     if (d.dmg) bits.push('Damage ' + d.dmg.map(([n, k]) => `${n} ${k}`).join(' + '));
     if (d.block) bits.push(`Block ${d.block}`); if (d.armor) bits.push(`Armour ${d.armor}`);
-    if (d.speed) bits.push(`${d.speed > 0 ? '+' : ''}${Math.round(d.speed * 100)}% speed`);
+    if (d.speed) bits.push(`${d.speed > 0 ? '+' : ''}${Math.round(d.speed * 100)}% speed`); if (d.resist) bits.push(`Resists ${d.resist.join(', ')}`); if (d.regen) bits.push(`+${Math.round(d.regen * 100)}% health regeneration`);
     if (d.dur) bits.push(`Durability ${Math.ceil(s.dur)} / ${d.dur}`);
     bits.push(`Weight ${(d.weight * s.n).toFixed(1)}`);
-    box.innerHTML = `<b>${d.name}</b>${s.n > 1 ? ` ×${s.n}` : ''}<br>${d.note ? d.note + '<br>' : ''}${bits.join(' · ')}`;
+    const use = usedIn(s.id);   // (what it goes into: crafting.js)
+    box.innerHTML = `<b>${d.name}</b>${s.n > 1 ? ` ×${s.n}` : ''}<br>${d.note ? d.note + '<br>' : ''}${bits.join(' · ')}${use.length ? `<br><i>Used in ${use.slice(0, 6).join(', ')}${use.length > 6 ? ` and ${use.length - 6} more` : ''}</i>` : ''}`;
   }
   drawChar() {
     const S = this.player.stats, armor = this.armor?.() ?? 0;
-    const sk = Object.entries(SKILLS).map(([k, d]) => { const s = S.skills[k], a = xpForLevel(s.level), b = xpForLevel(s.level + 1); return `<div class="skill"><span>${d.name}</span><b>${s.level}</b><i><u style="width:${((s.xp - a) / (b - a)) * 100}%"></u></i></div>`; }).join('');
+    const sk = Object.entries(SKILLS).map(([k, d]) => { const s = S.skills[k], a = xpForLevel(s.level), b = xpForLevel(s.level + 1); return `<div class="skill"><span>${d.name}</span><b>${s.level}</b><i><u style="width:${Math.min(100, Math.max(0, ((s.xp - a) / (b - a)) * 100))}%"></u></i></div>`; }).join('');   // (kept within the bar, whatever an old save holds)
     const html = `<div class="statrow"><span>Health</span><b>${Math.ceil(S.health)} / ${Math.round(S.maxHealth)}</b></div><div class="statrow"><span>Stamina</span><b>${Math.ceil(S.stamina)} / ${Math.round(S.maxStamina)}</b></div>
       <div class="statrow"><span>Armour</span><b>${armor}</b></div><p class="psub" style="margin-top:14px">Skills</p><div class="skills">${sk}</div>`;
     if (html !== this.last.char) { this.last.char = html; $('charBody').innerHTML = html; }

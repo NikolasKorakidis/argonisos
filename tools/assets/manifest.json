@@ -250,6 +250,38 @@
       "static": true,
       "join": true
     },
+    "oldSpear": {
+      "src": "incoming assets/audio/0. OLD/1.Weapons-Shields-Ammo/Stone_Spear/Stone_Spear.fbx",
+      "texture": "incoming assets/audio/0. OLD/1.Weapons-Shields-Ammo/Stone_Spear/StoneSpear1_T.png",
+      "flatColors": true,
+      "static": true,
+      "join": true
+    },
+    "oldHoe": {
+      "src": "incoming assets/audio/0. OLD/3.Tools/Hoe/Hoe1.fbx",
+      "texture": "incoming assets/audio/0. OLD/3.Tools/Hoe/Hoe1_T.png",
+      "flatColors": true,
+      "static": true,
+      "join": true
+    },
+    "foodOlive": {
+      "src": "incoming assets/audio/0. OLD/8.Materials/Green Olive .fbx",
+      "flatColors": true,
+      "static": true,
+      "join": true
+    },
+    "foodAcorn": {
+      "src": "incoming assets/audio/0. OLD/8.Materials/Acorn Flat.fbx",
+      "flatColors": true,
+      "static": true,
+      "join": true
+    },
+    "foodPomegranate": {
+      "src": "incoming assets/audio/0. OLD/8.Materials/Pomegranate Flat.fbx",
+      "flatColors": true,
+      "static": true,
+      "join": true
+    },
     "kWall": {
       "src": "RPGPP_AG/Models/Structures/Buildings/rpgpp_ag_wall_01_3x3_a.fbx",
       "shared": "rpgpp",
@@ -936,6 +968,279 @@
           "src": "GreekWarfare/Meshes/Character_AthenianHoplite.fbx",
           "mesh": "Character_AthenianHoplite",
           "region": "legs"
+        },
+        "corinthianHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Corinthian.fbx"
+          ],
+          "shell": true
+        },
+        "corinthianArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Corinthian.fbx"
+          ],
+          "shell": true
+        },
+        "corinthianLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Corinthian.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Corinthian.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourAchilles": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "achillesHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Achilles.fbx"
+          ],
+          "shell": true
+        },
+        "achillesArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Achilles.fbx"
+          ],
+          "shell": true
+        },
+        "achillesLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Achilles.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Achilles.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourHercules": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "herculesHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Hercules.fbx"
+          ],
+          "shell": true
+        },
+        "herculesArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Hercules.fbx"
+          ],
+          "shell": true
+        },
+        "herculesLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Hercules.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Hercules.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourJason": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "jasonHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Jason.fbx"
+          ],
+          "shell": true
+        },
+        "jasonArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Jason.fbx"
+          ],
+          "shell": true
+        },
+        "jasonLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Jason.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Jason.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourOdysseus": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "odysseusHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Odyssey.fbx"
+          ],
+          "shell": true
+        },
+        "odysseusArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Odyssey.fbx"
+          ],
+          "shell": true
+        },
+        "odysseusLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Odyssey.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Odyssey.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourPerseus": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "perseusHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Perseus.fbx"
+          ],
+          "shell": true
+        },
+        "perseusArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Perseus.fbx"
+          ],
+          "shell": true
+        },
+        "perseusLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Perseus.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Perseus.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourBellerophon": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "bellerophonHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Bellerofont.fbx"
+          ],
+          "shell": true
+        },
+        "bellerophonArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Bellerofont.fbx"
+          ],
+          "shell": true
+        },
+        "bellerophonLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Bellerofont.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Bellerofont.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourTheseus": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "theseusArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Theseus.fbx"
+          ],
+          "shell": true
+        },
+        "theseusLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Theseus.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Theseus.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourAthenian": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "athenianHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Athenian.fbx"
+          ],
+          "shell": true
+        },
+        "athenianArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Athenian.fbx"
+          ],
+          "shell": true
+        },
+        "athenianLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Athenian.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Athenian.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourSpartan": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "spartanHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Spartan.fbx"
+          ],
+          "shell": true
+        },
+        "spartanArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Spartan.fbx"
+          ],
+          "shell": true
+        },
+        "spartanLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Spartan.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Spartan.fbx"
+          ],
+          "shell": true
+        }
+      }
+    },
+    "armourTheban": {
+      "like": "heroArmour",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureBlue.png",
+      "wearOnly": true,
+      "wear": {
+        "thebanHelmet": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Helmet_Theban.fbx"
+          ],
+          "shell": true
+        },
+        "thebanArmor": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Armor_Theban.fbx"
+          ],
+          "shell": true
+        },
+        "thebanLegs": {
+          "src": [
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Left_Theban.fbx",
+            "incoming assets/audio/0. OLD/2.Armor/Leg_Right_Theban.fbx"
+          ],
+          "shell": true
         }
       }
     },
@@ -3230,55 +3535,61 @@
         }
       ]
     },
-    "plFarmhouse": {
-      "house": {
-        "w": 3,
-        "d": 2,
-        "door": 1,
-        "windows": [
-          [
-            0,
-            0
-          ],
-          [
-            0,
-            2
-          ],
-          [
-            2,
-            0
-          ],
-          [
-            3,
-            1
-          ]
-        ],
-        "fallen": [
-          [
-            1,
-            1
-          ]
-        ],
-        "roof": "half",
-        "plaster": "white"
-      },
+    "plKitWall": {
       "compose": [
         {
-          "src": "SM_Bld_Roof_Base_Straight_01",
-          "at": [
-            2.5,
-            0,
-            3
-          ]
-        },
+          "src": "SM_Bld_Wall_01"
+        }
+      ]
+    },
+    "plKitDoor": {
+      "plaster": "white",
+      "compose": [
         {
-          "src": "SM_Bld_Roof_Base_Straight_01",
-          "at": [
-            5,
-            5,
-            3
-          ],
-          "rot": 180
+          "src": "SM_Bld_Wall_Door_04"
+        }
+      ]
+    },
+    "plKitWindow": {
+      "plaster": "white",
+      "compose": [
+        {
+          "src": "SM_Bld_Wall_Window_06"
+        }
+      ]
+    },
+    "plKitEnd": {
+      "compose": [
+        {
+          "src": "SM_Bld_Wall_End_01"
+        }
+      ]
+    },
+    "plKitHalf": {
+      "compose": [
+        {
+          "src": "Synty/PolygonAncientEmpire/Models/Base_Building/SM_Bld_Base_Wall_Half_01.fbx"
+        }
+      ]
+    },
+    "plKitRoof": {
+      "compose": [
+        {
+          "src": "SM_Bld_Roof_Base_Straight_01"
+        }
+      ]
+    },
+    "plKitRoofSide": {
+      "compose": [
+        {
+          "src": "SM_Bld_Roof_Base_Straight_Side_01"
+        }
+      ]
+    },
+    "plKitPier": {
+      "compose": [
+        {
+          "src": "Synty/PolygonAncientEmpire/Models/Base_Building/SM_Bld_Base_Pillar_01.fbx"
         }
       ]
     },
@@ -3636,62 +3947,199 @@
     ]
   },
   "sounds": {
-    "stepGrass": [
-      "Classic Footstep SFX/Forest ground/Forest_ground_step0.wav",
-      "Classic Footstep SFX/Forest ground/Forest_ground_step1.wav",
-      "Classic Footstep SFX/Forest ground/Forest_ground_step2.wav",
-      "Classic Footstep SFX/Forest ground/Forest_ground_step3.wav"
-    ],
-    "stepDirt": [
-      "Classic Footstep SFX/Ground/Ground_Step0.wav",
-      "Classic Footstep SFX/Ground/Ground_Step1.wav",
-      "Classic Footstep SFX/Ground/Ground_Step2.wav",
-      "Classic Footstep SFX/Ground/Ground_Step3.wav",
-      "Classic Footstep SFX/Ground/Ground_Step4.wav"
-    ],
-    "stepRock": [
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step0.wav",
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step1.wav",
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step2.wav",
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step3.wav",
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step4.wav",
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_step5.wav"
-    ],
-    "stepWood": [
-      "Classic Footstep SFX/Floor/Floor_step0.wav",
-      "Classic Footstep SFX/Floor/Floor_step1.wav",
-      "Classic Footstep SFX/Floor/Floor_step2.wav",
-      "Classic Footstep SFX/Floor/Floor_step3.wav",
-      "Classic Footstep SFX/Floor/Floor_step4.wav",
-      "Classic Footstep SFX/Floor/Floor_step5.wav"
-    ],
-    "stepWater": [
-      "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_01.wav",
-      "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_02.wav",
-      "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_03.wav"
-    ],
-    "stepLeaves": [
-      "Classic Footstep SFX/Forest ground/Forest_ground_step4.wav",
-      "Classic Footstep SFX/Forest ground/Forest_ground_step5.wav",
-      "Classic Footstep SFX/Forest ground/Forest_ground_step6.wav"
-    ],
-    "stepSand": [
-      "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_01.wav",
-      "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_02.wav",
-      "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_03.wav"
-    ],
-    "landGrass": [
-      "Classic Footstep SFX/Forest ground/Forest_ground_jump0.wav"
-    ],
-    "landRock": [
-      "Classic Footstep SFX/Rocky_ground/Rocky_ground_jump0.wav"
-    ],
-    "landWood": [
-      "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Jump/Footsteps_Wood_Jump_Land_01.wav"
-    ],
-    "landWater": [
-      "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Jump/Footsteps_Water_Jump_Big_01.wav"
-    ],
+    "stepGrass": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Forest ground/Forest_ground_step0.wav",
+        "Classic Footstep SFX/Forest ground/Forest_ground_step1.wav",
+        "Classic Footstep SFX/Forest ground/Forest_ground_step2.wav",
+        "Classic Footstep SFX/Forest ground/Forest_ground_step3.wav"
+      ]
+    },
+    "stepDirt": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Ground/Ground_Step0.wav",
+        "Classic Footstep SFX/Ground/Ground_Step1.wav",
+        "Classic Footstep SFX/Ground/Ground_Step2.wav",
+        "Classic Footstep SFX/Ground/Ground_Step3.wav",
+        "Classic Footstep SFX/Ground/Ground_Step4.wav"
+      ]
+    },
+    "stepRock": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_step0.wav",
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_step1.wav",
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_step2.wav",
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_step3.wav",
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_step4.wav",
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_step5.wav"
+      ]
+    },
+    "stepWood": {
+      "group": "stepWood",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Floor/Floor_step0.wav",
+        "Classic Footstep SFX/Floor/Floor_step1.wav",
+        "Classic Footstep SFX/Floor/Floor_step2.wav",
+        "Classic Footstep SFX/Floor/Floor_step3.wav",
+        "Classic Footstep SFX/Floor/Floor_step4.wav",
+        "Classic Footstep SFX/Floor/Floor_step5.wav"
+      ]
+    },
+    "stepWater": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_01.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_02.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_03.wav"
+      ]
+    },
+    "stepLeaves": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Forest ground/Forest_ground_step4.wav",
+        "Classic Footstep SFX/Forest ground/Forest_ground_step5.wav",
+        "Classic Footstep SFX/Forest ground/Forest_ground_step6.wav"
+      ]
+    },
+    "stepSand": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_01.wav",
+        "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_02.wav",
+        "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Walk/Footsteps_Sand_Walk_03.wav"
+      ]
+    },
+    "stepSnow": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Walk/Footsteps_Snow_Hard_Walk_01.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Walk/Footsteps_Snow_Hard_Walk_02.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Walk/Footsteps_Snow_Hard_Walk_03.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Walk/Footsteps_Snow_Hard_Walk_04.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Walk/Footsteps_Snow_Hard_Walk_05.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Walk/Footsteps_Snow_Hard_Walk_06.wav"
+      ]
+    },
+    "stepMud": {
+      "group": "step",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Walk/Footsteps_Mud_Walk_01.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Walk/Footsteps_Mud_Walk_02.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Walk/Footsteps_Mud_Walk_03.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Walk/Footsteps_Mud_Walk_04.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Walk/Footsteps_Mud_Walk_05.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Walk/Footsteps_Mud_Walk_06.wav"
+      ]
+    },
+    "landGrass": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Forest ground/Forest_ground_jump0.wav",
+        "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Jump/Footsteps_Grass_Jump_Land_01.wav",
+        "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Jump/Footsteps_Grass_Jump_Land_02.wav",
+        "Footsteps - Essentials/Footsteps_Grass/Footsteps_Grass_Jump/Footsteps_Grass_Jump_Land_03.wav"
+      ]
+    },
+    "landRock": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Classic Footstep SFX/Rocky_ground/Rocky_ground_jump0.wav",
+        "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Jump/Footsteps_Rock_Jump_Land_01.wav",
+        "Footsteps - Essentials/Footsteps_Rock/Footsteps_Rock_Jump/Footsteps_Rock_Jump_Land_02.wav"
+      ]
+    },
+    "landWood": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Jump/Footsteps_Wood_Jump_Land_01.wav",
+        "Footsteps - Essentials/Footsteps_Wood/Footsteps_Wood_Jump/Footsteps_Wood_Jump_Land_02.wav"
+      ]
+    },
+    "landWater": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Jump/Footsteps_Water_Jump_Big_01.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Jump/Footsteps_Water_Jump_Big_02.wav"
+      ]
+    },
+    "landSand": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Jump/Footsteps_Sand_Jump_Land_01.wav",
+        "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Jump/Footsteps_Sand_Jump_Land_02.wav",
+        "Footsteps - Essentials/Footsteps_Sand/Footsteps_Sand_Jump/Footsteps_Sand_Jump_Land_03.wav"
+      ]
+    },
+    "landSnow": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Jump/Footsteps_Snow_Hard_Jump_Land_01.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Jump/Footsteps_Snow_Hard_Jump_Land_02.wav",
+        "Footsteps - Essentials/Footsteps_Snow/Footsteps_Snow_Jump/Footsteps_Snow_Hard_Jump_Land_03.wav"
+      ]
+    },
+    "landMud": {
+      "group": "land",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Jump/Footsteps_Mud_Jump_Land_01.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Jump/Footsteps_Mud_Jump_Land_02.wav",
+        "Footsteps - Essentials/Footsteps_Mud/Footsteps_Mud_Jump/Footsteps_Mud_Jump_Land_03.wav"
+      ]
+    },
+    "swimStroke": {
+      "group": "swim",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_04.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_05.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_06.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_07.wav",
+        "Footsteps - Essentials/Footsteps_Water/Footsteps_Water_Walk/Footsteps_WaterV1_Walk_08.wav"
+      ]
+    },
+    "roll": {
+      "group": "roll",
+      "from": "pack",
+      "files": [
+        "Footsteps - Essentials/Footsteps_Grass/Foley_Grass/Footsteps_Grass_Tall_Movement_02.wav",
+        "Footsteps - Essentials/Footsteps_Grass/Foley_Grass/Footsteps_Grass_Tall_Movement_04.wav",
+        "Footsteps - Essentials/Footsteps_Grass/Foley_Grass/Footsteps_Grass_Tall_Movement_05.wav",
+        "Footsteps - Essentials/Footsteps_Grass/Foley_Grass/Footsteps_Grass_Tall_Movement_08.wav"
+      ]
+    },
+    "giantCall": {
+      "group": "creature",
+      "from": "pack",
+      "files": [
+        "96 General Library (Free Sample)/Samples/ANMLPrim_InsJ_Gorillas_Vocalizing_Single_01-01.wav"
+      ]
+    },
+    "bell": {
+      "group": "chime",
+      "from": "pack",
+      "files": [
+        "96 General Library (Free Sample)/Samples/MUSCChim_InsJ_Hand-Bell_01-16_High-C.wav"
+      ]
+    },
     "door": [
       "96 General Library (Free Sample)/Samples/DOORWood_InsJ_Door_Wooden_Closing_03-01.wav"
     ],
@@ -3701,9 +4149,13 @@
     "stoneHit": [
       "96 General Library (Free Sample)/Samples/CERMImpt_InsJ_Bricks_Impact_Single_01-02.wav"
     ],
-    "whoosh": [
-      "96 General Library (Free Sample)/Samples/WHSH_InsJ_Whooshing_Bamboo_01-01.wav"
-    ],
+    "whoosh": {
+      "group": "swing",
+      "from": "pack",
+      "files": [
+        "96 General Library (Free Sample)/Samples/WHSH_InsJ_Whooshing_Bamboo_01-01.wav"
+      ]
+    },
     "growl": [
       "96 General Library (Free Sample)/Samples/CREAMnstr_InsJ_Monster_Growling_Male_09-01.wav"
     ],
@@ -3731,6 +4183,566 @@
     ],
     "foxCry": [
       "96 General Library (Free Sample)/Samples/ANMLDog_InsJ_Fox_Vocal-Cry_Distant_01-01.wav"
-    ]
+    ],
+    "swordHit": {
+      "group": "combat",
+      "files": [
+        "COMBAT/sword-hit-1.mp3",
+        "COMBAT/sword-hit-2.mp3",
+        "COMBAT/sword-hit-3.mp3",
+        "COMBAT/sword-hit-4.mp3",
+        "COMBAT/sword-hit-5.mp3"
+      ]
+    },
+    "axeHit": {
+      "group": "combat",
+      "files": [
+        "COMBAT/axe-hit-flesh-1.mp3",
+        "COMBAT/axe-hit-flesh-2.mp3"
+      ]
+    },
+    "hitPlant": {
+      "group": "combat",
+      "files": [
+        "COMBAT/hit-plant-1.mp3",
+        "COMBAT/hit-plant-2.mp3",
+        "COMBAT/hit-plant-3.mp3"
+      ]
+    },
+    "blockHit": {
+      "group": "combat",
+      "files": [
+        "COMBAT/block-1.mp3",
+        "COMBAT/block-2.mp3"
+      ]
+    },
+    "parryHit": {
+      "group": "combat",
+      "files": [
+        "COMBAT/parry-1.mp3",
+        "COMBAT/parry-2.mp3",
+        "COMBAT/parry-3.mp3"
+      ]
+    },
+    "drawWeapon": {
+      "group": "combat",
+      "files": [
+        "COMBAT/draw-weapon-1.mp3"
+      ]
+    },
+    "bowStretch": {
+      "group": "combat",
+      "files": [
+        "COMBAT/bow-stretch.mp3"
+      ]
+    },
+    "arrowRelease": {
+      "group": "combat",
+      "files": [
+        "COMBAT/arrow-release-1.mp3"
+      ]
+    },
+    "arrowFly": {
+      "group": "combat",
+      "files": [
+        {
+          "file": "COMBAT/arrow-fly-many.mp3",
+          "slice": true
+        }
+      ]
+    },
+    "arrowFlesh": {
+      "group": "combat",
+      "files": [
+        "COMBAT/arrow-hit-target-1.mp3",
+        "COMBAT/arrow-hit-target-2.mp3",
+        {
+          "file": "COMBAT/arrow-hit-target-many.mp3",
+          "slice": true
+        }
+      ]
+    },
+    "arrowWood": {
+      "group": "combat",
+      "files": [
+        "COMBAT/arrow-hit-wood-1.mp3"
+      ]
+    },
+    "slamHit": {
+      "group": "combat",
+      "files": [
+        "COMBAT/slam-1.mp3",
+        "COMBAT/slam-2.mp3"
+      ]
+    },
+    "enemyAlert": {
+      "group": "combat",
+      "files": [
+        "COMBAT/enemy-alert-1.mp3",
+        "COMBAT/enemy-alert-2.mp3"
+      ]
+    },
+    "hurtMale": {
+      "group": "voice",
+      "files": [
+        "COMBAT/hurt-1.mp3",
+        "COMBAT/hurt-2.mp3",
+        "COMBAT/hurt-3.mp3"
+      ]
+    },
+    "deathMale": {
+      "group": "voice",
+      "files": [
+        "COMBAT/male-death-1.mp3"
+      ]
+    },
+    "hitTree": {
+      "group": "gather",
+      "files": [
+        "GATHERING/hit-tree-01.mp3",
+        "GATHERING/hit-tree-02.mp3",
+        "GATHERING/hit-tree-03.mp3"
+      ]
+    },
+    "fallingTree": {
+      "group": "gather",
+      "files": [
+        "GATHERING/falling-tree.mp3"
+      ]
+    },
+    "mineHit": {
+      "group": "gather",
+      "files": [
+        {
+          "file": "GATHERING/pickaxe-stone-many.mp3",
+          "slice": true
+        }
+      ]
+    },
+    "pickupItem": {
+      "group": "pickup",
+      "files": [
+        "GATHERING/pickup-item.mp3"
+      ]
+    },
+    "buildPiece": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/build-1.mp3",
+        "BUILDING & CRAFTING/build-2.mp3"
+      ]
+    },
+    "breakPiece": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/break-1.mp3"
+      ]
+    },
+    "repairPiece": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/repair-1.mp3"
+      ]
+    },
+    "craftItem": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/craft-1.mp3"
+      ]
+    },
+    "doorOpen": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/door-1.mp3"
+      ]
+    },
+    "doorClose": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/door-2.mp3"
+      ]
+    },
+    "chestOpen": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/chest-2.mp3"
+      ]
+    },
+    "chestClose": {
+      "group": "build",
+      "files": [
+        "BUILDING & CRAFTING/chest-1.mp3"
+      ]
+    },
+    "fireStart": {
+      "group": "fire",
+      "files": [
+        "FIRE/campfire-start-1.mp3",
+        "FIRE/campfire-start-2.mp3"
+      ]
+    },
+    "fireDouse": {
+      "group": "fire",
+      "files": [
+        "FIRE/campfire-douse-1.mp3",
+        "FIRE/campfire-douse-2.mp3"
+      ]
+    },
+    "bossRoar": {
+      "group": "boss",
+      "files": [
+        {
+          "file": "BOSS & TRIAL/boss-roar-1.mp3",
+          "trim": 4.2,
+          "fade": 1
+        }
+      ]
+    },
+    "bossRoarLong": {
+      "group": "boss",
+      "files": [
+        "BOSS & TRIAL/boss-roar-1.mp3"
+      ]
+    },
+    "bossSummon": {
+      "group": "boss",
+      "files": [
+        "BOSS & TRIAL/boss-summon.mp3"
+      ]
+    },
+    "boulder": {
+      "group": "boss",
+      "files": [
+        "BOSS & TRIAL/boulder-2.mp3",
+        "BOSS & TRIAL/boulder-3.mp3"
+      ]
+    },
+    "revealChime": {
+      "group": "trial",
+      "files": [
+        "BOSS & TRIAL/reveal-1.mp3",
+        "BOSS & TRIAL/reveal-2.mp3"
+      ]
+    },
+    "owlHoot": {
+      "group": "owl",
+      "files": [
+        "BOSS & TRIAL/owl-hoot-1.mp3",
+        "BOSS & TRIAL/owl-hoot-2.mp3",
+        "BOSS & TRIAL/owl-hoot-3.mp3"
+      ]
+    },
+    "thunderNear": {
+      "group": "thunder",
+      "files": [
+        "WEATHER/thunder-1.mp3",
+        "WEATHER/thunder-2.mp3"
+      ]
+    },
+    "thunderFar": {
+      "group": "thunder",
+      "files": [
+        "WEATHER/thunder-3.mp3",
+        "WEATHER/thunder-5.mp3",
+        "WEATHER/thunder-6.mp3"
+      ]
+    },
+    "thunderClap": {
+      "group": "thunder",
+      "files": [
+        "WEATHER/thunder-clap-items-burst.mp3"
+      ]
+    },
+    "windGust": {
+      "group": "gust",
+      "files": [
+        "AMBIENCE/wind-gust-1.mp3",
+        "AMBIENCE/wind-gust-2.mp3"
+      ]
+    },
+    "leafRustle": {
+      "group": "gust",
+      "files": [
+        "AMBIENCE/leaves-rustle-2.mp3",
+        "AMBIENCE/leaves-rustle-3.mp3"
+      ]
+    },
+    "bedFire": {
+      "group": "fireBed",
+      "files": [
+        {
+          "file": "FIRE/campfire-ongoing-1.mp3",
+          "len": 40
+        },
+        {
+          "file": "FIRE/campfire-ongoing-2.mp3"
+        }
+      ]
+    },
+    "bedRain": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "WEATHER/rain-downpour.mp3",
+          "len": 40
+        }
+      ]
+    },
+    "bedDrops": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "WEATHER/rain-droplets.mp3",
+          "len": 40
+        }
+      ]
+    },
+    "bedRoof": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "WEATHER/rain-on-roof.mp3",
+          "len": 40
+        }
+      ]
+    },
+    "bedMuffled": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "WEATHER/rain-muffled.mp3",
+          "len": 40
+        }
+      ]
+    },
+    "bedWindSoft": {
+      "group": "bed",
+      "files": [
+        "AMBIENCE/wind-1.mp3",
+        "AMBIENCE/wind-2.mp3"
+      ]
+    },
+    "bedWindMid": {
+      "group": "bed",
+      "files": [
+        "AMBIENCE/wind-4.mp3"
+      ]
+    },
+    "bedWindStrong": {
+      "group": "bed",
+      "files": [
+        "AMBIENCE/wind-3.mp3",
+        "AMBIENCE/wind-5.mp3"
+      ]
+    },
+    "bedGrass": {
+      "group": "bed",
+      "files": [
+        "AMBIENCE/wind-soft-grass.mp3"
+      ]
+    },
+    "bedLeaves": {
+      "group": "bed",
+      "files": [
+        "AMBIENCE/leaves-rustle-1.mp3"
+      ]
+    },
+    "bedBirds": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "AMBIENCE/birdsong-1.mp3",
+          "len": 45
+        },
+        {
+          "file": "AMBIENCE/birdsong-2.mp3",
+          "len": 45
+        }
+      ]
+    },
+    "bedCricketsP": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "AMBIENCE/pedias-crickets-night-1.mp3",
+          "len": 45
+        },
+        {
+          "file": "AMBIENCE/pedias-crickets-night-2.mp3",
+          "len": 45
+        }
+      ]
+    },
+    "bedCricketsY": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "AMBIENCE/yleos-crickets-night-1.mp3",
+          "len": 40
+        },
+        {
+          "file": "AMBIENCE/yleos-crickets-night-2.mp3",
+          "len": 40
+        }
+      ]
+    },
+    "bedFrogs": {
+      "group": "bed",
+      "files": [
+        "AMBIENCE/swamps-ambience-frogs-1.mp3",
+        "AMBIENCE/swamps-ambience-frogs-2.mp3"
+      ]
+    },
+    "bedWaves": {
+      "group": "bed",
+      "files": [
+        {
+          "file": "AMBIENCE/waves-shore-1.mp3",
+          "len": 45
+        },
+        {
+          "file": "AMBIENCE/waves-shore-2.mp3",
+          "len": 45
+        }
+      ]
+    }
+  },
+  "soundGroups": {
+    "combat": {
+      "level": -16
+    },
+    "voice": {
+      "level": -17
+    },
+    "gather": {
+      "level": -16
+    },
+    "pickup": {
+      "level": -20
+    },
+    "build": {
+      "level": -17
+    },
+    "fire": {
+      "level": -18
+    },
+    "boss": {
+      "level": -13
+    },
+    "trial": {
+      "level": -17
+    },
+    "owl": {
+      "level": -19
+    },
+    "thunder": {
+      "level": -14
+    },
+    "gust": {
+      "level": -20
+    },
+    "fireBed": {
+      "level": -24,
+      "loop": true
+    },
+    "bed": {
+      "level": -24,
+      "loop": true,
+      "stereo": true
+    },
+    "step": {
+      "level": -25
+    },
+    "stepWood": {
+      "level": -23
+    },
+    "land": {
+      "level": -22
+    },
+    "swim": {
+      "level": -22
+    },
+    "roll": {
+      "level": -21
+    },
+    "swing": {
+      "level": -20
+    },
+    "creature": {
+      "level": -16
+    },
+    "chime": {
+      "level": -20
+    }
+  },
+  "music": {
+    "level": -18,
+    "tracks": {
+      "menu": {
+        "file": "0-Track 5-Main-Menu.wav",
+        "use": "the title screen and the character creator (looped)",
+        "loop": true
+      },
+      "story": {
+        "file": "1-Track 1-Story-Telling.wav",
+        "use": "a new trial begins; the owl's first talk"
+      },
+      "pedias": {
+        "file": "2-Track 3-Pedias.wav",
+        "use": "Pedias: entering it, dawn, dusk"
+      },
+      "base": {
+        "file": "3-Track 4-Inside-Base.wav",
+        "use": "resting by your fire or inside your own shelter"
+      },
+      "yleos": {
+        "file": "4-Track 5-Yleos.wav",
+        "use": "Yleos: entering it, dawn, dusk"
+      },
+      "swamp": {
+        "file": "5-Track 1-Swamp.wav",
+        "use": "Valtos, behind the storm"
+      },
+      "oros": {
+        "file": "6-Track 2-Oros.wav",
+        "use": "the climb up Olympos"
+      },
+      "sailing": {
+        "file": "7-Track 6-Sailing.wav",
+        "use": "not in the game yet",
+        "play": false
+      },
+      "nisia": {
+        "file": "8-Track 9-Nisia.wav",
+        "use": "the shore, at dawn and dusk"
+      },
+      "sirenReef": {
+        "file": "9-Track 7-Siren-Reef.wav",
+        "use": "the shore, at dawn and dusk"
+      },
+      "acheron": {
+        "file": "10-Track 1-Acheron.wav",
+        "use": "not in the game yet",
+        "play": false
+      },
+      "erebos": {
+        "file": "11-Track 11-Erebos.wav",
+        "use": "the Giants' caves, and a land come into by night"
+      },
+      "bossMinotaur": {
+        "file": "boss-minotaur-combat-music.mp3",
+        "use": "the Minotaur's fight (looped)",
+        "loop": true
+      },
+      "bossChimera": {
+        "file": "boss-chimera-combat-music.mp3",
+        "use": "the Chimera's fight (looped)",
+        "loop": true
+      }
+    }
+  },
+  "soundDirs": {
+    "finals": "incoming assets/audio/1. FINALS/9. SOUND",
+    "music": "incoming assets/audio/0. OLD/4. Music"
   }
 }

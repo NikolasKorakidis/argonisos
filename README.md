@@ -15,14 +15,16 @@ The dev server reloads open pages when a file changes. three.js r160 is vendored
 ```bash
 npm install && npx playwright install chromium   # once
 npm test              # every suite: the whole trial end to end, building, features, movement, bosses, performance, looks
-npm run test:quick    # the fast ones only
+npm run test:quick    # without the slow ones (perf, visual, creatures, combat, light, structures)
 npm run playtest -- --minutes 20   # a bot plays on its own and writes a report of what went wrong
-npm run check         # no browser needed: lint, import cycles, unused files, and the world's fingerprint
+npm run check         # no browser needed: nothing private tracked, lint, the stylesheet, the tests' imports, import
+                      # cycles, unused files, and the world's fingerprint
 ```
 The tests play the real game in headless Chrome on the GPU. Reports, screenshots and diffs land in `tests/reports/`.
 After a change meant to alter the look, check `tests/reports/visual.html`, then `npm run test:update`.
-Every pull request runs `npm run check` on GitHub Actions (its runners have no GPU, so the game suites run locally), and
-must target `main`. The title screen shows which build GitHub Pages is serving.
+Every pull request runs `npm run check` on GitHub Actions (`.github/workflows/ci.yml`; its runners have no GPU and no
+licensed pack files, so the game suites run locally), and must target `main`. GitHub Pages publishes only what the game
+needs (`.github/workflows/pages.yml`), and the title screen shows which build it is serving.
 
 ## The trial
 - **Explore.** A 2.9 km island: the meadows of **Pedias** in the middle, the dark forest hills of **Yleos** around them,
@@ -47,8 +49,8 @@ Debug: F3 info line · F9 free camera · T (with F3 on) time ×60.
 
 ## Code
 - `src/`: the game. `assets/models/`: models and textures. `vendor/three/`: three.js r160 and its add-ons (untouched).
-  `legacy/`: the old prototype. `tests/`: the suites and the playtest bot. `tools/`: the dev server and a lint hook for
-  Claude Code. `docs/`: reviews and audits.
+  `legacy/`: the old prototype. `tests/`: the suites and the playtest bot. `tools/`: the dev server, the checks, a lint
+  hook for Claude Code and the asset pipeline. `docs/plans/`: plans, each with its status; `docs/reviews/`: reviews.
 - `src/world`: generation (`gen.js`), sites, streamed terrain (`terrain.js` + `terrain-worker.js` in a worker pool),
   vegetation in three bands (full trees, light far meshes, impostor cards), grass, sky, water, weather, storm wall,
   pickups, structures.
@@ -56,7 +58,8 @@ Debug: F3 info line · F9 free camera · T (with F3 on) time ×60.
 - `src/game`: items and recipes, inventory, crafting, harvesting, combat, the trial (bosses, clues, offerings), the owl,
   saving.
 - `src/build`: building pieces and the build system. `src/creatures`: bodies and AI. `src/ui`: HUD, map, title, icons.
-- `src/audio/sound.js`: all sound is synthesised (WebAudio), no files.
+- `src/audio/sound.js`: the team's recordings (converted from the licensed packs, so not in this repo), placed in the
+  world and mixed on buses, with WebAudio synthesis where there is no recording; `src/audio/music.js`: the music.
 - The world saves to browser storage every minute and when the page closes.
 
 ## The classic prologue
