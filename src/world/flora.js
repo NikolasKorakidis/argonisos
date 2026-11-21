@@ -408,6 +408,15 @@ function riverCover(out, x0, z0, h2) {
     for (let i = 0; i < 3 + Math.floor(h2(k + 1) * 2); i++) { const kk = k + 2 + i * 1.3, x = cx + (h2(kk) - 0.5) * 16, z = cz + (h2(kk + 0.2) - 0.5) * 16, p = at(x, z); if (!p || p.out < 3 || p.out > 12 || isRock(x, z)) continue; const S = SPECIES[SP.plane].s; out.push(SP.plane, Math.floor(h2(kk + 0.4) * 3), x, heightAt(x, z) - 0.05, z, h2(kk + 0.6) * 6.283, S[0] + (S[1] - S[0]) * h2(kk + 0.8)); }
   }
   for (let i = 0; i < 4; i++) { const k = 5500 + i, [x, z] = spot(k), q = at(x, z); if (!q || q.out < 1.5 || q.out > 7 || q.fall >= 0 || isRock(x, z)) continue; lay(i % 2 ? SP.myrtle : SP.bush, k, x, heightAt(x, z) - 0.06, z, i % 2 ? 0 : [0, 1, 2, 3][Math.floor(h2(k + 0.2) * 4)]); }
+  // the hillside over the lake's far shore (the rock the lake's basin bared): scree, stones and moss on the bare rock, broom and
+  // myrtle where it softens, and pines in small stands on the soft ground among it (none on the rock: the slope rule)
+  const L = RIVER.lake; if (L && Math.hypot(x0 + 32 - L.x, z0 + 32 - L.z) < 240) {
+    const near = (x, z) => inCell(x, z) && !siteClear(x, z) && Math.hypot(x - L.x, z - L.z) < 200;   // (siteClear keeps it out of the water)
+    for (let i = 0; i < 30; i++) { const k = 5700 + i, [x, z] = spot(k); if (!near(x, z) || !isRock(x, z)) continue; const y = heightAt(x, z); if (i % 3 === 1) lay(SP.moss, k, x, y - 0.1, z); else if (i % 5) lay(SP.pebbles, k, x, y - 0.03, z); else { const S = SPECIES[SP.rock].s; out.push(SP.rock, Math.floor(h2(k + 0.2) * 4), x, y - 0.25, z, h2(k + 0.4) * 6.283, S[0] + (S[1] - S[0]) * h2(k + 0.6) * 0.6); } }
+    for (let i = 0; i < 8; i++) { const k = 5760 + i, [x, z] = spot(k); if (!near(x, z) || isRock(x, z)) continue; lay(i % 2 ? SP.broom : SP.myrtle, k, x, heightAt(x, z) - 0.05, z, 0); }
+    for (let c = 0; c < 2; c++) { const k = 5800 + c * 10, [cx, cz] = spot(k); if (!near(cx, cz) || isRock(cx, cz) || h2(k + 0.9) > 0.7) continue;
+      for (let i = 0; i < 3 + Math.floor(h2(k + 1) * 2); i++) { const kk = k + 2 + i * 1.1, x = cx + (h2(kk) - 0.5) * 14, z = cz + (h2(kk + 0.2) - 0.5) * 14; if (!near(x, z) || isRock(x, z)) continue; const S = SPECIES[SP.qpine].s; out.push(SP.qpine, Math.floor(h2(kk + 0.4) * 3), x, heightAt(x, z) - 0.05, z, h2(kk + 0.6) * 6.283, S[0] + (S[1] - S[0]) * h2(kk + 0.8)); } }
+  }
   // ferns and moss in the falls' spray, on the wet ledges and the rock round the pools
   for (let i = 0; i < 18; i++) { const k = 5600 + i, [x, z] = spot(k), q = at(x, z); if (!q || q.fall < 0 || q.out < 0.3 || q.out > 14) continue; const f = RIVER.falls[q.fall]; if (Math.hypot(x - f.px, z - f.pz) > 34) continue;
     lay(isRock(x, z) || i % 3 === 0 ? SP.moss : SP.fern, k, x, heightAt(x, z) - 0.08, z, isRock(x, z) || i % 3 === 0 ? undefined : 0); }

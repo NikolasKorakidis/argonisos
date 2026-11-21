@@ -119,27 +119,37 @@ const FRAG = `${RIPPLES}${SHADOW_GLSL}
   }
   #ifdef SSR_N
   // the reflected line of sight marched through the copy's depth, in steps growing with the distance, until it passes
-  // just behind something; refined by halving; faded towards the screen's edges and far away
-  vec4 ssr(vec3 W, vec3 R) {
-    // (each pixel starts a little further along than its neighbours, a fixed pattern, so the steps' bands break up into
-    // a fine grain instead of lines)
-    float jit = 0.0;
-    float s = 0.3 + jit * 0.3, s0 = 0.0, hit = 0.0; vec2 u = vec2(0.0);
-    for (int i = 0; i < SSR_N; i++) { vec4 q = uVP * vec4(W + R * s, 1.0); if (q.w <= 0.0) break; u = q.xy / q.w * 0.5 + 0.5;
-      if (u.x < 0.0 || u.x > 1.0 || u.y < 0.0 || u.y > 1.0) break;
-      float sd = texture2D(tGrabD, u).x, zs = linD(sd); if (sd < 0.99999 && q.w > zs && q.w - zs < max(0.5, s * 0.12)) { hit = 1.0; break; }
-      s0 = s; s = s * SSR_G + 0.3 * (0.8 + 0.4 * jit); }
-    if (hit < 0.5) return vec4(0.0);
-    float a = s0, b = s; for (int k = 0; k < 5; k++) { float m = 0.5 * (a + b); vec4 q = uVP * vec4(W + R * m, 1.0); if (q.w > linD(texture2D(tGrabD, q.xy / q.w * 0.5 + 0.5).x)) b = m; else a = m; }
-    vec4 q = uVP * vec4(W + R * b, 1.0); u = q.xy / q.w * 0.5 + 0.5; vec2 e = smoothstep(vec2(0.0), vec2(0.2, 0.12), u) * smoothstep(vec2(1.0), vec2(0.8, 0.88), u);
-    // (softened, more the further the thing mirrored: eight looks round it on a turned pattern, which takes the grain the
-    // stepping leaves out of the picture)
-    vec2 o = (2.0 + b * 0.05) / uRes; vec3 c = vec3(0.0); float ang = jit * 6.2832;
-    for (int k = 0; k < 8; k++) { float a = ang + float(k) * 0.7854, r = 0.5 + 0.5 * fract(float(k) * 0.618 + jit); c += texture2D(tGrab, u + vec2(cos(a), sin(a)) * o * r * 2.0).rgb; }
-    c *= 0.125;
+  // just behind something, then refined by halving; each pixel starts its march a little further along than its
+  // neighbours (a fixed pattern), and what is found is softened over the same few pixels, so neither the steps nor the
+  // pattern show. Faded out as the point found nears the screen's edges or the march its last steps; where it ran off
+  // the screen, what lies that way not far off stands in (pmirror), as a still pond would show it, faded likewise, so
+  // the mirror never ends in a line. The ripples move what is found only a little across the screen (rip), so a tree's
+  // reflection wavers but stays one tree.
+  vec3 ssrTap(vec2 u, float r, float jit) { vec2 o = r / uRes; vec3 c = vec3(0.0); float ang = jit * 6.2832;
+    for (int k = 0; k < 8; k++) { float a = ang + float(k) * 0.7854, q = 0.45 + 0.55 * fract(float(k) * 0.618 + jit); c += texture2D(tGrab, clamp(u + vec2(cos(a), sin(a)) * o * q, vec2(0.001), vec2(0.999))).rgb; }
+    return c * 0.125; }
+  float edgeK(vec2 u) { vec2 e = smoothstep(vec2(0.0), vec2(0.22, 0.14), u) * smoothstep(vec2(1.0), vec2(0.78, 0.86), u); return e.x * e.y; }
+  vec4 ssr(vec3 W, vec3 R, vec2 rip, float camD) {
+    float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    float s = 0.25 + 0.35 * jit, s0 = 0.0, hit = 0.0, fi = 0.0; vec2 u = vec2(0.5);
+    for (int i = 0; i < SSR_N; i++) { vec4 q = uVP * vec4(W + R * s, 1.0); if (q.w <= 0.0) break; vec2 uu = q.xy / q.w * 0.5 + 0.5;
+      if (uu.x < 0.0 || uu.x > 1.0 || uu.y < 0.0 || uu.y > 1.0) break; u = uu; fi = float(i);
+      float sd = texture2D(tGrabD, u).x, zs = linD(sd); if (sd < 0.99999 && q.w > zs && q.w - zs < max(0.6, s * 0.15)) { hit = 1.0; break; }
+      s0 = s; s = s * SSR_G + 0.3 * (0.75 + 0.5 * jit); }
+    float b = s, w = 0.0; vec3 c = vec3(0.0);
+    if (hit > 0.5) {
+      float a = s0; for (int k = 0; k < 6; k++) { float m = 0.5 * (a + b); vec4 q = uVP * vec4(W + R * m, 1.0); if (q.w > linD(texture2D(tGrabD, q.xy / q.w * 0.5 + 0.5).x)) b = m; else a = m; }
+      vec4 q = uVP * vec4(W + R * b, 1.0); u = q.xy / q.w * 0.5 + 0.5 + rip;
+      c = ssrTap(u, 2.5 + b * 0.06 + camD * 0.01, jit); w = edgeK(u) * (1.0 - smoothstep(0.7, 1.0, fi / float(SSR_N)));
+    }
+    if (w < 0.999) {   // (the stand-in: what lies that way some tens of metres off, where the copy has it)
+      float pd = clamp(camD * 0.6, 12.0, 45.0); vec4 q = uVP * vec4(W + R * pd, 1.0);
+      if (q.w > 0.0) { vec2 pu = clamp(q.xy / q.w * 0.5 + 0.5 + rip, vec2(0.0), vec2(1.0)); float pk = edgeK(pu) * step(texture2D(tGrabD, pu).x, 0.99999) * 0.65;
+        c = mix(ssrTap(pu, 4.0 + pd * 0.08, jit), c, w); w = max(w, pk); b = mix(pd, b, step(0.5, hit)); }
+    }
     // (and the player's mist over it, as over the thing itself where it stands: the copy is taken before the mist is laid)
     vec3 Q = W + R * b; c = mix(c, mistTone(R), mzAmt * smoothstep(mzR0, mzR1, length(Q.xz - mzC)) * mistUp(Q.y));
-    return vec4(c, e.x * e.y * (1.0 - smoothstep(250.0, 600.0, b)));
+    return vec4(c, w * (1.0 - smoothstep(250.0, 600.0, b)));
   }
   #endif
   void main() {
@@ -184,7 +194,9 @@ const FRAG = `${RIPPLES}${SHADOW_GLSL}
       if (q.w > 0.0 && u.x > 0.0 && u.x < 1.0 && u.y > 0.0 && u.y < 1.0 && texture2D(tGrabD, u).x >= 0.99999) refl = mix(sky, texture2D(tGrab, u).rgb, smoothstep(0.0, 0.05, min(min(u.x, 1.0 - u.x), min(u.y, 1.0 - u.y)))); }
     #endif
     #ifdef SSR_N
-    if (dist < 420.0) { vec4 h = ssr(vW, normalize(mix(R, reflect(-V, vec3(0.0, 1.0, 0.0)), 0.55))); refl = mix(refl, h.rgb, h.a); }   // (the broad ripples only: the fine ones scatter it into speckle)
+    // (marched along the still water's line, the ripples only bending it a touch and shifting what it finds a little across
+    // the screen, less far off: the fine ripples scattered the march into streaks)
+    if (dist < 420.0) { vec4 h = ssr(vW, normalize(mix(R, reflect(-V, vec3(0.0, 1.0, 0.0)), 0.82)), n.xz * vec2(0.012, 0.02) / (1.0 + dist * 0.02), dist); refl = mix(refl, h.rgb, h.a); }
     #endif
     vec3 col = mix(under, refl, clamp(F, 0.0, 1.0) * edge);
     // the sun's (or the moon's) glints, none in shade
