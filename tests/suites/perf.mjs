@@ -37,6 +37,16 @@ export default {
       t.check(`${name}: a frame renders in under ${BUDGET.render} ms${note}`, !judge || m.render <= BUDGET.render, `${m.render} ms`);
       t.check(`${name}: under ${BUDGET.draws} draw calls and ${BUDGET.tris / 1e6}M triangles`, m.draws <= BUDGET.draws && m.tris <= BUDGET.tris, `${m.draws} draws, ${(m.tris / 1e6).toFixed(2)}M tris`);
     }
+    // and a 40 s walk through the forest with the day running (perf review, 20 Nov: the woods hitched, a sky bake linking a
+    // shader, trees streaming in, the far shadow map drawn again): no frame may take over 50 ms
+    await visit(t, 'forest');
+    await t.eval(`AG.S.timeScale = 1; AG.S.still = false; return true;`); await t.page.keyboard.down('KeyW');
+    const w = await t.eval(`const p0 = P.pos.clone(), d = []; let last = performance.now(); const t0 = last; await new Promise((done) => { const f = (now) => { d.push(now - last); last = now; if (now - t0 < 40000) requestAnimationFrame(f); else done(); }; requestAnimationFrame(f); });
+      return { frames: d.length, over50: d.filter((x) => x > 50).length, worst: +Math.max(...d.slice(2)).toFixed(1), walked: Math.round(Math.hypot(P.pos.x - p0.x, P.pos.z - p0.z)) };`);
+    await t.page.keyboard.up('KeyW'); await t.eval(`AG.S.timeScale = 0; AG.S.still = true; return true;`);
+    rows.forestWalk = w; const wj = !busy();
+    t.metric('forest walk, 40 s with the day running', `${w.frames} frames · ${w.over50} over 50 ms · worst ${w.worst} ms · walked ${w.walked} m`);
+    t.check(`forest walk: no frame over 50 ms${wj ? '' : ' (machine busy: not judged)'}`, !wj || w.over50 === 0, `${w.over50} frames over 50 ms, worst ${w.worst} ms`);
     fs.mkdirSync(REPORTS, { recursive: true });
     fs.appendFileSync(path.join(REPORTS, 'perf-history.jsonl'), JSON.stringify({ when: new Date().toISOString(), load, rows }) + '\n');
   },
