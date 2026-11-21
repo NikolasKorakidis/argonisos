@@ -5,7 +5,7 @@ import { glyph } from './icons.js';
 export const PATCHES = [
   {
     id: 'patch-24', name: 'Patch 24', title: 'Footwork', date: '21 November 2026',
-    intro: 'Surer footing for the hero, rocks that look like stone, and a gentler storm seen from the top of Olympos.',
+    intro: 'Surer footing for the hero, rocks that look like stone, a grander Olympos with a smoother path up it, and a gentler storm seen from its top.',
     sections: [
       { t: 'The look', icon: 'sun', items: [
         '<b>Rocks and boulders in real stone.</b> Every rock on the island now has grain, cracks and layers, pale edges where its faces meet and darker hollows, and each is a little different in colour. Moss grows over their tops in the woods and a pale, sun-bleached lichen out in the meadows, less up the mountain and none by the sea, and they turn dark and wet in the rain. The stones you pick up, the cairns on Olympos and the boulders at the ruins match them.',
@@ -15,6 +15,12 @@ export const PATCHES = [
         '<b>Dodge with Shift + Space.</b> Hold Shift and press Space to dodge the way you are pressing: forwards, backwards, to either side or on a diagonal, or straight back if you press no direction. You throw yourself into a quick roll of about three and a half metres, and nothing can hit you in the heart of it. It costs the same stamina as the roll and works with anything in your hands. Space on its own still jumps (so let go of Shift to jump while sprinting), and the right mouse button with Space still rolls.',
         '<b>No more spinning while you aim.</b> Walking with the bow drawn, your body no longer twists round on itself: you face your aim steadily and step forwards, backwards and sideways under it. Drawing or lowering the bow on the move, and raising or dropping a shield, no longer swings you round either.',
         'Turning to your aim or your guard is quick but no longer instant, and after you lower the bow you turn smoothly back to where you are walking.',
+      ] },
+      { t: 'Olympos', icon: 'stone', items: [
+        '<b>A mountain, not a cone.</b> Olympos now rises in bands of grey limestone cliffs with shoulders between them, the rock beds tilted across the massif, streaked dark where water runs down and darker in its gullies. Holm oaks and olives grow on its lower slopes, then pines on the shoulders, then a thin turf and bare scree, and snow lies on the ledges and in the gullies near the top.',
+        '<b>A smoother way up.</b> The path climbs at a steady grade, with no more level stretches broken by steep ramps or bumps underfoot. It is a worn track you can see winding up the face, it passes the cliff bands where they break, and the last rock steps under the summit are each one clean jump.',
+        '<b>Boulders where the mountain drops them.</b> The rocks scattered all over the slopes are gone. Fallen blocks now gather at the foot of the cliffs, rounded stones lie in the gullies, outcrops stand out of the ridges and a few stones from the cut lie beside the path, all bedded in the ground, none floating and none in your way.',
+        '<b>Places to stop on the climb.</b> A ledge halfway up with a bench and a little shrine looking out over the island, a spring running from a bronze spout in the cut above the path, broken votive columns and pilgrims\' cairns where the crest begins, an eagle\'s nest on the lesser summit, and a cairn at every bend of the path. At the top, a gateway of columns leads in to the altar over old flagstones, ringed by crags.',
       ] },
     ],
   },
