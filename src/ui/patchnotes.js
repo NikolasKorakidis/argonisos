@@ -29,6 +29,7 @@ export const PATCHES = [
       { t: 'Building and crafting', icon: 'hammer', items: [
         '<b>Your buildings load whole.</b> A floor whose wall you had rebuilt no longer falls when the game loads, and a big base loads in a blink instead of several seconds.',
         'Building in a big base is quick: placing or taking down a piece no longer stutters.',
+        'Support now fades by the metre rather than by the piece: a floor reaches about 20 m out from one wall (it was 30, more than Valheim allows) and log beams a little further. Buildings you already have stand as they are.',
         '<b>What falls drops what it was made of.</b> A collapse, or a piece broken by a beast or a storm, leaves its wood and rope where it fell, gathered into a few piles.',
         'Taking down a piece that holds others up first flashes red everything that would fall with it: press again, or hold <b>X</b>, to take it down. A chest with things in it can\'t be taken down.',
         'The ghost shows how well a piece would be held up (green, yellow, orange) and red where it can\'t go, and it says why, down to what you\'re short of: "Need 1 more wood, 2 more rope".',

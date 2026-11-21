@@ -30,8 +30,13 @@ const ghostMat = (color, emissive) => new THREE.MeshStandardMaterial({ color, tr
 const ghostOk = ghostMat(0x7fe08a, 0x2a8a3a), ghostMid = ghostMat(0xf0dc60, 0x8a7a1a), ghostWeak = ghostMat(0xffa050, 0x8a4a12), ghostBad = ghostMat(0xff6a5a, 0x8a2a1a);
 const supportColor = (s, grounded) => (grounded ? 0x3a6cff : s > 0.7 ? 0x3fd060 : s > 0.4 ? 0xe8d040 : 0xff4a2a);
 // How much of a piece's support reaches a piece it holds up (p, from q): an eighth is lost going up, a fifth sideways
-// (Valheim's wood; a log less, def.loss); a door frame passes all of its own to its door
-const carry = (p, q) => (p.def.id === 'door' ? 1 : 1 - (p.pos.y - q.pos.y > 0.3 ? p.def.loss?.[0] ?? V_LOSS : p.def.loss?.[1] ?? H_LOSS));
+// (Valheim's wood; a log less, def.loss), for every STEP metres between their middles, so it goes by how far a floor
+// reaches out and not by how many pieces it takes (review, Nov: our 3 m pieces let a floor reach 30 m from one wall,
+// half as far again as Valheim's; now about 20 m, and a tower of walls some 33 m); a door frame passes all of its own
+// to its door
+const STEP = 2;
+const carry = (p, q) => (p.def.id === 'door' ? 1 : (1 - (p.pos.y - q.pos.y > 0.3 ? p.def.loss?.[0] ?? V_LOSS : p.def.loss?.[1] ?? H_LOSS)) ** (Math.max(1, p.mid.distanceTo(q.mid)) / STEP));
+const midOf = (def, pos, rot) => toWorld(pos, rot, (def.centre ||= centreOf(def)));
 // the meat on a cooking stand, and the ring over each piece showing how far it has cooked (a ring's arc in 24 steps)
 const MEAT_GEO = new THREE.DodecahedronGeometry(0.11, 0).scale(1, 0.8, 1.3), BURN = 2, _cookC = new THREE.Color(), _cookQ = new THREE.Quaternion();
 const RING = Array.from({ length: 25 }, (_, i) => new THREE.RingGeometry(0.055, 0.075, 24, 1, Math.PI / 2, -Math.max(0.001, (i / 24) * Math.PI * 2)));
@@ -445,7 +450,7 @@ export class Build {
   }
   supportFor(def, pos, rot, self) {
     if (this.grounded(def, pos, rot)) return { s: 1, grounded: true };
-    let s = 0; const me = { def, pos };
+    let s = 0; const me = { def, pos, mid: midOf(def, pos, rot) };
     for (const p of this.neighbours(def, pos, rot, self)) s = Math.max(s, p.support * carry(me, p));
     return { s, grounded: false };
   }
@@ -476,7 +481,7 @@ export class Build {
     const p = { uid: opts.uid ?? 'pc' + this.seq++, id, def, obj, inner, pos: pos.clone(), rot, hp: opts.hp ?? def.hp, state: opts.state || {}, support: 1, grounded: false, mats: [], nb: [] };
     this.dress(p);
     this.g.scene.add(obj);
-    p.snaps = this.snapsOf(def, pos, rot); p.boxes = this.boxes(def, pos, rot);
+    p.snaps = this.snapsOf(def, pos, rot); p.boxes = this.boxes(def, pos, rot); p.mid = midOf(def, pos, rot);
     this.index(p, true); this.placed.push(p);
     this.addColliders(p);
     if (def.fire || def.torch) { p.state.fuel ??= def.fire ? 3 : 4; p.state.lit ??= true; this.addFlame(p); }

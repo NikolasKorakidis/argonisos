@@ -45,6 +45,11 @@ export default {
         stood += n; }
       wipe(); if (stood < 80) bad.push('only ' + stood + ' pieces stood in all'); return bad.length === 0 || bad.join(' | ');`);
 
+    // ---- how far it reaches: support is lost by the metre, so floors go out about 20 m from one wall (Valheim's reach)
+    const reach = await t.eval(`${AT} wipe(); B.place('wall', new V(X, Y, Z), 0); let n = 0; for (; n < 15; n++) { const pos = new V(X, Y + 3, Z + 1.5 + 3 * n); P.spawn(pos.x + 3, pos.z); if (B.invalid(B.piece('floor'), pos, 0, true, { terrain: false })) break; B.place('floor', pos, 0); } wipe(); return n;`);
+    t.metric('floors out from one wall', reach);
+    t.check('floors reach about 20 m out from one wall, no further', reach >= 6 && reach <= 8, reach + ' floors');
+
     // ---- collapses
     await t.step('a tower brought down drops what all its pieces were made of, in a few piles', `${AT} wipe(); const w = B.place('wall', new V(X, Y, Z), 0); B.place('wall', new V(X, Y + 3, Z), 0); for (let k = 0; k < 4; k++) B.place('floor', new V(X, Y + 6, Z + 1.5 + k * 3), 0);
       const n = B.placed.length; if (n !== 6) return 'built ' + n; const before = { wood: inv.count('wood'), rope: inv.count('rope') }; B.remove(w, true); B.recompute();

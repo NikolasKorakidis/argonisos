@@ -42,7 +42,7 @@ const KIT = {
   wallWindow: { file: 'all/rpgpp-ag/rpgpp-ag-wall-01-3x3-window-a', box: wall(3) }, wallNarrow: { file: 'all/rpgpp-ag/rpgpp-ag-wall-01-1-5x3-a', box: wall(3, 0.9) },
   wallTri: { file: 'all/rpgpp-ag/rpgpp-ag-roof-end-01-6x3-wall-half-a', box: [-1.5, 1.65, 0, 3, -0.15, 0.15] },
   roof615: { file: 'kRoof63', ...roof(3, 1.5) }, end615: end('kEnd63', 'kTrim63', 3, 1.5),
-  beamLog: { file: 'pLog2', vc: true, lay: 'x', box: [-1.5, 1.5, -0.2, 0.2, -0.2, 0.2] }, postLog: { file: 'pLog3', vc: true, lay: 'y', box: [-0.21, 0.21, 0, 3, -0.21, 0.21] },
+  beamLog: { file: 'pLog2', vc: true, lay: 'x', box: [-1.5, 1.5, -0.2, 0.2, -0.2, 0.2] }, postLog: { file: 'pLog2', vc: true, lay: 'y', box: [-0.24, 0.24, 0, 3, -0.24, 0.24] },
 };
 
 const size = (g) => { g.computeBoundingBox(); return g.boundingBox.getSize(new THREE.Vector3()); };
