@@ -174,9 +174,9 @@ const NF = 6, MF = 12;
 // (while blocks stream in, the mid band is rebuilt at most this often, seconds: each rebuild repacks every block in it,
 // and a teleport or a walk out of the woods brings several in a row; they come in behind the mist)
 const MID_WAIT = 0.4;
-// (a plain per-pixel hash, not the interleaved gradient noise made for a temporal blend we don't have: on its own that
-// laid regular hatching over the crowns where the bands meet, reviewer 20 Nov; this reads as the leaves' own speckle)
-const DITHER = 'float igN(vec2 p) { p = mod(floor(p), 256.0); return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }\n';
+// (interleaved gradient noise. A plain per-pixel hash looked finer on the crowns where the bands meet, but its rougher
+// depth there made the woods' haze, marched from the depth, jump as you walked out of a wood: tests/suites/light.mjs)
+const DITHER = 'float igN(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }\n';
 // (each cut copy shares its program with every other copy of a material whose shader is the same, the leaf cards of
 // every species one program: keyed by the material's own program key, not by the material, the woods compiled a program
 // per species and band, many of them only when that species first came into view, a hitch each time)
