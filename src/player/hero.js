@@ -205,6 +205,10 @@ export const STRAP = { along: 15, out: 5 };
 // its foot turned back flat, which sets the feet down 7 to 9 cm either side of that line, as the walk's own are, the
 // shins nearer upright
 const STANCE = { run: [0.17, 0.23], sprint: [0.2, 0.12] };
+// How far off the bow's line the aim may be and still turn the body to it (radians: in full to the first, none past the second)
+const AIM_REACH = [0.9, 1.6];
+// How the hips' turn follows the cycles' (easeHips): eased at k a second, never faster than max (radians a second)
+const HIPS_EASE = { k: 10, max: 8 };
 // The swimming clip is a crawl under the water, the body flat: tipped this far head up (radians), the head kept this far
 // over the surface (its bone sits at the base of the skull: the face clears it)
 const SWIM_TILT = 0.45, SWIM_HEAD = 0.16;
@@ -293,8 +297,16 @@ const ZERO3 = [0, 0, 0];
 // and the body lifted by however far the lowest goes under (hero.floorLift). FEET_OFF: the clips the game plays with
 // the feet off the ground (hero.js, game/acts.js), which it lifts so
 export const FEET_OFF = new Set(['roll', 'deathBack', 'deathLeft', 'getUp', 'sit', 'sleep', 'pray']);
-const _fa = new THREE.Vector3();
-export const BOW_DUR = { equip: 0.88, draw: 0.8, lower: 0.3, disarm: 1.0, blend: 0.14 };
+const _fa = new THREE.Vector3(), _aimV = new THREE.Vector3();
+export const BOW_DUR = { equip: 0.88, draw: 0.8, lower: 0.3, disarm: 1.0, blend: 0.14, unaim: 0.12 };
+// The dodge (Space with RMB held, or Shift + Space: player.js): how far it goes (m) and how long it takes (s); and its clips,
+// each with the way it goes against the way the hero faces (radians, + to his left) and the stretch of it played (its own
+// seconds, all of it if not given). The roll (Mixamo's Stand To Roll) is in from the start, played from the dive, its
+// lean into it left out, so it sets off at once and slows as it comes up; the others are only played if moves.mjs found
+// them in "incoming assets/mixamo": a quicker roll from a run, and dodges to the side and back that keep the facing
+FEET_OFF.add('rollFast'); FEET_OFF.add('dodgeLeft'); FEET_OFF.add('dodgeRight'); FEET_OFF.add('dodgeBack');
+export const DODGE_MOVE = { dist: 3.5, time: 0.75 };
+export const DODGES = { roll: { axis: 0, from: 0.3, to: 1.65 }, rollFast: { axis: 0 }, dodgeLeft: { axis: Math.PI / 2 }, dodgeRight: { axis: -Math.PI / 2 }, dodgeBack: { axis: Math.PI } };
 
 // A body bound with its legs astride (the refit turns the pack's legs to point as the rig's, which rest a little apart,
 // and the feet go with them: the woman stands with her shins 9° out and her soles rolled onto their inner edges) shows
@@ -325,6 +337,8 @@ function fitBone(b, k, kp) { if (kp) b.quaternion.premultiply(_fk.copy(kp).inver
 
 const _hq = new THREE.Quaternion(), _ab = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()];
 const _sq = new THREE.Quaternion(), _sp = new THREE.Quaternion(), _sb = new THREE.Quaternion(), _sv = new THREE.Vector3();
+// the joints that turn the upper body round to the way its clip has it (overlay → upperSet)
+const UPPER_SET = ['mixamorigSpine', 'mixamorigSpine1', 'mixamorigSpine2'], _us = [new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quaternion()];
 // turn a bone by a world-space rotation q, keeping its parent where it is
 function turnWorld(bone, q) { bone.parent.getWorldQuaternion(_sp); bone.getWorldQuaternion(_sb); bone.quaternion.copy(_sp.invert().multiply(_sb.premultiply(q))); }
 
@@ -497,6 +511,7 @@ export class Hero {
     }
     const hp = C.clip.tracks.find((tr) => tr.name === 'mixamorigHips.position');
     if (hp && this.bones.mixamorigHips) S.hips = { bone: this.bones.mixamorigHips, interp: hp.createInterpolant() };
+    S.hipsQ = S.find((s) => s.bone === this.bones.mixamorigHips);   // (the hips' turn in the clip: overlay sets the upper body by it)
     return (this.samplers[C.clip.uuid] = S);
   }
   // When each foot comes down in a looping clip, as fractions of it. The legs are posed at 60 points through the clip,
@@ -538,14 +553,29 @@ export class Hero {
   // Blend clip C at normalised time t over the current pose with weight w. upper: true = upper body only, false = whole
   // body, or 0..1 to fade the legs out. hips: true = take the clip's hip height too (crouched stances); 'keep' = and its
   // travel (a fall backwards lands where it lands)
+  // The upper body over legs that aren't the clip's is set as the clip has it against the way the hero faces, not against
+  // the hips: the cycles turn the hips far round (the strafes' by 60 to 80°, backing up by 30°) and the bow's and the
+  // guard's stances turn them the other way (by 55 to 90°), so the bow drawn over a strafe to the left came out turned
+  // half round, and the aim (aimUpperBody), bending the spine the rest of the way, threw the body over and spun it. The
+  // spine takes up the difference, a third at each of its joints (UPPER_SET)
   overlay(C, t, w, upper, hips) {
     const S = this.sampler(C); if (!S || w <= 0.001) return;
     const time = clamp(t, 0, 0.999) * C.dur, lw = w * (upper === true ? 0 : upper ? 1 - upper : 1);
     for (const s of S) { const ww = s.upper ? w : lw; if (ww <= 0.001) continue; _hq.fromArray(s.interp.evaluate(time)); s.bone.quaternion.slerp(_hq, ww); }
+    if (w - lw > 0.01 && S.hipsQ) this.upperSet(S.hipsQ, time, w);
     if (hips && lw > 0.001 && S.hips) {
       const v = S.hips.interp.evaluate(time), p = S.hips.bone.position; p.y = lerp(p.y, v[1], lw);
       if (hips === 'keep') { const r = C.root ? C.root.evaluate(time) : ZERO3; p.x = lerp(p.x, v[0] + r[0], lw); p.z = lerp(p.z, v[2] + r[2], lw); }
     }
+  }
+
+  // (the spine turned about the upright by the turn between the clip's hips and the hips as they stand, by the share w of
+  // the clip in the pose; seen from above, by each one's forward axis)
+  upperSet(hq, time, w) {
+    const pq = hq.bone.parent.getWorldQuaternion(_us[0]), yaw = (q) => { _sv.set(0, 0, 1).applyQuaternion(q); return Math.hypot(_sv.x, _sv.z) < 0.3 ? null : Math.atan2(_sv.x, _sv.z); };
+    const a = yaw(_us[1].copy(pq).multiply(_hq.fromArray(hq.interp.evaluate(time)))), b = yaw(_us[1].copy(pq).multiply(hq.bone.quaternion)); if (a === null || b === null) return;
+    const d = angDiff(a, b) * w; if (Math.abs(d) < 0.01) return;
+    _us[2].setFromAxisAngle(UPV, d / UPPER_SET.length); for (const n of UPPER_SET) if (this.bones[n]) turnWorld(this.bones[n], _us[2]);
   }
 
   // ---- Actions: a clip played over everything else, for the game's own moves (hits, deaths, a hard landing, the roll,
@@ -627,6 +657,23 @@ export class Hero {
     return true;
   }
   revive() { this.death = null; this.stopActions(0); this.actions = []; }
+  // A dodge the way dir points (its yaw in the world), the hero facing yaw. With the facing held (held: the bow drawn, the
+  // guard up) a dodge to the side or back keeps it, if its clip is in; otherwise (and always with the facing free) he turns
+  // to face the way and rolls, as in Valheim (the quick roll, if it's in, from a run: fast). The clip nearest the way goes
+  // in the way it was made, the hero turned the little rest of the way (a diagonal). Returns { name, yaw (the facing while it
+  // plays), h (its action), path(u) (the share of its travel done a share u of its time in: the clip's own, so its hands and
+  // feet go with the ground) }, or null while the roll isn't in. onDone: as hero.action's
+  dodge(dir, yaw, held, fast, onDone) {
+    if (!want('roll').ready) return null;
+    let name = fast && this.has('rollFast') ? 'rollFast' : 'roll';
+    if (held) for (const n of ['dodgeLeft', 'dodgeRight', 'dodgeBack']) if (this.has(n) && Math.abs(angDiff(dir - yaw, DODGES[n].axis)) < Math.abs(angDiff(dir - yaw, DODGES[name].axis))) name = n;
+    const D = DODGES[name], C = CLIPS[name], from = D.from ?? 0, to = Math.min(D.to ?? C.dur, C.dur), r0 = C.root && [...C.root.evaluate(from)], r1 = C.root && [...C.root.evaluate(to)];
+    const ax = r1 ? [r1[0] - r0[0], r1[2] - r0[2]] : [0, 0], L2 = ax[0] ** 2 + ax[1] ** 2;
+    const h = this.action(name, { upper: false, from, to, rate: (to - from) / DODGE_MOVE.time, blend: 0.06, fade: 0.15, lock: true, feet: false, onDone });
+    // (a clip made in place has no travel to go by: an ease out instead)
+    const path = (u) => { u = clamp(u, 0, 1); if (L2 < 100) return 1 - (1 - u) ** 2.5; const r = C.root.evaluate(from + u * (to - from)); return clamp(((r[0] - r0[0]) * ax[0] + (r[2] - r0[2]) * ax[1]) / L2, 0, 1); };
+    return { name, yaw: dir - D.axis, h, path };
+  }
   landed(fall) {
     if (fall < HARD_LANDING || !want('land').ready || this.death) return false;
     this.action('land', { upper: false, root: 'keep', rate: 1.25, blend: 0.05, fade: 0.3, lock: 0.25, lockFor: 0.7, quiet: true }); this.airT = 0;
@@ -669,6 +716,7 @@ export class Hero {
     this.upperK = lerp(this.upperK, speed > 0.5 || !st.onGround ? 1 : 0, e(8));
     // walking one way, facing another: the cycle nearest the way the legs go, the hips turned the rest of the way
     if (Math.abs(this.twist) > 0.01 && B.mixamorigHips) B.mixamorigHips.rotateOnWorldAxis(UPV, this.twist);
+    this.easeHips(dt, W.w);
     // jump: skip the wind-up, map airtime onto the rise and fall, then a short landing settle (or, past a jump's arc, falling)
     const jumpT = st.jumped || this.airT > 0.25 ? this.airT : 0;
     if (this.landT > 0) this.landT -= dt;
@@ -693,7 +741,9 @@ export class Hero {
     this.stillT = idle ? this.stillT + dt : 0;
     if (this.stillT > this.fidgetAt) { this.action('look', { cancel: true, blend: 0.5, fade: 0.6, layer: true, quiet: true }); this.stillT = 0; this.fidgetAt = 10 + Math.random() * 8; }
     this.runActions(dt, st); this.poseActions();
-    if (st.bow) this.poseBow(st.bow, st.aimPt, st.sprinting);
+    // (the bow's poses give way to an action of the whole body: a roll, a stagger, a death)
+    let body = 0; for (const h of this.actions) if (h.o.upper === false && h.C.ready) body = Math.max(body, h.w);
+    if (st.bow && body < 0.999) this.poseBow(st.bow, st.aimPt, st.sprinting, 1 - body);
     // the legs set straight on a body bound standing astride (legFit), the clips' poses kept
     for (const f of this.legFit || []) for (const [b, k, kp] of f) fitBone(b, k, kp);
     this.keepAboveFloor(dt, st);
@@ -727,7 +777,7 @@ export class Hero {
       this.wrap.position.y += this.ik.plan(dt, st.rootY, st.onGround && !st.swimming && jumpT === 0 && this.noFeet < 0.5 && this.fallK < 0.5);
       this.root.updateMatrixWorld(true); this.ik.solve(st.rootY);
     }
-    this.cape?.update(dt);
+    this.cape?.update(dt); this.lastY = this.root.rotation.y;
   }
   // The points watched for the floor: every so many of the vertices of what shows (the body, its hair, what it wears:
   // chosen again when that changes, show), each with the bone that moves it most
@@ -759,6 +809,27 @@ export class Hero {
     if (this.noFeet > 0.01 && st.rootY !== undefined) { this.root.updateMatrixWorld(true); want = this.floorLift((x, z) => st.floorY ?? (st.ground ? Math.min(st.ground(x, z, st.rootY), st.rootY + 0.25) : st.rootY)); }
     this.floorUp = want > this.floorUp ? want : lerp(this.floorUp, want, Math.min(1, dt * 6));
     this.wrap.position.y += this.floorUp;
+  }
+  // The cycles hold the hips turned each its own way (seen from above: the walk 5° right, backing up 30° left, the strafes
+  // 65 to 80° towards where they go, the guard and the bow's stance 55 to 90° right), so a quick crossfade between two of
+  // them (the legs going round as the hero turns to his aim, or back to where he goes when the aim ends) swung the hips
+  // and all above them round by up to 100° in a frame or two. The hips' turn is eased instead (HIPS_EASE: how quickly,
+  // and the most a second), the thighs turned back by as much so the legs step as their clips have them
+  easeHips(dt, w) {
+    const Hb = this.bones.mixamorigHips; if (!Hb) return; let x = 0, z = 0;
+    for (const n in w) { const a = this.meanYaw(CLIPS[n]); if (a !== null) { x += Math.sin(a) * w[n]; z += Math.cos(a) * w[n]; } }
+    if (Math.hypot(x, z) < 0.2) { this.hipsY = null; return; }
+    const want = Math.atan2(x, z) + this.twist; if (this.hipsY === null || this.hipsY === undefined || !dt) { this.hipsY = want; return; }
+    const d0 = angDiff(want, this.hipsY), step = Math.sign(d0) * Math.min(Math.abs(d0) * Math.min(1, dt * HIPS_EASE.k), HIPS_EASE.max * dt);
+    this.hipsY = angDiff(this.hipsY + step, 0); const d = angDiff(this.hipsY, want); if (Math.abs(d) < 0.005) return;
+    Hb.rotateOnWorldAxis(UPV, d); _us[2].setFromAxisAngle(UPV, -d);
+    for (const s of ['Left', 'Right']) { const b = this.bones[`mixamorig${s}UpLeg`]; if (b) turnWorld(b, _us[2]); }
+  }
+  // a clip's hips' mean turn about the upright (radians, in the model; null if they lie too flat to tell: swimming)
+  meanYaw(C) {
+    if (!C?.ready) return null; const S = this.sampler(C); if (!S?.hipsQ) return null; if (S.yaw0 !== undefined) return S.yaw0;
+    let x = 0, z = 0; for (let i = 0; i < 16; i++) { _sv.set(0, 0, 1).applyQuaternion(_hq.fromArray(S.hipsQ.interp.evaluate(C.dur * i / 16))); const l = Math.hypot(_sv.x, _sv.z); if (l > 0.3) { x += _sv.x / l; z += _sv.z / l; } }
+    return (S.yaw0 = Math.hypot(x, z) > 4 ? Math.atan2(x, z) : null);
   }
   // A cycle's own time (0..1) at the shared step: each is offset so its left foot comes down at step 0; the old run
   // played backwards stands in for backing up while the moves aren't in
@@ -816,26 +887,37 @@ export class Hero {
     return { w: Object.fromEntries(Object.entries(w).map(([n, x]) => [n, x / sum])), move: cw / sum, lead, back: lead === 'run' && this.runBack, rate };
   }
   // Bow states: equip → ready → draw (hold RMB) → aim (full draw) → lower → ready → disarm
-  poseBow(b, aimPt, sprinting) {
+  poseBow(b, aimPt, sprinting, k = 1) {
     if (b.t < 0) return;
-    const C = CLIPS, up = this.upperK, aimPh = (t) => Math.min(t / C.bowAim.dur, 1);
-    if (b.st === 'equip') this.overlay(C.bowEquip, b.t / BOW_DUR.equip, Math.min(1, b.t * 6), up, true);
-    else if (b.st === 'disarm') this.overlay(C.bowDisarm, b.t / BOW_DUR.disarm, Math.min(1, (BOW_DUR.disarm - b.t) * 5), up, true);
-    else if (b.st === 'ready') this.overlay(C.bowDraw, 0, lerp(1, sprinting ? 0.15 : 0.3, up), up, true);
-    else if (b.st === 'draw') this.overlay(C.bowDraw, Math.max(b.ph, b.from || 0), 1, up, true);
-    else if (b.st === 'aim') this.overlay(C.bowAim, aimPh(b.t), 1, up, true);
-    else if (b.st === 'lower') this.overlay(C.bowDraw, 0, 1, up, true);
+    const C = CLIPS, up = this.upperK, aimPh = (t) => Math.min(t / C.bowAim.dur, 1), pose = (c, t, w) => this.overlay(c, t, w * k, up, true);   // (k: how much of the pose is the bow's)
+    if (b.st === 'equip') pose(C.bowEquip, b.t / BOW_DUR.equip, Math.min(1, b.t * 6));
+    else if (b.st === 'disarm') pose(C.bowDisarm, b.t / BOW_DUR.disarm, Math.min(1, (BOW_DUR.disarm - b.t) * 5));
+    // (held ready, in motion, the bow only part way into the arms; lowering eases into that, not dropping to it at the end;
+    // drawing from ready eases up from it)
+    const readyW = lerp(1, sprinting ? 0.15 : 0.3, up);
+    if (b.st === 'ready') pose(C.bowDraw, 0, readyW);
+    else if (b.st === 'draw') pose(C.bowDraw, Math.max(b.ph, b.from || 0), b.fromC ? 1 : lerp(readyW, 1, ss(b.t / BOW_DUR.blend)));
+    else if (b.st === 'aim') pose(C.bowAim, aimPh(b.t), 1);
+    else if (b.st === 'lower') pose(C.bowDraw, 0, lerp(1, readyW, ss(b.t / BOW_DUR.lower)));
     const fade = b.st === 'lower' ? 1 - ss(b.t / BOW_DUR.lower) : b.st === 'draw' ? 1 - ss(b.t / BOW_DUR.blend) : 0;
-    if (b.fromC && fade > 0) this.overlay(C[b.fromC], b.fromT, fade, up, true);
-    const aimW = b.st === 'aim' ? 1 : b.st === 'draw' ? ss((b.ph - 0.6) / 0.3) : b.st === 'lower' && b.fromC ? fade * (b.fromC === 'bowAim' ? 1 : ss((b.fromT - 0.6) / 0.3)) : 0;
+    if (b.fromC && fade > 0) pose(C[b.fromC], b.fromT, fade);
+    const aimW = k * (b.st === 'aim' ? 1 : b.st === 'draw' ? ss((b.ph - 0.6) / 0.3) : b.st === 'lower' && b.fromC ? (1 - ss(b.t / BOW_DUR.unaim)) * (b.fromC === 'bowAim' ? 1 : ss((b.fromT - 0.6) / 0.3)) : 0);
+    // (lowered, the aim lets go of the body at once (BOW_DUR.unaim), and meanwhile goes round with the hero as he turns back to
+    // where he walks: held where it was in the world, or let go of slowly, it kept the chest there as he turned under it,
+    // then let go of it all at once)
+    if (b.st === 'lower' && aimPt) { const r = this.root, y = r.rotation.y; if (!b.aimAt) { const dx = aimPt.x - r.position.x, dz = aimPt.z - r.position.z; b.aimAt = { y: this.lastY ?? y, x: dx, z: dz, h: aimPt.y - r.position.y }; }   // (the facing it was aimed from: the frame before, he may have turned since)
+      const a = b.aimAt, t = y - a.y, c = Math.cos(t), sn = Math.sin(t); aimPt = _aimV.set(r.position.x + a.x * c + a.z * sn, r.position.y + a.h, r.position.z - a.x * sn + a.z * c); }
     if (aimW > 0.01 && aimPt) this.aimUpperBody(aimPt, aimW);
   }
-  // Turn the spine (split over two joints) so the line string hand → bow hand points at the target
+
+  // Turn the spine (split over two joints) so the line string hand → bow hand points at the target. Only so far: a
+  // target well off to the side or behind (the aim let go, the hero turning back to where he walks) would bend the body
+  // over and wheel it round, the shortest turn there being any way at all; past AIM_REACH it is let go
   aimUpperBody(target, w) {
     const Bn = this.bones, R = Bn.mixamorigRightHand, L = Bn.mixamorigLeftHand; if (!R || !L) return;
     for (const [bone, part] of [[Bn.mixamorigSpine1, 0.5], [Bn.mixamorigSpine2, 1]]) {
-      const r = R.getWorldPosition(_ab[0]), cur = L.getWorldPosition(_ab[1]).sub(r).normalize(), want = _ab[2].copy(target).sub(r).normalize();
-      const d = _ab[3].identity().slerp(_ab[4].setFromUnitVectors(cur, want), w * part);
+      const r = R.getWorldPosition(_ab[0]), cur = L.getWorldPosition(_ab[1]).sub(r).normalize(), want = _ab[2].copy(target).sub(r).normalize(), off = cur.angleTo(want);
+      const d = _ab[3].identity().slerp(_ab[4].setFromUnitVectors(cur, want), w * part * (1 - smooth(AIM_REACH[0], AIM_REACH[1], off)));
       const pq = bone.parent.getWorldQuaternion(_ab[5]).invert(), wq = bone.getWorldQuaternion(_ab[4]);
       bone.quaternion.copy(pq.multiply(d.multiply(wq)));
     }

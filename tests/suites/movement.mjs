@@ -24,11 +24,12 @@ export default {
     // (every skill banner the HUD is asked for, with when: hud.js skill, from stats.js onLearn and onLevel)
     await t.eval(spy);
     await t.eval(`g.owl.o.g.visible = false; window._ts = performance.now(); return true;`);
-    await t.page.keyboard.down('KeyW'); await t.page.keyboard.down('ShiftLeft'); await t.wait(2500);
+    // (sprint, then run on and jump; Shift + Space is a jump, not a dodge: the sprint's leap is checked below)
+    await t.page.keyboard.down('KeyW'); await t.page.keyboard.down('ShiftLeft'); await t.wait(2500); await t.page.keyboard.up('ShiftLeft');
     await t.eval(`window._tj = performance.now(); return true;`);
     for (let i = 0; i < 3; i++) { await t.page.keyboard.press('Space'); if (!i) { await t.wait(500); await t.shot('skill-learned'); } await t.until('!P.onGround', 500); await t.until('P.onGround', 1500); }
     await t.step('the stamina bar shows its number while you run', `const e = document.querySelector('#stam > u'), st = document.getElementById('stam'); return (/^\\d+ \\/ \\d+$/.test(e?.textContent || '') && !st.classList.contains('full') && getComputedStyle(e).display !== 'none') || 'stamina reads "' + e?.textContent + '", full ' + st.classList.contains('full');`);
-    await t.page.keyboard.up('ShiftLeft'); await t.page.keyboard.up('KeyW');
+    await t.page.keyboard.up('KeyW');
     await t.step('sprinting and jumping: legs fine, the feet let go in the air', feetOk);
     // Skills found at once (Patch 22): the first sprint and the first jump each show "Skill learned" as they happen
     await t.step('the first sprint shows "Skill learned: Sprinting, level 1" at once', `const p = window._pops.find((q) => q.s === 'sprinting'); return (p && p.learned && p.L === 1 && p.t - window._ts < 600) || JSON.stringify(p || window._pops);`);
@@ -48,6 +49,44 @@ export default {
     const run = await t.eval(`const S = P.stats, sl = P.slope || 0, k = sl > 0 ? 1 - 0.35 * Math.min(sl, 0.8) : 1 + 0.12 * Math.min(-sl, 0.6); return { speed: P.speed, want: 4.6 * 0.75 * S.speedK * (1 + P.speedMod) * (P.overweight ? 0.6 : 1) * k, slope: sl };`);
     await t.page.keyboard.up('KeyW');
     t.check('…measured: the hero runs at 75% of the old run (within 6%)', Math.abs(run.speed / run.want - 1) < 0.06 && run.speed < 4.6 * 0.8, JSON.stringify(run));
+    // ---- The dodge (Patch 24): RMB + Space, the way the keys point (straight back with none), 3 to 4 m in about three
+    // quarters of a second, eased out; never a jump; the roll's stamina and its moment no blow lands; stopped by what
+    // stands in the way. With the bow drawn the hero turns, rolls and turns back to his aim. Space alone still jumps
+    const DG = `const { input } = await import('/src/input.js');
+      // (in the meadows' wide clearing, nothing within 5 m to roll into; timed by the dodge's own clock, which a slow machine's
+      // long frames don't stretch)
+      const fresh = async (rmb) => { AG.teleport(-220, 360, 0.6, -0.2); await until(() => AG.terrain.pending === 0, 20000); P.stats.stamina = P.stats.maxStamina; await until(() => P.onGround && !P.dodge && P.dodgeCd <= 0 && P.hero.moveK > 0.9, 3000); await frames(10);
+        if (rmb) { input.rmb = true; await until(() => P.bow?.st === 'aim', 3000); } };
+      const dodge = async (keys, o = {}) => {
+        await fresh(o.rmb); o.before?.(); for (const k of keys) input.keys['Key' + k] = true; if (!o.rmb) { input.rmb = true; await until(() => P.guardUp || P.blocking, 500); } await frames(1);
+        const p0 = P.pos.clone(), st0 = P.stats.stamina; let air = false, safe = 0, n = 0, secs = 0; input.pressed.add('Space');
+        const went = await until(() => P.dodge, 400); for (const k of keys) input.keys['Key' + k] = false;   // (the keys let go once it starts: only the dodge moves him)
+        if (went) await until(() => { if (!P.onGround) air = true; n++; if (P.dodging) safe++; if (P.dodge) secs = P.dodge.t; o.during?.(); return !P.dodge; }, 3000);
+        const m = P.pos.clone().sub(p0), fx = -Math.sin(P.camYaw), fz = -Math.cos(P.camYaw); if (!o.rmb) input.rmb = false;
+        return { went: !!went, fwd: +(m.x * fx + m.z * fz).toFixed(2), right: +(m.x * -fz + m.z * fx).toFixed(2), secs: +secs.toFixed(2), cost: +(st0 - P.stats.stamina).toFixed(1), air, safe: +(safe / Math.max(n, 1)).toFixed(2) };
+      };`;
+    await t.eval(`inv.slots.forEach((s) => { if (s?.worn) delete s.worn; }); g.inv.onChange?.(); return true;`);
+    const dodges = await t.eval(`${DG} const out = {}; for (const [k, keys] of [['W', ['W']], ['A', ['A']], ['S', ['S']], ['D', ['D']], ['none', []]]) out[k] = await dodge(keys); return out;`);
+    t.metric('dodges (m along the camera\'s forward / right, s, stamina, share of it safe)', dodges);
+    const way = { W: ['fwd', 1], A: ['right', -1], S: ['fwd', -1], D: ['right', 1], none: ['fwd', -1] }, ok = (r, k) => { const [ax, sg] = way[k], other = ax === 'fwd' ? 'right' : 'fwd'; return r.went && r[ax] * sg >= 3 && r[ax] * sg <= 4 && Math.abs(r[other]) < 0.4; };
+    t.check('RMB + Space dodges 3 to 4 m the way the keys point (W, A, S, D), and straight back with none', Object.entries(dodges).every(([k, r]) => ok(r, k)), JSON.stringify(dodges));
+    t.check('…in 0.6 to 0.85 s, never leaving the ground (no jump)', Object.values(dodges).every((r) => r.secs >= 0.6 && r.secs <= 0.85 && !r.air), JSON.stringify(dodges));
+    t.check('…for the roll\'s stamina (12), no blow landing through the heart of it', Object.values(dodges).every((r) => Math.abs(r.cost - 12) < 0.5 && r.safe > 0.5), JSON.stringify(dodges));
+    await t.step('a blow struck in the heart of a dodge misses', `${DG} let res = null; const h0 = P.stats.health, c = { pos: P.pos.clone(), dmgK: 1, hitT: 0, atkCd: 0, body: {}, T: {} };
+      const r = await dodge(['W'], { during: () => { if (!res && P.dodging && P.dodge.t > 0.2) { c.pos.copy(P.pos).x += 1; res = g.combat.hitPlayer(c, [20, 20, 'blunt']); } } });
+      return (r.went && res === 'dodged' && P.stats.health === h0) || JSON.stringify({ r, res, h: P.stats.health, h0 });`);
+    await t.step('Space alone jumps, and Shift + Space sprinting is a leap (higher), never a dodge', `${DG} await fresh(); input.pressed.add('Space'); const jumped = await until(() => !P.onGround, 500), dodged = !!P.dodge, v0 = P.vel.y; await until(() => P.onGround, 2000);
+      await fresh(); input.keys.KeyW = true; input.keys.ShiftLeft = true; await until(() => P.sprinting, 1000); await frames(20); input.pressed.add('Space'); const leapt = await until(() => !P.onGround, 500), v1 = P.vel.y, leapDodge = !!P.dodge;
+      await until(() => P.onGround, 2000); input.keys.KeyW = false; input.keys.ShiftLeft = false;
+      return (jumped && !dodged && leapt && !leapDodge && v1 > v0 * 1.05) || JSON.stringify({ jumped, dodged, leapt, leapDodge, v0, v1 });`);
+    await t.step('no dodge without the stamina for it (and no jump instead)', `${DG} const r = await dodge([], { before: () => { P.stats.stamina = 3; } }); await frames(5); return (!r.went && !r.air && Math.hypot(r.fwd, r.right) < 0.1) || JSON.stringify(r);`);
+    await t.step('a dodge stops at a wall in the way (a row of posts across it), not through it', `${DG} let row = null; const r = await dodge(['W'], { before: () => { const f = new V(-Math.sin(P.camYaw), 0, -Math.cos(P.camYaw)), s = new V(-f.z, 0, f.x);
+        row = [-2, -1, 0, 1, 2].map((k) => ({ x: P.pos.x + f.x * 2 + s.x * k * 0.6, z: P.pos.z + f.z * 2 + s.z * k * 0.6, r: 0.5 })); g.colliders.addGroup('test:wall', row); } });
+      const d = Math.min(...row.map((c) => Math.hypot(P.pos.x - c.x, P.pos.z - c.z))); g.colliders.removeGroup('test:wall'); return (r.went && r.fwd < 1.6 && d >= 0.5 + 0.38 - 0.05) || JSON.stringify({ r, d });`);
+    await t.step('with the bow drawn: RMB + Space and A rolls left, then the hero faces his aim and draws again', `${DG} g.give('crudeBow'); g.give('crudeArrow', 10); g.equip(inv.slots.findIndex((s) => s?.id === 'crudeBow')); P.equip = null; await frames(20);
+      const r = await dodge(['A'], { rmb: true }), aim = () => Math.abs(Math.atan2(Math.sin(P.yaw - P.camYaw - Math.PI), Math.cos(P.yaw - P.camYaw - Math.PI)));
+      const back = await until(() => aim() < 0.08 && P.aiming, 1500); input.rmb = false; inv.slots.forEach((s) => { if (s?.worn) delete s.worn; }); g.inv.onChange?.(); await frames(30);
+      return (r.went && r.right <= -3 && r.right >= -4 && back) || JSON.stringify({ r, aim: aim(), aiming: P.aiming });`);
     await t.step('into the sea', `for (let r = 600; r < 2000; r += 20) if (AG.heightAt(r, 0) < -3) { P.spawn(r, 0); return true; } return 'no sea found';`);
     await t.page.keyboard.down('KeyW'); await t.until('P.swimming && P.hero.ik.w <= 0.2', 4000); await t.page.keyboard.up('KeyW');
     await t.step('…swimming: no foot planting, nothing broken', `if (!P.swimming) return 'not swimming'; if (P.hero.ik.w > 0.2) return 'feet still planting (w ' + P.hero.ik.w.toFixed(2) + ')'; ${feetOk}`);

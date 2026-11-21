@@ -4,6 +4,36 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-24', name: 'Patch 24', title: 'Footwork', date: '21 November 2026',
+    intro: 'Surer footing for the hero, rocks that look like stone, a grander Olympos with a smoother path up it, a river falling from it to the sea, and a gentler storm seen from its top.',
+    sections: [
+      { t: 'The look', icon: 'sun', items: [
+        '<b>Rocks and boulders in real stone.</b> Every rock on the island now has grain, cracks and layers, pale edges where its faces meet and darker hollows, and each is a little different in colour. Moss grows over their tops in the woods and a pale, sun-bleached lichen out in the meadows, less up the mountain and none by the sea, and they turn dark and wet in the rain. The stones you pick up, the cairns on Olympos and the boulders at the ruins match them.',
+        '<b>Zeus\'s storm from the top of Olympos.</b> Seen from up high it now sits in the same soft haze as the rest of the island instead of standing out near black, its outline against the sky is softer, and its rings of cloud share the haze. It still towers dark over the marsh, and from the meadows it looks as before.',
+        '<b>Distant woods with depth, not cardboard.</b> Trees far away are no longer flat cut-outs that swing round to face you: each is now pictured from all round and from above, so it turns as you walk past it, and it is lit by the real sun and sky like the trees nearby, bright on its sunny side and darker in its own shade, in the same haze. The woods no longer turn near black past the nearest trees, and there is no more chequered band where near trees hand over to distant ones. The giant forest keeps its leafy roof far off, its trunks in their own shade instead of a row of pale sticks. On Ultra, the giants stay full trees out to 600 metres.',
+      ] },
+      { t: 'Footwork', icon: 'sprint', items: [
+        '<b>Dodge any way you like.</b> Hold the right mouse button and press Space to dodge the way you are pressing: forwards, backwards, to either side or on a diagonal, or straight back if you press no direction. You throw yourself into a quick roll of about three and a half metres, and nothing can hit you in the heart of it. It costs the same stamina as before and works with anything in your hands, the bow and bare hands too.',
+        '<b>A running leap.</b> Sprinting with Shift, Space throws you a little higher and carries you on at a sprint, over logs and gaps.',
+        '<b>No more spinning while you aim.</b> Walking with the bow drawn, your body no longer twists round on itself: you face your aim steadily and step forwards, backwards and sideways under it. Drawing or lowering the bow on the move, and raising or dropping a shield, no longer swings you round either.',
+        'Turning to your aim or your guard is quick but no longer instant, and after you lower the bow you turn smoothly back to where you are walking.',
+      ] },
+      { t: 'Olympos', icon: 'stone', items: [
+        '<b>A mountain, not a cone.</b> Olympos now rises in bands of grey limestone cliffs with shoulders between them, the rock beds tilted across the massif, streaked dark where water runs down and darker in its gullies. Holm oaks and olives grow on its lower slopes, then pines on the shoulders, then a thin turf and bare scree, and snow lies on the ledges and in the gullies near the top.',
+        '<b>A smoother way up.</b> The path climbs at a steady grade, with no more level stretches broken by steep ramps or bumps underfoot. It is a worn track you can see winding up the face, it passes the cliff bands where they break, and the last rock steps under the summit are each one clean jump. Off the path the cliffs can\'t be hopped up: you can\'t jump while sliding down a face or with a cliff right in front of you, and no jump lands you on a ledge above one.',
+        '<b>Boulders where the mountain drops them.</b> The rocks scattered all over the slopes are gone. Fallen blocks now gather at the foot of the cliffs, rounded stones lie in the gullies, outcrops stand out of the ridges and a few stones from the cut lie beside the path, all bedded in the ground, none floating and none in your way.',
+        '<b>Places to stop on the climb.</b> A ledge halfway up with a bench and a little shrine looking out over the island, a spring running from a bronze spout in the cut above the path, broken votive columns and pilgrims\' cairns where the crest begins, an eagle\'s nest on the lesser summit, and a cairn at every bend of the path. At the top, a gateway of columns leads in to the altar over old flagstones, ringed by crags.',
+      ] },
+      { t: 'The river', icon: 'wet', items: [
+        '<b>A river from Olympos to the sea.</b> It rises from a spring under a crag high on the mountain\'s south-west face, just below the snows, and comes down the cliff bands in four waterfalls, the highest some sixty-five metres, each pouring into a deep pool at its foot. Out on the meadows it winds south-west between the Ancient Temple and the western Giant\'s cave, turns north into a small lake under the forest hills, and leaves it through a ravine, down rapids to the sea on the north-west coast.',
+        '<b>Swim it.</b> Its deep, wide reach in the meadows and the lake are too deep to stand in: you swim across, as at sea. In the shallows you wade, slower the deeper it gets and splashing as you go, and the current carries you downstream, harder where the river runs narrow and quick; the lake is still. Animals keep out of its deep water, and a log you fell into it floats off downstream.',
+        '<b>Water you can see into.</b> The shallows are clear over their gravel and stones, with the sun\'s light playing on the bed; deeper water turns green and then dark in the pools. The river mirrors its banks, the trees and the mountain, the ripples run with the current, quicker and broken over the riffles, and foam gathers on the rapids, along the banks and under the falls. The lake lies almost still. Rain rings the surface, and by night it holds the moonlight.',
+        '<b>The falls.</b> Their water streams down the rock, quickening as it falls, white at the foot, with spray thrown up from the pools and mist drifting off them on the wind; stand with the sun behind you and you may see a rainbow in it. The rock round them is dark and wet, with moss and ferns in the spray.',
+        'Reeds stand at the slow water\'s edge, water lilies float on the lake and the deep reach, plane trees grow in groups along the meadow river, and nothing grows in the water. You hear the river babbling as you come near it, louder over the riffles, the roar of the falls from far off, and water lapping at the lake\'s shore. The map shows it all.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-23', name: 'Patch 23', title: 'Polish and Pace', date: '21 November 2026',
     intro: 'A long look over the whole island: a brighter sky and storm, clearer air, a smoother forest, fuller sound, fairer fights and building that keeps what you build.',
     sections: [

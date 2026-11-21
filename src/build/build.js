@@ -10,6 +10,7 @@ import { loadKit } from './kit.js';
 import { heightAt } from '../world/gen.js';
 import { clearGrass } from '../world/grass.js';
 import { setCut, SHAPE, groundAt } from '../world/groundcut.js';
+import { waterAt } from '../world/river.js';
 import { camera } from '../render/core.js';
 import { input, hit } from '../input.js';
 import { burst, dust, addShake } from '../render/fx.js';
@@ -278,7 +279,7 @@ export class Build {
     if (this.overlaps(def, pos, rot)) return 'Something is in the way';
     if (this.duplicate(def, pos, rot)) return 'Already built here';
     if (this.throughFloor(def, pos, rot)) return 'Something is in the way';
-    if (pos.y < -0.8) return 'Too deep in the water';
+    if (pos.y < waterAt(pos.x, pos.z) - 0.8) return 'Too deep in the water';   // (the sea's, the river's or the lake's: river.js)
     return null;
   }
   paint(why) { const s = this.lastSup, m = why ? ghostBad : !s || s.grounded || s.s > 0.7 ? ghostOk : s.s > 0.4 ? ghostMid : ghostWeak; for (const c of this.ghost.children) c.material = m; }

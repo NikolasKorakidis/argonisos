@@ -1,19 +1,29 @@
 // Streaming vegetation in three bands. Around the player, 64 m cells are drawn at full detail (branching trunks, leaf
-// cards, shadows). Out to MID_R, 256 m blocks use the light far versions. Beyond that every tree is an impostor: one
-// camera-facing card painted from an atlas rendered once at start-up, a single draw call per block. Shader cut-offs at
-// NEAR_R and MID_R put each tree in exactly one band, so the hand-overs are seamless. Layout comes from the workers.
+// cards, shadows). Out to MID_R, 256 m blocks use the light far versions (on Ultra the giant trees on out to RING_R as
+// well, each block's own still meshes past MID_R: the ring). Beyond that every tree is an impostor (impostors.js): painted
+// at start-up from a dome of directions and lit as the near trees are, a single draw call per block. Shader cut-offs at
+// NEAR_R, MID_R and RING_R put each tree in exactly one band, so the hand-overs are seamless. Layout comes from the workers.
 import * as THREE from 'three';
-import { propGeo, propMat, leafMat, TREE_BUILDERS, mergeParts, rr, isLow as PROP_LOW, A2C_FRAG } from './trees.js';
+import { propGeo, propMat, leafMat, TREE_BUILDERS, mergeParts, rr, isLow as PROP_LOW } from './trees.js';
+import { ROCK_MAT } from './rock.js';
 import { SPECIES, STRIDE, CELL } from './flora.js';
 import { MIST_R0, MIST_R1 } from './reach.js';
 import { heightAt } from './gen.js';
-import { renderer, sun, sunFar, hemi, SHADOW } from '../render/core.js';
+import { sun, sunFar, SHADOW } from '../render/core.js';
 import { PRIORITY } from './pool.js';
 import { ULTRA } from '../render/quality.js';
+import { FLORA } from './flora-pack.js';
+import { bakeImpostors, atlasComplete, impostorMaterial, canopyShade, IMP_QUAD, ATLAS } from './impostors.js';
 
 // (On Ultra, render/quality.js, each band reaches about twice as far, as the mist does: reach.js)
 export const NEAR_R = ULTRA ? 130 : 75;       // full-detail radius
 export const MID_R = ULTRA ? 340 : 180;       // light meshes out to here, impostors beyond
+// (Ultra: the giant trees' light meshes go on out to RING_R, each far block's own, standing still, so they cost no packing
+// each frame; their impostors only beyond. Tester, 21 Nov: "the very tall trees from far away look like carton paper".
+// Every species out there cost too much: the ring of all of them from 340 to 480 m doubled the M4's frame on Ultra, its
+// leaf cards in eight samples a pixel, where the impostors cost a tenth of that and now look the part)
+export const RING_R = ULTRA ? 600 : MID_R;
+const RING_M = 40, RING_SP = SPECIES.map((s) => ULTRA && s.name === 'titan');
 const SHADE_LAYER = 6; for (const L of [sun, sunFar]) L.shadow.camera.layers.enable(SHADE_LAYER);   // (the trees' shadow stand-ins: the sun's shadow cameras see them, no other camera does)
 const SHADE_R = SHADOW.farR;                  // (past the near band trees still cast to here, as far as the far shadow map reaches: a low sun's shadow from further off lands beyond the mist)
 const SPLIT = ULTRA ? 45 : 20;                // (a pack tree's own detail out to here; its thinned version beyond, to NEAR_R)
@@ -166,77 +176,64 @@ TREE_BUILDERS.tomato = (v) => { const P = []; for (let k = 0; k < 5; k++) P.push
 TREE_BUILDERS.driftwood = (v) => [[lying(0.12, 0.07, 2.2 + (v % 3) * 0.6), PALE], [new THREE.CylinderGeometry(0.03, 0.05, 0.7, 5).rotateZ(Math.PI / 2).rotateY(0.6).translate(0.5, 0.12, 0.25), PALE]];
 
 // ---- materials with the near/far cut-off (wind sway stays as in the base material)
-const VEG_U = { uVegC: { value: new THREE.Vector2() }, uNearR: { value: NEAR_R }, uMidR: { value: MID_R }, uFarR: { value: FAR_R } };
+const VEG_U = { uVegC: { value: new THREE.Vector2() }, uNearR: { value: NEAR_R }, uMidR: { value: MID_R }, uImpR: { value: RING_R }, uFarR: { value: FAR_R }, uShadeR: { value: 0 } };
 const cutMats = new Map();
 // Between bands a tree doesn't pop from one version to the next: across a few metres each pixel is drawn by exactly
 // one of them, chosen by a fixed screen pattern, so one dissolves into the other.
-const NF = 6, MF = 12;
+const NF = 6, MF = 6;
+// (and where the light meshes hand over to the impostors, each tree does so at its own distance, JIT metres either side
+// of the band's edge, by a dice of its own place: a whole ring of trees half dissolved at once read as a checkerboard
+// band across the woods, graphics review of Nov 2026)
+const JIT = ULTRA ? 60 : 30;
 // (while blocks stream in, the mid band is rebuilt at most this often, seconds: each rebuild repacks every block in it,
 // and a teleport or a walk out of the woods brings several in a row; they come in behind the mist)
 const MID_WAIT = 0.4;
 // (interleaved gradient noise. A plain per-pixel hash looked finer on the crowns where the bands meet, but its rougher
 // depth there made the woods' haze, marched from the depth, jump as you walked out of a wood: tests/suites/light.mjs)
 const DITHER = 'float igN(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }\n';
+// (a tree's own dice, the same in every band's shader: Dave Hoskins's hash, plain arithmetic, so each GPU rounds it alike)
+const JITTER = `float bandJit(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return (fract((q.x + q.y) * q.z) - 0.5) * ${JIT}.0; }\n`;
+// The bands a cut copy draws: 'n' near, 'f' the mid band, 'g' the mid band of a species with a ring (cut off sharp at
+// MID_R, where the ring goes on with the same meshes), 'r' Ultra's ring (from MID_R to its hand-over to the impostors)
+const KEEP = {
+  n: 'vKeepLo = 0.0; vKeepHi = fn;',
+  f: `vKeepLo = fn; vKeepHi = 1.0 - smoothstep(uMidR - ${MF}.0, uMidR + ${MF}.0, dj);`,
+  g: 'vKeepLo = fn; vKeepHi = step(dj, uMidR);',
+  r: `vKeepLo = step(dj, uMidR); vKeepHi = 1.0 - smoothstep(uImpR - ${MF}.0, uImpR + ${MF}.0, dj);`,
+};
 // (each cut copy shares its program with every other copy of a material whose shader is the same, the leaf cards of
 // every species one program: keyed by the material's own program key, not by the material, the woods compiled a program
 // per species and band, many of them only when that species first came into view, a hitch each time)
-function cut(mat, far) {
-  const id = mat.uuid + (far ? 'f' : 'n'); if (cutMats.has(id)) return cutMats.get(id);
-  const key = 'vegCut' + (far ? 'F|' : 'N|') + mat.customProgramCacheKey();
+function cut(mat, band) {
+  const id = mat.uuid + band; if (cutMats.has(id)) return cutMats.get(id);
+  const key = 'vegCut' + band + '|' + mat.customProgramCacheKey();
   const m = mat.clone(), base = mat.onBeforeCompile;
   m.onBeforeCompile = (sh, r) => {
     base?.call(m, sh, r);
     Object.assign(sh.uniforms, VEG_U);
-    sh.vertexShader = 'uniform vec2 uVegC; uniform float uNearR, uMidR; varying float vKeepLo, vKeepHi;\n' + sh.vertexShader.replace('#include <project_vertex>',
-      `{ vec2 ic = (modelMatrix * instanceMatrix[3]).xz; float dd = distance(ic, uVegC), fn = 1.0 - smoothstep(uNearR - ${NF}.0, uNearR + ${NF}.0, dd);
-        ${far ? `float fo = 1.0 - smoothstep(uMidR - ${MF}.0, uMidR + ${MF}.0, dd); vKeepLo = fn; vKeepHi = fo; if (fn >= 0.999 || fo <= 0.001) transformed *= 0.0;`
-              : 'vKeepLo = 0.0; vKeepHi = fn; if (fn <= 0.001) transformed *= 0.0;'} }
+    const far = band !== 'n';   // (the light meshes: past the far shadow map's reach, the shade under their own crowns painted in, canopyShade)
+    sh.vertexShader = 'uniform vec2 uVegC; uniform float uNearR, uMidR, uImpR, uShadeR; varying float vKeepLo, vKeepHi;\n' + (far ? 'attribute float shade; varying float vShade;\n' : '') + JITTER + sh.vertexShader.replace('#include <project_vertex>',
+      `{ vec2 ic = (modelMatrix * instanceMatrix[3]).xz; float dd = distance(ic, uVegC), dj = dd + bandJit(ic), fn = 1.0 - smoothstep(uNearR - ${NF}.0, uNearR + ${NF}.0, dd);
+        ${KEEP[band]} if (vKeepLo >= 0.999 || vKeepHi <= 0.001) transformed *= 0.0; ${far ? 'vShade = mix(1.0, shade, smoothstep(uShadeR, uShadeR + 30.0, dd));' : ''} }
       #include <project_vertex>`);
-    sh.fragmentShader = 'varying float vKeepLo, vKeepHi;\n' + DITHER + sh.fragmentShader.replace('#include <clipping_planes_fragment>',
-      '{ float n = igN(gl_FragCoord.xy); if (n < vKeepLo || n >= vKeepHi) discard; }\n#include <clipping_planes_fragment>');
+    sh.fragmentShader = 'varying float vKeepLo, vKeepHi;\n' + (far ? 'varying float vShade;\n' : '') + DITHER + sh.fragmentShader.replace('#include <clipping_planes_fragment>',
+      '{ float n = igN(gl_FragCoord.xy); if (n < vKeepLo || n >= vKeepHi) discard; }\n#include <clipping_planes_fragment>')
+      .replace('#include <color_fragment>', far ? '#include <color_fragment>\n diffuseColor.rgb *= vShade;' : '#include <color_fragment>');
   };
   m.customProgramCacheKey = () => key;
   cutMats.set(id, m); return m;
 }
 
-// ---- impostors: each species painted from the side into one atlas tile, shown as a card that turns to face you
-const TILE = ULTRA ? 512 : 256, COLS = 8, ATLAS = { tex: null, tiles: [] };   // (Ultra: twice as sharp)
-function buildAtlas() {
-  const rows = Math.ceil(SPECIES.length / COLS), rt = ATLAS.rt ||= new THREE.WebGLRenderTarget(TILE * COLS, TILE * rows, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, samples: 4 });
-  const sc = new THREE.Scene(); sc.add(new THREE.AmbientLight(0xffffff, 1.1)); const dl = new THREE.DirectionalLight(0xfff2dc, 2.4); dl.position.set(0.4, 1, 1); sc.add(dl);
-  const hl = new THREE.HemisphereLight(0xbfdcff, 0x3f6a5a, 0.8); sc.add(hl);
-  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100), I = new THREE.Matrix4();
-  const prev = { rt: renderer.getRenderTarget(), cc: renderer.getClearColor(new THREE.Color()), ca: renderer.getClearAlpha(), sc: renderer.getScissorTest() };
-  renderer.setRenderTarget(rt); renderer.setClearColor(0x3c4a30, 0); renderer.clear(); renderer.setScissorTest(true);   // (a leafy clear colour: shrunk far away, the edges blend to green, not black)
-  SPECIES.forEach((sp, i) => {
-    const P = propGeo(sp.name, 0), g = new THREE.Group(), a = new THREE.InstancedMesh(P.geo, propMat, 1); a.setMatrixAt(0, I); g.add(a);
-    if (P.cards) { const l = new THREE.InstancedMesh(P.cards, P.cardMat || leafMat, 1); l.setMatrixAt(0, I); g.add(l); }
-    const bb = new THREE.Box3().setFromBufferAttribute(P.geo.attributes.position); if (P.cards) bb.union(new THREE.Box3().setFromBufferAttribute(P.cards.attributes.position));
-    const w = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) * 1.04, h = (bb.max.y - bb.min.y) * 1.02, half = Math.max(w, h) / 2, cx = (bb.min.x + bb.max.x) / 2, cy = (bb.min.y + bb.max.y) / 2;
-    cam.left = cx - half; cam.right = cx + half; cam.top = cy + half; cam.bottom = cy - half; cam.position.set(0, 0, 50); cam.lookAt(0, 0, 0); cam.position.x = 0; cam.updateProjectionMatrix();
-    const col = i % COLS, row = Math.floor(i / COLS); renderer.setViewport(col * TILE, row * TILE, TILE, TILE); renderer.setScissor(col * TILE, row * TILE, TILE, TILE);
-    sc.add(g); renderer.render(sc, cam); sc.remove(g);
-    // where the tree sits in its square tile, in metres at scale 1
-    ATLAS.tiles[i] = { u: col / COLS, v: row / rows, du: 1 / COLS, dv: 1 / rows, size: half * 2, x0: cx - half, y0: cy - half };
-  });
-  renderer.setScissorTest(prev.sc); renderer.setRenderTarget(prev.rt); renderer.setClearColor(prev.cc, prev.ca); renderer.setViewport(0, 0, renderer.domElement.width / renderer.getPixelRatio(), renderer.domElement.height / renderer.getPixelRatio());
-  ATLAS.tex = rt.texture;
-}
-const impMat = new THREE.MeshBasicMaterial({ alphaTest: 0.5, side: THREE.DoubleSide, color: 0xffffff, alphaToCoverage: true });
-impMat.onBeforeCompile = (sh) => {
-  Object.assign(sh.uniforms, VEG_U);
-  sh.fragmentShader = 'varying float vImpKeep;\n' + DITHER + sh.fragmentShader.replace('#include <alphatest_fragment>', A2C_FRAG).replace('#include <clipping_planes_fragment>', '{ if (igN(gl_FragCoord.xy) < vImpKeep) discard; }\n#include <clipping_planes_fragment>');
-  sh.vertexShader = 'uniform vec2 uVegC; uniform float uNearR, uMidR, uFarR; attribute vec4 aTile; attribute vec3 aSize; varying float vImpKeep;\n' + sh.vertexShader
-    .replace('#include <uv_vertex>', '#include <uv_vertex>\n  vMapUv = aTile.xy + uv * aTile.zw;')
-    .replace('#include <begin_vertex>', `
-      vec3 c0 = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-      vec3 toC = cameraPosition - c0; toC.y = 0.0; vec3 rgt = normalize(vec3(toC.z, 0.0, -toC.x) + 1e-5);
-      vec3 transformed = rgt * (position.x * aSize.x + aSize.z) + vec3(0.0, position.y * aSize.x + aSize.y, 0.0);
-      float vd = distance(c0.xz, uVegC); vImpKeep = 1.0 - smoothstep(uMidR - 12.0, uMidR + 12.0, vd); if (vImpKeep >= 0.999) transformed *= 0.0;
-      transformed *= 1.0 - smoothstep(uFarR * 0.78, uFarR * 0.98, vd);   // the forest thins out gently at the edge of the drawn world`);
-};
-impMat.customProgramCacheKey = () => 'vegImpostor';
-const quad = new THREE.PlaneGeometry(1, 1).translate(0.5, 0.5, 0);
+// ---- impostors (impostors.js): every tree, rock and ruin that stays drawn beyond the light meshes, by species and look
+// Each is drawn from where it stands out to the edge of the drawn world, dissolving in from the light meshes at its own
+// distance past uImpR (the mid band's complement, pixel for pixel), and shrinking away about its foot as the forest
+// thins out at the far edge.
+const impMat = impostorMaterial({ key: ULTRA ? 'ring' : 'mid', uniforms: VEG_U,
+  vert: `uniform vec2 uVegC; uniform float uMidR, uImpR, uFarR;\n${JITTER}
+    float impBand(vec2 p, bool ring) { float r = ring ? uImpR : uMidR; return smoothstep(r - ${MF}.0, r + ${MF}.0, distance(p, uVegC) + bandJit(p)); }
+    float impShrink(vec2 p) { return 1.0 - smoothstep(uFarR * 0.78, uFarR * 0.98, distance(p, uVegC)); }\n`,
+  frag: DITHER + 'void impCut() { if (igN(gl_FragCoord.xy) < 1.0 - vImpKeep) discard; }\n' });
+const IMPV = [];   // species * 4 + look → { e: its views in the atlas, k: its size against theirs }
 const _mid = { m: new Float32Array(16 * 256), n: 0 }, _far = { m: new Float32Array(16 * 256), n: 0 }, _farT = { m: new Float32Array(16 * 256), n: 0 }, _one = new Float32Array(16);   // (the stand-ins' leaves and trunks outside the near shadow box, gathered to go after those inside it)
 // Whether a tree's shade can fall anywhere in view: the stretch from its ball down along the sun's light to where the shade
 // of its top meets the ground (taken as the foot of its ball), as thick as the ball, against each side of the camera's
@@ -293,9 +290,25 @@ export class Vegetation {
   // Build every species once up front (a second or two on the loading screen) so nothing hitches later
   prebuild(progress) {
     const names = [...new Set(SPECIES.map((s) => s.name))]; let n = 0;
-    for (const nm of names) for (let v = 0; v < 3; v++) { propGeo(nm, v); progress?.(++n / (names.length * 3)); }
-    buildAtlas(); impMat.map = ATLAS.tex; impMat.needsUpdate = true;
-    for (const t of [3000, 9000]) setTimeout(buildAtlas, t);   // again once the imported trees' leaf textures have loaded
+    for (const nm of names) for (let v = 0; v < 3; v++) { const P = propGeo(nm, v); progress?.(++n / (names.length * 3));
+      canopyShade([[P.lo, false], [P.loCards === undefined ? P.cards : P.loCards, true]]); }   // (every light version has its shade: the far bands' shader reads it)
+    this.bakeImpostors();
+  }
+  // The impostors' atlases (impostors.js), painted from what stays drawn far off: the trees, the big rocks and the ruins,
+  // each look of each. The pack's species have fewer looks than the carved ones whose places they take (a look of the
+  // same model fitted to another size): those share one painting, drawn at their own size (IMPV k). Each is painted from
+  // its version for the near band's further half where it has one, made to be seen from a distance. Painted again once,
+  // if a leaf texture was still loading.
+  bakeImpostors() {
+    const models = [], size = (P) => { const b = new THREE.Box3(); for (const g of [P.geo2 || P.geo, P.geo2 ? P.cards2 : P.cards]) if (g) { g.computeBoundingBox(); b.union(g.boundingBox); } return b.max.y - b.min.y || 1; };
+    for (let sp = 0; sp < SPECIES.length; sp++) {
+      if (!(farKeep(sp) > 0)) continue; const L = Math.min(3, FLORA[SPECIES[sp].name]?.length || 3);
+      for (let v = 0; v < 3; v++) { const e = v % L, P = this.geoFor(sp, v);
+        if (v < L) { const parts = [[P.geo2 || P.geo, P.mat || propMat]], c = P.geo2 ? P.cards2 : P.cards; if (c) parts.push([c, P.cardMat || leafMat]); models.push({ key: sp * 4 + e, parts }); }
+        IMPV[sp * 4 + v] = { e: sp * 4 + e, k: size(P) / size(this.geoFor(sp, e)) }; }
+    }
+    bakeImpostors(models);
+    if (!atlasComplete()) { let tries = 40; const again = () => { if (atlasComplete() || !--tries) bakeImpostors(models); else setTimeout(again, 500); }; setTimeout(again, 500); }
   }
   geoFor(sp, v) { return propGeo(SPECIES[sp].name, v); }
   // One stand-in of every species and variant in each of its bands' materials, for the loading screen to compile their
@@ -304,23 +317,59 @@ export class Vegetation {
   warmMeshes(also) {
     const g = new THREE.Group(), I = new THREE.Matrix4(), add = (geo, mat, more) => { const m = new THREE.InstancedMesh(geo, mat, 1); m.setMatrixAt(0, I); m.castShadow = m.receiveShadow = true; m.frustumCulled = false; g.add(m); if (more && also) add(geo, also(mat)); };
     for (let sp = 0; sp < SPECIES.length; sp++) for (let v = 0; v < 3; v++) { const P = this.geoFor(sp, v);
-      for (const far of [false, true]) { add(P.geo, cut(propMat, far), !far); if (P.cards) add(P.cards, cut(P.cardMat || leafMat, far), !far); } }
+      for (const band of ULTRA ? 'nfgr' : 'nf') { add(P.geo, cut(P.mat || propMat, band), band === 'n'); if (P.cards) add(P.cards, cut(P.cardMat || leafMat, band), band === 'n'); } }
+    add(this.geoFor(SPECIES.findIndex((s) => s.name === 'rock'), 0).geo, ROCK_MAT);   // (and the stone as the stones you pick up are drawn in it, uncut: pickups.js)
+    const im = this.buildImpostors(new Float32Array(STRIDE), new Set()); this.group.remove(im); im.frustumCulled = false; g.add(im);   // (and the impostors')
     return g;
   }
-  // all of a block's trees as impostor cards: one instanced mesh
+  // all of a block's trees as impostors: one instanced mesh. Each stands where its light mesh does (sunk as matrixOf sinks
+  // it, so nothing jumps at the hand-over), turned as it is; one not drawn (felled, or far beyond the mist where only a
+  // share stays) is given no size.
   buildImpostors(items, hidden) {
-    const n = items.length / STRIDE, im = new THREE.InstancedMesh(quad, impMat, n), tile = new Float32Array(n * 4), size = new Float32Array(n * 3);
+    const n = items.length / STRIDE, im = new THREE.InstancedMesh(IMP_QUAD, impMat, n), rect = new Float32Array(n * 4), cen = new Float32Array(n * 4), sz = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
-      const o = i * STRIDE, T = ATLAS.tiles[items[o]], s = items[o + 6];
-      tile.set([T.u, T.v, T.du, T.dv], i * 4); size.set([T.size * s, T.y0 * s, T.x0 * s], i * 3);
-      _m.makeTranslation(items[o + 2], items[o + 3], items[o + 4]); if (hidden.has(i) || keepTo(items[o], items[o + 2], items[o + 4]) < Infinity) _m.scale(_s.setScalar(0)); im.setMatrixAt(i, _m);   // (far beyond the mist: only the share that stays)
+      const o = i * STRIDE, sp = items[o], iv = IMPV[sp * 4 + items[o + 1]], e = iv && ATLAS.byKey.get(iv.e);
+      const on = e && items[o + 6] > 0 && !hidden.has(i) && keepTo(sp, items[o + 2], items[o + 4]) === Infinity;   // (far beyond the mist: only the share that stays)
+      const y = on && ROOTED[sp] ? matrixOf(items, i, false).elements[13] : items[o + 3];
+      _m.makeTranslation(items[o + 2], y, items[o + 4]); im.setMatrixAt(i, _m);
+      if (!e) continue; rect.set(e.rect, i * 4); cen.set([e.c.x, e.c.y, e.c.z, e.R], i * 4); sz.set([on ? items[o + 6] * iv.k : 0, items[o + 5], RING_SP[sp] ? -e.n : e.n], i * 3);   // (a species with a ring: its views per side given negative)
     }
-    const g = quad.clone(); g.setAttribute('aTile', new THREE.InstancedBufferAttribute(tile, 4)); g.setAttribute('aSize', new THREE.InstancedBufferAttribute(size, 3)); im.geometry = g;
-    im.castShadow = false; im.receiveShadow = false; im.computeBoundingSphere(); im.boundingSphere.radius += 30; this.group.add(im); return im;
+    const g = new THREE.InstancedBufferGeometry(); g.index = IMP_QUAD.index; for (const k of ['position', 'normal', 'uv']) g.setAttribute(k, IMP_QUAD.attributes[k]);
+    g.setAttribute('aImpRect', new THREE.InstancedBufferAttribute(rect, 4)); g.setAttribute('aImpC', new THREE.InstancedBufferAttribute(cen, 4)); g.setAttribute('aImpS', new THREE.InstancedBufferAttribute(sz, 3)); im.geometry = g;
+    im.castShadow = false; im.receiveShadow = false; im.computeBoundingSphere(); im.boundingSphere.radius += 60; this.group.add(im); return im;
   }
-  dropCell(map, key) { const c = map.get(key); if (!c) return; if (map === this.near) this.nearDirty = true; else if (c.mid) this.midDirty = true; for (const m of c.meshes || []) { this.group.remove(m); m.dispose(); } if (c.imp) { this.group.remove(c.imp); c.imp.geometry.dispose(); c.imp.dispose(); } map.delete(key); if (map === this.near) this.onCell?.(key, null); }
+  // ---- Ultra's ring: past MID_R, out to RING_R, each far block's trees as its own still instanced meshes of their light
+  // versions (as the mid band's, one per species and look: a trunk and its leaves), cut by the shader. No packing each
+  // frame and no shadows: three culls each block whole. Each block's meshes hold only its trees within RING_M of the ring
+  // as it lay round you when they were made (a whole 256 m block, most of it inside the mid band, was most of the ring's
+  // cost on the card), and are made again once you have walked half that from there; dropped when it leaves.
+  buildRing(blk, pos) {
+    this.dropRing(blk); this.blockMats(blk); blk.ringAt = { x: pos.x, z: pos.z };
+    const it = blk.items, groups = new Map(), lo = Math.max(0, MID_R - JIT / 2 - RING_M) ** 2, hi = (RING_R + JIT / 2 + MF + RING_M) ** 2;
+    for (let i = 0; i < it.length / STRIDE; i++) { const o = i * STRIDE, d2 = (it[o + 2] - pos.x) ** 2 + (it[o + 4] - pos.z) ** 2;
+      if (!RING_SP[it[o]] || it[o + 6] <= 0 || d2 < lo || d2 > hi || blk.keep[i] < Infinity || this.removed.has(blk.idOf[i])) continue; const key = blk.gkey[i]; (groups.get(key) || groups.set(key, []).get(key)).push(i); }
+    blk.ring = [];
+    for (const list of groups.values()) {
+      const o0 = list[0] * STRIDE, P = this.geoFor(it[o0], it[o0 + 1]), lc = P.loCards === undefined ? P.cards : P.loCards;
+      const t = new THREE.InstancedMesh(P.lo, cut(P.mat || propMat, 'r'), list.length), ms = [t];
+      list.forEach((i, k) => t.instanceMatrix.array.set(blk.mats.subarray(i * 16, i * 16 + 16), k * 16));
+      if (lc && P.leafFar) { const l = new THREE.InstancedMesh(lc, cut(P.cardMat || leafMat, 'r'), list.length); l.instanceMatrix = t.instanceMatrix; ms.push(l); }
+      t.computeBoundingSphere(); P.lo.computeBoundingSphere(); const bs = t.boundingSphere.clone(); bs.radius += P.lo.boundingSphere.radius * 1.4 + 8;
+      for (const m of ms) { m.boundingSphere = bs; m.castShadow = false; m.receiveShadow = false; this.group.add(m); blk.ring.push(m); }
+    }
+  }
+  dropRing(blk) { for (const m of blk.ring || []) { this.group.remove(m); m.dispose(); } blk.ring = null; }
+  // (what never changes about a far block is worked out once: each tree's matrix, how far it stays drawn and which batch
+  // of the light meshes it goes in)
+  blockMats(blk) {
+    const it = blk.items; if (blk.mats) return;
+    const n = it.length / STRIDE; blk.mats = new Float32Array(n * 16); blk.keep = new Float32Array(n); blk.gkey = [];
+    for (let i = 0; i < n; i++) { const o = i * STRIDE, sp = it[o], v = it[o + 1]; matrixOf(it, i, false); blk.mats.set(_m.elements, i * 16);
+      blk.keep[i] = keepTo(sp, it[o + 2], it[o + 4]); blk.gkey[i] = this.geoFor(sp, v).leafFar ? sp + ':' + v : 'sp' + sp; }
+  }
+  dropCell(map, key) { const c = map.get(key); if (!c) return; if (map === this.near) this.nearDirty = true; else if (c.mid) this.midDirty = true; for (const m of c.meshes || []) { this.group.remove(m); m.dispose(); } if (c.imp) { this.group.remove(c.imp); c.imp.geometry.dispose(); c.imp.dispose(); } if (c.ring) this.dropRing(c); map.delete(key); if (map === this.near) this.onCell?.(key, null); }
   update(dt, pos) {
-    VEG_U.uVegC.value.set(pos.x, pos.z);
+    VEG_U.uVegC.value.set(pos.x, pos.z); VEG_U.uShadeR.value = SHADOW.far ? SHADOW.farR * 0.8 : SHADOW.nearR;
     this.timer -= dt; if (this.timer > 0) return; this.timer = 0.25;
     // near cells
     const r = Math.ceil(NEAR_KEEP / CELL), pcx = Math.floor(pos.x / CELL), pcz = Math.floor(pos.z / CELL);
@@ -355,14 +404,17 @@ export class Vegetation {
         const hidden = new Set(); for (const [id, i] of ids) if (this.removed.has(id)) hidden.add(i); blk.imp = this.buildImpostors(m.items, hidden);
       });
     }
+    let ring = ULTRA ? 2 : 0;   // (at most two ring blocks made a tick)
     for (const [key, blk] of this.far) {
       const [bx, bz] = key.split(',').map(Number), d = Math.hypot((bx + 0.5) * FAR - pos.x, (bz + 0.5) * FAR - pos.z);
       if (d > farR + FAR * 1.4) { this.dropCell(this.far, key); continue; }
       if (!blk.items) continue;
-      const inMid = d < MID_R + FAR * 0.75; if (inMid !== !!blk.mid) { blk.mid = inMid; this.midDirty = true; }
+      const inMid = d < MID_R + JIT / 2 + FAR * 0.75; if (inMid !== !!blk.mid) { blk.mid = inMid; this.midDirty = true; }
+      if (!ULTRA) continue;
+      const inRing = d < RING_R + JIT / 2 + MF + FAR * 0.75 && d > MID_R - FAR * 0.75;
+      const moved = blk.ring && Math.hypot(blk.ringAt.x - pos.x, blk.ringAt.z - pos.z) > RING_M / 2;
+      if (!inRing && blk.ring) this.dropRing(blk); else if (inRing && (!blk.ring || blk.ringDirty || moved) && ring) { ring--; blk.ringDirty = false; this.buildRing(blk, pos); }
     }
-    // impostors take their light from the sky
-    const k = Math.min(1.15, Math.max(0.06, (sun.intensity * 0.3 + hemi.intensity) / 1.55)); impMat.color.setScalar(k);
   }
   // Remove one tree/rock (felled or mined): hidden in its near cell and far block now, and remembered for when they are rebuilt
   remove(cx, cz, i) {
@@ -371,7 +423,8 @@ export class Vegetation {
     const per = FAR / CELL, bkey = Math.floor(cx / per) + ',' + Math.floor(cz / per), b = this.far.get(bkey);
     const fi = b?.ids?.get(`${cx},${cz},${i}`);
     if (fi !== undefined && b.mid) this.midDirty = true;
-    if (fi !== undefined && b.imp) { b.imp.setMatrixAt(fi, _m.makeScale(0, 0, 0)); b.imp.instanceMatrix.needsUpdate = true; }
+    if (fi !== undefined && b.ring) b.ringDirty = true;
+    if (fi !== undefined && b.imp) { const a = b.imp.geometry.attributes.aImpS; a.setX(fi, 0); a.needsUpdate = true; }
   }
   // ---- The near band, batched. One instanced mesh per species-and-variant (and one for its leaf cards, sharing the same
   // instance buffer) holds the trees of every near cell together: a few dozen draws instead of several hundred. The full
@@ -395,8 +448,8 @@ export class Vegetation {
       if (!b || b.cap < n) {
         if (b) for (const m of b.meshes) { this.group.remove(m); m.dispose(); }
         const P = this.geoFor(sp, v), cap = Math.ceil(n * 1.4) + 16, sh = !SPECIES[sp].noShadow;
-        const pair = (geo, cards, own) => { const t = new THREE.InstancedMesh(geo, cut(propMat, false), cap), ms = [t];
-          if (cards) { const lm = new THREE.InstancedMesh(cards, cut(P.cardMat || leafMat, false), cap); if (!own) lm.instanceMatrix = t.instanceMatrix; ms.push(lm); } return ms; };
+        const pair = (geo, cards, own) => { const t = new THREE.InstancedMesh(geo, cut(P.mat || propMat, 'n'), cap), ms = [t];
+          if (cards) { const lm = new THREE.InstancedMesh(cards, cut(P.cardMat || leafMat, 'n'), cap); if (!own) lm.instanceMatrix = t.instanceMatrix; ms.push(lm); } return ms; };
         // (a pack tree has a lighter version for the band's further half, from SPLIT out: its leaves thinned)
         const near = pair(P.geo, P.cards), far = P.geo2 ? pair(P.geo2, P.cards2) : [];
         // (and its shadow: its light far version casts, with that version's leaf cards, seen only by the sun's shadow
@@ -427,11 +480,7 @@ export class Vegetation {
     const groups = new Map();
     for (const blk of this.far.values()) {
       if (!blk.mid || !blk.items) continue; const it = blk.items;
-      // (what never changes is worked out once per block: each tree's matrix, how far it stays drawn and its batch; a
-      // rebuild, which comes with every block that streams in, then only copies them)
-      if (!blk.mats) { const n = it.length / STRIDE; blk.mats = new Float32Array(n * 16); blk.keep = new Float32Array(n); blk.gkey = [];
-        for (let i = 0; i < n; i++) { const o = i * STRIDE, sp = it[o], v = it[o + 1]; matrixOf(it, i, false); blk.mats.set(_m.elements, i * 16);
-          blk.keep[i] = keepTo(sp, it[o + 2], it[o + 4]); blk.gkey[i] = this.geoFor(sp, v).leafFar ? sp + ':' + v : 'sp' + sp; } }
+      this.blockMats(blk);   // (a rebuild, which comes with every block that streams in, then only copies them)
       for (let i = 0; i < it.length / STRIDE; i++) { if (it[i * STRIDE + 6] <= 0 || this.removed.has(blk.idOf[i])) continue;
         const key = blk.gkey[i]; (groups.get(key) || groups.set(key, []).get(key)).push(blk, i); }
     }
@@ -441,14 +490,14 @@ export class Vegetation {
       if (!b || b.cap < n) {
         if (b) for (const m of b.meshes) { this.group.remove(m); m.dispose(); }
         const it0 = refs[0].items, o0 = refs[1] * STRIDE, P = this.geoFor(it0[o0], it0[o0 + 1]), cap = Math.ceil(n * 1.3) + 32;
-        const trunk = new THREE.InstancedMesh(P.lo, cut(propMat, true), cap), meshes = [trunk];
+        const band = RING_SP[it0[o0]] ? 'g' : 'f', trunk = new THREE.InstancedMesh(P.lo, cut(P.mat || propMat, band), cap), meshes = [trunk];
         const lc = P.loCards === undefined ? P.cards : P.loCards;   // (a pack plant's far version has cards of its own, thinned)
-        if (lc && P.leafFar) { const lm = new THREE.InstancedMesh(lc, cut(P.cardMat || leafMat, true), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
+        if (lc && P.leafFar) { const lm = new THREE.InstancedMesh(lc, cut(P.cardMat || leafMat, band), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
         // (its shadow: past the near band a tree still casts into the shadow box, the same stand-in as nearer in, so a low
         // sun's long shadows don't appear and vanish as trees cross into the near band; its own instances, packed by the
         // shadow camera's view and kept even when the tree itself has dropped away behind the mist)
-        const shade = []; if (!SPECIES[it0[o0]].noShadow && !sinks(it0[o0])) { const st = new THREE.InstancedMesh(P.lo, cut(propMat, false), cap); shade.push(st);
-          if (lc) { const sl = new THREE.InstancedMesh(lc, cut(P.cardMat || leafMat, false), cap); sl.instanceMatrix = st.instanceMatrix; shade.push(sl); }
+        const shade = []; if (!SPECIES[it0[o0]].noShadow && !sinks(it0[o0])) { const st = new THREE.InstancedMesh(P.lo, cut(P.mat || propMat, 'n'), cap); shade.push(st);
+          if (lc) { const sl = new THREE.InstancedMesh(lc, cut(P.cardMat || leafMat, 'n'), cap); sl.instanceMatrix = st.instanceMatrix; shade.push(sl); }
           for (const q of shade) { q.layers.set(SHADE_LAYER); q.castShadow = true; q.frustumCulled = false; q.count = 0; } }
         P.lo.computeBoundingSphere(); const bs = P.lo.boundingSphere.clone(); if (meshes[1]) { lc.computeBoundingSphere(); bs.union(lc.boundingSphere); }
         b = { meshes: [...meshes, ...shade], shade, cap, sphere: bs, mats: new Float32Array(cap * 16), cen: new Float32Array(cap * 4), keep: new Float32Array(cap), sinks: sinks(it0[o0]), sAll: 0, refs: [], n: 0 };
@@ -512,7 +561,7 @@ export class Vegetation {
       send(b.near[0].instanceMatrix, m); if (dst2) send(b.far[0].instanceMatrix, m2);
     }
     if (this.midDirty && now - this.midT > MID_WAIT) { this.midT = now; this.rebuildMid(); }
-    const lo = NEAR_R - NF, hi = MID_R + MF;
+    const lo = NEAR_R - NF, hi = MID_R + MF + JIT / 2;
     for (const b of this.mids.values()) {
       const dst = b.meshes[0].instanceMatrix.array, sdst = b.shade[0]?.instanceMatrix.array; let m = 0, s = 0;
       for (let k = 0; k < b.n; k++) {
@@ -551,8 +600,8 @@ export class Vegetation {
   // One tree or rock as its own little object (for felling animations): instanced meshes of count 1 in a group
   single(sp, v) {
     const P = this.geoFor(sp, v), g = new THREE.Group(), I = new THREE.Matrix4();
-    const a = new THREE.InstancedMesh(P.geo, cut(propMat, false), 1); a.setMatrixAt(0, I); a.castShadow = a.receiveShadow = true; a.frustumCulled = false; g.add(a);
-    if (P.cards) { const l = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, false), 1); l.setMatrixAt(0, I); l.castShadow = true; l.frustumCulled = false; g.add(l); }
+    const a = new THREE.InstancedMesh(P.geo, cut(P.mat || propMat, 'n'), 1); a.setMatrixAt(0, I); a.castShadow = a.receiveShadow = true; a.frustumCulled = false; g.add(a);
+    if (P.cards) { const l = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, 'n'), 1); l.setMatrixAt(0, I); l.castShadow = true; l.frustumCulled = false; g.add(l); }
     return g;
   }
   // ...and done with: its instances' buffers freed on the card (the shape and materials are the species', shared). Each tree

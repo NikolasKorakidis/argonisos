@@ -16,8 +16,10 @@ import { clamp, seeded } from '../util/math.js';
 import { propGeo, propMat, leafMat } from './trees.js';
 import { GMAT, amphora, pithos, bowl, jug, tripod, acroterion, antefixes, cartWheel, firewood, leaves, mist, dice } from './greek.js';
 import { wettable } from './wetness.js';
+import { stony } from './rock.js';
 import { siteProp, sitePropAt, piece, pieceAt, hasPiece, chestParts } from './site-pack.js';
 import { buildTown, buildSpot } from './town.js';
+import { RIVER } from './river.js';
 import { mergeGeometries } from '../../vendor/three/jsm/utils/BufferGeometryUtils.js';
 import { ULTRA } from '../render/quality.js';
 
@@ -122,6 +124,9 @@ export const SMAT = {
   glowCap: new THREE.MeshStandardMaterial({ color: 0xbfe6d6, emissive: 0x4cc8a8, emissiveIntensity: 0.8, roughness: 0.6 }),
 };
 for (const [k, o] of Object.entries({ marble: [0.72, 0.28], paving: [0.7, 0.3], stone: [0.66, 0.28], moss: [0.7, 0.45], tile: [0.68, 0.3], frieze: [0.72, 0.3], dark: [0.68, 0.3], rock: [0.66, 0.26], wood: [0.62, 0.32], plaster: [0.72, 0.35], flags: [0.66, 0.26], bone: [0.75, 0.35] })) wettable(SMAT[k], { dark: o[0], gloss: o[1] });   // (wetness.js)
+for (const k of ['rock', 'dark']) stony(SMAT[k], { wet: false });   // (the boulders and cairns in the island's stone, as the streamed rocks are: rock.js)
+// the water of Olympos's spring (mtnSpot): clear, dark and glossy over the basin's stone
+const SPRING = new THREE.MeshStandardMaterial({ color: 0x2c4a52, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.82, envMapIntensity: 0.9 });
 const _nav = new THREE.Vector3();
 // the bones of the beasts' meals (other packs' models, site-pack.js), and the pack's pieces grown over with moss (the shrine's)
 const BONES = ['all/pnb-swamp-marshland/sm-prop-bone-pile-01', 'all/pnb-swamp-marshland/sm-prop-bone-ribcage-01', 'all/pnb-swamp-marshland/sm-prop-bone-pile-02', 'all/pnb-swamp-marshland/sm-prop-bone-skull-01'];
@@ -133,7 +138,7 @@ const BAY = 2.5, STOREY = 3, PITCH = 0.75;
 // how far off each kind of site is drawn: the landmarks you find your way by far out under the mist, the minor sites
 // (the farmhouse, the olive markers, the caves) only a little way beyond it. On Ultra (render/quality.js) the mist lies
 // twice as far out, and so does where the minor sites go; the landmarks a little further than they already were.
-const VIEW_R = Object.fromEntries(Object.entries({ temple: 1700, labyrinth: 1400, chimera: 1200, house: 220, peak: 600, olive: 220, cave: 220, town: 650, spot: 260 })
+const VIEW_R = Object.fromEntries(Object.entries({ temple: 1700, labyrinth: 1400, chimera: 1200, house: 220, peak: 600, olive: 220, cave: 220, town: 650, spot: 260, mtn: 300 })
   .map(([k, r]) => [k, ULTRA ? Math.round(r * (r < 700 ? 1.8 : 1.25)) : r]));
 // The pack's temple is converted at half the demo scene's size (tools/assets/manifest.json plTemple) and stood here TK
 // times as big; its plan (templeHall) is written at the converted size and grown by this. At 2.25 it is near the real
@@ -438,6 +443,8 @@ export class Structures {
     if (S.peak) this.summit(S.peak);
     if (S.town) buildTown(this, S.town);   // (last: they throw dice of their own, so the places above keep theirs)
     for (const sp of S.spots) buildSpot(this, sp);
+    for (const m of S.mtn) this.mtnSpot(m);
+    if (RIVER.bridge) this.bridge(RIVER.bridge);
     const col = this.solids.map((c) => ({ ...c, ref: { site: true } })); this.g.colliders.addGroup('sites', col);
     for (const [k, R] of Object.entries(this.ruins || {})) this.g.colliders.addGroup('ruin:' + k, R.walls.map((c) => ({ ...c, ref: { site: true } })));   // (the walls that will fall, on their own)
   }
@@ -1214,16 +1221,85 @@ export class Structures {
     const fallen = sitePropAt('broken2', 1); if (fallen) P.push([fallen[0].rotateY(1.9).translate(-3.6, 0, -1.2), fallen[1]]);
     for (const [x, z, a] of [[3.3, -2.2, 0.4], [4.1, -1.1, 1.3]]) P.push([new THREE.CylinderGeometry(0.34, 0.34, 0.75, 16).rotateZ(Math.PI / 2).rotateY(a).translate(x, 0.3, z), SMAT.marble]);
     cairn(-2.6, 5.2, 9, 0.42);
+    // (Patch 24) crags round the rim of the flat top, half sunk, the biggest on the side away from the path
+    for (let k = 0; k < 9; k++) { const a = Math.PI / 2 + 0.75 + (k / 8) * (Math.PI * 2 - 1.5) + (lr() - 0.5) * 0.3, r = 13 + lr() * 5, x = Math.cos(a) * r, z = Math.sin(a) * r, sz = 1 + lr() * 1.2 + 0.6 * Math.max(0, -Math.sin(a));
+      rock(x, this.groundY(ctx, x, z) + sz * 0.25, z, sz, 1.2 + lr() * 0.5, 0.75 + lr() * 0.5, 1, lr() * 6); this.solid(ctx, x, z, sz * 1.1); }
+    // (Patch 24) where the path comes up into the ring, a gateway: two columns, one still whole and one broken off, and
+    // the worn flagstones of an old floor round the altar, some sunk, some gone
+    column(P, -1.9, this.groundY(ctx, -1.9, 7.4) - 0.1, 7.4, 4.2, 0.34); column(P, 1.9, this.groundY(ctx, 1.9, 7.4) - 0.1, 7.4, 4.2, 0.34, SMAT.marble, 0.45); this.solid(ctx, -1.9, 7.4, 0.45); this.solid(ctx, 1.9, 7.4, 0.45);
+    P.push([new THREE.CylinderGeometry(0.3, 0.3, 0.7, 16).rotateZ(Math.PI / 2).rotateY(0.5).translate(3.1, this.groundY(ctx, 3.1, 8.6) + 0.26, 8.6), SMAT.marble]);
+    for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) { const x = i * 1.15 + (lr() - 0.5) * 0.12, z = j * 1.15 + (lr() - 0.5) * 0.12, d = Math.hypot(x, z); if (d < 2.4 || d > 3.9 + lr() * 0.8 || lr() < 0.22) continue;
+      P.push([uvBox(1.0, 0.16, 1.0, 1 / 2).rotateY((lr() - 0.5) * 0.12).translate(x, this.groundY(ctx, x, z) - 0.05 - lr() * 0.06, z), SMAT.paving]); }
     // the rock steps on the crest: a boulder over each, its top where the path goes on
     for (const st of PEAK.steps) {
       const [x, z] = loc(st.x, st.z), lx = Math.sin(st.a) * c - Math.cos(st.a) * sn, lz = Math.sin(st.a) * sn + Math.cos(st.a) * c, y = st.y - s.y;
-      rock(x + lx * 0.75, y + 0.5, z + lz * 0.75, 1, 2.1, 0.95, 1.05, Math.atan2(lx, lz));
+      rock(x + lx * 0.75, y + 0.02, z + lz * 0.75, 1, 2.1, 0.95, 1.05, Math.atan2(lx, lz));   // (its top a metre up, level with the path above the step)
       for (const side of [-1, 1]) rock(x + lx * 0.4 + lz * side * 1.9, y + 0.3, z + lz * 0.4 - lx * side * 1.9, 0.75 + lr() * 0.3, 1, 1.2, 1, lr() * 3);
     }
-    // cairns along the path, every 80 m or so, on its outer edge; the stele and a great cairn at its foot
-    const R = PEAK.route; for (let i = 40; i < R.length - 60; i += 40) { const a = R[i - 1], b = R[i + 1], l = Math.hypot(b.x - a.x, b.z - a.z) || 1, [x, z] = loc(R[i].x + (b.z - a.z) / l * 2.2, R[i].z - (b.x - a.x) / l * 2.2); cairn(x, z, 5, 0.26); }
+    // cairns on the outside of every hairpin, where the way turns back (Patch 24: they stood every 80 m, wherever that
+    // fell), and between them, on the long legs, a marker stone set upright on the downhill edge every 100 m or so; the
+    // stele and a great cairn at the path's foot
+    const R = PEAK.route;
+    for (const t of PEAK.turns) { if (t < 8 || t > R.length - 9) continue; const a = R[t - 8], b = R[t + 8], cx = (a.x + b.x) / 2, cz = (a.z + b.z) / 2, l = Math.hypot(R[t].x - cx, R[t].z - cz) || 1, [x, z] = loc(R[t].x + (R[t].x - cx) / l * 3.9, R[t].z + (R[t].z - cz) / l * 3.9); cairn(x, z, 7, 0.32); }
+    for (let i = 30; i < PEAK.crest - 10; i += 50) {
+      if (PEAK.turns.some((t) => Math.abs(t - i) < 18)) continue; const a = R[i - 1], b = R[i + 1], l = Math.hypot(b.x - a.x, b.z - a.z) || 1, nx = (b.z - a.z) / l, nz = -(b.x - a.x) / l, dn = heightAt(R[i].x + nx * 8, R[i].z + nz * 8) < heightAt(R[i].x - nx * 8, R[i].z - nz * 8) ? 1 : -1;
+      const [x, z] = loc(R[i].x + nx * dn * 3.3, R[i].z + nz * dn * 3.3), y = this.groundY(ctx, x, z); rock(x, y + 0.35, z, 0.32, 0.9, 2.4, 0.7, lr() * 3); this.solid(ctx, x, z, 0.3);
+    }
     if (R.length) { const [x, z] = loc(R[0].x, R[0].z), y = this.groundY(ctx, x - 2.4, z); cairn(x + 2.4, z, 11, 0.5); P.push([uvBox(0.6, 1.5, 0.2).rotateZ(0.06).rotateY(rot + PEAK.a).translate(x - 2.4, y + 0.6, z), SMAT.marble]); this.solid(ctx, x - 2.4, z, 0.4); }
     this.finish(ctx, { r: 7 });
+  }
+  // ---- (Patch 24) the places to stop on the way up Olympos (sites.js SITES.mtn), each a little site of its own; +z looks
+  // out from the mountain (the spring's, from its bank onto the path)
+  // (Patch 24) the footbridge over the meadow river (river.js layBridge): a deck of rough planks on two log stringers,
+  // carried on pairs of piles driven into the bed every few metres, a rail of poles along each side, and a footing of
+  // dressed stone at each end where it meets the bank. Local +z runs across the river.
+  bridge(b) {
+    const s = { x: b.x, z: b.z, y: b.y, r: b.len / 2 + 2, kind: 'spot' }, ctx = this.site(s, b.rot), P = ctx.P, lr = dice(907), L = b.len / 2, gy = (x, z) => this.groundY(ctx, x, z);
+    for (const x of [-0.85, 0.85]) P.push([new THREE.CylinderGeometry(0.2, 0.22, 2 * L + 0.6, 8).rotateX(Math.PI / 2).translate(x, -0.3, 0), SMAT.wood]);   // the stringers
+    for (let z = -L; z <= L; z += 0.34) P.push([uvBox(2.3 + (lr() - 0.5) * 0.25, 0.08, 0.3, 1 / 2).rotateY((lr() - 0.5) * 0.06).translate((lr() - 0.5) * 0.12, -0.04 + (lr() - 0.5) * 0.03, z), lr() < 0.3 ? GMAT.oldWood : SMAT.wood]);
+    for (let z = -L + 1; z <= L - 1; z += 3.6) for (const x of [-0.95, 0.95]) { const g = gy(x, z) - 0.4; if (g < -0.5) P.push([new THREE.CylinderGeometry(0.15, 0.17, -g, 7).translate(x, g / 2, z), SMAT.wood]); }   // (piles down to the bed or the bank)
+    for (const x of [-1.15, 1.15]) {
+      for (let z = -L; z <= L + 0.01; z += (2 * L) / Math.max(2, Math.round((2 * L) / 2.4))) P.push([new THREE.CylinderGeometry(0.06, 0.07, 1.05, 6).translate(x, 0.5, z), SMAT.wood]);
+      P.push([new THREE.CylinderGeometry(0.05, 0.05, 2 * L, 6).rotateX(Math.PI / 2).translate(x, 0.98, 0), SMAT.wood]); this.wall(ctx, x, -L, x, L, 1.1, 0.1);
+    }
+    for (const z of [-L - 0.6, L + 0.6]) { const g = gy(0, z); P.push([uvBox(3, 0.9 - Math.min(0, g), 1.3, 1 / 2).translate(0, Math.min(0, g) / 2 - 0.47, z), GMAT.ashlar]); }   // (the footings)
+    this.top(ctx, -1.15, 1.15, -L - 1.2, L + 1.2, 0.0);
+    this.finish(ctx, { w: 3, d: 2 * L + 2.6 });
+  }
+  mtnSpot(s) {
+    const ctx = this.site(s, s.rot), P = ctx.P, lr = dice(311 + s.v), gy = (x, z) => this.groundY(ctx, x, z);
+    const put = (k, x, z, rot = 0, r = 0, sc = 1, y = 0) => { P.push(...piece(k, x, y, z, rot, sc)); if (r) this.solid(ctx, x, z, r); };
+    const rock = (x, y, z, r, sx = 1, sy = 1, sz = 1, yaw = 0, mat = SMAT.rock) => { const T = []; boulder(T, 0, 0, 0, r, mat, sx, sy, sz); P.push([T[0][0].rotateY(yaw).translate(x, y, z), mat]); };
+    const cairn = (x, z, n, r0) => { const y0 = gy(x, z); for (let k = 0; k < n; k++) { const t = k / n, a = lr() * 6.28, o = (1 - t) * r0 * 0.35; rock(x + Math.cos(a) * o, y0 + 0.1 + t * r0 * 2.6, z + Math.sin(a) * o, r0 * (1 - t * 0.6), 1, 0.7, 1, lr() * 3); } this.solid(ctx, x, z, r0 * 0.9); };
+    if (s.v === 0) {   // the ledge: a stone bench at its edge looking out, a little shrine behind it, a low wall of stones along the drop, a pine
+      put('twBench', 0, 1.6, 0, 0.6); put('twPlinth', -2.6, -2.2, 0.3, 0.45); put('twStatue', -2.6, -2.2, 0.3, 0, 0.8, 1.0);
+      put('twCenser', -1.6, -1.5, 0, 0.2); put('twBowl', -2.4, -1.1, 0.4, 0, 0.45); put('twVase', -3.5, -1.4, 1, 0.3);
+      for (let k = 0; k < 9; k++) { const x = -4 + k, z = 4.3 + (lr() - 0.5) * 0.5; rock(x, gy(x, z) + 0.15, z, 0.42 + lr() * 0.2, 1.3, 0.7, 1, lr() * 3); }
+      this.solid(ctx, 0, 4.3, 0.6); this.solid(ctx, -2.5, 4.3, 0.6); this.solid(ctx, 2.5, 4.3, 0.6);
+      this.plant(ctx, 'qpine', 1, 3.4, gy(3.4, -2.4) - 0.2, -2.4, 0.85); this.solid(ctx, 3.4, -2.4, 0.4);
+    } else if (s.v === 1) {   // the spring: water from a bronze spout in a carved slab set into the bank, falling into a stone basin; mossy stones and ferns
+      const y0 = gy(0, 0); P.push([uvBox(1.8, 2.1, 0.35, 1 / 2).translate(0, y0 + 0.8, -0.55), SMAT.stone], [uvBox(1.7, 0.55, 0.9, 1 / 2).translate(0, y0 + 0.2, 0.15), SMAT.stone]);
+      P.push([new THREE.CylinderGeometry(0.05, 0.06, 0.4, 8).rotateX(Math.PI / 2).translate(0, y0 + 1.25, -0.25), GMAT.bronze], [new THREE.SphereGeometry(0.13, 10, 8).scale(1, 1, 0.6).translate(0, y0 + 1.25, -0.38), GMAT.bronze]);
+      P.push([new THREE.BoxGeometry(1.45, 0.04, 0.65).translate(0, y0 + 0.44, 0.15), SPRING], [new THREE.CylinderGeometry(0.025, 0.04, 0.8, 6).translate(0, y0 + 0.85, -0.05), SPRING]);
+      for (const [x, z, r] of [[-1.25, 0.4, 0.35], [1.2, 0.5, 0.3], [-0.9, -0.9, 0.45], [1.0, -0.9, 0.4]]) rock(x, gy(x, z) + r * 0.3, z, r, 1.2, 0.8, 1, lr() * 3, mossy(SMAT.rock));
+      this.scatter(ctx, 'fern', 1, [[-1.5, gy(-1.5, -0.5), -0.5, 0.7, 1], [1.55, gy(1.55, -0.3), -0.3, 0.6, 3]]); put('twBowl', 0.62, 0.3, 0.6, 0, 0.3, y0 + 0.48);
+      this.solid(ctx, 0, 0, 0.9);
+    } else if (s.v === 2) {   // votive columns and prayer stones: columns broken off at different heights, a drum fallen, stelai, the little cairns pilgrims leave
+      column(P, -1.8, gy(-1.8, -1.2) - 0.1, -1.2, 4.4, 0.32, SMAT.marble, 0.75); column(P, 0.6, gy(0.6, -1.9) - 0.1, -1.9, 4.4, 0.32, SMAT.marble, 0.4); column(P, 2.6, gy(2.6, -0.6) - 0.1, -0.6, 4.4, 0.32, SMAT.marble, 0.95);
+      for (const [x, z] of [[-1.8, -1.2], [0.6, -1.9], [2.6, -0.6]]) this.solid(ctx, x, z, 0.42);
+      P.push([new THREE.CylinderGeometry(0.29, 0.29, 0.8, 16).rotateZ(Math.PI / 2).rotateY(0.9).translate(1.7, gy(1.7, 1.4) + 0.25, 1.4), SMAT.marble]);
+      for (const [x, z, a] of [[-0.5, 0.4, 0.2], [3.2, 1.2, -0.4]]) { P.push([uvBox(0.5, 1.1, 0.14, 1 / 2).rotateZ((lr() - 0.5) * 0.15).rotateY(a).translate(x, gy(x, z) + 0.45, z), SMAT.marble]); this.solid(ctx, x, z, 0.3); }
+      for (const [x, z, n] of [[-2.8, 1.0, 5], [-1.2, 2.2, 4], [0.9, 2.6, 6], [-3.4, -0.6, 3]]) cairn(x, z, n, 0.2 + lr() * 0.08);
+      put('twBowl', -0.4, 0.95, 0, 0, 0.4, gy(-0.4, 0.95)); put('twRubbleA', 3.6, -1.6, 0.7, 0, 0.8, gy(3.6, -1.6));
+    } else {   // the eagle's nest on the lesser summit: a ring of sticks, eggs, and the eagle on its rim looking over to Zeus's altar
+      const y0 = gy(0, 0) + 0.15;
+      for (let k = 0; k < 22; k++) { const a = (k / 22) * 6.283 + lr() * 0.2, r = 0.95 + lr() * 0.3; P.push([new THREE.CylinderGeometry(0.035, 0.05, 1.3 + lr() * 0.6, 5).rotateZ(Math.PI / 2 + (lr() - 0.5) * 0.5).rotateY(-a + Math.PI / 2 + (lr() - 0.5) * 0.6).translate(Math.cos(a) * r, y0 + 0.12 + lr() * 0.25, Math.sin(a) * r), SMAT.wood]); }
+      P.push([new THREE.CylinderGeometry(1.0, 0.7, 0.3, 14).translate(0, y0 + 0.05, 0), SMAT.wood]);
+      for (const [x, z] of [[0.2, 0.1], [-0.15, -0.2]]) P.push([new THREE.SphereGeometry(0.11, 10, 8).scale(1, 1.3, 1).translate(x, y0 + 0.3, z), SMAT.bone]);
+      if (hasPiece('all/pnb-alpine-mountain/fx-hawk-01')) P.push(...piece('all/pnb-alpine-mountain/fx-hawk-01', 0.1, y0 + 0.45, 0.9, Math.PI / 2, 1.4).map(([g]) => [g, SMAT.dark]));   // (dark against the sky: the pack's own colours are an effect's)
+      this.solid(ctx, 0, 0, 1.1, 1);
+    }
+    this.finish(ctx, s.v === 3 ? undefined : { r: s.v === 1 ? 2.5 : 5 });
   }
   // ---- queries
   // ground height at a site-local point, relative to the site (for things standing beyond its levelled pad)

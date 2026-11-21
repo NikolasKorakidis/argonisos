@@ -15,9 +15,9 @@ export function clearSave() { try { localStorage.removeItem(KEY); } catch { /* p
 // place in that layout, so when it changes (2: the woods of Pedias and bare rock on steep ground, Patch 4; 3: woods over
 // most of Pedias, Patch 5; 4: the abandoned town and the small scenes about the island, Patch 11; 5: the temple's hill,
 // its marble precinct and the meadow cleared round it; 6: a fifth fewer trees in the meadows' woods, new trees in the
-// hills, the mushrooms gone and tomato bushes in the meadows, Patch 20) an older save keeps everything else but lets the
-// trees and pickups come back.
-const WORLD_LAYOUT = 6;
+// hills, the mushrooms gone and tomato bushes in the meadows, Patch 20; 7: Olympos's cliff bands, its own trees, rocks
+// and high ground, Patch 24) an older save keeps everything else but lets the trees and pickups come back.
+const WORLD_LAYOUT = 7;
 export function save(g) {
   const P = g.player, S = g.S;
   // (saved on the death screen: as you'll wake, at your bed with the pack in the grave, Zeus's Favour on you and no food)

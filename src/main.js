@@ -1,6 +1,6 @@
 // Argonisos: the trial of Zeus. Entry point: builds the world and the player, runs the frame loop.
 import * as THREE from 'three';
-import { renderer, scene, camera, render, followShadow, setShadowSky, SHADOW, groundDetail, sun, GPU, ADAPT, adaptResolution, sceneTarget } from './render/core.js';
+import { renderer, scene, camera, render, followShadow, setShadowSky, SHADOW, groundDetail, sun, GPU, ADAPT, adaptResolution, sceneTarget, hemi } from './render/core.js';
 import { Terrain, rockGround } from './world/terrain.js';
 import { WorkerPool } from './world/pool.js';
 import { Vegetation } from './world/vegetation.js';
@@ -13,6 +13,7 @@ import { skyDome, updateSky, fogSky, sunDir, moonDir, lightDir, LIGHT, DAY_SECON
 import { updateWeather, setWeather, snapWeather, WEATHER } from './world/weather.js';
 import { updateClouds } from './world/clouds.js';
 import { setHeightTexture, updateWater } from './world/water.js';
+import { buildRiverWater, updateRiverWater, riverWarm } from './world/river-water.js';
 import { buildStormWall, updateStormWall, STORM_WALL } from './world/stormwall.js';
 import { updateLightning } from './world/lightning.js';
 import { SPECIES, STRIDE } from './world/flora.js';
@@ -55,6 +56,7 @@ await Promise.all([loadFlora(), loadSiteProps(), loadPieces()]);   // (the packs
 const veg = new Vegetation(scene, pool);
 veg.prebuild();
 buildStormWall(scene);
+buildRiverWater();   // (Patch 24) the river's water, its falls and their spray (river-water.js)
 // trees and rocks near the player become colliders (felled ones are skipped)
 veg.onCell = (key, items, cx, cz) => {
   if (!items) { colliders.removeGroup('v' + key); return; }
@@ -140,7 +142,7 @@ game.setFly = (on) => {
 let warmed = 0;   // 0: not yet, 2: done
 // (with a stand-in of every tree, rock and plant, in each band's material, so a species met later doesn't compile then)
 // (and the faded copies of the sites' materials, for when a wall or a column comes between the camera and the hero)
-const warmUp = () => { if (warmed) return; warmed = 2; const w = veg.warmMeshes(fadeAhead), seen = new Set(); scene.add(w);
+const warmUp = () => { if (warmed) return; warmed = 2; const w = veg.warmMeshes(fadeAhead), seen = new Set(); scene.add(w); riverWarm(w);
   for (const grp of game.structures?.groups || []) for (const m of grp.children) if (m.isMesh) for (const mt of [].concat(m.material)) if (!seen.has(mt)) { seen.add(mt); w.add(m.isInstancedMesh ? new THREE.InstancedMesh(m.geometry, fadeAhead(mt, true), 1) : new THREE.Mesh(m.geometry, fadeAhead(mt, true))); }
   const rt = renderer.getRenderTarget(); renderer.setRenderTarget(sceneTarget());   // (compiled for the buffer the scene is drawn into: render/core.js)
   // (and each program's link finished and looked at now: the browser links them only when first asked, which three does
@@ -187,7 +189,7 @@ function loop() {
   updateGiantwood(dt, focus, camera, lightDir, LIGHT.day, S.still); lap('wind, giants');
   updateClouds(dt, { time: t, still: S.still, dayT: S.time, dayN: S.day });   // (the clouds, and the fog inside one: before fogSky, which hides the sky in a thick one)
   lap('clouds'); fogSky(Math.min(1, Math.max(0, 1 - scene.fog.far / 1400, atmo.overcast)));
-  updateWater(t, camera.position, LIGHT, skyDome, sunDir, moonDir);
+  updateWater(t, camera.position, LIGHT, skyDome, sunDir, moonDir); updateRiverWater(LIGHT, hemi, S.still ? 0 : dt);
   followShadow(focus, lightDir, !LIGHT.moon); setShadowSky(SHADOW.sky * (LIGHT.day + 0.6 * LIGHT.night) * (1 - atmo.overcast * 0.8), LIGHT.moon ? SHADOW.nightFade : 0);   // (the share of sky light a shadow takes: core.js)
   LIGHT_U.uSunDir.value.copy(lightDir); LIGHT_U.uSunCol.value.copy(sun.color).multiplyScalar(sun.intensity * 0.32);
   lap('water, shadows'); terrain.update(camera.position); lap('terrain');

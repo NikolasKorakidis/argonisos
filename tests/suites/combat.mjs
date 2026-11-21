@@ -263,5 +263,31 @@ export default {
       await snap(`${k}-impact`, await frozen());
     }
     await t.eval(`g.combat.hitPlayer = window._real; for (const c of [...g.creatures.list]) g.creatures.remove(c); return true;`);
+
+    // ---- The bow drawn and the guard up on the move (Patch 24: drawing, or letting go, while walking spun the hero's body
+    // round, by up to 150° in a frame). In each of the eight directions: aiming, the hero faces the aim (the root within 3°
+    // of it, not turning) and his chest holds still against his facing; drawing and letting go on the move, and raising
+    // and dropping the guard, his chest never turns against his facing faster than a quick turn of the shoulders (as fast
+    // as a frame goes: per second). (chest: the shoulders' line, seen from above)
+    const AIMT = `const { input } = await import('/src/input.js'); const Bn = P.hero.bones, R = P.hero.root, w = (b) => b.getWorldPosition(new V()), ang = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b)), deg = (x) => Math.round(Math.abs(x) * 180 / Math.PI);
+      const chest = () => { const v = w(Bn.mixamorigLeftShoulder).sub(w(Bn.mixamorigRightShoulder)); return Math.atan2(-v.z, v.x); }, aimYaw = () => Math.atan2(-Math.sin(P.camYaw), -Math.cos(P.camYaw));
+      const kit = (...ids) => { for (const s of inv.slots) if (s?.worn) delete s.worn; for (const id of ids) { if (!inv.count(id)) g.give(id, 1); g.equip(inv.slots.findIndex((s) => s?.id === id && !s.worn)); } P.equip = null; };
+      const DIRS = [['W'], ['W', 'D'], ['D'], ['S', 'D'], ['S'], ['S', 'A'], ['A'], ['W', 'A']], keys = (list, on) => { for (const k of list) input.keys['Key' + k] = on; };
+      const home = async () => { P.spawn(window._home.x, window._home.z); P.camYaw = 2.2; P.yaw = 2.2 + Math.PI; P.stats.stamina = P.stats.maxStamina; await frames(30); };
+      // n frames: the most the facing strays from the aim (from frame 'from' on), and the fastest the facing turns and the chest turns against it (°/s)
+      const watch = async (n, from = 0) => { const s = { off: 0, turn: 0, chest: 0 }; let y0 = null, c0 = null, t0 = performance.now();
+        for (let i = 0; i < n; i++) { await frames(1); const y = R.rotation.y, c = ang(chest(), y), now = performance.now(), dt = Math.max(now - t0, 8) / 1000; t0 = now;
+          if (i >= from) { s.off = Math.max(s.off, Math.abs(ang(y, aimYaw()))); if (y0 !== null) { s.turn = Math.max(s.turn, Math.abs(ang(y, y0)) / dt); s.chest = Math.max(s.chest, Math.abs(ang(c, c0)) / dt); } } y0 = y; c0 = c; }
+        return { off: deg(s.off), turn: deg(s.turn), chest: deg(s.chest) }; };`;
+    const aim = await t.eval(`${AIMT} AG.S.peaceful = true; P.stats.god = true; kit('crudeBow'); g.give('crudeArrow', 20); await frames(20); const steady = {}, moving = {}, guard = {};
+      for (const d of DIRS) { await home(); input.rmb = true; await until(() => P.bow?.st === 'aim', 3000); keys(d, true); steady[d.join('')] = await watch(60, 20); keys(d, false); input.rmb = false; await frames(20); }
+      for (const d of DIRS) { await home(); keys(d, true); await frames(25); input.rmb = true; const a = await watch(80); input.rmb = false; const b = await watch(50); keys(d, false); moving[d.join('')] = Math.max(a.chest, b.chest); await frames(20); }
+      kit('crudeAxe', 'crudeShield'); await frames(20);
+      for (const d of DIRS) { await home(); keys(d, true); await frames(25); input.rmb = true; const a = await watch(50), s = await watch(30); input.rmb = false; const b = await watch(50); keys(d, false); guard[d.join('')] = { off: s.off, chest: Math.max(a.chest, b.chest) }; await frames(20); }
+      kit(); P.stats.god = false; return { steady, moving, guard };`);
+    t.metric('aiming on the move: steady (° off the aim, °/s the facing and the chest turn), drawing and letting go (chest °/s), the guard', aim);
+    t.check('the bow drawn, walking in each of the 8 directions: the hero faces his aim (within 3°, turning under 30°/s), his chest still (under 150°/s)', Object.values(aim.steady).every((r) => r.off <= 3 && r.turn < 30 && r.chest < 150), JSON.stringify(aim.steady));
+    t.check('…drawing and letting go on the move: the chest never wheels round against the facing (under 1000°/s; it spun at 2800)', Object.values(aim.moving).every((c) => c < 1000), JSON.stringify(aim.moving));
+    t.check('the guard up on the move: facing the aim, and raising and dropping it never wheels the chest round (under 1300°/s; 2500 before)', Object.values(aim.guard).every((r) => r.off <= 3 && r.chest < 1300), JSON.stringify(aim.guard));
   },
 };

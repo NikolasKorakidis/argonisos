@@ -3,7 +3,7 @@
 // tools/assets/moves.mjs makes them), and a walk through the real hero.update with a small copy of the player's controls
 // (player/player.js, game/combat.js: speeds, momentum, the jump, sneaking, the guard, the block, the bow, the strikes).
 import * as THREE from 'three';
-import { Hero, CLIPS, BODIES, SKINS, HAIRS, HAIR_COLOURS, BEARDS, EYES, CLOTHS, WREATHS, randomLook, normLook, loadMoves, strikeOf, strikeKind, BOW_DUR, GRIP } from '../../player/hero.js';
+import { Hero, CLIPS, BODIES, SKINS, HAIRS, HAIR_COLOURS, BEARDS, EYES, CLOTHS, WREATHS, randomLook, normLook, loadMoves, strikeOf, strikeKind, BOW_DUR, GRIP, DODGE_MOVE } from '../../player/hero.js';
 import { heldModel } from '../../player/held.js';
 import { RUN, SPRINT, SNEAK, AIM, BLOCK_K, GRAV, JUMP_V } from '../../player/speeds.js';
 import { fpsOf } from './pose.js';
@@ -16,7 +16,7 @@ const OLD_LOOPS = new Set(['run', 'sprint']);
 const GROUPS = [
   ['Locomotion', ['walk', 'walkBack', 'walkLeft', 'walkRight', 'run', 'runBack', 'jogLeft', 'jogRight', 'sprint']],
   ['Sneak', ['crouch', 'crouchReady', 'crouchWalk', 'crouchBack', 'crouchLeft', 'crouchRight', 'crouchDown', 'crouchUp']],
-  ['Combat', ['guard', 'block', 'slash', 'slash2', 'chop', 'sweep', 'stab', 'kick', 'attack', 'punch', 'throw', 'roll', 'equip', 'disarm', 'bowEquip', 'bowDraw', 'bowAim', 'bowDisarm']],
+  ['Combat', ['guard', 'block', 'slash', 'slash2', 'chop', 'sweep', 'stab', 'kick', 'attack', 'punch', 'throw', 'roll', 'rollFast', 'dodgeLeft', 'dodgeRight', 'dodgeBack', 'equip', 'disarm', 'bowEquip', 'bowDraw', 'bowAim', 'bowDisarm']],
   ['Hits and deaths', ['hitSmall', 'hitLarge', 'deathBack', 'deathLeft']],
   ['Water and air', ['swim', 'tread', 'jump', 'fall', 'land']],
   ['Actions', ['pickUp', 'drink', 'sit', 'sleep', 'getUp', 'pray', 'wave', 'victory']],
@@ -154,21 +154,26 @@ export class HeroSubject {
     const acc = !W.onGround ? 2.5 : want.lengthSq() ? 11 : 14;
     W.hv.x += (want.x - W.hv.x) * Math.min(1, acc * dt); W.hv.z += (want.z - W.hv.z) * Math.min(1, acc * dt);
     let speed = Math.hypot(W.hv.x, W.hv.z); if (speed < 0.05) { speed = 0; W.hv.set(0, 0, 0); } W.speed = speed;
+    // (a dodge's travel: its clip's own, scaled to its distance, the way it goes: player.js dodgeStep)
+    let ddx = 0, ddz = 0;
+    if (W.dodge) { const d = W.dodge; d.t += dt; const f = d.path(d.t / DODGE_MOVE.time), s = (f - d.f) * DODGE_MOVE.dist; d.f = f; ddx = d.dx * s; ddz = d.dz * s; if (d.t >= DODGE_MOVE.time) W.dodge = null; }
     // (the stage's walls: a step higher than a foot reaches stops you, one axis at a time so you slide along it)
-    const nx = pos.x + W.hv.x * dt + H.step.x, nz = pos.z + W.hv.z * dt + H.step.z; H.step.set(0, 0, 0);
+    const nx = pos.x + W.hv.x * dt + H.step.x + ddx, nz = pos.z + W.hv.z * dt + H.step.z + ddz; H.step.set(0, 0, 0);
     if (stage.topAt(nx, pos.z) <= pos.y + stage.STEP_UP) pos.x = nx; else W.hv.x = 0;
     if (stage.topAt(pos.x, nz) <= pos.y + stage.STEP_UP) pos.z = nz; else W.hv.z = 0;
     if (W.dodge) W.yaw += angDiff(W.dodge.yaw, W.yaw) * Math.min(1, dt * 20);
-    else if (aiming || W.blocking || W.swing > 0) W.yaw += angDiff(Math.atan2(-Math.sin(camYaw), -Math.cos(camYaw)), W.yaw) * Math.min(1, dt * 14);
+    else if (aiming || W.blocking || W.swing > 0) W.yaw += clamp(angDiff(Math.atan2(-Math.sin(camYaw), -Math.cos(camYaw)), W.yaw) * Math.min(1, dt * 14), -12 * dt, 12 * dt);   // (player.js TURN_MAX)
     else if (speed > 0.3 && want.lengthSq()) W.yaw += angDiff(Math.atan2(want.x, want.z), W.yaw) * Math.min(1, dt * (W.onGround ? 10 : 4));
-    // the jump, or with the guard up a dodge roll; gravity onto the stage
+    // the jump, or with RMB held a dodge the way the keys point (straight back with none: hero.dodge); gravity
+    // onto the stage
     if (I.hit('Space')) W.jumpBuf = 0.15; if (W.jumpBuf > 0) W.jumpBuf -= dt;
-    if (W.jumpBuf > 0 && W.blocking && W.onGround && !W.dodge && held > 0.9 && H.has('roll')) {
-      W.jumpBuf = 0; const yaw = want.lengthSq() ? Math.atan2(want.x, want.z) : W.yaw + Math.PI;
-      H.action('roll', { upper: false, rate: 1.6, blend: 0.08, fade: 0.25, root: 'move', lock: true, feet: false, onDone: () => (W.dodge = null) }); W.dodge = { t: 0, yaw }; W.hv.set(0, 0, 0);
+    const dodgeKey = I.rmb;
+    if (W.jumpBuf > 0 && dodgeKey && W.onGround && !W.dodge && held > 0.9 && H.has('roll')) {
+      W.jumpBuf = 0; const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw), dir = ix || iz ? Math.atan2(fx * iz - fz * ix, fz * iz + fx * ix) : W.yaw + Math.PI;
+      const d = { t: 0, f: 0, dx: Math.sin(dir), dz: Math.cos(dir) };
+      Object.assign(d, H.dodge(dir, W.yaw, aiming || W.blocking, speed > RUN * 0.8, (why) => { if (why !== 'end' && W.dodge === d) W.dodge = null; })); W.dodge = d; W.hv.set(0, 0, 0);
     }
-    if (W.dodge && (W.dodge.t += dt) > 2) W.dodge = null;
-    if (W.jumpBuf > 0 && W.onGround && W.swing <= 0 && held > 0.9) { W.jumpBuf = 0; W.vel.y = JUMP_V; W.onGround = false; W.jumped = true; }
+    if (W.jumpBuf > 0 && !dodgeKey && W.onGround && W.swing <= 0 && held > 0.9) { W.jumpBuf = 0; W.vel.y = JUMP_V; W.onGround = false; W.jumped = true; }
     const wasAir = !W.onGround && W.vel.y < -6, fl = stage.groundAt(pos.x, pos.z, pos.y);
     W.vel.y -= GRAV * dt; pos.y += W.vel.y * dt;
     if (W.onGround && W.vel.y <= 0 && pos.y - fl < 0.35 + speed * dt * 1.5) pos.y = fl;
@@ -180,7 +185,9 @@ export class HeroSubject {
     const yawRate = angDiff(W.yaw, W.lastYaw) / Math.max(dt, 1e-3); W.lastYaw = W.yaw;
     W.lean = lerp(W.lean, W.onGround ? clamp(speed / 8, 0, 1) * 0.09 : 0, Math.min(1, dt * 6)); W.bank = lerp(W.bank, clamp(-yawRate * 0.03 * clamp(speed / 5, 0, 1), -0.12, 0.12), Math.min(1, dt * 6));
     this.root.rotation.set(W.lean, W.yaw, W.bank);
-    let moveRel = 0; if ((aiming || W.blocking) && speed > 0.3) moveRel = angDiff(Math.atan2(W.hv.x, W.hv.z), W.yaw);
+    // (the way the legs go against the facing: while it's held, and after until the hero has turned to where he goes: player.js)
+    let moveRel = 0;
+    if (speed > 0.3) { const r = angDiff(Math.atan2(W.hv.x, W.hv.z), W.yaw); W.relHeld = aiming || W.blocking || W.swing > 0 || (W.relHeld && Math.abs(r) > 0.2); if (W.relHeld) moveRel = r; } else W.relHeld = false;
     W.aimPt.copy(aim);
     H.update(dt, { baseY: W.sneaking && !H.crouches ? -0.12 : 0, speed, sprinting: W.sprinting, onGround: W.onGround, jumped: W.jumped, vy: W.vel.y, moving: !!(ix || iz) || W.jumpBuf > 0, swimming: false, water: 0, moveRel,
       sneaking: W.sneaking, guard: W.guard, blocking: W.blocking && !W.dodge, swing: W.swing, swingKind: W.swingKind, strike: W.strikeMove, equip: W.equip, bow: W.bow, aimPt: W.aimPt,

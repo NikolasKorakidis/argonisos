@@ -17,7 +17,8 @@ import { Guide } from './guide.js';
 import { BuildMenu } from '../ui/buildmenu.js';
 import { Occlusion } from '../render/occlusion.js';
 import { save, load, Graves, SAVE_LOST } from './save.js';
-import { sound, updateAmbience, listen, fires } from '../audio/sound.js';
+import { sound, updateAmbience, listen, fires, waters } from '../audio/sound.js';
+import { riverSounds } from '../world/river.js';
 import { WIND } from '../world/wind.js';
 import { LIGHT } from '../world/sky.js';
 import { WEATHER, flashSky } from '../world/weather.js';
@@ -63,7 +64,7 @@ export function installGame(g) {
   // what the feet come down on, for the footsteps and landings: water (swimming or wading), a building's boards, a site's
   // paving or bare rock (the one slope rule), the sand along the shore (not the marsh), the forest's leaf litter, or the
   // meadows' grass and earth
-  const surface = () => { const p = player.pos; if (player.swimming || groundAt(p.x, p.z) < 0) return 'water'; if (g.build.floorAt(p.x, p.z, p.y) > p.y - 0.1) return 'wood';
+  const surface = () => { const p = player.pos; if (player.swimming || player.wading > 0.05 || groundAt(p.x, p.z) < 0) return 'water'; if (g.build.floorAt(p.x, p.z, p.y) > p.y - 0.1) return 'wood';
     if (g.structures.floorAt(p.x, p.z, p.y) > p.y - 0.1 || isRock(p.x, p.z)) return 'stone'; const w = biomeWeights(p.x, p.z); return heightAt(p.x, p.z) < 1.6 && w.v < 0.5 ? 'sand' : w.y > 0.5 ? 'leaves' : 'ground'; };
   // footsteps and landings by how near the camera is: as loud as ever zoomed right in (1.8 m), a quarter fully out (11 m)
   player.onStep = (k) => sound(k, k === 'step' || k === 'land' ? surface() : undefined, 1 - 0.75 * Math.min(1, Math.max(0, (player.camDist - 1.8) / 9.2)));
@@ -184,7 +185,7 @@ export function installGame(g) {
         g.fires = near.sort((a, b) => a.d - b.d).slice(0, 3); } g.ambT -= dt;
       // (under a roof you hear the rain drum on it; with walls round you as well, you're inside: the world comes muffled)
       const roof = player.stats.has('underRoof'), inside = (roof && g.amb.walled) || !!g.structures.inCave?.(player.pos);
-      listen(camera.position, camera.getWorldDirection(_look)); fires(g.fires || []);
+      listen(camera.position, camera.getWorldDirection(_look)); fires(g.fires || []); waters(riverSounds(camera.position));   // (the river's water: river.js)
       updateAmbience(dt, { wind: Math.min(1, Math.max(0, (WIND.speed - 2.3) / 8)), gust: WIND.gust, windDir: { x: WIND.dir.x, z: WIND.dir.y }, rain: WEATHER.k.rain, night: LIGHT.night, dusk: LIGHT.dusk, fire: fd, roof: roof ? 1 : 0, inside: inside ? 1 : 0, ...g.amb }); }
     if (hit('KeyC') && !g.map.open && !g.buildMenu.open) hud.toggle(!hud.open);   // C opens and closes the pack and crafting, on whichever tab you left it
     if (input.uiOpen || player.dead) { hud.prompt(null); g.build.update(dt); g.creatures.update(dt); g.combat.update(dt); g.structures.update(dt); g.trial.stage(dt); return; }   // (a boss's coming goes on behind a menu)

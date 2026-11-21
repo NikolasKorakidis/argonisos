@@ -5,10 +5,11 @@
 // for every species and variant (propGeo, through veg.geoFor). The world fingerprint covers where the sites are; this
 // covers what stands there. Sites built from the packs differ without them, so the fingerprint is recorded with them.
 // When the sites are meant to change: run `node tests/run.mjs sites --update` and paste the new fingerprint below.
-// (recorded on 21 November 2026, at commit 982cfb2 with the other agents' work of that round in progress: record it again
-// once the round is in, before moving any site code)
+// (recorded on 21 November 2026 after commit a64dce0, the stone material in, with Olympos's new summit, cairns and places
+// on the way up (Patch 24) and the other agents' work of that round in progress: record it again once the round is in,
+// before moving any site code)
 const FINGERPRINT = {
-  solids: '77eb892d', tops: '31d55e52', uses: '67a640ce', colliders: '46eed49e', plants: 'e7829800', groups: 'c0cf9af5',
+  solids: 'a81fa4ba', tops: 'f26a546f', uses: '67a640ce', colliders: 'b07fa0ad', plants: '798b817a', groups: '44f8cde8',
 };
 
 // (FNV-1a over numbers rounded to a fixed precision, as in world.mjs, so the last float bit doesn't count; the mesh

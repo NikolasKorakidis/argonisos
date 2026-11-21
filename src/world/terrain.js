@@ -8,6 +8,7 @@ import { seeded, hash21, tileNoise } from '../util/math.js';
 import { PRIORITY } from './pool.js';
 import { ULTRA } from '../render/quality.js';
 import { ATMO } from '../render/atmosphere.js';
+import { STONE_TEX, STONE_GLSL } from './rock.js';
 
 // (On Ultra, render/quality.js, a patch splits into finer ones half as far out again, so the land keeps its shape further
 // off: hills and ridges in the distance with their own folds rather than a few broad facets; more of them kept.)
@@ -176,11 +177,11 @@ export function rockGround(mat) {
   const base = mat.onBeforeCompile;
   mat.onBeforeCompile = (sh, r) => {
     base?.call(mat, sh, r);
-    sh.uniforms.uRockTex = { value: ROCK_TEX }; sh.uniforms.uFloorTex = { value: FLOOR_TEX }; sh.uniforms.uWoods = ATMO.tWoods; sh.uniforms.uWoodsExt = ATMO.woodsExt; sh.uniforms.uNight = ATMO.night;
+    sh.uniforms.uRockTex = { value: ROCK_TEX }; sh.uniforms.uStoneTex = { value: STONE_TEX }; sh.uniforms.uFloorTex = { value: FLOOR_TEX }; sh.uniforms.uWoods = ATMO.tWoods; sh.uniforms.uWoodsExt = ATMO.woodsExt; sh.uniforms.uNight = ATMO.night;
     sh.vertexShader = 'attribute float rock; attribute vec2 bio; varying float vRock; varying vec2 vBio; varying vec3 vRockP, vRockN;\n' + sh.vertexShader.replace('#include <project_vertex>', `
       vRock = rock; vBio = bio; vRockP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRockN = normalize(mat3(modelMatrix) * objectNormal);
       #include <project_vertex>`);
-    sh.fragmentShader = 'uniform sampler2D uRockTex, uFloorTex, uWoods; uniform float uWoodsExt, uNight; varying float vRock; varying vec2 vBio; varying vec3 vRockP, vRockN;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>${FLOOR}
+    sh.fragmentShader = 'uniform sampler2D uRockTex, uFloorTex; uniform float uNight; varying float vRock; varying vec2 vBio; varying vec3 vRockP, vRockN;\n' + STONE_GLSL + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>${FLOOR}
       // (sampled everywhere, not only on rock: the relief's screen derivatives need every pixel of the quad)
       vec3 rbw = pow(abs(vRockN), vec3(4.0)); rbw /= rbw.x + rbw.y + rbw.z;
       vec3 rp = vRockP / 7.0;   // (a tile 7 m across: slabs of about 1.7 m)
@@ -192,6 +193,13 @@ export function rockGround(mat) {
       float rlayer = (vRockP.y + dot(vRockP.xz, vec2(0.21, -0.13))) / (1.7 + rmacro * 1.6) + (rbroad - 0.5) * 6.0 + (rmacro - 0.5) * 9.0, rbed = abs(fract(rlayer) - 0.5) * 2.0;
       float rbk = smoothstep(0.42, 0.72, rpatch) * (1.0 - smoothstep(30.0, 110.0, length(vViewPosition)));
       float rtone = (0.4 + rk.r * 0.85) * mix(1.0, mix(0.9, 1.06, step(0.5, fract(rlayer * 0.5))) * mix(0.75, 1.0, smoothstep(0.0, 0.12, rbed)), rbk) * (0.8 + rbroad * 0.25 + rmacro * 0.15);
+      // far off, where the slabs have mipmapped away to one grey, the broad variation and Olympos's beds stay (the review
+      // of 20 Nov, item 15: a featureless cone at middle distance): pale and darker beds some 9 m thick, wandering with the
+      // noise, faded out where they would be finer than a pixel or two; nothing finer than the broad channels
+      float rfar = smoothstep(45.0, 170.0, length(vViewPosition)), rmtn = smoothstep(110.0, 170.0, vRockP.y);
+      float rsl = vRockP.y / 9.0 + (rmacro - 0.5) * 3.0 + (rpatch - 0.5) * 1.5, rsb = sin(rsl * 6.2832) * (1.0 - smoothstep(0.2, 0.5, fwidth(rsl)));
+      rtone *= mix(1.0, 0.72 + rbroad * 0.56, rfar * 0.7) * (1.0 + rsb * 0.12 * rmtn);
+      rtone *= 0.84 + stoneTri(vRockP / 0.9 + 0.5, rbw).r * 0.32;   // (the grain of the island's stone, rock.js, so the bare slopes and the boulders on them match)
       vec3 rcol = diffuseColor.rgb * rtone;
       rcol = mix(rcol, rcol * vec3(0.85, 1.0, 0.62), smoothstep(0.72, 0.85, rk.b) * 0.6);   // lichen
       diffuseColor.rgb = mix(diffuseColor.rgb, rcol, vRock);

@@ -7,6 +7,7 @@ import QBUSH from '../../assets/models/qbushes.js';
 import { clamp, lerp } from '../util/math.js';
 import { patchWet } from './wetness.js';
 import { FLORA, floraGeo, TREE_TALL } from './flora-pack.js';
+import { ROCK_MAT, rockEdges } from './rock.js';
 
 let seed = 1337;
 const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -150,10 +151,11 @@ function growTree(P, o) {
   const cc = new THREE.Vector3(); tips.forEach((t) => cc.add(t.p)); cc.multiplyScalar(1 / Math.max(1, tips.length)); cc.y -= o.clusterR * 0.6;
   if (o.noLeaf) return tips;
   for (let ti = 0; ti < tips.length; ti++) {
-    const t = tips[ti]; if (PROP_LO && ti % 3) continue;           // far LOD: one fat blob stands in for three clusters
+    const fat = PROP_LO && !o.loCards;                               // (a far version with leaf cards of its own keeps every cluster's core, as near)
+    const t = tips[ti]; if (fat && ti % 3) continue;                  // far LOD: one fat blob stands in for three clusters
     const c = t.p.clone().addScaledVector(t.d, o.clusterR * 0.35);
-    const core = new THREE.Color(o.leaf).multiplyScalar(PROP_LO ? 0.72 : 0.58).getHex();   // far: the blended tone of core + cards, so the hand-over doesn't flash
-    P.push([blob(o.clusterR * (PROP_LO ? 1.7 : o.core || 0.62), c.x, c.y, c.z, cc, 1, 0), core]);
+    const core = new THREE.Color(o.leaf).multiplyScalar(fat ? 0.72 : 0.58).getHex();   // far: the blended tone of core + cards, so the hand-over doesn't flash
+    P.push([blob(o.clusterR * (fat ? 1.7 : o.core || 0.62), c.x, c.y, c.z, cc, 1, 0), core]);
     if (!PROP_LO && o.extraBlob) P.push([blob(o.clusterR * 0.45, c.x + rr(-0.5, 0.5), c.y + o.clusterR * 0.4, c.z + rr(-0.5, 0.5), cc, 1), core]);
     leafCards(c, o.clusterR, o.clusterR * o.flat, o.cards, o.leaf, o.card0, o.card1, cc);
   }
@@ -217,7 +219,7 @@ const TREE_BUILDERS = {
   titan(v) {
     const P = [], leaf = [0x2f5a2c, 0x35602e, 0x2b5530][v % 3];
     growTree(P, { bark: [0x5a4434, 0x63493a, 0x4f3d30][v % 3], leaf, trunkH: rr(24, 30), trunkR: rr(1.05, 1.3), trunkSteps: 6, depth: 2, taper: 0.42, gnarl: 0.03, rise: 0.7, lean: 0.03, roots: 8, knot: 1.04,
-      kids: (d) => (d === 2 ? 5 : 3), spread: (d) => (d === 2 ? 1.2 : 0.85), lenF: 0.32, rF: 0.36, midKids: false, clusterR: 3.4, flat: 0.5, cards: 16, card0: 2.4, card1: 3.6 });
+      kids: (d) => (d === 2 ? 5 : 3), spread: (d) => (d === 2 ? 1.2 : 0.85), lenF: 0.32, rF: 0.36, midKids: false, clusterR: 3.4, flat: 0.5, cards: 16, card0: 2.4, card1: 3.6, loCards: true });
     return P;
   },
   birch(v) {
@@ -369,6 +371,17 @@ function qBuild(species, v) {
   return { geo, lo: geo, cards, cardMat: cards && Q_LEAF_MATS[species], leafFar: true };
 }
 const PROPS = {};  // key -> { geo, variants:[geo], chunks: Map }
+// One leaf card of every n kept (mergeCards' cards: two loose triangles each), each grown by k about its middle
+function thinCards(g, n, k) {
+  const out = new THREE.BufferGeometry(), per = 6, cnt = g.attributes.position.count / per, keep = []; for (let i = 0; i < cnt; i += n) keep.push(i);
+  for (const [name, a] of Object.entries(g.attributes)) { const w = a.itemSize, arr = new Float32Array(keep.length * per * w);
+    keep.forEach((c, j) => arr.set(a.array.subarray(c * per * w, (c + 1) * per * w), j * per * w)); out.setAttribute(name, new THREE.BufferAttribute(arr, w)); }
+  const p = out.attributes.position;
+  for (let j = 0; j < keep.length; j++) { let cx = 0, cy = 0, cz = 0; for (let v = 0; v < per; v++) { cx += p.getX(j * per + v) / per; cy += p.getY(j * per + v) / per; cz += p.getZ(j * per + v) / per; }
+    for (let v = 0; v < per; v++) { const i = j * per + v; p.setXYZ(i, cx + (p.getX(i) - cx) * k, cy + (p.getY(i) - cy) * k, cz + (p.getZ(i) - cz) * k); } }
+  out.computeBoundingSphere(); return out;
+}
+const STONY = new Set(['rock', 'boulder', 'pebbles']);   // (drawn in stone: rock.js)
 const TREE_TYPES = new Set(['olive', 'oak', 'cypress', 'pomegranate', 'fig', 'plane', 'qtree', 'qpine', 'fir', 'holm', 'qdead', 'dead']);   // (fitted by height; the rest by bulk)
 function propGeo(species, v) {
   const k = species + v;
@@ -379,7 +392,12 @@ function propGeo(species, v) {
     const s0 = seed, r = TREE_BUILDERS[species](v), s1 = seed, cards = CARD_PARTS.length ? mergeCards(CARD_PARTS) : null; CARD_PARTS = [];
     seed = s0; PROP_LO = true; const lo = TREE_BUILDERS[species](v); PROP_LO = false; seed = s1;
     PROPS[k] = { species, geo: r.isBufferGeometry ? r : mergeParts(r), lo: lo.isBufferGeometry ? lo : mergeParts(lo), cards, items: [] };
-    if (species === 'titan') for (const g of new Set([PROPS[k].geo, PROPS[k].lo, cards])) g?.scale(1, TREE_TALL, 1);   // (the giants, carved, stretched as the pack's trees are: flora-pack.js)
+    if (species === 'titan') {
+      for (const g of new Set([PROPS[k].geo, PROPS[k].lo, cards])) g?.scale(1, TREE_TALL, 1);   // (the giants, carved, stretched as the pack's trees are: flora-pack.js)
+      // (and seen from afar with their leaves, half the cards each grown to cover the gap, not as a few fat blobs: a giant's
+      // crown is the forest's roof. Tester, 21 Nov: from far away the giants looked like cardboard lollipops)
+      Object.assign(PROPS[k], { loCards: thinCards(cards, 2, 1.35), leafFar: true });
+    }
   }
   // the pack's model in the carved one's place (flora-pack.js; the carved one was still built, so the shared dice roll on as before)
   const P = PROPS[k];
@@ -387,6 +405,8 @@ function propGeo(species, v) {
     const box = new THREE.Box3(); for (const g of [P.geo, P.cards]) if (g) { g.computeBoundingBox(); box.union(g.boundingBox); }
     const g = floraGeo(species, v, box, TREE_TYPES.has(species)); if (g) Object.assign(P, { geo: g.geo, lo: g.lo || g.geo, cards: g.cards, loCards: g.lo ? g.loCards : g.cards, geo2: g.mid, cards2: g.mid ? g.midCards : null, cardMat: g.cards && packCardMat(g.map), leafFar: !!g.cards, packed: true });   // (geo2: the near band's further half, vegetation.js)
   }
+  // the rocks in stone of their own (rock.js: no wind, and the detail laid on in the shader), their faces' edges marked
+  if (STONY.has(species) && P.mat !== ROCK_MAT && (P.packed || !FLORA[species])) { for (const q of new Set([P.geo, P.lo])) rockEdges(q); P.mat = ROCK_MAT; }
   return P;
 }
 // the see-through parts of the packs' plants (flora-pack.js): one material per pack texture, cut out like the leaves and

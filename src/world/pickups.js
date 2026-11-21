@@ -10,6 +10,7 @@ import { PRIORITY } from './pool.js';
 import { seeded } from '../util/math.js';
 import { loadPack, bake } from '../assets.js';
 import { windUniform, LIGHT_U } from './trees.js';
+import { stony, rockEdges } from './rock.js';
 export { layoutPickups };
 
 const RANGE = 110, REGROW_DAYS = 3;
@@ -61,9 +62,9 @@ function layFlat(geo) {
   geo.applyQuaternion(q.setFromEuler(e.set(best[1] * Math.PI / 12, 0, best[2] * Math.PI / 12)));
 }
 const PACKED = {
-  stone: [['pStone'], [0.42, 0.2]],
+  stone: [['pStone'], [0.42, 0.2], { stone: true }],
   branch: [['pBranch', 'pBranch1', 'pBranch2', 'pBranch3', 'pBranch4'], [1.3, 0.25], { flat: true }],
-  lightstone: [['pLight0', 'pLight1'], [0.34, 0.24], { bright: 4, color: 0xe8e2d0, emissive: 0x5a5a48, emissiveIntensity: 0.3, roughness: 0.5 }],
+  lightstone: [['pLight0', 'pLight1'], [0.34, 0.24], { bright: 4, color: 0xe8e2d0, emissive: 0x5a5a48, emissiveIntensity: 0.3, roughness: 0.5, stone: true }],
   dandelion: [['pDandelion0', 'pDandelion1'], [0.42, 0.36]],
   moonflower: [['pMoon0', 'pMoon1'], [0.5, 0.6], { petals: 0xcfe0ff, glow: 0x6080c0 }],
   feather: [['pFeather'], [0.36, 0.02], { lift: 0.12, double: true, shade: 1.15, glow: 0xfff4dc, glowK: 0.35 }],
@@ -92,6 +93,7 @@ function packedLook(gl, [W, H], o = {}) {
   geo.computeBoundingSphere();
   const base = o.bright ? vc({ color: o.color, emissive: o.emissive, emissiveIntensity: o.emissiveIntensity, roughness: o.roughness }) : vc({ flatShading: false, roughness: 0.9 });
   if (o.double) base.side = THREE.DoubleSide;
+  if (o.stone) { base.flatShading = false; stony(base, { edges: true }); rockEdges(geo); }   // (in the island's stone, rock.js: its faces' edges marked)
   if (o.glow !== undefined) {   // (the moonflower: its pale petals light up, plainest at night; the feather a little, so it shows in shade)
     base.emissive.setHex(o.glow); base.emissiveIntensity = o.glowK ?? 0.9;
     base.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n  totalEmissiveRadiance *= vColor.rgb;'); };

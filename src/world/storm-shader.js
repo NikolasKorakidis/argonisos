@@ -55,9 +55,25 @@ export const COMMON = `
   float amp(float h) { return 26.0 + 0.13 * max(h, 0.0); }   // (how far the billows push in and out: bigger higher up)
   vec3 turn(vec3 p, float a) { vec2 c = p.xz - centre; float s = sin(a), k = cos(a); vec2 r = centre + vec2(k * c.x - s * c.y, s * c.x + k * c.y); return vec3(r.x, p.y, r.y); }`;
 
-export const MARCH_FRAG = `${COMMON}
-  uniform vec3 sunDir, sunCol, ambCol, fogCol, flashCol, glowCol; uniform float fogV, fogMax, glow, mzR1, mzAmt, mzTop, mzSoft, lift, floorK;
+// ---- The air between the eye and the wall (or its rings: storm-rings.js), as the march and the rings both lay it. Its
+// own haze with distance, thinner than the fog (it must read from across the island) and never quite closing in; and the
+// player's mist (atmosphere.js), laid as the atmosphere pass lays it on whatever lies past the mist's far edge (by where
+// the line of sight is when it reaches that edge), over the wall's foot only from the ground, so its towers rise clear.
+// High up (hiK: the air clears with the eye's height, as main.js clears the fog) the land below lies in the mist's
+// sky-coloured haze, and so did the sky round the wall, while the wall stood out of it near black: hazed then towards
+// the fog's colour where you stand (on Olympos the forest's dark teal) and with no mist over its towers (the player, 21
+// Nov: "from the top of the mountain everything is foggy and nice, but the storm looks very dark… it really stands
+// out"). Up there its haze leans towards the sky's colour along the line of sight and the mist lies over the towers too,
+// if more thinly than over its foot, so it still stands dark against the sky, but in the same air as everything else.
+export const STORM_AIR = `uniform vec3 fogCol; uniform float fogV, fogMax, hiK, mzR1, mzAmt, mzTop, mzSoft;
   ${MIST_TONE}
+  vec3 stormHaze(vec3 rd) { return mix(fogCol, mistTone(rd), hiK * 0.45); }
+  float stormFog(float t) { return min(fogMax * (1.0 - 0.3 * hiK), 1.0 - exp(-t / fogV)); }
+  float stormMist(vec3 rd, float h) { return mzAmt * mistUp(camPos.y + rd.y * (mzR1 / max(length(rd.xz), 1e-3))) * max(1.0 - smoothstep(60.0, 220.0, h), 0.5 * hiK); }`;
+
+export const MARCH_FRAG = `${COMMON}
+  uniform vec3 sunDir, sunCol, ambCol, flashCol, glowCol; uniform float glow, lift, floorK;
+  ${STORM_AIR}
   uniform vec4 flashP[4]; uniform float flashI[4]; uniform vec4 caves[4];
   // The cloud's surface at a point: how far inside it the point lies (metres; negative outside). The border field and
   // the profile give the smooth wall; on it great lobes and towers (taller than wide, warped), turning slowly round the
@@ -83,9 +99,7 @@ export const MARCH_FRAG = `${COMMON}
     // (a fixed dither on where each pixel's steps fall, against banding; fixed on the screen, so it never flickers)
     float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
     float t = t0, T = 1.0; vec3 L = vec3(0.0), surf = vec3(0.0); bool first = true, lit0 = false;
-    // the player's mist, laid as the atmosphere pass lays it on what lies past its far edge (by where the line of sight is
-    // when it reaches that edge), but only over the storm's foot: its towers rise clear of it, however high you stand
-    float mist = mzAmt * mistUp(camPos.y + rd.y * (mzR1 / max(length(rd.xz), 1e-3))); vec3 mzc = mistTone(rd);
+    vec3 mzc = mistTone(rd), hazeC = stormHaze(rd);   // (the player's mist and the haze: STORM_AIR)
     for (int i = 0; i < 64; i++) {
       if (t >= t1 || T < 0.04) break;
       vec3 p = camPos + rd * t; vec2 fg = fieldAt(p.xz); float h = p.y - fg.y;
@@ -101,7 +115,8 @@ export const MARCH_FRAG = `${COMMON}
       // the tops: domed and ragged, thinning into the sky; the bottom on the ground. Where the border runs out to sea the
       // wall's arms sink and fray away into a trailing storm, raggedly, rather than ending in a cut
       float tail = smoothstep(1650.0, 2450.0, r + (lo - 0.5) * 260.0), fade = 1.0 - smoothstep(2250.0, 2600.0, r + (lo - 0.5) * 300.0 + (mid - 0.5) * 80.0);
-      float topH = (uTop + (lo - 0.5) * 260.0 + (mid - 0.5) * 80.0) * (1.0 - tail * 0.85), dens = smoothstep(0.0, 30.0, env) * smoothstep(topH, topH - 120.0, h) * smoothstep(-25.0, 10.0, h) * fade;
+      // (its skin thickens with distance, so seen from across the island its edge against the sky is soft rather than cut)
+      float topH = (uTop + (lo - 0.5) * 260.0 + (mid - 0.5) * 80.0) * (1.0 - tail * 0.85), dens = smoothstep(0.0, 30.0 + 0.02 * t, env) * smoothstep(topH, topH - 120.0 - 0.03 * t, h) * smoothstep(-25.0, 10.0, h) * fade;
       // the skin frays into wisps: finer billows eaten out of it, boiling upward
       if (env < 60.0 && dens > 0.0 && t < 900.0) { float det = texture(tNoise, turn(p, uT * 0.004) / 320.0 - vec3(0.0, uT * 0.006, 0.0)).b; dens = clamp(dens - (1.0 - det) * 0.8 * (1.0 - smoothstep(0.0, 60.0, env)), 0.0, 1.0); }
       // rain hanging in sheets under the shelf, from its underside to the ground, streaked and falling
@@ -133,8 +148,8 @@ export const MARCH_FRAG = `${COMMON}
         c = mix(c, ambCol * 0.35, rain / max(rain + dens, 1e-3) * 0.7);
         // lightning inside the cloud, lighting it from within
         float fl = 0.0; for (int k = 0; k < 4; k++) if (flashI[k] > 0.0) fl += flashI[k] * exp(-length(p - flashP[k].xyz) / flashP[k].w);
-        float fk = min(fogMax, 1.0 - exp(-t / fogV));
-        c = mix(mix(c, fogCol, fk), mzc, mist * (1.0 - smoothstep(60.0, 220.0, h))) + flashCol * fl * (0.3 + 0.7 * skin) * max(bump, 0.2) * (1.0 - fk * 0.7);
+        float fk = stormFog(t);
+        c = mix(mix(c, hazeC, fk), mzc, stormMist(rd, h)) + flashCol * fl * (0.3 + 0.7 * skin) * max(bump, 0.2) * (1.0 - fk * 0.7);
         L += T * (a * c + glowCol * zap * dt * 0.01 * (1.0 - fk));
         T *= 1.0 - a;
       }

@@ -1,5 +1,5 @@
-// Olympos: its path can be climbed (switchbacks, the crest and its rock steps, jumped), its faces can't be walked
-// straight up, and the old altar on the top opens the whole map once, and remembers it in the save.
+// Olympos: its path can be climbed (switchbacks at an even grade, the crest and its rock steps, each jumped once), its
+// faces can't be walked straight up, and the old altar on the top opens the whole map once, and remembers it in the save.
 // The hero is driven up the path's line (gen.js PEAK.route) the way a player would: W held, the camera turned towards
 // the line a few metres ahead, Space where the ground ahead rises more than a stride can take.
 const climb = (from, secs) =>   // (from: an index into the path, or an expression of R)
@@ -12,7 +12,7 @@ const climb = (from, secs) =>   // (from: an index into the path, or an expressi
     if (P.onGround && P.groundHere(p.x + dx / l * 1.1, p.z + dz / l * 1.1) - p.y > 1.15) { key('keydown', 'Space'); setTimeout(() => key('keyup', 'Space'), 60); jumps++; }
     if (P.sliding) slid++; const now = performance.now(); if (i !== lastI) { lastI = i; lastT = now; }
     const top = Math.hypot(p.x - s.x, p.z - s.z) < 10 && p.y > s.y - 1;
-    if (top || now - lastT > 12000 || now - t0 > ${secs * 1000}) { clearInterval(iv); key('keyup', 'KeyW'); done({ top, secs: Math.round((now - t0) / 1000), at: i, of: R.length, y: +p.y.toFixed(1), summit: +s.y.toFixed(1), jumps, slid }); }
+    if (top || now - lastT > 12000 || now - t0 > ${secs * 1000}) { clearInterval(iv); key('keyup', 'KeyW'); done({ top, secs: Math.round((now - t0) / 1000), at: i, of: R.length, y: +p.y.toFixed(1), summit: +s.y.toFixed(1), jumps, steps: G.PEAK.steps.length, slid }); }
   }, 50); });`;
 
 export default {
@@ -20,10 +20,16 @@ export default {
   async run(t) {
     await t.eval(`AG.S.timeScale = 0; AG.S.time = 0.32; for (const c of [...g.creatures.list]) g.creatures.remove(c); g.owl.update = () => {}; return true;`);
     await t.step('the path is laid from the foot of the steep ground to the summit, rock steps on its crest', `const G = await import('/src/world/gen.js'), R = G.PEAK.route, s = g.SITES.peak, e = R.at(-1);
-      return (R.length > 200 && G.PEAK.steps.length >= 4 && Math.hypot(e.x - s.x, e.z - s.z) < 12 && Math.abs(e.y - s.y) < 1.5 && !G.climbable(R[0].x, R[0].z)) || JSON.stringify({ n: R.length, steps: G.PEAK.steps.length, end: [e.x - s.x, e.z - s.z, e.y - s.y] });`);
+      return (R.length > 200 && G.PEAK.steps.length >= 2 && Math.hypot(e.x - s.x, e.z - s.z) < 12 && Math.abs(e.y - s.y) < 1.5 && !G.climbable(R[0].x, R[0].z)) || JSON.stringify({ n: R.length, steps: G.PEAK.steps.length, end: [e.x - s.x, e.z - s.z, e.y - s.y] });`);
+    // (the player, 21 Nov: the way up wasn't smooth) walked along its line every half metre below the crest, the ground
+    // climbs no steeper than the path's steepest grade allows and never falls, and lies on the line: no step, ramp or bump
+    await t.step('below the crest the path climbs at an even grade, without steps or bumps', `const G = await import('/src/world/gen.js'), R = G.PEAK.route; let worst = 0, off = 0, at = -1;
+      for (let i = 0; i < G.PEAK.crest; i++) for (let f = 0; f < 1; f += 0.25) { const x = R[i].x + (R[i + 1].x - R[i].x) * f, z = R[i].z + (R[i + 1].z - R[i].z) * f, x2 = R[i].x + (R[i + 1].x - R[i].x) * (f + 0.25), z2 = R[i].z + (R[i + 1].z - R[i].z) * (f + 0.25);
+        const g = (AG.heightAt(x2, z2) - AG.heightAt(x, z)) / Math.hypot(x2 - x, z2 - z); if (Math.abs(g) > Math.abs(worst)) { worst = g; at = i; } off = Math.max(off, Math.abs(AG.heightAt(x, z) - (R[i].y + (R[i + 1].y - R[i].y) * f))); }
+      return (worst < 0.75 && worst > -0.1 && off < 0.4) || JSON.stringify({ worst: +worst.toFixed(2), at, off: +off.toFixed(2) });`);
     // the upper path: its last switchbacks, a hairpin, the crest and every rock step
     const up = await t.eval(climb('R.length - 130', 150));
-    t.check('the upper path climbs to the summit (switchbacks, the crest, its rock steps jumped)', up.top && up.jumps >= 4, JSON.stringify(up));
+    t.check('the upper path climbs to the summit at the first go (switchbacks, the crest, each rock step jumped once)', up.top && up.jumps >= up.steps && up.jumps <= up.steps + 2, JSON.stringify(up));
     t.metric('upper path', up);
     // a face: steep ground on the upper mountain, off the path, walked straight up for six seconds
     const face = await t.eval(`const G = await import('/src/world/gen.js'), P0 = G.PEAK; let f = null;
