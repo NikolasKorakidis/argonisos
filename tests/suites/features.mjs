@@ -47,5 +47,59 @@ export default {
     await t.wait(1500);
     await t.step('18 …(restored exactly)', `const w = window._wall; return w.mats.every((m) => m.opacity === 1 && m.transparent === false && m.depthWrite === true) || w.mats.map((m) => [m.opacity, m.transparent, m.depthWrite]).join(' ');`);
     await t.shot('hud');
+
+    // ---- Patch 23, fights and survival: each fix of the gameplay review with its own check
+    const F = `const { input } = await import('/src/input.js'); const frames = (n) => new Promise((r) => { let i = 0; const f = () => (++i >= n ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); });
+      const until = async (f, ms) => { const t0 = performance.now(); while (!f() && performance.now() - t0 < ms) await new Promise((r) => requestAnimationFrame(r)); return !!f(); };
+      const wear = (...ids) => { for (const s of inv.slots) if (s?.worn) delete s.worn; for (const id of ids) { if (!inv.count(id)) g.give(id, 1); g.equip(inv.slots.findIndex((s) => s?.id === id && !s.worn)); } P.equip = null; };
+      const ahead = (d) => new V(P.pos.x + Math.sin(P.yaw) * d, P.pos.y, P.pos.z + Math.cos(P.yaw) * d);
+      const fake = (o) => ({ pos: ahead(1.5), yaw: P.yaw + Math.PI, dmgK: 1, hitT: 0, atkCd: 0, body: {}, ...o });`;
+    await t.eval(`for (const c of [...g.creatures.list]) g.creatures.remove(c); B.remove(window._wall, false); P.spawn(P.pos.x + 40, P.pos.z); return true;`);
+    await t.step('23 the roll works without a guard: with bare hands and with the bow drawn (RMB held, Space), for its stamina', `${F} const out = {};
+      for (const kit of [[], ['crudeBow']]) { wear(...kit); if (kit.length) g.give('crudeArrow', 10); P.dodge = null; P.stats.stamina = 50; input.rmb = true; await frames(kit.length ? 40 : 3); const drawn = P.aiming;
+        input.pressed.add('Space'); await frames(4); const k = kit[0] || 'hands'; out[k] = { rolled: !!P.dodge, cost: +(50 - P.stats.stamina).toFixed(1), drawn, lowered: !P.aiming };
+        await until(() => !P.dodge, 3000); input.rmb = false; await frames(3); }
+      wear(); return (out.hands.rolled && out.hands.cost > 10 && out.crudeBow.rolled && out.crudeBow.drawn && out.crudeBow.lowered) || JSON.stringify(out);`);
+    await t.step('23 a parry staggers a hog, never a boss, and a giant only when the guard holds most of its blow; a tower shield soaks but cannot parry', `${F} const { TYPES } = await import('/src/creatures/creatures.js'); wear('crudeAxe', 'crudeShield'); P.stats.god = true; const out = {};
+      const parry = (c, dmg) => { P.blocking = true; g.combat.blockT = 0; P.stats.stamina = 50; g.combat.hitPlayer(c, dmg); return c.hitT > 0; };
+      out.hog = parry(fake({ T: TYPES.hog, type: 'hog' }), [10, 10, 'pierce']); out.boss = parry(fake({ T: TYPES.minotaur, type: 'minotaur', boss: true }), [30, 30, 'slash']);
+      out.giantHard = parry(fake({ T: TYPES.giant, type: 'giant' }), [60, 60, 'blunt']); out.giantSoft = parry(fake({ T: TYPES.giant, type: 'giant' }), [40, 40, 'blunt']);
+      wear('crudeAxe', 'crudeTowerShield'); out.tower = g.combat.parryBonus(); out.towerHog = parry(fake({ T: TYPES.hog, type: 'hog' }), [10, 10, 'pierce']);
+      P.blocking = false; P.stats.god = false; wear(); return (out.hog && !out.boss && !out.giantHard && out.giantSoft && out.tower === 0 && !out.towerHog) || JSON.stringify(out);`);
+    await t.step('23 a beast outside a wall can\'t strike you inside it: its blow goes into the wall', `${F} AG.S.freeBuild = true; const f = new V(Math.sin(P.yaw), 0, Math.cos(P.yaw)), w = ahead(1.2); w.y = AG.heightAt(w.x, w.z);
+      const wall = B.place('wall', w, P.yaw), c = g.creatures.spawn('hog', P.pos.x + f.x * 2.6, P.pos.z + f.z * 2.6, { level: 0, aware: true, young: false }); c.yaw = Math.atan2(-f.x, -f.z);
+      const through = g.creatures.walled(c, P.pos, c.pos.distanceTo(P.pos)); B.remove(wall, false); const open = g.creatures.walled(c, P.pos, c.pos.distanceTo(P.pos)); g.creatures.remove(c);
+      return (through && !open) || JSON.stringify({ through, open });`);
+    await t.step('23 the Chimera\'s sting poisons only when it lands: not rolled clear of, not blocked', `${F} const { TYPES } = await import('/src/creatures/creatures.js'); P.stats.god = true; const c = fake({ T: TYPES.chimera, type: 'chimera', boss: true, pos: ahead(5) }); const out = {};
+      const sting = () => { P.stats.remove('poisoned'); g.trial.runMove(c, { k: 'sting', ph: 0, t: 0, hit: 0, dur: 1 }, 0.016, 5, P.yaw); return P.stats.has('poisoned'); };
+      P.dodge = { t: 0.2, yaw: P.yaw }; out.rolled = sting(); P.dodge = null; out.hit = sting(); P.stats.remove('poisoned'); P.stats.god = false; return (!out.rolled && out.hit) || JSON.stringify(out);`);
+    await t.step('23 arrows grow with the Bowman skill, Zeus\'s Blessing and the Cretan helmet, take the bow\'s own backstab, and a full set\'s bonus counts', `${F} wear('cretanBow', 'cretanHelmet', 'cretanArmor', 'cretanLegs', 'cretanCape'); g.give('crudeArrow', 10); const S = P.stats, sk = S.skills.bow, lv = sk.level;
+      sk.level = 21; S.add('zeusBlessing'); g.combat.shoot(1); const a = g.combat.arrows.at(-1), want = S.damageK('bow') * 1.1 * 1.05; sk.level = lv; S.remove('zeusBlessing');
+      const { SET_BONUS } = await import('/src/game/items.js'), armour = g.armor(); wear();
+      return (Math.abs(a.k - want) < 1e-6 && a.backstab === 4 && armour === Math.round(36 * SET_BONUS)) || JSON.stringify({ k: a.k, want, backstab: a.backstab, armour });`);
+    await t.step('23 the worn cape shows on a held frame too (S.still: no NaN in its rope)', `${F} AG.S.still = true; wear('cretanCape'); await frames(20); const K = P.hero.cape; if (!K) { AG.S.still = false; wear(); return true; }
+      const ok = K.group.visible && K.bones.every((b) => Number.isFinite(b.getWorldPosition(new V()).y)); AG.S.still = false; await frames(20); const moving = K.pts?.every((p) => Number.isFinite(p.y)); wear();
+      return (ok && moving !== false) || JSON.stringify({ ok, moving });`);
+    await t.step('23 a deer bolts from 18 m, and the better you sneak (and with a hunting bow) the closer you get', `${F} const { TYPES } = await import('/src/creatures/creatures.js'); const c = { pos: ahead(10), yaw: P.yaw + Math.PI, state: 'idle' }, sk = P.stats.skills.sneaking, lv = sk.level;
+      P.sneaking = true; sk.level = 1; const k1 = g.creatures.senseK(c, P.pos, P); sk.level = 100; const k100 = g.creatures.senseK(c, P.pos, P); wear('cretanBow'); const kBow = g.creatures.senseK(c, P.pos, P); wear(); sk.level = lv; P.sneaking = false;
+      return (TYPES.deer.flee >= 18 && k1 === 0.5 && k100 < 0.32 && kBow < k100) || JSON.stringify({ flee: TYPES.deer.flee, k1, k100, kBow });`);
+    await t.step('23 a beast that lost you can be sneak-attacked again', `const c = g.creatures.spawn('hog', P.pos.x + 70, P.pos.z, { level: 0, aware: true }); c.state = 'chase'; g.creatures.update(0.016); const calm = c.state === 'idle' && !c.aware; g.creatures.remove(c); return calm || JSON.stringify({ state: c.state, aware: c.aware });`);
+    await t.step('23 death takes 5% of each used skill (a level can go), leaves the unused alone, and the skill bars stay in their frames', `const { xpForLevel } = await import('/src/player/stats.js'); const S = P.stats, keep = JSON.stringify(S.skills);
+      S.skills.axe = { level: 10, xp: xpForLevel(10) + 10, seen: true }; S.skills.swimming = { level: 1, xp: 0 }; const lost = S.deathPenalty(), axe = S.skills.axe;
+      S.skills.mace = { level: 5, xp: 0 }; g.hud.toggle(true); const widths = [...document.querySelectorAll('#charBody .skill u')].map((u) => parseFloat(u.style.width)); g.hud.toggle(false); S.skills = JSON.parse(keep);
+      return (axe.level === 9 && lost.some(([n]) => n === 'Axeman') && !lost.some(([n]) => n === 'Swimming') && widths.every((w) => w >= 0 && w <= 100)) || JSON.stringify({ axe, lost, widths });`);
+    await t.step('23 dying saves at once: the grave, your waking at the bed, and the pack in the grave (a tab closed on the death screen loses nothing)', `const { save } = await import('/src/game/save.js'); const fake = g.save; g.save = () => save(g); AG.S.bed = { x: P.pos.x + 30, z: P.pos.z };
+      g.give('stone', 7); P.stats.damage(9999); const d = JSON.parse(localStorage.getItem('argonisos.world.v1') || 'null'); g.save = fake; localStorage.removeItem('argonisos.world.v1');
+      const gr = d?.graves?.at(-1); window._grave = g.graves.list.at(-1);
+      return (gr && gr.slots.some((s) => s.id === 'stone') && !d.inv.slots.some(Boolean) && Math.abs(d.player.x - AG.S.bed.x) < 0.01 && d.player.stats.health > 0) || JSON.stringify({ graves: d?.graves?.length, player: d?.player && [d.player.x, d.player.stats.health] });`);
+    await t.page.waitForFunction(() => !AG.player.dead, null, { timeout: 15000 });
+    await t.eval(`const q = window._grave; P.camYaw = Math.atan2(q.x - P.pos.x, q.z - P.pos.z) - Math.PI; return true;`); await t.wait(800);
+    await t.step('23 …your grave is on the compass when you wake at your bed', `return !!document.querySelector('#compassStrip .poi.grave') || document.getElementById('compassStrip').innerHTML.slice(0, 200);`);
+    await t.step('23 …and is gone from them once emptied', `g.graves.recover(window._grave); await new Promise((r) => setTimeout(r, 700)); return !document.querySelector('#compassStrip .poi.grave') || 'still marked';`);
+    await t.step('23 the Owl reads again what she has told you (pause menu), and no longer says dryads fear fire', `const { TOPICS } = await import('/src/game/owl.js'); g.owl.st.done = ['intro', 'fight', 'temple']; g.owl.counsel(() => (window._back = true));
+      const list = [...document.querySelectorAll('#owlCounsel [data-t]')].map((b) => b.dataset.t); document.querySelector('#owlCounsel [data-t="fight"]').click(); const shown = document.querySelector('#owlTalk h3').textContent;
+      g.owl.next(); const back = !document.querySelector('#owlCounsel').classList.contains('hidden'); document.getElementById('counselX').click(); g.owl.st.done = ['intro', 'fight', 'night', 'house', 'temple', 'death']; g.owl.st.queue = [];
+      return (list.join() === 'intro,fight,temple' && shown === 'Guard and Roll' && back && window._back && !/fear fire/.test(TOPICS.yleos[0].body)) || JSON.stringify({ list, shown, back, closed: window._back });`);
+    await t.step('23 the clock\'s figures are Cinzel\'s, not Stoix\'s slashed zero', `const f = getComputedStyle(document.querySelector('#clock span')).fontFamily; return /^"?Cinzel/.test(f) || f;`);
   },
 };
