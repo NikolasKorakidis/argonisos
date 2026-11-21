@@ -21,8 +21,9 @@ import { FBXLoader } from '../../vendor/three/jsm/loaders/FBXLoader.js';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname), ROOT = path.resolve(HERE, '../..');
 const SRC = path.join(ROOT, 'incoming assets/mixamo'), OUT = path.join(ROOT, 'assets/models');
-// [our name, Mixamo's file, options]: loop (a cycle: only its steady travel taken out), cut ([from, to] seconds), rate
-// (played this much faster in the file itself)
+// [our name, Mixamo's file (or a list of files, the first found taken), options]: loop (a cycle: only its steady travel
+// taken out), cut ([from, to] seconds), rate (played this much faster in the file itself), optional (left out, and the
+// game does without it, until the file is downloaded into "incoming assets/mixamo")
 const LIB = {
   moves: [
     ['breathe', 'Breathing Idle', { loop: true }], ['look', 'Looking Around'],
@@ -37,6 +38,11 @@ const LIB = {
     ['slash', 'Sword And Shield Slash'], ['slash2', 'Sword And Shield Slash (1)'], ['chop', 'Standing Melee Attack Downward'], ['sweep', 'Standing Melee Attack Horizontal'], ['stab', 'Stabbing'],
     ['hitSmall', 'Standing React Small From Front'], ['hitLarge', 'Standing React Large From Front'], ['deathBack', 'Standing React Death Backward'], ['deathLeft', 'Standing React Death Left'],
     ['roll', 'Stand To Roll', { cut: [0.3, 2.1] }],
+    // (the dodge, Shift + Space: hero.js DODGES. Without these the hero turns and rolls; with them, the bow drawn or the
+    // guard up, a dodge to the side or back keeps him facing his aim, and from a run he rolls the quicker way. Mixamo's
+    // with root motion left in, 30 fps, like the rest)
+    ['rollFast', ['Quick Roll To Run', 'Running Dive Roll'], { optional: true }],
+    ['dodgeLeft', 'Standing Dodge Left', { optional: true }], ['dodgeRight', 'Standing Dodge Right', { optional: true }], ['dodgeBack', 'Standing Dodge Backward', { optional: true }],
   ],
   acts: [
     ['kick', 'Sword And Shield Kick'], ['pickUp', 'Picking Up'], ['drink', 'Drinking'], ['sit', 'Sitting Idle', { loop: true }], ['sleep', 'Sleeping Idle', { loop: true }], ['getUp', 'Getting Up'],
@@ -135,7 +141,9 @@ function glb(clips) {
 const only = process.argv.slice(2);
 for (const [file, list] of Object.entries(LIB)) {
   if (only.length && !only.includes(file)) continue;
-  const clips = list.map(([name, src, o]) => convert(name, src, o)), out = path.join(OUT, file + '.glb'), data = glb(clips);
+  const found = (src) => [].concat(src).find((f) => fs.existsSync(path.join(SRC, f + '.fbx')));
+  for (const [name, src, o] of list) if (o?.optional && !found(src)) console.log(`   (${name}: no ${[].concat(src).join(' or ')}.fbx, left out)`);
+  const clips = list.filter(([, src, o]) => !o?.optional || found(src)).map(([name, src, o]) => convert(name, found(src) || src, o)), out = path.join(OUT, file + '.glb'), data = glb(clips);
   fs.writeFileSync(out, data);
   // (and the base64 module copy, for static hosting that won't serve .glb: assets.js falls back to it)
   fs.writeFileSync(out + '.js', `export default "${data.toString('base64')}";\n`);

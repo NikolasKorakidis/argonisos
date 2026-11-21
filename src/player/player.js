@@ -7,7 +7,7 @@ import { colliders } from '../world/colliders.js';
 import { stormWallDepth, stormWallOut } from '../world/stormwall.js';
 import { climbable, climbLimit } from '../world/gen.js';
 import { input, down, hit } from '../input.js';
-import { Hero, strikeOf } from './hero.js';
+import { Hero, strikeOf, DODGE_MOVE } from './hero.js';
 import { RUN, SPRINT, SWIM, SNEAK, AIM, BLOCK_K, GRAV, JUMP_V } from './speeds.js';
 import { SETTINGS } from '../ui/settings.js';
 import { Stats } from './stats.js';
@@ -17,9 +17,13 @@ import { GAIT } from '../audio/sound.js';
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const _lv = new THREE.Vector3();
 const SWIM_DEPTH = 1.35, RADIUS = 0.38;
-// The dodge roll (Space with RMB held, as in Valheim: with any weapon, the bow or bare hands): its stamina, and the
-// stretch of it no blow lands (seconds in)
-const DODGE = { cost: 12, safe: [0.05, 0.55] };
+// The dodge (Space with RMB held, as in Valheim: with any weapon, the bow or bare hands; or Shift + Space, whatever is in
+// your hands): its stamina, the stretch of it no blow lands (seconds in), how long after one before the next (s), and the
+// most the ground may fall away (a ledge: the dodge stops at its edge) or rise (a bank too steep to roll up) in one
+// frame's step, beyond what the step's own length allows (m). How far and how long: hero.js DODGE_MOVE
+const DODGE = { cost: 12, safe: [0.05, 0.55], cool: 0.25, drop: 0.6, rise: 0.05 };
+// The quickest the hero turns to face the aim or the guard (radians a second): half round in about a quarter of a second
+const TURN_MAX = 12;
 // The free camera while seated (seat.look: sitting on the ground, game/acts.js): how far from the hero it may go (m), how fast WASD and Q / E move that point (m/s, Shift three times as fast), how close to the
 // ground it may come (m), the pitch it may reach either way (radians) and the wheel's range (m)
 const LOOK = { r: 30, speed: 3, low: 0.15, pitch: 1.5, near: 0.8, far: 14 };
@@ -42,7 +46,7 @@ export class Player {
     this.bossCam = false; this.bossK = 0; this.focus = null;   // (the boss camera: BOSS_CAM)
     this.onGround = true; this.swimming = false; this.sprinting = false; this.sneaking = false; this.jumped = false; this.jumpBuf = 0;
     this.speed = 0; this.winded = false; this.swing = 0; this.swingKind = 'punch'; this.swingHit = false; this.equip = null; this.bow = null;
-    this.strikeMove = null; this.combo = 0; this.comboT = 0; this.dodge = null; this.guardUp = false;
+    this.strikeMove = null; this.combo = 0; this.comboT = 0; this.dodge = null; this.dodgeCd = 0; this.guardUp = false;
     this.stats = new Stats(); this.dead = false; this.deadT = 0; this.lean = 0; this.bank = 0; this.lastYaw = 0; this.swimD = 0; this.sprintD = 0;
     this.speedMod = 0;            // from equipment (-0.05 per heavy item etc.)
     this.overweight = false; this.frozen = false;  // frozen: no control (menus, cutscenes)
@@ -75,6 +79,18 @@ export class Player {
   die() { if (this.dead) return; this.seat = null; this.dead = true; this.deadT = 0; this.swing = 0; this.bow = null; this.dodge = null; this.fell = this.hero.die(); }
   // no blow lands in the heart of a dodge roll
   get dodging() { return !!this.dodge && this.dodge.t > DODGE.safe[0] && this.dodge.t < DODGE.safe[1]; }
+  // A dodge's frame: the hero carried along its clip's own travel (hero.dodge path, scaled to DODGE_MOVE.dist), the way it
+  // goes, whichever way he faces; walls stop him (colliders, after), and so does the edge of a drop or a bank too steep,
+  // where he stops and finishes the move in place
+  dodgeStep(dt) {
+    const d = this.dodge; d.t += dt; const f = d.path(d.t / DODGE_MOVE.time), step = (f - d.f) * DODGE_MOVE.dist; d.f = f;
+    if (!d.stopped && step > 0) {
+      const x = this.pos.x + d.dx * step, z = this.pos.z + d.dz * step, g = this.groundHere(x, z, this.pos.y + 0.3), y = this.onGround ? this.pos.y : g;
+      if (g < y - step - DODGE.drop || g > y + step + DODGE.rise) d.stopped = true; else { this.pos.x = x; this.pos.z = z; }
+    }
+    if (d.t >= DODGE_MOVE.time) this.endDodge();
+  }
+  endDodge() { this.dodge = null; this.dodgeCd = DODGE.cool; }
   update(dt) {
     const S = this.stats; this.daze(dt);
     // ---- camera input
@@ -90,7 +106,7 @@ export class Player {
     if (this.seat) { this.updateSeat(dt); this.updateCamera(dt); return; }
     // ---- movement intent
     const ctl = !this.frozen && !S.has('stunned');
-    const ix = ctl ? (down('KeyD') ? 1 : 0) - (down('KeyA') ? 1 : 0) : 0, iz = ctl ? (down('KeyW') ? 1 : 0) - (down('KeyS') ? 1 : 0) : 0;
+    const ix = ctl ? (down('KeyD') ? 1 : 0) - (down('KeyA') ? 1 : 0) : 0, iz = ctl ? (down('KeyW') ? 1 : 0) - (down('KeyS') ? 1 : 0) : 0, shift = down('ShiftLeft') || down('ShiftRight');
     const want = new THREE.Vector3();
     this.sprinting = false;
     if (ctl && hit('ControlLeft')) this.sneaking = !this.sneaking;
@@ -99,7 +115,7 @@ export class Player {
       const fx = -Math.sin(this.camYaw), fz = -Math.cos(this.camYaw), l = Math.hypot(ix, iz);
       want.set((fx * iz - fz * ix) / l, 0, (fz * iz + fx * ix) / l);
       if (S.stamina <= 0.5) this.winded = true; else if (S.stamina > 12) this.winded = false;
-      const aiming = this.aiming, shift = down('ShiftLeft') || down('ShiftRight');
+      const aiming = this.aiming;
       const canSprint = shift && !this.winded && !this.swimming && !aiming && !this.overweight && this.swing <= 0 && !this.blocking;
       if (shift && this.overweight && !this.warnedW) { this.onToast?.('Carrying too much to run'); this.warnedW = true; setTimeout(() => (this.warnedW = false), 4000); }
       if (canSprint) this.sneaking = false;
@@ -140,12 +156,13 @@ export class Player {
       }
     }
     this.pos.x += mx; this.pos.z += mz;
-    // the travel an action asks for (a roll, a stagger back), from the hero's last frame
+    // the travel an action asks for (a stagger back, getting up), from the hero's last frame; and the dodge's (dodgeStep)
     this.pos.x += H.step.x; this.pos.z += H.step.z; H.step.set(0, 0, 0);
+    if (this.dodge) this.dodgeStep(dt); else if (this.dodgeCd > 0) this.dodgeCd -= dt;
     // facing: where you move, or where the camera looks while striking, aiming or blocking (then the legs walk the way
     // you go: hero.js plays the backing-up and sideways clips)
     if (this.dodge) this.yaw += angDiff(this.dodge.yaw, this.yaw) * Math.min(1, dt * 20);
-    else if (this.aiming || this.blocking || this.swing > 0) { const ty = Math.atan2(-Math.sin(this.camYaw), -Math.cos(this.camYaw)); this.yaw += angDiff(ty, this.yaw) * Math.min(1, dt * 14); }
+    else if (this.aiming || this.blocking || this.swing > 0) { const ty = Math.atan2(-Math.sin(this.camYaw), -Math.cos(this.camYaw)); this.yaw += clamp(angDiff(ty, this.yaw) * Math.min(1, dt * 14), -TURN_MAX * dt, TURN_MAX * dt); }   // (round to the aim quickly, but not in a blink)
     else if (speed > 0.3 && want.lengthSq()) { const ty = Math.atan2(want.x, want.z); this.yaw += angDiff(ty, this.yaw) * Math.min(1, dt * (this.onGround ? 10 : 4)); }
     // ---- collisions: trees, rocks, buildings
     colliders.resolve(this.pos, RADIUS, this.pos.y);
@@ -159,16 +176,20 @@ export class Player {
     // ---- jump and gravity
     if (ctl && hit('Space')) this.jumpBuf = 0.15;
     if (this.jumpBuf > 0) this.jumpBuf -= dt;
-    // ...or, with RMB held (the guard up, the bow drawn, or bare hands: guardUp, combat.js), a dodge roll the way you're
-    // going (straight back with no direction held)
-    if (this.jumpBuf > 0 && (this.blocking || this.guardUp) && this.onGround && !this.swimming && !this.dodge && held > 0.9 && H.has('roll')) {
+    // ...or a dodge: with RMB held (the guard up, the bow drawn, or bare hands: guardUp, combat.js) or with Shift, the way
+    // the keys point (straight back with none held). Shift + Space never jumps
+    const dodgeKey = this.blocking || this.guardUp || shift;
+    if (this.jumpBuf > 0 && dodgeKey && this.onGround && !this.swimming && !this.dodge && this.dodgeCd <= 0 && held > 0.9 && H.has('roll')) {
       this.jumpBuf = 0;
-      const yaw = want.lengthSq() ? Math.atan2(want.x, want.z) : this.yaw + Math.PI;
       if (!S.use(DODGE.cost, 'jumping')) this.onToast?.('Too tired to roll');
-      else { H.action('roll', { upper: false, rate: 1.6, blend: 0.08, fade: 0.25, root: 'move', lock: true, feet: false, onDone: () => (this.dodge = null) }); this.dodge = { t: 0, yaw }; this.hv.set(0, 0, 0); this.onStep?.('roll'); }
+      else {
+        const fx = -Math.sin(this.camYaw), fz = -Math.cos(this.camYaw), dir = ix || iz ? Math.atan2(fx * iz - fz * ix, fz * iz + fx * ix) : this.yaw + Math.PI;
+        const d = { t: 0, f: 0, dx: Math.sin(dir), dz: Math.cos(dir) };
+        Object.assign(d, H.dodge(dir, this.yaw, this.aiming || this.blocking, this.speed > RUN * 0.8, (why) => { if (why !== 'end' && this.dodge === d) this.endDodge(); }));
+        this.dodge = d; this.hv.set(0, 0, 0); this.sprinting = false; this.onStep?.('roll');
+      }
     }
-    if (this.dodge) { this.dodge.t += dt; if (this.dodge.t > 2) this.dodge = null; }
-    if (this.jumpBuf > 0 && this.onGround && !this.swimming && this.swing <= 0 && held > 0.9) {
+    if (this.jumpBuf > 0 && !dodgeKey && this.onGround && !this.swimming && this.swing <= 0 && held > 0.9) {
       this.jumpBuf = 0;
       if (S.use(5, 'jumping')) { this.vel.y = JUMP_V * Math.sqrt(S.skillK('jumping')); this.onGround = false; this.jumped = true; S.train('jumping', 2.5); this.onStep?.('jump'); }
       else this.onToast?.('Too tired to jump');
@@ -198,7 +219,10 @@ export class Player {
     this.bank = lerp(this.bank, clamp(-yawRate * 0.03 * clamp(speed / 5, 0, 1), -0.12, 0.12), Math.min(1, dt * 6));
     this.root.rotation.set(this.lean, this.yaw, this.bank + (this.sway || 0));
     // ---- animation
-    let moveRel = 0; if ((this.aiming || this.blocking) && speed > 0.3) moveRel = angDiff(Math.atan2(this.hv.x, this.hv.z), this.yaw);
+    // (the way the legs go against the facing, while it's held another way: aiming, blocking, striking; and after, until
+    // the hero has turned to where he goes, so the legs keep going his way as he turns, not wheeling through the strafes)
+    let moveRel = 0; const facing = this.aiming || this.blocking || this.swing > 0;
+    if (speed > 0.3) { const r = angDiff(Math.atan2(this.hv.x, this.hv.z), this.yaw); this.relHeld = facing || (this.relHeld && Math.abs(r) > 0.2); if (this.relHeld) moveRel = r; } else this.relHeld = false;
     H.update(dt, { baseY: this.sneaking && !H.crouches ? -0.12 : 0, speed, sprinting: this.sprinting, onGround: this.onGround || this.swimming, jumped: this.jumped, vy: this.vel.y, moving: !!(ix || iz) || this.jumpBuf > 0, swimming: this.swimming, water: 0, moveRel,
       sneaking: this.sneaking && !this.swimming, guard: this.guard, blocking: this.blocking && !this.dodge, swing: this.swing, swingKind: this.swingKind, strike: this.strikeMove,
       equip: this.equip, bow: this.bow, aimPt: this.aimPt, ground: this.groundFn ||= (x, z, y) => this.groundHere(x, z, y), rootY: this.pos.y });
