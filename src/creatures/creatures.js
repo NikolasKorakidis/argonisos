@@ -20,6 +20,7 @@ import { makeBody, preloadBodies } from './models.js';
 import { burst, dust, addShake } from '../render/fx.js';
 import { camera } from '../render/core.js';
 import { stormWallDepth } from '../world/stormwall.js';
+import { waterAt } from '../world/river.js';
 import { icon } from '../ui/icons.js';
 import { rr } from '../util/math.js';
 
@@ -90,7 +91,7 @@ export class Creatures {
     const night = this.g.S.time >= 0.72 || this.g.S.time < 0.02;
     for (let tries = 0; tries < 6; tries++) {
       const a = Math.random() * 6.283, d = rr(42, 75), x = P.x + Math.cos(a) * d, z = P.z + Math.sin(a) * d, h = heightAt(x, z);
-      if (h < 1.2 || stormWallDepth(x, z) > 0) continue;
+      if (h < 1.2 || waterAt(x, z) > h - 0.3 || stormWallDepth(x, z) > 0) continue;   // (nor in the river or the lake)
       const bk = this.biomeKey(x, z); if (!bk) continue;
       if (this.g.build?.nearStation('workbench', new THREE.Vector3(x, h, z), 30)) continue;   // no spawns in the player's camp
       // out of sight: behind the camera, or far enough
@@ -100,7 +101,7 @@ export class Creatures {
       for (const [t, w] of tbl) { pick -= w; if (pick <= 0) { type = t; break; } }
       const [m0, m1] = TYPES[type].mob, n = ri(m0, m1), F = FAMILY[type], lone = F ? false : undefined;   // (hogs and deer are young only with their mothers)
       if (F && Math.random() < F.p) { this.spawnFamily(type, x, z, night, Math.max(1, CAP[key] - near - 1)); return; }
-      for (let i = 0; i < n; i++) { const xx = x + rr(-4, 4), zz = z + rr(-4, 4); if (heightAt(xx, zz) > 1) this.spawn(type, xx, zz, { level: night && Math.random() < 0.3 ? ri(1, 2) : undefined, young: lone }); }
+      for (let i = 0; i < n; i++) { const xx = x + rr(-4, 4), zz = z + rr(-4, 4); if (heightAt(xx, zz) > 1 && waterAt(xx, zz) < heightAt(xx, zz) - 0.3) this.spawn(type, xx, zz, { level: night && Math.random() < 0.3 ? ri(1, 2) : undefined, young: lone }); }
       return;
     }
   }
@@ -112,7 +113,7 @@ export class Creatures {
     const M = this.spawn(type, x, z, { level: lv, young: false }), n = Math.min(ri(...F.young), room); M.brood = [];
     for (let i = 0; i < n; i++) {
       const slot = Math.PI + (n > 1 ? (i / (n - 1) - 0.5) * 1.8 : rr(-0.6, 0.6)) + rr(-0.15, 0.15), slotR = M.T.r + rr(0.7, 1.3), a = M.yaw + slot;
-      const xx = x + Math.sin(a) * slotR, zz = z + Math.cos(a) * slotR; if (heightAt(xx, zz) <= 1) continue;
+      const xx = x + Math.sin(a) * slotR, zz = z + Math.cos(a) * slotR; if (heightAt(xx, zz) <= 1 || waterAt(xx, zz) > heightAt(xx, zz) - 0.3) continue;
       const y = this.spawn(type, xx, zz, { level: 0, young: true }); Object.assign(y, { mother: M, slot, slotR, yaw: M.yaw }); M.brood.push(y);
     }
     return M;
@@ -282,7 +283,8 @@ export class Creatures {
       if (c.hitT > 0) c.speed *= c.boss ? 1 - Math.min(1, dt * 3) : 0.5;
       if (c.shove?.t > 0) { const k = Math.min(dt, c.shove.t) / c.shove.d; c.shove.t -= dt; c.pos.x += c.shove.x * k; c.pos.z += c.shove.z * k; }   // (unstick: shouldered free over a moment)
       const nx = ctl?.at ? ctl.at.x : c.pos.x + Math.sin(c.yaw) * c.speed * dt, nz = ctl?.at ? ctl.at.z : c.pos.z + Math.cos(c.yaw) * c.speed * dt, nh = heightAt(nx, nz);
-      if (nh > (T.heavy ? -1.2 : 0.2) && stormWallDepth(nx, nz) === 0) { c.pos.x = nx; c.pos.z = nz; } else { c.wanderYaw = c.yaw + Math.PI; c.speed *= 0.3; if (c.state === 'flee') c.yaw += 1; }
+      const nw = waterAt(nx, nz);   // (the river's and the lake's water as the sea's: wading its shallows, never its deep)
+      if (nh - nw > (T.heavy ? -1.2 : nw > 0.05 ? -0.45 : 0.2) && stormWallDepth(nx, nz) === 0) { c.pos.x = nx; c.pos.z = nz; } else { c.wanderYaw = c.yaw + Math.PI; c.speed *= 0.3; if (c.state === 'flee') c.yaw += 1; }
       // room for each: they don't stand in one another or in you (a family or a herd spreads round you rather than into one spot)
       if (!c.boss && !T.heavy) {
         for (const o of this.list) { if (o === c || o.dead) continue; const dx = c.pos.x - o.pos.x, dz = c.pos.z - o.pos.z, need = (T.r + o.T.r) * (c.summoned && o.summoned ? 2.2 : 0.75), dd = dx * dx + dz * dz;   // (a boss's dead keep an arm's length apart)

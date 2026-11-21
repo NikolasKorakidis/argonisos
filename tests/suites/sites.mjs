@@ -9,7 +9,7 @@
 // on the way up (Patch 24) and the other agents' work of that round in progress: record it again once the round is in,
 // before moving any site code)
 const FINGERPRINT = {
-  solids: 'f95d6c9b', tops: '31d55e52', uses: '67a640ce', colliders: '63681f22', plants: '798b817a', groups: 'ebca4400',
+  solids: 'a81fa4ba', tops: 'f26a546f', uses: '67a640ce', colliders: 'b07fa0ad', plants: '798b817a', groups: '44f8cde8',
 };
 
 // (FNV-1a over numbers rounded to a fixed precision, as in world.mjs, so the last float bit doesn't count; the mesh

@@ -19,6 +19,7 @@ import { wettable } from './wetness.js';
 import { stony } from './rock.js';
 import { siteProp, sitePropAt, piece, pieceAt, hasPiece, chestParts } from './site-pack.js';
 import { buildTown, buildSpot } from './town.js';
+import { RIVER } from './river.js';
 import { mergeGeometries } from '../../vendor/three/jsm/utils/BufferGeometryUtils.js';
 import { ULTRA } from '../render/quality.js';
 
@@ -443,6 +444,7 @@ export class Structures {
     if (S.town) buildTown(this, S.town);   // (last: they throw dice of their own, so the places above keep theirs)
     for (const sp of S.spots) buildSpot(this, sp);
     for (const m of S.mtn) this.mtnSpot(m);
+    if (RIVER.bridge) this.bridge(RIVER.bridge);
     const col = this.solids.map((c) => ({ ...c, ref: { site: true } })); this.g.colliders.addGroup('sites', col);
     for (const [k, R] of Object.entries(this.ruins || {})) this.g.colliders.addGroup('ruin:' + k, R.walls.map((c) => ({ ...c, ref: { site: true } })));   // (the walls that will fall, on their own)
   }
@@ -1248,6 +1250,22 @@ export class Structures {
   }
   // ---- (Patch 24) the places to stop on the way up Olympos (sites.js SITES.mtn), each a little site of its own; +z looks
   // out from the mountain (the spring's, from its bank onto the path)
+  // (Patch 24) the footbridge over the meadow river (river.js layBridge): a deck of rough planks on two log stringers,
+  // carried on pairs of piles driven into the bed every few metres, a rail of poles along each side, and a footing of
+  // dressed stone at each end where it meets the bank. Local +z runs across the river.
+  bridge(b) {
+    const s = { x: b.x, z: b.z, y: b.y, r: b.len / 2 + 2, kind: 'spot' }, ctx = this.site(s, b.rot), P = ctx.P, lr = dice(907), L = b.len / 2, gy = (x, z) => this.groundY(ctx, x, z);
+    for (const x of [-0.85, 0.85]) P.push([new THREE.CylinderGeometry(0.2, 0.22, 2 * L + 0.6, 8).rotateX(Math.PI / 2).translate(x, -0.3, 0), SMAT.wood]);   // the stringers
+    for (let z = -L; z <= L; z += 0.34) P.push([uvBox(2.3 + (lr() - 0.5) * 0.25, 0.08, 0.3, 1 / 2).rotateY((lr() - 0.5) * 0.06).translate((lr() - 0.5) * 0.12, -0.04 + (lr() - 0.5) * 0.03, z), lr() < 0.3 ? GMAT.oldWood : SMAT.wood]);
+    for (let z = -L + 1; z <= L - 1; z += 3.6) for (const x of [-0.95, 0.95]) { const g = gy(x, z) - 0.4; if (g < -0.5) P.push([new THREE.CylinderGeometry(0.15, 0.17, -g, 7).translate(x, g / 2, z), SMAT.wood]); }   // (piles down to the bed or the bank)
+    for (const x of [-1.15, 1.15]) {
+      for (let z = -L; z <= L + 0.01; z += (2 * L) / Math.max(2, Math.round((2 * L) / 2.4))) P.push([new THREE.CylinderGeometry(0.06, 0.07, 1.05, 6).translate(x, 0.5, z), SMAT.wood]);
+      P.push([new THREE.CylinderGeometry(0.05, 0.05, 2 * L, 6).rotateX(Math.PI / 2).translate(x, 0.98, 0), SMAT.wood]); this.wall(ctx, x, -L, x, L, 1.1, 0.1);
+    }
+    for (const z of [-L - 0.6, L + 0.6]) { const g = gy(0, z); P.push([uvBox(3, 0.9 - Math.min(0, g), 1.3, 1 / 2).translate(0, Math.min(0, g) / 2 - 0.47, z), GMAT.ashlar]); }   // (the footings)
+    this.top(ctx, -1.15, 1.15, -L - 1.2, L + 1.2, 0.0);
+    this.finish(ctx, { w: 3, d: 2 * L + 2.6 });
+  }
   mtnSpot(s) {
     const ctx = this.site(s, s.rot), P = ctx.P, lr = dice(311 + s.v), gy = (x, z) => this.groundY(ctx, x, z);
     const put = (k, x, z, rot = 0, r = 0, sc = 1, y = 0) => { P.push(...piece(k, x, y, z, rot, sc)); if (r) this.solid(ctx, x, z, r); };

@@ -6,6 +6,7 @@ import { groundAt } from '../world/groundcut.js';
 import { colliders } from '../world/colliders.js';
 import { stormWallDepth, stormWallOut } from '../world/stormwall.js';
 import { climbable, climbLimit, routeAt, CLIMB } from '../world/gen.js';
+import { waterAt, riverAt } from '../world/river.js';
 import { input, down, hit } from '../input.js';
 import { Hero, strikeOf, DODGE_MOVE } from './hero.js';
 import { RUN, SPRINT, SWIM, SNEAK, AIM, BLOCK_K, GRAV, JUMP_V } from './speeds.js';
@@ -17,6 +18,11 @@ import { GAIT } from '../audio/sound.js';
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const _lv = new THREE.Vector3();
 const SWIM_DEPTH = 1.35, RADIUS = 0.38;
+// The water's surface over (x, z): the river's or the lake's where they are (river.js), else the sea's (0). You swim where
+// it stands more than SWIM_DEPTH over the ground, and wade where it stands over your ankles: slower the deeper (WADE: the
+// share of your speed left at swimming depth), and in the river the current carries you downstream (CURRENT: how much
+// of its speed, swimming and wading)
+const WADE = 0.55, CURRENT = { swim: 0.75, wade: 0.3 };
 // The dodge (Space with RMB held, as in Valheim: with any weapon, the bow or bare hands; Shift is the sprint and its
 // leap, never a dodge): its stamina, the stretch of it no blow lands (seconds in), how long after one before the next (s), and the
 // most the ground may fall away (a ledge: the dodge stops at its edge) or rise (a bank too steep to roll up) in one
@@ -63,7 +69,7 @@ export class Player {
     // a footstep each time a foot comes down in the stride the legs are playing (hero.update), on the ground
     this.hero.onFootfall = () => { if (this.onGround && !this.swimming) { GAIT.k = this.sneaking ? 0.5 : this.sprinting ? 1.3 : 1; this.onStep?.('step'); } };   // (louder sprinting, softer sneaking: sound.js)
   }
-  spawn(x, z) { this.seat = null; this.pos.set(x, Math.max(groundAt(x, z), -SWIM_DEPTH), z); this.vel.set(0, 0, 0); this.hv.set(0, 0, 0); this.camInit = false; this.lookK = 0; this.lookOff.set(0, 0, 0); this.home = null; }
+  spawn(x, z) { this.seat = null; this.pos.set(x, Math.max(groundAt(x, z), waterAt(x, z) - SWIM_DEPTH), z); this.vel.set(0, 0, 0); this.hv.set(0, 0, 0); this.camInit = false; this.lookK = 0; this.lookOff.set(0, 0, 0); this.home = null; }
   get camForward() { return new THREE.Vector3(-Math.sin(this.camYaw) * Math.cos(this.camPitch), Math.sin(this.camPitch), -Math.cos(this.camYaw) * Math.cos(this.camPitch)); }
   // Start a strike (LMB). kind: hero.js strikeKind ('punch', 'tool' or a weapon's skill). Costs stamina; the hit lands
   // partway through the swing (onStrike), where the move's weapon meets what's in front; blows that follow each other
@@ -103,8 +109,9 @@ export class Player {
       this.camYaw -= input.dx * 0.0022 * input.sens; this.camPitch = clamp(this.camPitch - input.dy * 0.0022 * input.sens, lerp(-1.25, -LOOK.pitch, L), lerp(1.0, LOOK.pitch, L));
       this.camDist = clamp(this.camDist + input.wheel * (0.6 + this.camDist * 0.12 * L), lerp(1.8, LOOK.near, L), lerp(11, LOOK.far, L));
     }
-    const ground = groundAt(this.pos.x, this.pos.z);
-    this.swimming = ground < -SWIM_DEPTH && this.pos.y <= -SWIM_DEPTH + 0.15;
+    const ground = groundAt(this.pos.x, this.pos.z), wl = waterAt(this.pos.x, this.pos.z); this.waterLevel = wl;
+    this.swimming = ground < wl - SWIM_DEPTH && this.pos.y <= wl - SWIM_DEPTH + 0.15;
+    this.wading = !this.swimming && wl - this.pos.y > 0.25 ? Math.min(1, (wl - this.pos.y - 0.25) / (SWIM_DEPTH - 0.25)) : 0;   // (0 on dry land, 1 all but out of your depth)
     if (this.dead) { this.updateDead(dt); this.updateCamera(dt); return; }
     if (this.seat) { this.updateSeat(dt); this.updateCamera(dt); return; }
     // ---- movement intent
@@ -124,7 +131,7 @@ export class Player {
       if (canSprint) this.sneaking = false;
       this.sprinting = canSprint;
       const base = this.swimming ? SWIM * S.skillK('swimming') : canSprint ? SPRINT * S.skillK('sprinting') : this.sneaking ? SNEAK : aiming ? AIM : RUN;
-      want.multiplyScalar(base * S.speedK * (1 + this.speedMod) * (this.overweight && !this.swimming ? 0.6 : 1) * (this.blocking ? BLOCK_K : 1) * held);
+      want.multiplyScalar(base * S.speedK * (1 + this.speedMod) * (this.overweight && !this.swimming ? 0.6 : 1) * (this.blocking ? BLOCK_K : 1) * held * (1 - (1 - WADE) * this.wading));
       // the lie of the land: slower and leaning in up a slope, a little quicker leaning back down one
       if (this.onGround && !this.swimming) { const d = want.clone().normalize(), e = 0.7; this.slope = clamp((this.groundHere(this.pos.x + d.x * e, this.pos.z + d.z * e) - this.groundHere(this.pos.x - d.x * e, this.pos.z - d.z * e)) / (2 * e), -1, 1);
         want.multiplyScalar(this.slope > 0 ? 1 - 0.35 * Math.min(this.slope, 0.8) : 1 + 0.12 * Math.min(-this.slope, 0.6)); }
@@ -164,6 +171,8 @@ export class Player {
       }
     }
     this.pos.x += mx; this.pos.z += mz;
+    // the river's current, swimming or wading (none in the lake, little in the deep reach: river.js)
+    if (this.swimming || this.wading > 0) { const r = riverAt(this.pos.x, this.pos.z); if (r && r.speed > 0.05) { const k = Math.min(r.speed, 1.8) * (this.swimming ? CURRENT.swim : CURRENT.wade * this.wading) * dt; this.pos.x += r.fx * k; this.pos.z += r.fz * k; } }
     // the travel an action asks for (a stagger back, getting up), from the hero's last frame; and the dodge's (dodgeStep)
     this.pos.x += H.step.x; this.pos.z += H.step.z; H.step.set(0, 0, 0);
     if (this.dodge) this.dodgeStep(dt); else if (this.dodgeCd > 0) this.dodgeCd -= dt;
@@ -203,8 +212,8 @@ export class Player {
       else this.onToast?.('Too tired to jump');
     }
     const wasAir = !this.onGround && this.vel.y < -6;
-    const g2 = groundAt(this.pos.x, this.pos.z), floor = Math.max(g2, -SWIM_DEPTH), fl = Math.max(floor, this.floorAt ? this.floorAt(this.pos) : -1e9);
-    if (this.swimming && g2 < -SWIM_DEPTH) { this.pos.y = lerp(this.pos.y, -SWIM_DEPTH, Math.min(1, dt * 6)); this.vel.y = 0; this.onGround = false; }
+    const g2 = groundAt(this.pos.x, this.pos.z), w2 = waterAt(this.pos.x, this.pos.z) - SWIM_DEPTH, floor = Math.max(g2, w2), fl = Math.max(floor, this.floorAt ? this.floorAt(this.pos) : -1e9);
+    if (this.swimming && g2 < w2) { this.pos.y = lerp(this.pos.y, w2, Math.min(1, dt * 6)); this.vel.y = 0; this.onGround = false; }
     else {
       this.vel.y -= GRAV * dt; this.pos.y += this.vel.y * dt;
       // walk down slopes without bouncing: snap to the ground if it's just below
@@ -231,7 +240,7 @@ export class Player {
     // the hero has turned to where he goes, so the legs keep going his way as he turns, not wheeling through the strafes)
     let moveRel = 0; const facing = this.aiming || this.blocking || this.swing > 0;
     if (speed > 0.3) { const r = angDiff(Math.atan2(this.hv.x, this.hv.z), this.yaw); this.relHeld = facing || (this.relHeld && Math.abs(r) > 0.2); if (this.relHeld) moveRel = r; } else this.relHeld = false;
-    H.update(dt, { baseY: this.sneaking && !H.crouches ? -0.12 : 0, speed, sprinting: this.sprinting, onGround: this.onGround || this.swimming, jumped: this.jumped, vy: this.vel.y, moving: !!(ix || iz) || this.jumpBuf > 0, swimming: this.swimming, water: 0, moveRel,
+    H.update(dt, { baseY: this.sneaking && !H.crouches ? -0.12 : 0, speed, sprinting: this.sprinting, onGround: this.onGround || this.swimming, jumped: this.jumped, vy: this.vel.y, moving: !!(ix || iz) || this.jumpBuf > 0, swimming: this.swimming, water: this.waterLevel, moveRel,
       sneaking: this.sneaking && !this.swimming, guard: this.guard, blocking: this.blocking && !this.dodge, swing: this.swing, swingKind: this.swingKind, strike: this.strikeMove,
       equip: this.equip, bow: this.bow, aimPt: this.aimPt, ground: this.groundFn ||= (x, z, y) => this.groundHere(x, z, y), rootY: this.pos.y });
     this.updateCamera(dt);
@@ -247,7 +256,7 @@ export class Player {
     this.sway = on && !this.seat ? Math.sin(this.dazeT * 2.6) * 0.07 * k : 0;   // (swaying on his feet)
   }
   // what you'd stand on at (x, z): the ground (pressed down under floors), or a floor, step or stair within reach of y
-  groundHere(x, z, y = this.pos.y) { return Math.max(groundAt(x, z), -SWIM_DEPTH, this.floorAt ? this.floorAt({ x, z, y }) : -1e9); }
+  groundHere(x, z, y = this.pos.y) { return Math.max(groundAt(x, z), waterAt(x, z) - SWIM_DEPTH, this.floorAt ? this.floorAt({ x, z, y }) : -1e9); }
   get aiming() { return !!this.bow && (this.bow.st === 'draw' || this.bow.st === 'aim'); }
   // Dead: the hero falls (one of the deaths, hero.die, held on the ground; or, before those clips are in, the body tipped
   // over) and lies there until revived
@@ -255,7 +264,7 @@ export class Player {
     this.deadT += dt;
     if (!this.fell) this.root.rotation.z = lerp(this.root.rotation.z, Math.PI / 2, Math.min(1, dt * 4));
     else this.root.rotation.set(0, this.yaw, 0);
-    this.vel.y -= GRAV * dt; this.pos.y = Math.max(this.pos.y + this.vel.y * dt, Math.max(groundAt(this.pos.x, this.pos.z), -SWIM_DEPTH) + (this.fell ? 0 : 0.3));
+    this.vel.y -= GRAV * dt; this.pos.y = Math.max(this.pos.y + this.vel.y * dt, Math.max(groundAt(this.pos.x, this.pos.z), waterAt(this.pos.x, this.pos.z) - SWIM_DEPTH) + (this.fell ? 0 : 0.3));
     this.hero.step.set(0, 0, 0); this.hero.update(dt, { speed: 0, onGround: true, ...(this.fell ? { ground: this.groundFn ||= (x, z, y) => this.groundHere(x, z, y), rootY: this.pos.y } : {}) });
   }
   // Lifted up again where you wake: the hero gets up off the ground (lying on his back at first, the screen still dark),
@@ -320,7 +329,7 @@ export class Player {
     const want = target.clone().add(off), over = lerp(0.4, LOOK.low, L);
     // keep the camera out of hills between it and the player (free, it may come down close over the grass)
     for (let i = 1; i <= 6; i++) { const p = target.clone().lerp(want, i / 6), g = groundAt(p.x, p.z) + over; if (p.y < g) { want.y += g - p.y; } }
-    want.y = Math.max(want.y, groundAt(want.x, want.z) + lerp(0.5, LOOK.low, L), -0.6);
+    const wc = waterAt(want.x, want.z); want.y = Math.max(want.y, groundAt(want.x, want.z) + lerp(0.5, LOOK.low, L), wc > 0.05 ? wc + 0.3 : -0.6);   // (and over the river's water, never under it)
     if (L) {
       // (free: over floors too, and never further than LOOK.r from the hero)
       const fromHero = want.clone().sub(raw); if (fromHero.length() > LOOK.r) want.copy(raw).add(fromHero.setLength(LOOK.r));

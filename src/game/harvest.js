@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { SPECIES, STRIDE, CELL } from '../world/flora.js';
 import { biomeWeights, hash2, WORLD } from '../world/gen.js';
 import { groundAt } from '../world/groundcut.js';
+import { waterAt, riverAt } from '../world/river.js';
 import { burst, dust, addShake, punch, impact, spark } from '../render/fx.js';
 import { voice } from '../audio/sound.js';
 import { trunkMat } from '../world/trees.js';
@@ -88,17 +89,19 @@ const size = (t) => t.girth * t.girth * t.tall;
 // cylinder) against a little rolling resistance, so it stays put on gentle ground (under about 10°: roll) but once going
 // rolls on down to about 6° (rolling) and gathers speed on steeper ground; along its length it slides only where the
 // ground falls more steeply than its friction holds (about 31°). It bounces a little off a hard knock and glances off
-// what it strikes at an angle (only the end that strikes is stopped); it floats where it reaches the sea. Still for a
+// what it strikes at an angle (only the end that strikes is stopped); it floats where it reaches the sea, the river or the
+// lake, and in the river the current takes it downstream (Patch 24: over the falls, too). Still for a
 // moment, it sleeps (no more work) and is the splittable log there.
 const ROLL = { mu: 0.6, roll: 0.12, rolling: 0.07, bounce: 0.22, wall: 0.3, wallMu: 0.3, sleepV: 0.06, sleepT: 0.5, maxV: 16, maxStep: 0.1, iters: 3, life: 45, pop: 1.2, hurt: 2.2 };
 const GROUND = { ground: true };   // (what fallHit returns for the ground)
 const _a = new THREE.Vector3(), _c = new THREE.Vector3(), _d = new THREE.Vector3(), _e = new THREE.Vector3(), _n = new THREE.Vector3(), _q = new THREE.Vector3(), _t = new THREE.Vector3(), _Q = new THREE.Quaternion(), X = new THREE.Vector3(1, 0, 0);
 const shrink = (x, d) => (x > d ? x - d : x < -d ? x + d : 0);   // (friction: takes up to d off a speed, never past naught)
 // the ground under x, z: its height and slope, into out (h, the height; sx, sz, how it rises per metre along x and z;
-// water: true where the land lies under the sea, whose face, a little up the log, stands in: it floats)
+// water: true where the land lies under the water, whose face, a little up the log, stands in: it floats; cx, cz: the
+// current there, in the river)
 function floorAt(x, z, R, out) {
-  const h = groundAt(x, z), sea = WORLD.SEA - R * 0.6, e = 0.4; out.water = h < sea;
-  if (out.water) { out.h = sea; out.sx = out.sz = 0; return out; }
+  const h = groundAt(x, z), wl = waterAt(x, z), sea = Math.max(WORLD.SEA, wl) - R * 0.6, e = 0.4; out.water = h < sea; out.cx = out.cz = 0;
+  if (out.water) { out.h = sea; out.sx = out.sz = 0; const r = wl > WORLD.SEA ? riverAt(x, z) : null; if (r) { out.cx = r.fx * r.speed; out.cz = r.fz * r.speed; } return out; }
   out.h = h; out.sx = (groundAt(x + e, z) - h) / e; out.sz = (groundAt(x, z + e) - h) / e; return out;
 }
 // push a log's ends a, b so its point u of the way along moves d along n (each end by its share: the nearer end more)
@@ -412,7 +415,7 @@ export class Harvest {
         const gap = _q.y - (f.h + f.sx * (_q.x - f.x) + f.sz * (_q.z - f.z)); if (gap > R * 1.5) continue;
         _n.set(-f.sx, 1, -f.sz).normalize(); const depth = R - gap * _n.y; if (depth < near) continue;
         if (depth > 0) push(a, b, u, _n, Math.min(depth, 0.3));
-        if (last) { G[0].w += 1 - u; G[0].n.addScaledVector(_n, 1 - u); G[1].w += u; G[1].n.addScaledVector(_n, u); if (f.water) G[0].water = G[1].water = true; l.touch = true; l.at.copy(_q); }
+        if (last) { G[0].w += 1 - u; G[0].n.addScaledVector(_n, 1 - u); G[1].w += u; G[1].n.addScaledVector(_n, u); if (f.water) { G[0].water = G[1].water = true; l.cx = f.cx; l.cz = f.cz; } l.touch = true; l.at.copy(_q); }
       }
       for (const c of obs) {   // trunks, rocks, posts, walls, stumps
         const depth = column(a, b, R, c.x, c.z, c.trunk, c.y ?? -1e9, c.h !== undefined ? (c.y ?? 0) + c.h : 1e9, _n); if (depth < near) continue;
@@ -438,6 +441,7 @@ export class Harvest {
       if (vp < -2) { vn = Math.max(vn, -ROLL.bounce * vp); l.bang = Math.max(l.bang, -vp); }
       vn = Math.min(vn, Math.max(ROLL.pop, -ROLL.bounce * vp));   // (no more out of the ground than it came in with: no popping)
       v.copy(n).multiplyScalar(vn).addScaledVector(_a, va).addScaledVector(_c, vc);
+      if (C.water && (l.cx || l.cz)) { const q = Math.min(1, h * 0.8); v.x += (l.cx - v.x) * q; v.z += (l.cz - v.z) * q; }   // (carried along by the river)
       spin -= vc / R; ns++;
     }
     for (const c of W) {   // what it struck: it bounces off a little (the end that struck the more) and drags along it
