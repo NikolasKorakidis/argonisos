@@ -5,7 +5,7 @@ import { camera, renderer } from '../render/core.js';
 import { groundAt } from '../world/groundcut.js';
 import { colliders } from '../world/colliders.js';
 import { stormWallDepth, stormWallOut } from '../world/stormwall.js';
-import { climbable, climbLimit } from '../world/gen.js';
+import { climbable, climbLimit, routeAt, CLIMB } from '../world/gen.js';
 import { input, down, hit } from '../input.js';
 import { Hero, strikeOf, DODGE_MOVE } from './hero.js';
 import { RUN, SPRINT, SWIM, SNEAK, AIM, BLOCK_K, GRAV, JUMP_V } from './speeds.js';
@@ -21,7 +21,8 @@ const SWIM_DEPTH = 1.35, RADIUS = 0.38;
 // leap, never a dodge): its stamina, the stretch of it no blow lands (seconds in), how long after one before the next (s), and the
 // most the ground may fall away (a ledge: the dodge stops at its edge) or rise (a bank too steep to roll up) in one
 // frame's step, beyond what the step's own length allows (m). How far and how long: hero.js DODGE_MOVE
-// (a jump from a sprint carries a little higher, a running leap: over a log or a gap it carries you on at the sprint's pace)
+// (a jump from a sprint carries a little higher, a running leap: over a log or a gap it carries you on at the sprint's pace.
+// Not up a steep slope or a face you slide on: a leap there would hop you up what's meant to be climbed only by the path)
 const LEAP = 1.1;
 const DODGE = { cost: 12, safe: [0.05, 0.55], cool: 0.25, drop: 0.6, rise: 0.05 };
 // The quickest the hero turns to face the aim or the guard (radians a second): half round in about a quarter of a second
@@ -129,9 +130,12 @@ export class Player {
         want.multiplyScalar(this.slope > 0 ? 1 - 0.35 * Math.min(this.slope, 0.8) : 1 + 0.12 * Math.min(-this.slope, 0.6)); }
     } else this.slope = 0;
     // Olympos is climbed, not walked (gen.js CLIMB): on its upper slopes, ground steeper than CLIMB.slip under your feet
-    // (off the path) slides you back down it, whatever you do (moves below refuse what's too steep to walk up)
-    const steep = climbable(this.pos.x, this.pos.z); this.sliding = false;
+    // (off the path) slides you back down it, whatever you do (moves below refuse what's too steep to walk up). Off the
+    // path there's no jump at a face either: ground a stride ahead, the way you go, rising more than you could walk up
+    // leaves nothing to jump for (faced), and you can't jump out of a slide (the path's rock steps are jumped from flat)
+    const steep = climbable(this.pos.x, this.pos.z); this.sliding = false; this.faced = false;
     if (steep && this.onGround && !this.swimming) {
+      if (want.lengthSq()) { const l = Math.hypot(want.x, want.z), x = this.pos.x + want.x / l, z = this.pos.z + want.z / l; this.faced = routeAt(x, z).k <= 0.5 && this.groundHere(x, z) - this.groundHere(this.pos.x, this.pos.z) > CLIMB.up; }
       const e = 0.7, gx = (this.groundHere(this.pos.x + e, this.pos.z) - this.groundHere(this.pos.x - e, this.pos.z)) / (2 * e), gz = (this.groundHere(this.pos.x, this.pos.z + e) - this.groundHere(this.pos.x, this.pos.z - e)) / (2 * e), gr = Math.hypot(gx, gz);
       if (gr > climbLimit(this.pos.x, this.pos.z, true)) { const k = 3 + 6 * Math.min(1, (gr - 1) * 2); want.multiplyScalar(0.25); want.x -= (gx / gr) * k; want.z -= (gz / gr) * k; this.sliding = true; this.sprinting = false; }
     }
@@ -148,10 +152,12 @@ export class Player {
     if (this.swimming) { S.add('wet'); if (S.stamina <= 0.5 && speed > 0.3) S.damage(5 * dt); }
     let mx = this.hv.x * dt, mz = this.hv.z * dt;
     // ...and a move that would take you up onto ground steeper than CLIMB.up (off the path) is refused (the part of it
-    // across the slope still goes), on foot or in the air, unless you're already above where it lands: so a rock step can
-    // be jumped onto, but a face can't be hopped up (the speed you were going at is kept, as against a wall, for the jump)
+    // across the slope still goes), on foot or in the air, unless you're on the path and already above where it lands: so
+    // a rock step can be jumped onto, but a face can't be hopped up, nor a ledge off the path mounted however high you
+    // jump, since the cliff bands' flat shoulders are reached only by the path (the speed you were going at is kept, as
+    // against a wall, for the jump)
     if (steep && (mx || mz)) {
-      const too = (dx, dz) => { const l = Math.hypot(dx, dz), g1 = this.groundHere(this.pos.x + dx, this.pos.z + dz); return l > 1e-5 && g1 > this.pos.y + 0.02 && (g1 - Math.min(this.pos.y, this.groundHere(this.pos.x, this.pos.z))) / l > climbLimit(this.pos.x + dx, this.pos.z + dz); };
+      const too = (dx, dz) => { const l = Math.hypot(dx, dz), x = this.pos.x + dx, z = this.pos.z + dz, g1 = this.groundHere(x, z), g0 = this.groundHere(this.pos.x, this.pos.z); return l > 1e-5 && g1 > (routeAt(x, z).k > 0.5 ? this.pos.y : g0) + 0.02 && (g1 - Math.min(this.pos.y, g0)) / l > climbLimit(x, z); };
       if (too(mx, mz)) {
         const e = 0.3, gx = this.groundHere(this.pos.x + e, this.pos.z) - this.groundHere(this.pos.x - e, this.pos.z), gz = this.groundHere(this.pos.x, this.pos.z + e) - this.groundHere(this.pos.x, this.pos.z - e), gl = Math.hypot(gx, gz) || 1, up = (mx * gx + mz * gz) / gl;
         if (up > 0) { mx -= (gx / gl) * up; mz -= (gz / gl) * up; } if (too(mx, mz)) mx = mz = 0;
@@ -191,9 +197,9 @@ export class Player {
         this.dodge = d; this.hv.set(0, 0, 0); this.sprinting = false; this.onStep?.('roll');
       }
     }
-    if (this.jumpBuf > 0 && !dodgeKey && this.onGround && !this.swimming && this.swing <= 0 && held > 0.9) {
+    if (this.jumpBuf > 0 && !dodgeKey && this.onGround && !this.swimming && !this.sliding && !this.faced && this.swing <= 0 && held > 0.9) {
       this.jumpBuf = 0;
-      if (S.use(5, 'jumping')) { this.vel.y = JUMP_V * Math.sqrt(S.skillK('jumping')) * (this.sprinting ? LEAP : 1); this.onGround = false; this.jumped = true; S.train('jumping', 2.5); this.onStep?.('jump'); }
+      if (S.use(5, 'jumping')) { this.vel.y = JUMP_V * Math.sqrt(S.skillK('jumping')) * (this.sprinting && !this.sliding && this.slope < 0.5 ? LEAP : 1); this.onGround = false; this.jumped = true; S.train('jumping', 2.5); this.onStep?.('jump'); }
       else this.onToast?.('Too tired to jump');
     }
     const wasAir = !this.onGround && this.vel.y < -6;
