@@ -67,8 +67,8 @@ const at = (bone) => (bone ? bone.getWorldPosition(new THREE.Vector3()) : null);
 // red markings, which have no place on a Greek island (and the black-and-white, blue-grey, purple-striped and red-striped
 // coats of the does and the young, now that mothers and young go about together and are seen close). The pack's palette
 // is bright in our light, so its colours are taken down a little (tint).
-const PACK = { calf: { file: 'pack/calf', looks: 'pack/calfLooks', drop: [6, 8, 9, 10, 12], len: 0.94, walk: 0.95, run: 4.5 }, deer: { file: 'pack/doe', looks: 'pack/doeLooks', drop: [6, 8, 12], len: 1.6, walk: 1.6, run: 7.6 },
-  stag: { file: 'pack/stag', looks: 'pack/stagLooks', len: 1.9, walk: 1.7, run: 7.6 },
+const PACK = { calf: { file: 'pack/calf', looks: 'pack/calfLooks', drop: [6, 8, 9, 10, 12], len: 0.94, walk: 0.95, run: 4.5, tint: 0.68 }, deer: { file: 'pack/doe', looks: 'pack/doeLooks', drop: [6, 8, 12], len: 1.6, walk: 1.6, run: 7.6, tint: 0.68 },
+  stag: { file: 'pack/stag', looks: 'pack/stagLooks', len: 1.9, walk: 1.7, run: 7.6, tint: 0.68 },   // (deer darker still: their red-brown coats read a vivid orange in the sun)
   foxCub: { file: 'pack/foxCub', looks: 'pack/foxCubLooks', drop: [8, 9, 10], len: 0.55, walk: 0.7, run: 3.5 }, fox: { file: 'pack/fox', looks: 'pack/foxLooks', drop: [8, 9, 10], len: 0.95, walk: 1.2, run: 6 },
   // (hares: drawn a size up from life, or the meadow's grass swallows them, and in their brown, grey and sandy coats only,
   // without the pack's near-black, blue-grey and snow-white ones, and not darkened as much: they're meant to be spotted)

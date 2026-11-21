@@ -65,14 +65,18 @@ const lin = (hex) => new THREE.Color(hex);   // (three keeps colours linear: the
 // SkinMask / HairMask place them, and the colours they hold, which the chosen ones replace
 const BASE = { skin: lin(0xffcbad), hair: lin(0x4f402c), cloth: lin(0xc6c2be), curls: lin(0x3e2616) };   // (curls: the Greek warriors' hair, in their own palette)
 // The armour's bare arms and legs (the Greek warriors' palette has its skin in two columns) take the chosen skin too
+// (and the armour's gold and bronze, told by their colour in the texture, are metal: polished, taking the sky's light, not
+// matte yellow plastic; the review of 20 Nov)
 function armourSkin(m, U) {
-  if (!U) return m;
   m.onBeforeCompile = (s) => {
-    s.uniforms.uSkin = U.uSkin;
-    s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uSkin;')
-      .replace('#include <map_fragment>', '#include <map_fragment>\n      if (vMapUv.x > 0.505 && vMapUv.x < 0.575 && vMapUv.y < 0.125) diffuseColor.rgb *= uSkin;');
+    if (U) s.uniforms.uSkin = U.uSkin;
+    s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>\n${U ? 'uniform vec3 uSkin;' : ''}`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+      ${U ? 'if (vMapUv.x > 0.505 && vMapUv.x < 0.575 && vMapUv.y < 0.125) diffuseColor.rgb *= uSkin;' : ''}
+      float metalR = max(diffuseColor.r, 1e-3), metalK = smoothstep(0.15, 0.28, diffuseColor.r) * smoothstep(0.42, 0.55, diffuseColor.g / metalR) * (1.0 - smoothstep(0.18, 0.3, diffuseColor.b / metalR));   // (bright, yellow to orange, little blue: not leather, cloth or skin)`)
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n      metalnessFactor = mix(metalnessFactor, 0.6, metalK); roughnessFactor = mix(roughnessFactor, 0.38, metalK);');
   };
-  m.customProgramCacheKey = () => 'heroArmourSkin'; return m;
+  m.customProgramCacheKey = () => (U ? 'heroArmourSkin' : 'heroArmourMetal'); return m;
 }
 // The bare pieces worn over the body (shells: the Corinthian set) were made on the Greek warriors' slimmer body, and a
 // low-poly shell over a low-poly body lets the body's corners through its faces. Two passes, in the rest pose, once per

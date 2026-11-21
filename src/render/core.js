@@ -14,7 +14,11 @@ THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars
   `vec3 CustomToneMapping( vec3 color ) {
     float l = dot(color, vec3(0.2126, 0.7152, 0.0722));
     color = max(mix(vec3(l), color, 1.12) * vec3(1.04, 1.0, 0.93) + (1.0 - smoothstep(0.0, 0.5, l)) * vec3(-0.012, 0.01, 0.03), 0.0);
-    return AgXToneMapping(color * 1.15); }`);   // (AgX: holds bright snow, marble and sky without burning out, and keeps the grass's depth)
+    color = AgXToneMapping(color * 1.15);
+    // (and after it a gentle S-curve about the middle grey, a tenth more contrast there with black and white left where
+    // they are, as AgX's own 'punchy' look: three's plain AgX left the midtones flat and the distance grey; review, 20 Nov)
+    vec3 g = clamp(pow(max(color, 0.0), vec3(1.0 / 2.2)), 0.0, 1.0); g = mix(g, g * g * (3.0 - 2.0 * g), 0.22); l = dot(g, vec3(0.2126, 0.7152, 0.0722));
+    return pow(max(mix(vec3(l), g, 1.05), 0.0), vec3(2.2)); }`);   // (AgX: holds bright snow, marble and sky without burning out, and keeps the grass's depth)
 
 export const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
