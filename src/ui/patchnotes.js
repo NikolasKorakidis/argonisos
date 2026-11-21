@@ -11,6 +11,11 @@ export const PATCHES = [
         '<b>Rocks and boulders in real stone.</b> Every rock on the island now has grain, cracks and layers, pale edges where its faces meet and darker hollows, and each is a little different in colour. Moss grows over their tops in the woods and a pale, sun-bleached lichen out in the meadows, less up the mountain and none by the sea, and they turn dark and wet in the rain. The stones you pick up, the cairns on Olympos and the boulders at the ruins match them.',
         '<b>Zeus\'s storm from the top of Olympos.</b> Seen from up high it now sits in the same soft haze as the rest of the island instead of standing out near black, its outline against the sky is softer, and its rings of cloud share the haze. It still towers dark over the marsh, and from the meadows it looks as before.',
       ] },
+      { t: 'Footwork', icon: 'sprint', items: [
+        '<b>Dodge with Shift + Space.</b> Hold Shift and press Space to dodge the way you are pressing: forwards, backwards, to either side or on a diagonal, or straight back if you press no direction. You throw yourself into a quick roll of about three and a half metres, and nothing can hit you in the heart of it. It costs the same stamina as the roll and works with anything in your hands. Space on its own still jumps (so let go of Shift to jump while sprinting), and the right mouse button with Space still rolls.',
+        '<b>No more spinning while you aim.</b> Walking with the bow drawn, your body no longer twists round on itself: you face your aim steadily and step forwards, backwards and sideways under it. Drawing or lowering the bow on the move, and raising or dropping a shield, no longer swings you round either.',
+        'Turning to your aim or your guard is quick but no longer instant, and after you lower the bow you turn smoothly back to where you are walking.',
+      ] },
     ],
   },
   {
