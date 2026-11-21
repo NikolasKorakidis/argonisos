@@ -37,6 +37,12 @@ const KIT = {
   bed: { file: 'kBed', box: [-0.55, 0.55, 0, 0.6, -1.05, 1.05], uniform: true },   // (a low pallet bed: in proportion it's lower than the bed you lie on)
   cookingStand: { file: 'kCookStand', box: [-0.85, 0.85, 0, 1.12, -0.45, 0.45], uniform: true },   // (the fish rack at half its size, its bar where the meat hangs)
   chest: { file: 'kChest', box: [-0.5, 0.5, 0, 0.7, -0.3, 0.3], uniform: true }, torchStand: { file: 'kTorchStand', box: [-0.15, 0.15, 0, 1.62, -0.15, 0.15], uniform: true },
+  // (the pieces added in Patch 23: the kit's window wall, narrow wall and half gable, the thatch panel and gable end laid
+  // to a low pitch, and the packs' cut logs as log beams and posts, in their own vertex colours: vc)
+  wallWindow: { file: 'all/rpgpp-ag/rpgpp-ag-wall-01-3x3-window-a', box: wall(3) }, wallNarrow: { file: 'all/rpgpp-ag/rpgpp-ag-wall-01-1-5x3-a', box: wall(3, 0.9) },
+  wallTri: { file: 'all/rpgpp-ag/rpgpp-ag-roof-end-01-6x3-wall-half-a', box: [-1.5, 1.65, 0, 3, -0.15, 0.15] },
+  roof615: { file: 'kRoof63', ...roof(3, 1.5) }, end615: end('kEnd63', 'kTrim63', 3, 1.5),
+  beamLog: { file: 'pLog2', vc: true, lay: 'x', box: [-1.5, 1.5, -0.2, 0.2, -0.2, 0.2] }, postLog: { file: 'pLog3', vc: true, lay: 'y', box: [-0.21, 0.21, 0, 3, -0.21, 0.21] },
 };
 
 const size = (g) => { g.computeBoundingBox(); return g.boundingBox.getSize(new THREE.Vector3()); };
@@ -44,7 +50,7 @@ const size = (g) => { g.computeBoundingBox(); return g.boundingBox.getSize(new T
 function rises(g) { g.computeBoundingBox(); const mid = (g.boundingBox.min.z + g.boundingBox.max.z) / 2, p = g.attributes.position; let a = 0, na = 0, b = 0, nb = 0; for (let i = 0; i < p.count; i++) if (p.getZ(i) < mid) { a += p.getY(i); na++; } else { b += p.getY(i); nb++; } return a / Math.max(na, 1) - b / Math.max(nb, 1); }
 function fit(geo, K) {
   const [x0, x1, y0, y1, z0, z1] = K.box, W = x1 - x0, H = y1 - y0, D = z1 - z0;
-  if (K.lay) { const s = size(geo); if (s.y >= s.x && s.y >= s.z) geo.rotateZ(Math.PI / 2); else if (s.z >= s.x) geo.rotateY(Math.PI / 2); if (K.lay === 'd') geo.rotateZ(Math.PI / 4); }   // (a post laid along x, or rising on the diagonal)
+  if (K.lay) { const s = size(geo); if (s.y >= s.x && s.y >= s.z) geo.rotateZ(Math.PI / 2); else if (s.z >= s.x) geo.rotateY(Math.PI / 2); if (K.lay === 'd') geo.rotateZ(Math.PI / 4); if (K.lay === 'y') geo.rotateZ(Math.PI / 2); }   // (a post laid along x, rising on the diagonal, or a log stood up)
   let s = size(geo); if (!K.lay && Math.abs(W - D) > 0.05 && (s.x > s.z) !== (W > D)) geo.rotateY(Math.PI / 2);
   if (K.slope && rises(geo) < 0) geo.rotateY(Math.PI);
   if (K.lay === 'd') { s = size(geo); const k = Math.hypot(W, H) / Math.hypot(s.x, s.y); geo.scale(k, k, D / s.z); }   // (keep the diagonal's angle)
@@ -85,10 +91,13 @@ function hang(door, frame, hinge) {
 
 // Load every piece's model and give the piece its look ({ geo, mat } like the carved ones); resolves when all are in
 export function loadKit(pieces) {
-  const mats = new Map();   // (one material per atlas, made wettable like the carved planks)
+  const mats = new Map(); let vcMat = null;   // (one material per atlas, made wettable like the carved planks)
   // (the kit's paint is pale in our light: taken down a little)
   const matFor = (src) => { const key = src.map?.uuid ?? src.uuid; if (!mats.has(key)) mats.set(key, wettable(new THREE.MeshStandardMaterial({ map: src.map, color: 0xa8a8a8, roughness: 0.9 }), { dark: 0.62, gloss: 0.32 })); return mats.get(key); };
-  const look = (K) => loadPack(K.file).then((gl) => { let src = null; gl.scene.traverse((m) => { if (m.isMesh && !src) src = m.material; }); return { geo: fit(bake(gl.scene), K), mat: matFor(src) }; });
+  const look = (K) => loadPack(K.file).then((gl) => {
+    if (K.vc) { const geo = fit(bake(gl.scene, true), K), c = geo.attributes.color; for (let k = 0; k < c.array.length; k++) c.array[k] *= 0.82; return { geo, mat: (vcMat ||= wettable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { dark: 0.66, gloss: 0.3 })) }; }   // (a palette pale in our light, as the logs in harvest.js)
+    let src = null; gl.scene.traverse((m) => { if (m.isMesh && !src) src = m.material; }); return { geo: fit(bake(gl.scene), K), mat: matFor(src) };
+  });
   return Promise.all(pieces.filter((p) => KIT[p.id]).map((p) => Promise.all([KIT[p.id], KIT[p.id].trim].filter(Boolean).map(look)).then((m) => { p.meshes = m; }).catch(() => {})))
     .then(() => { const d = pieces.find((p) => p.id === 'door'), f = pieces.find((p) => p.id === 'doorframe'); if (d?.meshes && f?.meshes) hang(d.meshes[0].geo, f.meshes[0].geo, d.door.hinge); });
 }

@@ -52,6 +52,7 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 .slot.worn::after { content:""; position:absolute; right:3px; top:3px; width:7px; height:7px; border-radius:50%; background:var(--gold); box-shadow:0 0 0 1px var(--glaze); }
 .slot.sel { box-shadow:inset 0 0 0 1px var(--glaze), 0 0 0 2px var(--gold), 0 0 14px rgba(217,169,74,.7); }
 .slot.drag { opacity:.35; }
+.slot.broken > svg { opacity:.4; filter:grayscale(1); } .slot.broken { box-shadow:inset 0 0 0 2px #b8402e; }   /* a tool worn to naught: kept, but no use until mended */
 .slot.over { box-shadow:inset 0 0 0 2px var(--gold); }
 
 /* ---------- HUD ---------- */
@@ -192,6 +193,7 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 #craftDetail .cost .slot.no em { color:#ffb4a4; }
 #craftDetail .where { margin:0; font-size:12.5px; color:var(--ink2); display:flex; gap:6px; align-items:center; }
 #craftDetail .btn { width:100%; }
+#craftDetail .srcs { margin:0; font-size:12px; line-height:1.35; color:var(--ink2); } #craftDetail #craftGo5 { margin-top:4px; } #craftDetail #repairAll { width:auto; margin-bottom:6px; }
 #chestPanel .grid { display:grid; gap:5px; }
 #chestPanel .grid .slot { width:56px; height:56px; font-size:34px; cursor:pointer; }
 #chestPanel .hint, #craftPanel .hint { margin:10px 0 0; font-size:12.5px; color:var(--ink2); font-style:italic; text-align:center; }

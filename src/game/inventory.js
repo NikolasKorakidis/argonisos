@@ -14,6 +14,8 @@ export class Inventory {
   get overweight() { return this.weight > MAX_WEIGHT; }
   count(id) { let n = 0; for (const s of this.slots) if (s?.id === id) n += s.n; return n; }
   has(mats) { return Object.entries(mats).every(([id, n]) => this.count(id) >= n); }
+  // what's short of mats, said plainly: "Need 1 more wood, 2 more rope" (review: "Missing materials" never said what)
+  need(mats) { const short = Object.entries(mats).map(([id, n]) => [id, n - this.count(id)]).filter(([, k]) => k > 0); return short.length ? 'Need ' + short.map(([id, k]) => `${k} more ${ITEMS[id].name.toLowerCase()}`).join(', ') : null; }
   // Room for n more of an item (stacking into existing piles first)
   room(id) { const st = ITEMS[id].stack; let r = 0; for (const s of this.slots) r += !s ? st : s.id === id && !s.worn ? st - s.n : 0; return r; }
   // Add n of an item; returns how many didn't fit
@@ -35,14 +37,18 @@ export class Inventory {
     return n - left;
   }
   takeMats(mats) { if (!this.has(mats)) return false; for (const [id, n] of Object.entries(mats)) this.take(id, n); return true; }
-  move(a, b) {          // drag a → b: merge piles of the same thing, otherwise swap
+  // drag a → b: onto a pile of the same thing it tops that pile up; if nothing fits (a full pile, two axes) they swap
+  move(a, b) {
     if (a === b) return; const A = this.slots[a], B = this.slots[b]; if (!A) return;
-    if (B && B.id === A.id && !A.worn && !B.worn) { const st = ITEMS[A.id].stack, k = Math.min(A.n, st - B.n); B.n += k; A.n -= k; if (A.n <= 0) this.slots[a] = null; }
+    const k = B && B.id === A.id && !A.worn && !B.worn ? Math.min(A.n, ITEMS[A.id].stack - B.n) : 0;
+    if (k > 0) { B.n += k; A.n -= k; if (A.n <= 0) this.slots[a] = null; }
     else { this.slots[a] = B; this.slots[b] = A; }
     this.onChange?.();
   }
-  split(a) {            // halve a pile into the first empty slot
-    const A = this.slots[a]; if (!A || A.n < 2) return; const e = this.slots.indexOf(null); if (e < 0) return;
+  // halve a pile into the first empty slot of the pack (below the hotbar: a split pile of stones has no place on keys 1-8),
+  // the hotbar only when the pack is full
+  split(a) {
+    const A = this.slots[a]; if (!A || A.n < 2) return; let e = this.slots.indexOf(null, COLS); if (e < 0) e = this.slots.indexOf(null); if (e < 0) return;
     const k = Math.floor(A.n / 2); A.n -= k; this.slots[e] = { id: A.id, n: k }; this.onChange?.();
   }
   // Sort the slots from..to: identical plain piles merge (up to the stack size), then everything is ordered by name.

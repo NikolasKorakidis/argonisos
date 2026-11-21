@@ -31,6 +31,14 @@ const SCENARIOS = [
   ['a post goes on the corner of the floor you aim at', `floors(); return check('beamV', 0, [3, 0, -3], null, grid(2.85, 0, -2.85, 0.3, 0, 0.3).map((t) => [[7, 3, -7], t]));`],
   ['a beam goes across the tops of two posts', `floors(); put('beamV', 3, 0, -3); put('beamV', 3, 0, 0); return check('beamH', Math.PI / 2, [3, 3, -1.5], Math.PI / 2, grid(3, 3, -1.5, 0, 0.1, 1.2).map((t) => [[8, 4, t[2]], t]));`],
   ['a half wall goes on the edge of the floor you aim at', `floors(); return check('wallHalf', 0, [1.5, 0, -3], 0, grid(1.5, 0, -2.6, 1, 0, 0.4).map((t) => [[t[0], 3, -9], t]));`],
+  // the pieces of Patch 23: a window wall, a narrow wall and a triangle wall on a floor's edge, the low roof on a wall's
+  // top, log posts and beams as the plank ones
+  ['a window wall goes on the edge of the floor you aim at', `floors(); return check('wallWindow', 0, [-1.5, 0, -3], 0, grid(-1.5, 0, -2.6, 1, 0, 0.5).map((t) => [[t[0] + 0.5, 3, -9], t]));`],
+  ['a narrow wall goes on the edge of the floor you aim at, by its nearer half', `floors(); return check('wallNarrow', 0, [-2.25, 0, -3], 0, grid(-2.25, 0, -2.7, 0.4, 0, 0.3).map((t) => [[t[0], 3, -9], t]));`],
+  ['a triangle wall goes on the edge of the floor you aim at', `floors(); return check('wallTri', 0, [1.5, 0, -3], 0, grid(1.5, 0, -2.6, 1, 0, 0.4).map((t) => [[t[0], 3, -9], t]));`],
+  ['a low roof panel goes on the top of the wall you aim at', `floors(); walls(); return check('roof615', Math.PI, [-1.5, 3, -3], Math.PI, grid(-1.5, 2.9, -3.05, 1, 0.2, 0).map((t) => [[t[0] + 0.5, 3.6, -12], t]));`],
+  ['a log post goes on the corner of the floor you aim at', `floors(); return check('postLog', 0, [3, 0, -3], null, grid(2.85, 0, -2.85, 0.3, 0, 0.3).map((t) => [[7, 3, -7], t]));`],
+  ['a log beam goes across the tops of two log posts', `floors(); put('postLog', 3, 0, -3); put('postLog', 3, 0, 0); return check('beamLog', Math.PI / 2, [3, 3, -1.5], Math.PI / 2, grid(3, 3, -1.5, 0, 0.1, 1.2).map((t) => [[8, 4, t[2]], t]));`],
   // playtest (15 Oct): long stairs never attached to an upper floor. A front terrace on two posts, one storey up; the long
   // stairs climb to its outer edge from the ground in front, aimed at the edge they should reach or at where they start
   ['long stairs reach the edge of an upper floor (aimed at the top)', `floors(); walls(); for (const [x, z] of [[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]]) put('floor', x, 3, z); put('beamV', -3, 0, -6); put('beamV', 0, 0, -6); put('floor', -1.5, 3, -4.5);
@@ -43,7 +51,7 @@ const SCENARIOS = [
     B.sel = null; if (B.ghost) AG.scene.remove(B.ghost); B.ghost = null; return (fresh.length === 1 && p.id === 'roof63' && Math.hypot(at[0] + 1.5, at[1] - 3, at[2] + 3) < 0.05) || 'placed ' + p?.id + ' at ' + at.map((v) => v.toFixed(2));`],
   // a sweep of random aims with every kind of piece: whatever the ghost offers as allowed must be held by something
   ['300 random aims: an allowed ghost always stands on the ground, joins something built, or (a door) fills a frame', `floors(); walls(['f2']); put('doorframe', 1.5, 0, -3); put('roof63', -1.5, 3, -3, Math.PI);
-    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646; const ids = ['floor', 'wall', 'wallHalf', 'doorframe', 'door', 'beamV', 'beamH', 'stairs', 'roof63', 'end63', 'fence'], bad = []; let allowed = 0;
+    let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646; const ids = ['floor', 'wall', 'wallHalf', 'doorframe', 'door', 'beamV', 'beamH', 'stairs', 'roof63', 'end63', 'fence', 'wallWindow', 'wallNarrow', 'wallTri', 'roof615', 'postLog', 'beamLog'], bad = []; let allowed = 0;
     const snapsAll = B.placed.flatMap((q) => q.snaps);
     for (let k = 0; k < 300; k++) {
       const id = ids[Math.floor(rnd() * ids.length)], a = rnd() * 6.283, r0 = 4 + rnd() * 8, cam = [Math.cos(a) * r0, 1.5 + rnd() * 4, Math.sin(a) * r0], tg = [(rnd() - 0.5) * 8, rnd() * 4, (rnd() - 0.5) * 8];

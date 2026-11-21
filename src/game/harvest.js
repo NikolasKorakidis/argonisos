@@ -51,6 +51,8 @@ const WOODY = {
   bush: { leafy: true, extra: [['fiber', 0.35, 1, 1]] }, myrtle: { leafy: true }, broom: { leafy: true, extra: [['fiber', 0.6, 1, 2]] }, redbush: { leafy: true, extra: [['fiber', 0.25, 1, 1]] },
   stump: { hits: 4, wood: 2 }, log: { hits: 5, wood: 3 }, driftwood: { hits: 3, wood: 2 }, tomato: { leafy: true, hits: 3, wood: [6, 8] },
 };
+// A felled tree's stump: three blows of an axe, one or two wood
+const STUMP = { hits: 3, wood: [1, 2] };
 // A tomato bush picked bare grows its fruit back in a game day; picking gives 8 to 12 tomatoes and now and then a seed
 const TOMATO = { regrow: 1, n: [8, 12], seed: 0.25 };
 const WOODY_SP = SPECIES.map((s) => WOODY[s.name] || null), BUSH_H = [0.9, 1.6], SP_TOMATO = SPECIES.findIndex((s) => s.name === 'tomato');
@@ -149,6 +151,7 @@ function brown(c) {
 }
 function logThud(at, k) {
   const c = audio(); if (!c) return; const s = heard(at, 6, 80), v = Math.min(1.2, k) * s.k; if (v < 0.01) return;
+    if (c.ref.stump) return this.hitStump(c.ref.stump, item, at, dir);
   const t = c.currentTime, p = c.createStereoPanner(); p.pan.value = s.pan; p.connect(THUNDER.out());
   const o = c.createOscillator(), og = c.createGain(); o.frequency.setValueAtTime(78, t); o.frequency.exponentialRampToValueAtTime(34, t + 0.4);
   og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.45 * v, t + 0.008); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.5); o.connect(og).connect(p); o.start(t); o.stop(t + 0.55);
@@ -177,7 +180,8 @@ export class Harvest {
   // A strike landed (from player.onStrike): find what's in front and hit it with the held item
   strike(item) {
     const P = this.g.player, dir = new THREE.Vector3(Math.sin(P.yaw), 0, Math.cos(P.yaw));
-    const c = this.g.colliders.pick(P.pos.x, P.pos.z, dir.x, dir.z, 2.3, (c) => c.ref && ((c.ref.sp !== undefined && !WOODY_SP[c.ref.sp]) || c.ref.log)), w = this.woodyAhead(P.pos, dir, 2.3);
+    // (a tree, rock, log or stump: never one of the layout's empty slots, drawn at no size, review: felled from thin air)
+    const c = this.g.colliders.pick(P.pos.x, P.pos.z, dir.x, dir.z, 2.3, (c) => c.ref && ((c.ref.sp !== undefined && !WOODY_SP[c.ref.sp] && c.ref.s > 0) || c.ref.log || c.ref.stump)), w = this.woodyAhead(P.pos, dir, 2.3);
     if (w && (!c || w.t <= (along(c.x - P.pos.x, c.z - P.pos.z, c.r, dir.x, dir.z) ?? Infinity))) return this.hitWoody(w, item, dir);   // (whichever the blow meets first)
     if (!c) return false;
     const at = new THREE.Vector3(c.x - dir.x * c.r * 0.9, P.pos.y + 1.1, c.z - dir.z * c.r * 0.9);
@@ -187,12 +191,13 @@ export class Harvest {
     if (sp.res === 'rock') return this.hitRock(c, sp, item, at, dir);
     return false;
   }
-  // (a toast for the wrong tool, once in a while)
+  // (a toast for the wrong tool, once in a while; a blow with it only clinks, and the strike says so, 'clink', so the tool
+  // isn't worn by it: game.js)
   warn(key, msg) { if (this[key]) return; this.g.hud.toast(msg); this[key] = true; setTimeout(() => (this[key] = false), 6000); }
   dmg(item, kind) { const d = item?.dmg?.find(([, k]) => k === kind)?.[0] ?? 0; return d; }
   hitTree(c, sp, item, at, dir) {
     const { player } = this.g, id = `${c.ref.cx},${c.ref.cz},${c.ref.i}`;
-    if (!item?.chop) { burst(at, { color: 0x7a5236, n: 3, speed: 1.5 }); punch(0.07, dir); this.g.sound?.('clink', true); this.warn('warned', 'You need an <b>axe</b> to fell trees'); return true; }
+    if (!item?.chop) { burst(at, { color: 0x7a5236, n: 3, speed: 1.5 }); punch(0.07, dir); this.g.sound?.('clink', true); this.warn('warned', 'You need an <b>axe</b> to fell trees'); return 'clink'; }
     const max = treeHP(sp.name, c.ref.s), hp = (this.hp.get(id) ?? max) - this.dmg(item, 'slash') * player.stats.damageK('axe');
     player.stats.train('axe', 12.5);
     // (a sapling's blow is a light one, a great trunk's a heavy one that holds the swing; it rings lower too)
@@ -241,7 +246,6 @@ export class Harvest {
       const tree = c.ref?.cx !== undefined && SPECIES[c.ref.sp]?.res === 'tree';
       add(c, c.x, c.z, c.r, c.y ?? -1e9, c.h !== undefined ? (c.y ?? 0) + c.h : tree ? c.y + this.treeSize(c.ref).tall : 1e9, tree);
     }
-    for (const s of this.stumps) add(null, s.x, s.z, s.r * 1.05, s.y - 1, s.y + CUT, false);
     return out;
   }
   // how far out from its axis the falling tree f reaches s metres up it: its trunk, then into the crown (k: how much of
@@ -320,6 +324,7 @@ export class Harvest {
   // The collider c as it is now, or null if what it belonged to is gone (a tree felled, a log split, a wall pulled down):
   // a tree's or a log's is made again when its cell streams back in or the log moves, so they're known by what they are
   live(c) {
+    const P = this.g.player.pos; if (this.stumps.length > 512 && (!this.drawnAt || Math.hypot(P.x - this.drawnAt.x, P.z - this.drawnAt.z) > 32)) this.drawStumps();   // (the nearest 512 again, once you've come a way)
     const r = c.ref, { colliders, veg } = this.g;
     if (r?.log) return this.logs.includes(r.log) ? c : null;
     if (r?.cx === undefined) return colliders.groups.has(c.key) ? c : null;
@@ -328,9 +333,27 @@ export class Harvest {
     for (const k of colliders.near(c.x, c.z, 0.5)) if (k.ref?.cx === r.cx && k.ref.cz === r.cz && k.ref.i === r.i) return k;
     return null;
   }
-  addStump(x, y, z, r) { this.stumps.push({ x, y, z, r, col: { x, z, r: r * 1.05, trunk: r * 1.05, y: y - 1, h: 1 + CUT } }); this.drawStumps(); clearGrass('stump' + x.toFixed(1) + z.toFixed(1), { x, z, r: r + 0.4 }); }   // (col: what a log rolls against)
+  // A felled tree's stump. It stands in your way (a collider of its own, which logs and falling trees meet too), takes a
+  // few blows of an axe for a little wood (Valheim's), and goes from under anything built over it (clearStumps, from
+  // build.js: review, Nov, one stood up through a floor). The 512 nearest you are drawn
+  addStump(x, y, z, r) {
+    const s = { x, y, z, r, id: 'stump' + this.seq++ }; s.col = { x, z, r: r * 1.05, trunk: r * 1.05, y: y - 1, h: 1 + CUT, ref: { stump: s } };
+    this.stumps.push(s); this.g.colliders?.addGroup(s.id, [s.col]); this.drawStumps(); clearGrass('stump' + x.toFixed(1) + z.toFixed(1), { x, z, r: r + 0.4 });
+  }
+  removeStump(s) { const i = this.stumps.indexOf(s); if (i < 0) return; this.stumps.splice(i, 1); this.g.colliders?.removeGroup(s.id); clearGrass('stump' + s.x.toFixed(1) + s.z.toFixed(1), null); this.drawStumps(); }
+  clearStumps(under) { for (const s of [...this.stumps]) if (under(s.x, s.z, s.y)) this.removeStump(s); }
+  hitStump(s, item, at, dir) {
+    const { player } = this.g; at.y = s.y + 0.2;
+    if (!item?.chop) { impact(at, 'dull'); punch(0.07, dir); this.g.sound?.('clink', true); this.warn('warned', 'Cut up a stump with an <b>axe</b>'); return 'clink'; }
+    impact(at, 'wood', 0.4); punch(0.22, dir); player.hitStop(0.03); this.g.sound?.('chop', 1.1); player.stats.train('axe', 6);
+    if ((s.hp = (s.hp ?? STUMP.hits) - 1) > 0) return true;
+    this.removeStump(s); dust(new THREE.Vector3(s.x, s.y + 0.2, s.z), 10, 0x6e5e46, 0.3); impact(at, 'wood', 0.8);
+    this.g.give('wood', Math.max(1, Math.round((STUMP.wood[0] + Math.floor(Math.random() * (STUMP.wood[1] - STUMP.wood[0] + 1))) * player.stats.skillK('gathering')))); player.stats.train('gathering', 6);
+    return true;
+  }
   drawStumps() {
-    const m = new THREE.Matrix4(), near = this.stumps.slice(-512);
+    const P = this.g.player?.pos, m = new THREE.Matrix4(), d = (s) => (s.x - P.x) ** 2 + (s.z - P.z) ** 2;
+    const near = this.stumps.length > 512 && P ? [...this.stumps].sort((a, b) => d(a) - d(b)).slice(0, 512) : this.stumps.slice(-512); this.drawnAt = P ? { x: P.x, z: P.z } : null;
     near.forEach((s, i) => this.stumpMesh.setMatrixAt(i, m.compose(new THREE.Vector3(s.x, s.y - 0.05, s.z), new THREE.Quaternion(), new THREE.Vector3(s.r * 1.1, 1, s.r * 1.1))));
     this.stumpMesh.count = near.length; this.stumpMesh.instanceMatrix.needsUpdate = true;
   }
@@ -405,7 +428,6 @@ export class Harvest {
       if (c.ref?.log || (c.x - mx) ** 2 + (c.z - mz) ** 2 > (r + c.r) ** 2) continue;
       c.trunk ??= c.ref?.cx !== undefined && SPECIES[c.ref.sp]?.res === 'tree' ? Math.min(c.r, this.treeSize(c.ref).girth + 0.05) : c.r; obs.push(c);
     }
-    for (const s of this.stumps) if ((s.x - mx) ** 2 + (s.z - mz) ** 2 < (r + 1) ** 2) obs.push(s.col);
     for (const m of this.logs) if (m !== l && Math.hypot(m.mesh.position.x - mx, m.mesh.position.z - mz) < r + m.L / 2 + m.R) near.push(m);
     return obs;
   }
@@ -525,7 +547,7 @@ export class Harvest {
   }
   hitLog(c, item, at) {
     const log = c.ref.log, { player } = this.g;
-    if (!item?.chop) { burst(at, { color: 0x7a5236, n: 3, speed: 1.5 }); punch(0.07); this.g.sound?.('clink', true); this.warn('warned', 'Split logs with an <b>axe</b>'); return true; }
+    if (!item?.chop) { burst(at, { color: 0x7a5236, n: 3, speed: 1.5 }); punch(0.07); this.g.sound?.('clink', true); this.warn('warned', 'Split logs with an <b>axe</b>'); return 'clink'; }
     log.hp -= this.dmg(item, 'slash') * player.stats.damageK('axe'); player.stats.train('axe', 12.5);
     burst(at, { color: 0xd9b07a, n: 10, speed: 3, size: 0.06 }); impact(at, 'wood', 0.3); punch(0.26); player.hitStop(0.03); this.g.sound?.('chop', 0.95);
     if (log.asleep) { log.kick = 0; log.y0 ??= log.mesh.position.y; }   // (the log jumps under the blow, update; one rolling has other things to do)
@@ -542,7 +564,7 @@ export class Harvest {
   hitRock(c, sp, item, at, dir) {
     const { player } = this.g, id = `${c.ref.cx},${c.ref.cz},${c.ref.i}`;
     // (the wrong tool glances off: a dull clink, a chip or two and a spark, a little jolt)
-    if (item?.tool !== 'mine') { impact(at, 'dull'); punch(0.08, dir); this.g.sound?.('clink'); this.warn('warnedR', 'You need a <b>pickaxe</b> to break rock'); return true; }
+    if (item?.tool !== 'mine') { impact(at, 'dull'); punch(0.08, dir); this.g.sound?.('clink'); this.warn('warnedR', 'You need a <b>pickaxe</b> to break rock'); return 'clink'; }
     const max = rockHP(sp.name, c.ref.s), hp = (this.hp.get(id) ?? max) - this.dmg(item, 'pierce') * 2.5 * player.stats.skillK('gathering');
     // (rock doesn't give: the hardest kick of all the gathering, and the swing held a few frames where the pick bites)
     const big = sp.name === 'boulder' || c.ref.s > 1.6; impact(at, 'stone', big ? 0.7 : 0.5); punch(big ? 0.48 : 0.42, dir); player.hitStop(0.06); this.g.sound?.('mine', big ? 0.9 : 1.05);
@@ -586,7 +608,7 @@ export class Harvest {
     const at = new THREE.Vector3(b.x - dir.x * b.r * 0.6, b.y + clamp(h * 0.55, 0.25, 1.1), b.z - dir.z * b.r * 0.6);
     if (!item?.chop) {
       if (w.leafy) { veg.shake(b.cx, b.cz, b.i, dir.x, dir.z, 2); impact(at, 'leaves', 0.1); this.g.sound?.('rustle', 0.6); } else { impact(at, 'dull'); this.g.sound?.('clink', true); }
-      punch(0.06, dir); this.warn('warnedB', `You need an <b>axe</b> to cut ${w.leafy ? 'bushes' : 'it'} for wood`); return true;
+      punch(0.06, dir); this.warn('warnedB', `You need an <b>axe</b> to cut ${w.leafy ? 'bushes' : 'it'} for wood`); return 'clink';
     }
     const hits = w.hits ?? (h < BUSH_H[0] ? 2 : h < BUSH_H[1] ? 3 : 4), left = (this.hp.get(id) ?? hits) - 1;
     player.stats.train('axe', 6);

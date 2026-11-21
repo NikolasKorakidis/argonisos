@@ -1,6 +1,7 @@
 // HUD and the inventory screen. The HUD redraws its bars every frame and everything else when it changes.
 import { icon, glyph } from './icons.js';
 import { ITEMS } from '../game/items.js';
+import { usedIn } from '../game/crafting.js';
 import { COLS, ROWS, MAX_WEIGHT } from '../game/inventory.js';
 import { CONDITIONS, SKILLS, xpForLevel, Stats } from '../player/stats.js';
 import { input, lock, unlock } from '../input.js';
@@ -137,7 +138,7 @@ export class HUD {
   slotHTML(s, i, hot) {
     if (!s) return `<div class="slot empty" data-i="${i}">${hot ? `<b>${i + 1}</b>` : ''}</div>`;
     const d = ITEMS[s.id], dur = d.dur ? `<div class="dur"><i style="width:${(s.dur / d.dur) * 100}%;${s.dur / d.dur < 0.25 ? 'background:#d65446' : ''}"></i></div>` : '';
-    return `<div class="slot${s.worn ? ' worn' : ''}${i === this.sel ? ' sel' : ''}" data-i="${i}" title="${d.name}">${hot ? `<b>${i + 1}</b>` : ''}${icon(d.icon || 'stone')}${s.n > 1 ? `<em>${s.n}</em>` : ''}${dur}</div>`;
+    return `<div class="slot${s.worn ? ' worn' : ''}${i === this.sel ? ' sel' : ''}${d.dur && s.dur <= 0 ? ' broken' : ''}" data-i="${i}" title="${d.name}${d.dur && s.dur <= 0 ? ' (broken: mend it at a workbench)' : ''}">${hot ? `<b>${i + 1}</b>` : ''}${icon(d.icon || 'stone')}${s.n > 1 ? `<em>${s.n}</em>` : ''}${dur}</div>`;
   }
   drawHotbar() { $('hotbar').innerHTML = this.inv.slots.slice(0, COLS).map((s, i) => this.slotHTML(s, i, true)).join(''); }
   // ---- inventory screen
@@ -205,7 +206,8 @@ export class HUD {
     if (d.speed) bits.push(`${d.speed > 0 ? '+' : ''}${Math.round(d.speed * 100)}% speed`); if (d.resist) bits.push(`Resists ${d.resist.join(', ')}`); if (d.regen) bits.push(`+${Math.round(d.regen * 100)}% health regeneration`);
     if (d.dur) bits.push(`Durability ${Math.ceil(s.dur)} / ${d.dur}`);
     bits.push(`Weight ${(d.weight * s.n).toFixed(1)}`);
-    box.innerHTML = `<b>${d.name}</b>${s.n > 1 ? ` ×${s.n}` : ''}<br>${d.note ? d.note + '<br>' : ''}${bits.join(' · ')}`;
+    const use = usedIn(s.id);   // (what it goes into: crafting.js)
+    box.innerHTML = `<b>${d.name}</b>${s.n > 1 ? ` ×${s.n}` : ''}<br>${d.note ? d.note + '<br>' : ''}${bits.join(' · ')}${use.length ? `<br><i>Used in ${use.slice(0, 6).join(', ')}${use.length > 6 ? ` and ${use.length - 6} more` : ''}</i>` : ''}`;
   }
   drawChar() {
     const S = this.player.stats, armor = this.armor?.() ?? 0;

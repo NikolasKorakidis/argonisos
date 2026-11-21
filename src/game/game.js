@@ -105,6 +105,7 @@ export function installGame(g) {
   function unequip(i) { const s = inv.slots[i]; if (!s) return; delete s.worn; refreshLook(); }
   g.equip = (i) => {
     const s = inv.slots[i]; if (!s) return; const d = ITEMS[s.id];
+    if (!s.worn && d.dur && s.dur <= 0 && d.type !== 'armor') { hud.toast(`Your ${d.name.toLowerCase()} is broken: mend it at a workbench`); return; }   // (broken tools stay in the pack)
     if (s.worn) { player.equip = { kind: 'disarm', t: 0 }; unequip(i); if (d.type !== 'armor') g.sound('sheathe'); return; }
     if (d.type === 'armor') { const o = inv.slots.findIndex((x) => x?.worn === d.slot); if (o >= 0) delete inv.slots[o].worn; s.worn = d.slot; refreshLook(); hud.toast(`Wearing ${d.name.toLowerCase()}`); return; }
     const slot = d.type === 'shield' || d.bow ? 'left' : 'hand';
@@ -125,7 +126,13 @@ export function installGame(g) {
   player.onStrike = () => {
     const slot = g.heldSlot(), item = slot ? ITEMS[slot.id] : null;
     const hitSomething = g.combat.strike(item) || g.harvest.strike(item) || false;
-    if (hitSomething && slot?.dur !== undefined) { slot.dur -= 1; if (slot.dur <= 0) { hud.toast(`Your ${ITEMS[slot.id].name.toLowerCase()} broke`); inv.slots[inv.slots.indexOf(slot)] = null; } hud.dirtyInv = true; refreshLook(); }
+    // (a wrong tool's clink wears nothing; at naught a tool breaks but stays in the pack, put away until it's mended at a
+    // workbench, Valheim's way: review, Nov, it used to be lost for good)
+    if (hitSomething && hitSomething !== 'clink' && slot?.dur !== undefined) {
+      const name = ITEMS[slot.id].name.toLowerCase(), was = slot.dur; slot.dur = Math.max(0, slot.dur - 1);
+      if (slot.dur <= 0) { hud.toast(`Your ${name} broke: mend it at a workbench`); delete slot.worn; player.equip = { kind: 'disarm', t: 0 }; } else if (was > ITEMS[slot.id].dur * 0.1 && slot.dur <= ITEMS[slot.id].dur * 0.1) hud.toast(`Your ${name} is wearing out`);
+      hud.dirtyInv = true; refreshLook();
+    }
     if (!item) player.stats.train('unarmed', 12.5);
   };
 

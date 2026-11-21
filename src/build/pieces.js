@@ -100,6 +100,18 @@ export const PIECES = [
   { id: 'wallHalf', name: 'Wooden Wall 3×1', cat: 'Walls', icon: 'wall', mats: { wood: 2, rope: 1 }, hp: 400,
     parts: () => [part(box(W, 1, T, 0, 0.5, 0), MAT.plank), part(box(W, 0.18, 0.26, 0, 0.91, 0), MAT.beam)],
     snaps: corners(W, 1), solids: [[0, 0.5, 0, W, 1, T + 0.1]] },
+  // (more walls, review Nov: every house came out the same box) a wall with a window, a narrow one, and a triangle that
+  // closes the end of a lean-to or a gable under 45° roof panels. w: a wall's width when it isn't 3 m (its footprint on
+  // the ground, build.js foot)
+  { id: 'wallWindow', name: 'Wooden Window Wall 3×3', cat: 'Walls', icon: 'wall', mats: { wood: 4, rope: 2 }, hp: 700,
+    parts: () => [part(box(W, 1, T, 0, 0.5, 0), MAT.plank), part(box(W, 0.9, T, 0, 2.55, 0), MAT.plank), part(box(0.9, 1.1, T, -1.05, 1.55, 0), MAT.plank), part(box(0.9, 1.1, T, 1.05, 1.55, 0), MAT.plank), part(box(1.3, 0.1, 0.32, 0, 1.02, 0), MAT.beam)],
+    snaps: corners(W, W), solids: [[0, W / 2, 0, W, W, T + 0.1]] },
+  { id: 'wallNarrow', name: 'Wooden Wall 1.5×3', cat: 'Walls', icon: 'wall', mats: { wood: 2, rope: 1 }, hp: 400, w: 1.5,
+    parts: () => [part(box(1.5, W, T, 0, W / 2, 0), MAT.plank), part(box(0.24, W, 0.26, -0.63, W / 2, 0), MAT.beam), part(box(0.24, W, 0.26, 0.63, W / 2, 0), MAT.beam)],
+    snaps: corners(1.5, W), solids: [[0, W / 2, 0, 1.5, W, T + 0.1]] },
+  { id: 'wallTri', name: 'Wooden Triangle Wall 3×3', cat: 'Walls', icon: 'roofEnd', mats: { wood: 2, rope: 1 }, hp: 400,
+    parts: () => [slant(W, W, T, MAT.plank), part(box(W, 0.22, 0.26, 0, 0.11, 0), MAT.beam)],
+    snaps: [[-W / 2, 0, 0], [W / 2, 0, 0], [0, 0, 0], [W / 2, W, 0], [W / 2, W / 2, 0]], solids: [[0.5, 0.9, 0, 2, 1.8, T + 0.1]] },
   { id: 'doorframe', name: 'Wooden Door Frame', cat: 'Walls', icon: 'door', mats: { wood: 2, rope: 1 }, hp: 600,
     parts: () => [part(box(0.8, W, T, -1.1, W / 2, 0), MAT.plank), part(box(0.8, W, T, 1.1, W / 2, 0), MAT.plank), part(box(1.4, 0.7, T, 0, 2.65, 0), MAT.plank),
       part(box(0.18, 2.3, 0.3, -0.79, 1.15, 0), MAT.beam), part(box(0.18, 2.3, 0.3, 0.79, 1.15, 0), MAT.beam), part(box(1.76, 0.2, 0.3, 0, 2.3, 0), MAT.beam)],
@@ -113,10 +125,17 @@ export const PIECES = [
     parts: () => [part(box(W, 0.26, 0.26, 0, 0, 0), MAT.beam)], snaps: [[-W / 2, 0, 0], [W / 2, 0, 0], [0, 0, 0]], solids: [], tops: [{ x0: -1.5, x1: 1.5, z0: -0.13, z1: 0.13, y: 0.13 }] },
   { id: 'beamD', name: 'Wooden Diagonal Beam 3m', cat: 'Beams', icon: 'beam', mats: { wood: 1 }, hp: 150,
     parts: () => [part(box(0.26, Math.hypot(2.12, 2.12), 0.26, 0, 0, 0).rotateZ(-Math.PI / 4).translate(0, 1.06, 0), MAT.beam)], snaps: [[-1.06, 0, 0], [1.06, 2.12, 0]], solids: [] },
+  // (whole logs, from the giants': core wood, which loses less support at each piece than planks, loss [up, sideways],
+  // so it reaches further out and holds taller buildings up)
+  { id: 'beamLog', name: 'Log Beam 3m', cat: 'Beams', icon: 'log', mats: { log: 1 }, hp: 300, loss: [0.1, 0.16],
+    parts: () => [part(new THREE.CylinderGeometry(0.18, 0.2, W, 9).rotateZ(Math.PI / 2), MAT.beam)], snaps: [[-W / 2, 0, 0], [W / 2, 0, 0], [0, 0, 0]], solids: [], tops: [{ x0: -1.5, x1: 1.5, z0: -0.18, z1: 0.18, y: 0.18 }] },
+  { id: 'postLog', name: 'Log Post 3m', cat: 'Beams', icon: 'log', mats: { log: 1 }, hp: 300, loss: [0.1, 0.16],
+    parts: () => [part(new THREE.CylinderGeometry(0.19, 0.21, W, 9).translate(0, W / 2, 0), MAT.beam)], snaps: [[0, 0, 0], [0, W, 0], [0, W / 2, 0]], solids: [[0, W / 2, 0, 0.4, W, 0.4]] },
   { id: 'floor', name: 'Wooden Floor 3×3', cat: 'Floors', icon: 'floor', mats: { wood: 4, rope: 2 }, hp: 800,
     parts: () => [part(box(W, T, W, 0, -T / 2, 0).rotateY(Math.PI / 2), MAT.plank), part(box(0.22, 0.24, W, -W / 2 + 0.11, -0.2, 0), MAT.beam), part(box(0.22, 0.24, W, W / 2 - 0.11, -0.2, 0), MAT.beam)],
     snaps: [[-1.5, 0, -1.5], [1.5, 0, -1.5], [-1.5, 0, 1.5], [1.5, 0, 1.5], [0, 0, -1.5], [0, 0, 1.5], [-1.5, 0, 0], [1.5, 0, 0], [0, 0, 0]], solids: [], tops: [{ x0: -1.5, x1: 1.5, z0: -1.5, z1: 1.5, y: 0 }], roof: true },
-  ...[[6, 3, 'roof63', 'Thatch Roof 6×3', { wood: 2, rope: 1 }, 400], [6, 5, 'roof65', 'Thatch Roof 6×5', { wood: 2, rope: 1 }, 400], [9, 4, 'roof94', 'Thatch Roof 9×4', { wood: 4, rope: 2 }, 500]].map(([span, rise, id, name, mats, hp]) => {
+  // (the low one, 6×1.5, about 26°: porches, lean-tos and low houses, under the steep ones' 45° to 59°)
+  ...[[6, 3, 'roof63', 'Thatch Roof 6×3', { wood: 2, rope: 1 }, 400], [6, 5, 'roof65', 'Thatch Roof 6×5', { wood: 2, rope: 1 }, 400], [9, 4, 'roof94', 'Thatch Roof 9×4', { wood: 4, rope: 2 }, 500], [6, 1.5, 'roof615', 'Thatch Roof 6×1.5 (low)', { wood: 2, rope: 1 }, 400]].map(([span, rise, id, name, mats, hp]) => {
     const run = span / 2;
     return { id, name, cat: 'Roofs', icon: 'roof', mats, hp, roofPitch: Math.atan2(rise, run),
       // rafters along both sides: a centimetre proud of the thatch's ends, a little below its underside and short of its
@@ -125,7 +144,7 @@ export const PIECES = [
       snaps: [[-W / 2, 0, 0], [W / 2, 0, 0], [0, 0, 0], [-W / 2, rise, -run], [W / 2, rise, -run], [0, rise, -run]], solids: [],
       tops: [{ x0: -1.5, x1: 1.5, z0: 0, z1: -run, y0: 0.25, y1: rise + 0.25 }], roof: true };
   }),
-  ...[[6, 3, 'end63', 'Wooden Roof End 6×3', { wood: 4, rope: 2 }, 300], [6, 5, 'end65', 'Wooden Roof End 6×5', { wood: 4, rope: 2 }, 300], [9, 4, 'end94', 'Wooden Roof End 9×4', { wood: 6, rope: 4 }, 400]].map(([span, rise, id, name, mats, hp]) => ({
+  ...[[6, 3, 'end63', 'Wooden Roof End 6×3', { wood: 4, rope: 2 }, 300], [6, 5, 'end65', 'Wooden Roof End 6×5', { wood: 4, rope: 2 }, 300], [9, 4, 'end94', 'Wooden Roof End 9×4', { wood: 6, rope: 4 }, 400], [6, 1.5, 'end615', 'Wooden Roof End 6×1.5 (low)', { wood: 2, rope: 1 }, 250]].map(([span, rise, id, name, mats, hp]) => ({
     id, name, cat: 'Roofs', icon: 'roofEnd', mats, hp,
     parts: () => [triangle(span, rise, T, MAT.plank), part(box(span, 0.22, 0.26, 0, 0.11, 0), MAT.beam)],
     snaps: [[-span / 2, 0, 0], [span / 2, 0, 0], [0, 0, 0], [-span / 2 + 3, 0, 0], [span / 2 - 3, 0, 0], [0, rise, 0]], solids: [[0, rise / 3, 0, span * 0.66, rise * 0.66, T + 0.1]] })),
@@ -163,6 +182,12 @@ export const PIECES = [
       for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; P.push(part(new THREE.CylinderGeometry(0.05, 0.06, 0.8, 6).rotateZ(1.1).rotateY(a).translate(Math.cos(a) * 0.18, 0.22, Math.sin(a) * 0.18), MAT.beam)); }
       P.push(part(new THREE.CylinderGeometry(0.4, 0.45, 0.06, 10).translate(0, 0.03, 0), MAT.ember)); return P; },
     snaps: [[0, 0, 0]], solids: [[0, 0.2, 0, 1.2, 0.4, 1.2]] },
+  // (a hearth of stones: it holds twice the wood and burns it slower, and the rain doesn't put it out)
+  { id: 'hearth', name: 'Stone Hearth', cat: 'Crafting', icon: 'fire', mats: { stone: 15, wood: 5 }, hp: 400, fire: true, hearth: true, equip: true, desc: 'A fire in a ring of stones: it holds 20 wood, burns each longer, and the rain can\'t put it out.',
+    parts: () => { const P = []; for (let i = 0; i < 14; i++) { const a = (i / 14) * Math.PI * 2; P.push(part(new THREE.DodecahedronGeometry(0.2, 0).scale(1.1, 0.9 + (i % 3) * 0.15, 1.3).rotateY(-a).translate(Math.cos(a) * 0.72, 0.14, Math.sin(a) * 0.72), MAT.stone)); }
+      for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2; P.push(part(new THREE.CylinderGeometry(0.05, 0.065, 0.85, 6).rotateZ(1.1).rotateY(a).translate(Math.cos(a) * 0.2, 0.24, Math.sin(a) * 0.2), MAT.beam)); }
+      P.push(part(new THREE.CylinderGeometry(0.5, 0.55, 0.06, 12).translate(0, 0.03, 0), MAT.ember)); return P; },
+    snaps: [[0, 0, 0]], solids: [[0, 0.22, 0, 1.6, 0.44, 1.6]] },
   { id: 'cookingStand', name: 'Cooking Stand', cat: 'Crafting', icon: 'meat', mats: { wood: 6 }, hp: 50, cook: 3, equip: true, desc: 'Place it over a fire, then hang raw meat on it (E).',
     parts: () => [part(box(0.08, 1.1, 0.08, -0.75, 0.55, 0).rotateZ(-0.12), MAT.beam), part(box(0.08, 1.1, 0.08, 0.75, 0.55, 0).rotateZ(0.12), MAT.beam), part(new THREE.CylinderGeometry(0.025, 0.025, 1.7, 6).rotateZ(Math.PI / 2).translate(0, 1.0, 0), MAT.iron)],
     snaps: [[0, 0, 0]], solids: [] },
@@ -177,6 +202,12 @@ export const PIECES = [
     parts: () => [part(box(0.1, 1.5, 0.1, 0, 0.75, 0), MAT.beam), part(new THREE.CylinderGeometry(0.1, 0.06, 0.2, 7).translate(0, 1.55, 0), MAT.iron)],
     snaps: [[0, 0, 0]], solids: [[0, 0.7, 0, 0.2, 1.4, 0.2]] },
 ];
+// a right-angled triangle of planks: its base along x, its upright edge at x = base / 2 (the triangle wall)
+function slant(base, height, t, mat) {
+  const b = base / 2, s = new THREE.Shape(); s.moveTo(-b, 0); s.lineTo(b, 0); s.lineTo(b, height); s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, { depth: t, bevelEnabled: false }).translate(0, 0, -t / 2), uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 3, uv.getY(i) / 3);
+  return part(g, mat);
+}
 function stairs(rise, run) {
   const n = Math.round(rise / 0.25), P = [part(box(0.12, 0.3, Math.hypot(run, rise) + 0.2, -0.95, 0, 0).translate(0, 0, -Math.hypot(run, rise) / 2).rotateX(Math.atan2(rise, run)), MAT.beam),
     part(box(0.12, 0.3, Math.hypot(run, rise) + 0.2, 0.95, 0, 0).translate(0, 0, -Math.hypot(run, rise) / 2).rotateX(Math.atan2(rise, run)), MAT.beam)];

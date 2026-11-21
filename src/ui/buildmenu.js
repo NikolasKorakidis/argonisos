@@ -45,7 +45,8 @@ export class BuildMenu {
     const box = this.el.querySelector('.bminfo'), p = this.g.build.piece(this.hover);
     if (!p) { box.innerHTML = '<p class="empty">Gather wood and stone to learn what you can build.</p>'; return; }
     const cost = Object.entries(p.mats).map(([m, n]) => { const have = this.g.inv.count(m); return `<div class="slot${have < n && !this.g.S.freeBuild ? ' no' : ''}" title="${ITEMS[m].name}">${icon(ITEMS[m].icon)}<em>${have}/${n}</em></div>`; }).join('');
-    box.innerHTML = `<div class="big">${icon(p.icon, '', 'p_' + p.id)}</div><div class="txt"><h3>${p.name}</h3><p>${p.desc || (p.hp ? `${p.hp} hit points` : '')}</p></div><div class="cost">${cost || '<span class="free">No cost</span>'}</div>`;
+    const need = this.missing(p) ? this.g.inv.need(p.mats) : '';   // (what's short, by how much)
+    box.innerHTML = `<div class="big">${icon(p.icon, '', 'p_' + p.id)}</div><div class="txt"><h3>${p.name}</h3><p>${p.desc || (p.hp ? `${p.hp} hit points` : '')}${need ? `<br><i class="need">${need}</i>` : ''}</p></div><div class="cost">${cost || '<span class="free">No cost</span>'}</div>`;
   }
   update() {
     if (!this.open) return;

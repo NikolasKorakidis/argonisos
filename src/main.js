@@ -60,7 +60,7 @@ veg.onCell = (key, items, cx, cz) => {
   if (!items) { colliders.removeGroup('v' + key); return; }
   const list = [];
   for (let i = 0; i < items.length / STRIDE; i++) {
-    const o = i * STRIDE, sp = SPECIES[items[o]]; if (!sp.col || veg.removed.has(`${cx},${cz},${i}`)) continue;
+    const o = i * STRIDE, sp = SPECIES[items[o]]; if (!sp.col || !(items[o + 6] > 0) || veg.removed.has(`${cx},${cz},${i}`)) continue;   // (nor the slots the layout left empty, at no size: review, an axe felled them from thin air)
     const s = items[o + 6]; list.push({ x: items[o + 2], z: items[o + 4], y: items[o + 3], r: sp.col * s, h: sp.h ? sp.h * s * 1.4 : undefined, ref: { cx, cz, i, sp: items[o], s } });
   }
   colliders.addGroup('v' + key, list);
