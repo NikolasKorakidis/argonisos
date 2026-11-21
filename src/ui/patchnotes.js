@@ -5,7 +5,7 @@ import { glyph } from './icons.js';
 export const PATCHES = [
   {
     id: 'patch-24', name: 'Patch 24', title: 'Footwork', date: '21 November 2026',
-    intro: 'Surer footing for the hero, rocks that look like stone, a grander Olympos with a smoother path up it, and a gentler storm seen from its top.',
+    intro: 'Surer footing for the hero, rocks that look like stone, a grander Olympos with a smoother path up it, a river falling from it to the sea, and a gentler storm seen from its top.',
     sections: [
       { t: 'The look', icon: 'sun', items: [
         '<b>Rocks and boulders in real stone.</b> Every rock on the island now has grain, cracks and layers, pale edges where its faces meet and darker hollows, and each is a little different in colour. Moss grows over their tops in the woods and a pale, sun-bleached lichen out in the meadows, less up the mountain and none by the sea, and they turn dark and wet in the rain. The stones you pick up, the cairns on Olympos and the boulders at the ruins match them.',
@@ -22,6 +22,13 @@ export const PATCHES = [
         '<b>A smoother way up.</b> The path climbs at a steady grade, with no more level stretches broken by steep ramps or bumps underfoot. It is a worn track you can see winding up the face, it passes the cliff bands where they break, and the last rock steps under the summit are each one clean jump. Off the path the cliffs can\'t be hopped up: you can\'t jump while sliding down a face or with a cliff right in front of you, and no jump lands you on a ledge above one.',
         '<b>Boulders where the mountain drops them.</b> The rocks scattered all over the slopes are gone. Fallen blocks now gather at the foot of the cliffs, rounded stones lie in the gullies, outcrops stand out of the ridges and a few stones from the cut lie beside the path, all bedded in the ground, none floating and none in your way.',
         '<b>Places to stop on the climb.</b> A ledge halfway up with a bench and a little shrine looking out over the island, a spring running from a bronze spout in the cut above the path, broken votive columns and pilgrims\' cairns where the crest begins, an eagle\'s nest on the lesser summit, and a cairn at every bend of the path. At the top, a gateway of columns leads in to the altar over old flagstones, ringed by crags.',
+      ] },
+      { t: 'The river', icon: 'wet', items: [
+        '<b>A river from Olympos to the sea.</b> It rises from a spring under a crag high on the mountain\'s south-west face, just below the snows, and comes down the cliff bands in four waterfalls, the highest some sixty-five metres, each pouring into a deep pool at its foot. Out on the meadows it winds south-west between the Ancient Temple and the western Giant\'s cave, turns north into a small lake under the forest hills, and leaves it through a ravine, down rapids to the sea on the north-west coast.',
+        '<b>Swim it.</b> Its deep, wide reach in the meadows and the lake are too deep to stand in: you swim across, as at sea. In the shallows you wade, slower the deeper it gets and splashing as you go, and the current carries you downstream, harder where the river runs narrow and quick; the lake is still. Animals keep out of its deep water, and a log you fell into it floats off downstream.',
+        '<b>Water you can see into.</b> The shallows are clear over their gravel and stones, with the sun\'s light playing on the bed; deeper water turns green and then dark in the pools. The river mirrors its banks, the trees and the mountain, the ripples run with the current, quicker and broken over the riffles, and foam gathers on the rapids, along the banks and under the falls. The lake lies almost still. Rain rings the surface, and by night it holds the moonlight.',
+        '<b>The falls.</b> Their water streams down the rock, quickening as it falls, white at the foot, with spray thrown up from the pools and mist drifting off them on the wind; stand with the sun behind you and you may see a rainbow in it. The rock round them is dark and wet, with moss and ferns in the spray.',
+        'Reeds stand at the slow water\'s edge, water lilies float on the lake and the deep reach, plane trees grow in groups along the meadow river, and nothing grows in the water. You hear the river babbling as you come near it, louder over the riffles, the roar of the falls from far off, and water lapping at the lake\'s shore. The map shows it all.',
       ] },
     ],
   },
