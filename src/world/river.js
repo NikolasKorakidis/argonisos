@@ -13,7 +13,7 @@
 // inside), and beyond the water's edge a bank that rises gently and then as a valley side, taking the land down
 // wherever it stood higher. So every bank stands at or above the water and every bed below it, and the water's surface
 // (waterAt) is the same function the ground was carved by.
-import { heightAt, noise, fbm, hash2, setRiverHook, meadowPath, isRock } from './gen.js';
+import { heightAt, noise, fbm, setRiverHook, meadowPath, isRock } from './gen.js';
 import { clamp, lerp, smooth } from '../util/math.js';
 
 // The course, from the spring to the sea: [x, z, half width (m), depth at the deepest (m), valley side's slope, width of
@@ -127,9 +127,8 @@ export function layRiver(keep = []) {
   { let i1 = -1; for (let i = 0; i < n; i++) if (kd(i) === 'K') i1 = i; let ic = n - 1; for (let i = i1 + 1; i < n; i++) if (land[i] < 0.6) { ic = i; break; }
     if (i1 > 0) for (let i = i1 + 1; i < n; i++) W[i] = Math.min(W[i], W[i1] * Math.pow(Math.max(0, 1 - (i - i1) / (ic - i1)), 0.85)); }
   for (let i = 0; i < n; i++) W[i] = Math.max(W[i], 0.02);
-  // the falls: where the surface drops more than 8 m in 10, gathered into one sheer drop at the cliff's lip (the first
-  // sample where it steepens), the water below level with the plunge pool at its foot; the land between is cut down
-  // into a notch with near sheer sides
+  // the falls: where the surface drops more than 8 m, steeper than 3 in 5 from the cliff's lip (the first sample where
+  // it steepens) to its foot
   R.falls = [];
   for (let i = 1; i < n - 2; i++) {
     if (W[i] - W[i + 1] < 0.6 * STEP) continue;
@@ -253,7 +252,7 @@ function carve(x, z, h) {
     const i = list[j], ex = X[i + 1] - X[i], ez = Z[i + 1] - Z[i], t = clamp(((x - X[i]) * ex + (z - Z[i]) * ez) / (ex * ex + ez * ez), 0, 1), dx = x - X[i] - ex * t, dz = z - Z[i] - ez * t;
     D2[j] = dx * dx + dz * dz; T[j] = t; if (D2[j] < bd) { bd = D2[j]; bi = i; bt = t; }
   }
-  // the nearest stretch of each reach that comes near (two loops of a bend, a fall's bowl and the reach above it: each
+  // the nearest stretch of each reach that comes near (two loops of a bend, a fall's face and the reach above it: each
   // the nearest of a run of stretches one after another) may take the land down; the nearest of all decides the bed
   // and the low bank (those much further off would only lower it less)
   const lim = (Math.sqrt(bd) + 8) ** 2;
@@ -290,7 +289,7 @@ export function riverAt(x, z, out = _r) {
   return out;
 }
 // how near the river's water (x, z) is, for flora and pickups: true in the water and on its wet margin (the first metre
-// of the bank), and in a fall's notch and spray
+// of the bank), and close round a fall, in its spray
 export function riverWet(x, z, margin = 1) { const q = nearest(x, z); return !!q && (q.out < margin || (q.fall >= 0 && q.out < 4)); }
 
 // ---- Colours: the bed and the banks (gen.js groundColor asks, after everything else has coloured the ground)
@@ -332,5 +331,3 @@ export function riverSounds(p) {
   R.falls.forEach((f, i) => { if ((f.px - p.x) ** 2 + (f.pz - p.z) ** 2 < 460 * 460) _snd.push({ id: 'fall' + i, kind: 'fall', x: f.px, y: f.foot + Math.min(20, f.h * 0.3), z: f.pz, k: 0.55 + f.h / 140 }); });
   return _snd;
 }
-// (a hash for the river's own things, its own dice: nothing it lays out moves anything else)
-export const riverHash = (a, b) => hash2(a * 7.31 + 9173, b * 3.17 - 4421);

@@ -131,7 +131,7 @@ const FRAG = `${RIPPLES}${SHADOW_GLSL}
       s0 = s; s = s * SSR_G + 0.3 * (0.8 + 0.4 * jit); }
     if (hit < 0.5) return vec4(0.0);
     float a = s0, b = s; for (int k = 0; k < 5; k++) { float m = 0.5 * (a + b); vec4 q = uVP * vec4(W + R * m, 1.0); if (q.w > linD(texture2D(tGrabD, q.xy / q.w * 0.5 + 0.5).x)) b = m; else a = m; }
-    vec4 q = uVP * vec4(W + R * b, 1.0); u = q.xy / q.w * 0.5 + 0.5; vec2 e = smoothstep(vec2(0.0), vec2(0.06), u) * smoothstep(vec2(1.0), vec2(0.94), u);
+    vec4 q = uVP * vec4(W + R * b, 1.0); u = q.xy / q.w * 0.5 + 0.5; vec2 e = smoothstep(vec2(0.0), vec2(0.2, 0.12), u) * smoothstep(vec2(1.0), vec2(0.8, 0.88), u);
     // (softened, more the further the thing mirrored: eight looks round it on a turned pattern, which takes the grain the
     // stepping leaves out of the picture)
     vec2 o = (2.0 + b * 0.05) / uRes; vec3 c = vec3(0.0); float ang = jit * 6.2832;
