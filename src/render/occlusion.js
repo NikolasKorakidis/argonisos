@@ -13,7 +13,7 @@ const FADE = 0.28, KEEP = 0.25;   // opacity when faded; seconds an object stays
 // ...and closer to the camera than NEAR[1] metres it fades further, gone by NEAR[0]: a trunk the camera all but touches
 // (a fir's, thirty centimetres off, with the camera ten metres back in a thick wood) filled half the picture as a flat,
 // see-through slab
-const NEAR = [0.6, 2.5], HUG = 1.5;   // (HUG: how near a trunk's round the camera must come for the tree to fade, see update)
+const NEAR = [0.6, 2.5], HUG = 1.5, HEAD = [1.65], MIDDLE = [1.0];   // (HUG: how near a trunk's round the camera must come for the tree to fade, see update)
 // The faded copies of materials are kept for the next time rather than thrown away: a material disposed takes its shader
 // program with it, and walking through the woods, with trunk after trunk between the camera and the hero, compiled the
 // same program again and again, a hitch each time. Each copy is made like the source again when it is taken.
@@ -43,9 +43,11 @@ export class Occlusion {
     const g = this.g, P = g.player; if (!P || P.dead || g.S.fly) { this.clearAll(); return; }
     this.t -= dt; const now = performance.now() / 1000;
     if (this.t <= 0) {
-      this.t = 0.08;
+      // (the two rays, to the hero's head and to his middle, in turn, each every 80 ms as before: both at once, through the
+      // crowns of the woods, made a frame 1.5-2 ms longer every fifth one)
+      this.t = 0.04; this.ray = (this.ray || 0) ^ 1;
       const hits = new Map(), cand = this.candidates();
-      for (const h of [1.65, 1.0]) {
+      for (const h of this.ray ? HEAD : MIDDLE) {
         const target = _a.copy(P.pos); target.y += h; _d.copy(target).sub(camera.position); const len = _d.length(); if (len < 0.5) continue;
         ray.set(camera.position, _d.normalize()); ray.far = len - 0.3;
         for (const hit of ray.intersectObjects(cand, false)) { const key = this.keyOf(hit); if (key && !(hits.get(key)?.distance < hit.distance)) hits.set(key, hit); }
