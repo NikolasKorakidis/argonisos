@@ -211,8 +211,8 @@ const FAR_SITE = ULTRA ? 450 : 350, PX_R = 0.4, PX_K = 1 / 600, FAR_MIN = 8;   /
 const plainMat = (m) => m.onBeforeCompile === THREE.Material.prototype.onBeforeCompile;
 const matKey = (m) => (plainMat(m) ? [m.type, m.map?.uuid, m.normalMap?.uuid, m.color?.getHex(), m.emissive?.getHex(), m.emissiveIntensity, m.roughness, m.metalness, m.vertexColors, m.side, m.alphaTest, m.flatShading, m.fog].join('|') : m.uuid);
 function farVersion(grp) {
+  grp.updateMatrixWorld(true);   // (before its inverse is taken: a site made in the same frame hasn't been placed yet)
   const by = new Map(), from = [], todo = [], inv = new THREE.Matrix4().copy(grp.matrixWorld).invert(), seen = (o) => { for (let p = o; p && p !== grp; p = p.parent) if (!p.visible) return false; return true; };
-  grp.updateMatrixWorld(true);
   // (first what goes in and how it groups: a site whose every piece has a look of its own, the temple's each with its own
   // picture, would gain nothing for the copy, and is left as it is)
   grp.traverse((m) => {
