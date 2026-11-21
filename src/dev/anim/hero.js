@@ -164,10 +164,10 @@ export class HeroSubject {
     if (W.dodge) W.yaw += angDiff(W.dodge.yaw, W.yaw) * Math.min(1, dt * 20);
     else if (aiming || W.blocking || W.swing > 0) W.yaw += clamp(angDiff(Math.atan2(-Math.sin(camYaw), -Math.cos(camYaw)), W.yaw) * Math.min(1, dt * 14), -12 * dt, 12 * dt);   // (player.js TURN_MAX)
     else if (speed > 0.3 && want.lengthSq()) W.yaw += angDiff(Math.atan2(want.x, want.z), W.yaw) * Math.min(1, dt * (W.onGround ? 10 : 4));
-    // the jump, or with RMB or Shift held a dodge the way the keys point (straight back with none: hero.dodge); gravity
+    // the jump, or with RMB held a dodge the way the keys point (straight back with none: hero.dodge); gravity
     // onto the stage
     if (I.hit('Space')) W.jumpBuf = 0.15; if (W.jumpBuf > 0) W.jumpBuf -= dt;
-    const dodgeKey = I.rmb || I.down('ShiftLeft') || I.down('ShiftRight');
+    const dodgeKey = I.rmb;
     if (W.jumpBuf > 0 && dodgeKey && W.onGround && !W.dodge && held > 0.9 && H.has('roll')) {
       W.jumpBuf = 0; const fx = -Math.sin(camYaw), fz = -Math.cos(camYaw), dir = ix || iz ? Math.atan2(fx * iz - fz * ix, fz * iz + fx * ix) : W.yaw + Math.PI;
       const d = { t: 0, f: 0, dx: Math.sin(dir), dz: Math.cos(dir) };

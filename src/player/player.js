@@ -17,10 +17,12 @@ import { GAIT } from '../audio/sound.js';
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const _lv = new THREE.Vector3();
 const SWIM_DEPTH = 1.35, RADIUS = 0.38;
-// The dodge (Space with RMB held, as in Valheim: with any weapon, the bow or bare hands; or Shift + Space, whatever is in
-// your hands): its stamina, the stretch of it no blow lands (seconds in), how long after one before the next (s), and the
+// The dodge (Space with RMB held, as in Valheim: with any weapon, the bow or bare hands; Shift is the sprint and its
+// leap, never a dodge): its stamina, the stretch of it no blow lands (seconds in), how long after one before the next (s), and the
 // most the ground may fall away (a ledge: the dodge stops at its edge) or rise (a bank too steep to roll up) in one
 // frame's step, beyond what the step's own length allows (m). How far and how long: hero.js DODGE_MOVE
+// (a jump from a sprint carries a little higher, a running leap: over a log or a gap it carries you on at the sprint's pace)
+const LEAP = 1.1;
 const DODGE = { cost: 12, safe: [0.05, 0.55], cool: 0.25, drop: 0.6, rise: 0.05 };
 // The quickest the hero turns to face the aim or the guard (radians a second): half round in about a quarter of a second
 const TURN_MAX = 12;
@@ -176,9 +178,9 @@ export class Player {
     // ---- jump and gravity
     if (ctl && hit('Space')) this.jumpBuf = 0.15;
     if (this.jumpBuf > 0) this.jumpBuf -= dt;
-    // ...or a dodge: with RMB held (the guard up, the bow drawn, or bare hands: guardUp, combat.js) or with Shift, the way
-    // the keys point (straight back with none held). Shift + Space never jumps
-    const dodgeKey = this.blocking || this.guardUp || shift;
+    // ...or a dodge: with RMB held (the guard up, the bow drawn, or bare hands: guardUp, combat.js), the way the keys point
+    // (straight back with none held). Shift + Space is a jump, a running leap when sprinting
+    const dodgeKey = this.blocking || this.guardUp;
     if (this.jumpBuf > 0 && dodgeKey && this.onGround && !this.swimming && !this.dodge && this.dodgeCd <= 0 && held > 0.9 && H.has('roll')) {
       this.jumpBuf = 0;
       if (!S.use(DODGE.cost, 'jumping')) this.onToast?.('Too tired to roll');
@@ -191,7 +193,7 @@ export class Player {
     }
     if (this.jumpBuf > 0 && !dodgeKey && this.onGround && !this.swimming && this.swing <= 0 && held > 0.9) {
       this.jumpBuf = 0;
-      if (S.use(5, 'jumping')) { this.vel.y = JUMP_V * Math.sqrt(S.skillK('jumping')); this.onGround = false; this.jumped = true; S.train('jumping', 2.5); this.onStep?.('jump'); }
+      if (S.use(5, 'jumping')) { this.vel.y = JUMP_V * Math.sqrt(S.skillK('jumping')) * (this.sprinting ? LEAP : 1); this.onGround = false; this.jumped = true; S.train('jumping', 2.5); this.onStep?.('jump'); }
       else this.onToast?.('Too tired to jump');
     }
     const wasAir = !this.onGround && this.vel.y < -6;
