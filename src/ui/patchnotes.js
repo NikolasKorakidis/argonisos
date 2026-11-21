@@ -4,6 +4,16 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-24', name: 'Patch 24', title: 'Footwork', date: '21 November 2026',
+    intro: 'Surer footing for the hero, rocks that look like stone, and a gentler storm seen from the top of Olympos.',
+    sections: [
+      { t: 'The look', icon: 'sun', items: [
+        '<b>Rocks and boulders in real stone.</b> Every rock on the island now has grain, cracks and layers, pale edges where its faces meet and darker hollows, and each is a little different in colour. Moss grows over their tops in the woods and a pale, sun-bleached lichen out in the meadows, less up the mountain and none by the sea, and they turn dark and wet in the rain. The stones you pick up, the cairns on Olympos and the boulders at the ruins match them.',
+        '<b>Zeus\'s storm from the top of Olympos.</b> Seen from up high it now sits in the same soft haze as the rest of the island instead of standing out near black, its outline against the sky is softer, and its rings of cloud share the haze. It still towers dark over the marsh, and from the meadows it looks as before.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-23', name: 'Patch 23', title: 'Polish and Pace', date: '21 November 2026',
     intro: 'A long look over the whole island: a brighter sky and storm, clearer air, a smoother forest, fuller sound, fairer fights and building that keeps what you build.',
     sections: [
