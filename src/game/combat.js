@@ -119,8 +119,8 @@ export class Combat {
     // (a giant boss's blow lands harder still: a heavy impact under the cry, the view kicked hard and rumbling on)
     S.damage(final); g.hud.hurt(final / Math.max(10, S.maxHealth) * 2); punch(c.boss ? clamp(0.55 + final / 40, 0.6, 1) : clamp(final / 22, 0.2, 0.85), { x: P.pos.x - src.x, z: P.pos.z - src.z }); if (final > 20 || c.boss) addShake(c.boss ? clamp(0.35 + final / 60, 0.35, 0.8) : clamp((final - 20) / 60, 0, 0.3)); g.sound?.('hurt', { voice: g.heroVoice?.() ?? true });
     if (c.boss) g.sound?.('bossHit', { k: clamp(0.6 + final / 40, 0.6, 1.2) });
-    { const f = camera.getWorldDirection(new THREE.Vector3()), dx = src.x - P.pos.x, dz = src.z - P.pos.z, fl = Math.hypot(f.x, f.z) || 1; g.hud.hurtFrom?.((dx * -f.z + dz * f.x) / fl, (dx * f.x + dz * f.z) / fl, clamp(final / 25, 0.25, 1)); }
     if (c.type) g.owl?.want?.('fight');   // (the first blow a beast lands on you brings the Owl with her counsel on guarding and rolling)
+    { const f = camera.getWorldDirection(new THREE.Vector3()), dx = src.x - P.pos.x, dz = src.z - P.pos.z, fl = Math.hypot(f.x, f.z) || 1; g.hud.hurtFrom?.((dx * -f.z + dz * f.x) / fl, (dx * f.x + dz * f.z) / fl, clamp(final / 25, 0.25, 1)); }
     if (!S.dead) P.hero.hurt(final, S.maxHealth);   // (a flinch, or a stagger back from a big blow)
     g.acts?.hurt(final);   // (a hard enough blow breaks off eating, praying, sitting)
     // (a heavy blow knocks you back; a giant boss's sends you flying, the harder the further)

@@ -92,10 +92,10 @@ export function pauseMenu(g) {
   const notes = notesPanel(); pm.querySelector('#pNotes').onclick = () => notes.open();
   // the character creator, here to change the hero's look (Esc in it goes back to the pause menu, the old look kept)
   g.creator = characterCreator(g);
-  pm.querySelector('#pLook').onclick = () => { pm.classList.add('hidden'); const back = () => pm.classList.remove('hidden'); g.creator.show({ onDone: back, onBack: back }); };
-  g.pause = (on) => {
   // (what the Owl has told you, to read again: owl.js counsel)
   pm.querySelector('#pOwl').onclick = () => { pm.classList.add('hidden'); g.owl.counsel(() => pm.classList.remove('hidden')); };
+  pm.querySelector('#pLook').onclick = () => { pm.classList.add('hidden'); const back = () => pm.classList.remove('hidden'); g.creator.show({ onDone: back, onBack: back }); };
+  g.pause = (on) => {
     if (!on && g.creator.open) { g.creator.close(false); return; } pm.classList.toggle('hidden', !on); if (!on) document.getElementById('devPanel')?.classList.add('hidden'); g.paused = on; input.uiOpen = on; if (on) { unlock(); sync(); g.pausedAt = performance.now(); } else lock(); };
   pm.querySelector('#pResume').onclick = () => g.pause(false);
   pm.querySelector('#pSave').onclick = () => { g.hud.toast(g.save() ? 'Saved' : 'Could not save'); g.pause(false); };
