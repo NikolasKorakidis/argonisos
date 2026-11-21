@@ -8,6 +8,7 @@
 import { heightAt, biomeWeights, fbm, hash2, slopeGrade, isRock, rockLimit, ROCK_GRADE, PEAK, routeAt } from './gen.js';
 import { smooth } from '../util/math.js';
 import { siteClear, ALL_SITES } from './sites.js';
+import { RIVER, riverAt } from './river.js';
 
 export const CELL = 64;
 // species: name for the builder, scale range, collision radius (and height) per unit of scale; 'res' marks things you can harvest (trees give logs, rocks stone)
@@ -266,6 +267,7 @@ function layoutRaw(cx, cz) {
     if (cw.y > 0.3 && cw.v < 0.3) for (let k = 0; k < 3; k++) { if (h2(500 + k) > cw.y * 0.5) continue; const q = place(510 + k * 2); if (!q || q.h > 160) continue; const S = SPECIES[SP.redbush].s; out.push(SP.redbush, 0, q.x, q.h - 0.05, q.z, h2(511 + k) * 6.283, S[0] + (S[1] - S[0]) * h2(512 + k)); }
     groundCover(out, x0, z0, cw, bc, h2);
     if (PEAK.on && Math.hypot(x0 + 32 - PEAK.x, z0 + 32 - PEAK.z) < PEAK.r * 0.92 + 46) mountainCover(out, x0, z0, h2);
+    if (RIVER.on && x0 + CELL > RIVER.box[0] && x0 < RIVER.box[1] && z0 + CELL > RIVER.box[2] && z0 < RIVER.box[3]) riverCover(out, x0, z0, h2);
   }
   return new Float32Array(out);
 }
@@ -377,5 +379,37 @@ function mountainCover(out, x0, z0, h2) {
   }
   for (let c = 0; c < 3; c++) { const k = 3700 + c, x = x0 + h2(k) * CELL, z = z0 + h2(k + 0.5) * CELL, y = soft(x, z); if (y !== null && y > 170 && y < 320 && clear(x, z, 0.8)) lay(SP.broom, k, x, y - 0.05, z, 0); }
   for (let c = 0; c < 6; c++) { const k = 3750 + c, x = x0 + h2(k) * CELL, z = z0 + h2(k + 0.5) * CELL; if (!inCell(x, z) || siteClear(x, z) || mtnK(x, z) < 0.5 || !isRock(x, z)) continue; const y = heightAt(x, z); if (y > 220) lay(SP.pebbles, k, x, y - 0.03, z); }
+}
+// (Patch 24) The river's banks (river.js), laid out after everything else in the cell with dice of their own (k from
+// 5000), so nothing laid out before them moves: beds of reeds standing in the slow water's edge and on its wet margin,
+// sedge along the banks, water lilies afloat over the lake's and the deep reach's shallows, plane trees in threes and
+// fours along the meadow river (the Greek river's tree; never one on its own, the meadows' rule), shrubs on the banks,
+// and ferns and moss in the falls' spray.
+function riverCover(out, x0, z0, h2) {
+  const inCell = (x, z) => x >= x0 && x < x0 + CELL && z >= z0 && z < z0 + CELL, spot = (k) => [x0 + h2(k) * CELL, z0 + h2(k + 0.5) * CELL];
+  const lay = (sp, k, x, y, z, v) => { const S = SPECIES[sp]; out.push(sp, v ?? Math.floor(h2(k + 0.11) * (S.n || 3)), x, y, z, h2(k + 0.37) * 6.283, S.s[0] + (S.s[1] - S.s[0]) * h2(k + 0.53)); };
+  const r = {}, at = (x, z) => (inCell(x, z) && !siteClear(x, z, false) ? riverAt(x, z, r) : null), slow = (q) => q.kind === 'P' || q.kind === 'D' || q.kind === 'K' || q.kind === 'E';
+  if (!at(x0 + 32, z0 + 32) && ![[8, 8], [56, 8], [8, 56], [56, 56]].some(([u, v]) => riverAt(x0 + u, z0 + v, r))) return;   // (no water near this cell)
+  // reeds: clumps of five to ten round a spot at the slow water's edge, standing in it up to half a metre deep
+  for (let c = 0; c < 6; c++) {
+    const k = 5000 + c * 20, [cx, cz] = spot(k), q = at(cx, cz); if (!q || !slow(q) || q.out < -2.5 || q.out > 1.5 || h2(k + 0.9) > 0.75) continue;
+    for (let i = 0; i < 5 + Math.floor(h2(k + 1) * 6); i++) { const kk = k + 2 + i * 0.7, x = cx + (h2(kk) - 0.5) * 4.5, z = cz + (h2(kk + 0.2) - 0.5) * 4.5, p = at(x, z); if (!p || p.out < -2.5 || p.depth > 0.55 || p.out > 2) continue; lay(SP.reeds, kk, x, heightAt(x, z) - 0.05, z); }
+  }
+  // sedge along the banks, just over the water
+  for (let i = 0; i < 14; i++) { const k = 5200 + i, [x, z] = spot(k), q = at(x, z); if (!q || q.out < 0 || q.out > 4 || q.fall >= 0 || isRock(x, z)) continue; lay(SP.swampgrass, k, x, heightAt(x, z) - 0.08, z); }
+  // water lilies over the still water's shallows, afloat on its face, in rafts
+  for (let c = 0; c < 4; c++) {
+    const k = 5300 + c * 12, [cx, cz] = spot(k), q = at(cx, cz); if (!q || (q.kind !== 'K' && q.kind !== 'D') || q.depth < 0.5 || q.depth > 2.8 || q.out > -1.5) continue;
+    for (let i = 0; i < 4 + Math.floor(h2(k + 1) * 6); i++) { const kk = k + 2 + i * 0.9, x = cx + (h2(kk) - 0.5) * 6, z = cz + (h2(kk + 0.2) - 0.5) * 6, p = at(x, z); if (p && p.depth > 0.4 && p.depth < 3 && p.out < -1) lay(SP.lilypads, kk, x, p.W + 0.03, z); }
+  }
+  // plane trees in threes and fours on the meadow river's banks, and shrubs between them
+  for (let c = 0; c < 2; c++) {
+    const k = 5400 + c * 30, [cx, cz] = spot(k), q = at(cx, cz); if (!q || !slow(q) || q.out < 3 || q.out > 9 || h2(k + 0.9) > 0.55 || isRock(cx, cz)) continue;
+    for (let i = 0; i < 3 + Math.floor(h2(k + 1) * 2); i++) { const kk = k + 2 + i * 1.3, x = cx + (h2(kk) - 0.5) * 16, z = cz + (h2(kk + 0.2) - 0.5) * 16, p = at(x, z); if (!p || p.out < 3 || p.out > 12 || isRock(x, z)) continue; const S = SPECIES[SP.plane].s; out.push(SP.plane, Math.floor(h2(kk + 0.4) * 3), x, heightAt(x, z) - 0.05, z, h2(kk + 0.6) * 6.283, S[0] + (S[1] - S[0]) * h2(kk + 0.8)); }
+  }
+  for (let i = 0; i < 4; i++) { const k = 5500 + i, [x, z] = spot(k), q = at(x, z); if (!q || q.out < 1.5 || q.out > 7 || q.fall >= 0 || isRock(x, z)) continue; lay(i % 2 ? SP.myrtle : SP.bush, k, x, heightAt(x, z) - 0.06, z, i % 2 ? 0 : [0, 1, 2, 3][Math.floor(h2(k + 0.2) * 4)]); }
+  // ferns and moss in the falls' spray, on the wet ledges and the rock round the pools
+  for (let i = 0; i < 18; i++) { const k = 5600 + i, [x, z] = spot(k), q = at(x, z); if (!q || q.fall < 0 || q.out < 0.3 || q.out > 14) continue; const f = RIVER.falls[q.fall]; if (Math.hypot(x - f.px, z - f.pz) > 34) continue;
+    lay(isRock(x, z) || i % 3 === 0 ? SP.moss : SP.fern, k, x, heightAt(x, z) - 0.08, z, isRock(x, z) || i % 3 === 0 ? undefined : 0); }
 }
 export const STRIDE = 7;

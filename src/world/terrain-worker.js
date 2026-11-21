@@ -8,6 +8,7 @@ const CLEAR_R = { lavender: 0.5, broom: 0.7, myrtle: 0.8, fern: 0.6, redbush: 0.
 import './sites.js';   // registers the flattened ground under the trial's sites
 import { smooth } from '../util/math.js';
 import { layoutPickups } from './pickup-layout.js';
+import { waterAt } from './river.js';
 
 function patch({ id, x0, z0, size, res }) {
   const n = res + 1, step = size / res, NV = n * n + 4 * res;
@@ -96,6 +97,7 @@ self.onmessage = (e) => {
       const thr = 0.66 + (1 - Math.min(1, w.p + w.v * 0.8 + w.y * 0.45)) * 0.07, tall = smooth(thr - 0.0015, thr + 0.0015, fbm(x * 0.032 + 50, z * 0.032 - 30, 3));   // (fewer outside the meadows)
       if (data[k + 1] > 0) data[k + 1] = Math.min(0.999, data[k + 1]) + 2 * Math.round(Math.min(1, tall) * 7);
       if (isRock(x, z)) { data[k + 1] = -1; data[k + 3] = 0; }   // bare rock: no grass, no flowers (-1, so blades stop halfway to the next texel)
+      else if (waterAt(x, z) > h - 0.25) { data[k + 1] = -1; data[k + 3] = 0; }   // (nor in the river and the lake, nor on the wet line at their edge: river.js)
     }
     // nothing grows in or over a rock, a boulder, a tree's trunk, a shrub or a ruin: a clear space round each (fading back
     // in just outside it), for the short grass and the tall alike, as round the things lying on the ground
@@ -133,7 +135,9 @@ self.onmessage = (e) => {
       else if (h < 1.2) { r = 214; g = 196; b = 150; }
       else { r = 150 * w.p + 62 * w.y + 104 * w.v; g = 168 * w.p + 96 * w.y + 104 * w.v; b = 92 * w.p + 56 * w.y + 78 * w.v; }
       const hx = H[j * N + Math.min(N - 1, i + 1)] - H[j * N + Math.max(0, i - 1)], hz = H[Math.min(N - 1, j + 1) * N + i] - H[Math.max(0, j - 1) * N + i];
-      const shade = h < 0 ? 1 : Math.max(0.55, Math.min(1.25, 1 + (-hx + -hz) * 0.035));
+      const wv = waterAt(x, z), river = wv > 0.05 && wv > h + 0.05;   // (the river and the lake, in the sea's ink: river.js)
+      if (river) { const d = Math.min(1, (wv - h) / 6); r = 84 - d * 30; g = 138 - d * 40; b = 172 - d * 26; }
+      const shade = h < 0 || river ? 1 : Math.max(0.55, Math.min(1.25, 1 + (-hx + -hz) * 0.035));
       const paper = 0.82 + 0.18 * fbm(x * 0.02, z * 0.02, 2);
       data[o] = r * shade * paper; data[o + 1] = g * shade * paper; data[o + 2] = b * shade * paper; data[o + 3] = 255;
       if (h > 0 && h < 30 && Math.abs((h % 10) - 5) < 0.18) { data[o] *= 0.8; data[o + 1] *= 0.8; data[o + 2] *= 0.8; }   // contour lines

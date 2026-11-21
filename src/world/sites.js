@@ -10,7 +10,9 @@
 //   town:     an abandoned little town on level meadow, its streets, square and houses from the team's packs
 //   spots:    small scenes about the island (a roadside shrine, a lost cart, a shepherd's camp, a well...)
 //   mtn:      places to stop on the way up Olympos (a ledge with a bench and a shrine, a spring, votive columns, a nest)
+// and, once they are all laid out, the river (river.js)
 import { heightAt, biomeWeights, addPad, hash2, WORLD, setPeak, routeAt, landness, setDetail, addCave, caveWorld, caveLocal, caveCut, CAVE_FORM, PEAK } from './gen.js';
+import { layRiver, riverWet, RIVER } from './river.js';
 
 const slopeAt = (x, z) => Math.hypot(heightAt(x + 2, z) - heightAt(x - 2, z), heightAt(x, z + 2) - heightAt(x, z - 2)) / 4;
 const _w = { p: 0, y: 0, v: 0, r: 0 };
@@ -120,10 +122,12 @@ function pad(s, r0, r1, kind, y = s.y) { s.y = y; s.r = r1; s.kind = kind; addPa
     { const T = PEAK.towers[0]; if (T) { const s = spot(T.x, T.z, heightAt(T.x, T.z) - 0.4, 3, Math.atan2(SITES.peak.x - T.x, SITES.peak.z - T.z)); s.r = 3; SITES.mtn.push(s); } }
   }
   setDetail(true);   // the ground's small bumps, now that nothing will be placed by its height (see detail() in gen.js)
+  layRiver([SITES.temple, SITES.house, SITES.labyrinth, SITES.chimera, ...SITES.olives, ...SITES.caves, SITES.town, ...SITES.spots, ...SITES.mtn].filter(Boolean).map((s) => [s.x, s.z, s.r * 1.6]));   // (Patch 24) the river, last of all, from the land as it now is: nothing above moves (river.js)
+  { const b = RIVER.bridge; if (b) for (let o = -b.len / 2 - 2; o <= b.len / 2 + 2; o += 2) clears.push([b.x + Math.sin(b.rot) * o, b.z + Math.cos(b.rot) * o, 2.6]); }   // (nothing grows on its footbridge's way)
 }
 // Nothing grows here (flora and ground pickups ask): the sites, and the path up Olympos (no boulder blocks it)
-export function siteClear(x, z) {
-  if (routeAt(x, z).k > 0) return true;
+export function siteClear(x, z, river = true) {
+  if (routeAt(x, z).k > 0 || (river && riverWet(x, z))) return true;   // (nor in the river, nor on its wet margin: river.js; its own plants ask without it)
   for (const [cx, cz, r] of clears) if ((x - cx) * (x - cx) + (z - cz) * (z - cz) < r * r) return true;
   for (const c of SITES.caves) { if (!c.form || Math.abs(x - c.x) > 32 || Math.abs(z - c.z) > 32) continue; const [u, v] = caveLocal(c.form, x, z); if (caveCut(c.form, u, v) < CAVE_FORM.RAMP + 1) return true; }   // (wherever a cave's ground is cut down: the rock's over it)
   return false;

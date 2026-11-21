@@ -322,8 +322,12 @@ export function heightAt(x, z) {
   if (cell) for (const p of cell) { const d = Math.hypot(x - p.x, z - p.z); if (d < p.r1) { const t = smooth(p.r0, p.r1, d); h = lerp(p.y, h, t); } }
   const cv = CAVE_GRID.get(padKey(Math.floor(x / PAD_CELL), Math.floor(z / PAD_CELL)));
   if (cv) for (const c of cv) h = caveGround(c, x, z, h);
-  return h;
+  return RIVER_HOOK.h ? RIVER_HOOK.h(x, z, h) : h;   // (the river's channel and valley, cut last: river.js)
 }
+// The river (river.js) lays its course once the sites are placed and then carves its channel into the height and
+// colours its banks through these, so the generator needn't import it (river.js reads the land from here)
+export const RIVER_HOOK = { h: null, c: null };
+export function setRiverHook(h, c) { RIVER_HOOK.h = h; RIVER_HOOK.c = c; }
 
 // ---- The Giants' caves (sites.js places them, after everything else, so nothing moves): each in a hill of its own on a
 // hillside, rounded and wooded, with a cliff on its downhill face and the cave's mouth at the cliff's foot. A heightfield
@@ -505,6 +509,7 @@ export function groundColor(x, z, h, slope, w = biomeWeights(x, z, _gw), out = [
     const n = fbm(x * 0.21 + 7, z * 0.21 - 3, 2), e = PAL.caveEarth.slice(); mix3(e, PAL.caveRock, smooth(0.38, 0.68, n));
     mix3(out, e, cin[0]); const k = 1 - (1 - caveShade(cin[1])) * cin[0]; out[0] *= k; out[1] *= k; out[2] *= k; out[3] = Math.max(out[3], cin[0] * smooth(0.3, 0.75, n) * 0.8);
   }
+  if (RIVER_HOOK.c) RIVER_HOOK.c(x, z, h, out);   // (the river's bed and banks: river.js)
   const j = 0.94 + hash2(Math.floor(x * 2), Math.floor(z * 2)) * 0.08;   // tiny per-vertex jitter breaks banding
   out[0] *= j; out[1] *= j; out[2] *= j;
   return out;
