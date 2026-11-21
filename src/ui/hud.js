@@ -143,7 +143,7 @@ export class HUD {
   drawHotbar() { $('hotbar').innerHTML = this.inv.slots.slice(0, COLS).map((s, i) => this.slotHTML(s, i, true)).join(''); }
   // ---- inventory screen
   toggle(on = !this.open) {
-    this.open = on; this.panel.classList.toggle('hidden', !on); input.uiOpen = on;
+    if (on !== !!this.open) sound('ui', { open: on, kind: 'pack' }); this.open = on; this.panel.classList.toggle('hidden', !on); input.uiOpen = on;
     if (on) { unlock(); this.drawGrid(); this.drawChar(); } else { lock(); this.sel = -1; this.onClose?.(); }
     this.onToggle?.(on);
     if (on) this.fit();

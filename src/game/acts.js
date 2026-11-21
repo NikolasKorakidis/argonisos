@@ -126,7 +126,7 @@ export class Acts {
     const g = this.g, P = this.P, s = g.inv.slots[i], d = s && ITEMS[s.id]; if (!d?.food || P.dead) return;
     if (this.eating) return;   // (one mouthful at a time)
     const why = P.stats.canEat(s.id, d.food); if (why) { g.hud.toast(`${d.name}: ${why}`); return; }
-    this.eating = { id: s.id, def: d, t: 0, h: this.H.action('drink', { upper: true, layer: true, from: EAT.from, to: EAT.to, rate: (EAT.to - EAT.from) / EAT.time, lock: EAT.lock, blend: 0.25, fade: 0.35, quiet: true }) };
+    this.eating = { id: s.id, def: d, t: 0, h: this.H.action('drink', { upper: true, layer: true, from: EAT.from, to: EAT.to, rate: (EAT.to - EAT.from) / EAT.time, lock: EAT.lock, blend: 0.25, fade: 0.35, quiet: true }) }; g.sound?.('eat', { food: d.food });
   }
   stopEat(why) {
     const e = this.eating; if (!e) return; this.eating = null; e.h.stop(0.3); this.g.hud.progress(null);

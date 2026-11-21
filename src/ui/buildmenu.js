@@ -24,7 +24,7 @@ export class BuildMenu {
   }
   pieces() { const C = this.g.crafting; return this.g.build.pieces.filter((p) => C.known.has('b:' + p.id)); }
   toggle(on = !this.open) {
-    this.open = on; this.el.classList.toggle('hidden', !on); input.uiOpen = on;
+    if (on !== this.open) this.g.sound?.('ui', { open: on, kind: 'build' }); this.open = on; this.el.classList.toggle('hidden', !on); input.uiOpen = on;
     if (on) { unlock(); this.g.crafting.discover(true); const known = this.pieces(); if (!known.some((p) => (p.cat || 'Tools') === this.cat)) this.cat = CATS.find((c) => known.some((p) => (p.cat || 'Tools') === c)) || 'Crafting'; this.hover = this.g.build.sel; this.draw(); }
     else lock();
   }

@@ -162,7 +162,7 @@ export class Creatures {
     return total;
   }
   kill(c) {
-    c.dead = true; c.state = 'dead'; c.deadT = 0; c.hp = 0; this.g.sound?.('kill'); c.crumble = c.type === 'skeleton';
+    c.dead = true; c.state = 'dead'; c.deadT = 0; c.hp = 0; this.g.sound?.('kill', { at: c.pos.clone(), type: c.type, boss: !!c.boss }); c.crumble = c.type === 'skeleton';
     this.g.onKill?.(c);
   }
   // when a body has lain long enough: a small thunderclap, and it's gone, leaving its drops
@@ -201,7 +201,7 @@ export class Creatures {
         if (d < range) {
           // a moment of alarm first: it freezes, lifts its head and turns to look at you, then bolts (or charges)
           if (c.boss) { c.state = 'chase'; c.aware = true; }
-          else { c.state = 'alert'; c.alertT = T.alert ?? (T.passive ? 1.2 : 0.7); c.alertD = d; c.aware = true; g.sound?.('alert', { at: c.pos, hostile: !T.passive }); this.rouse(c); }   // (a hostile one cries out, an animal only starts: sound.js)
+          else { c.state = 'alert'; c.alertT = T.alert ?? (T.passive ? 1.2 : 0.7); c.alertD = d; c.aware = true; g.sound?.('alert', { at: c.pos, hostile: !T.passive, type: c.type }); this.rouse(c); }   // (a hostile one cries out, an animal only starts: sound.js)
         }
       }
       if (c.state === 'alert') {
@@ -396,7 +396,7 @@ export class Creatures {
   strike(c, kind = 'attack') {
     const T = c.T, q = c.body.cue?.(kind) || { hit: T.heavy ? 0.65 : 0.3, dur: T.heavy ? 1.1 : 0.55 };
     c.state = kind; c.atkE = 0; c.hitAt = q.hit; c.atkT = q.dur; c.hitDone = false; c.blowAt = null;
-    if (kind === 'attack') c.atkCd = q.dur + (T.heavy ? rr(1, 1.6) : rr(0.4, 1)) + (c.summoned && T.risen ? rr(...GAP) : 0); else this.g.sound?.('thornCast', this.near(c));
+    if (kind === 'attack') { c.atkCd = q.dur + (T.heavy ? rr(1, 1.6) : rr(0.4, 1)) + (c.summoned && T.risen ? rr(...GAP) : 0); this.g.sound?.('swing', { at: c.pos, delay: q.hit * 0.75, heavy: T.heavy, kind: 'axe' }); } else this.g.sound?.('thornCast', this.near(c));   // (its blow whooshing in just before it lands)
     return q;
   }
   // how loud something a creature does is where you stand (full within 6 m, gone by 40)

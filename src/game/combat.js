@@ -77,6 +77,7 @@ export class Combat {
     const g = this.g, P = g.player, kind = item?.skill || 'unarmed', reach = REACH[kind] ?? (item ? 2.1 : 1.7);
     // (the nearest in the arc first: a swing meets the beast in front of you before the one behind it)
     const targets = g.creatures.inArc(P.pos, P.yaw, reach).sort((a, b) => a.pos.distanceTo(P.pos) - b.pos.distanceTo(P.pos)).slice(0, kind === 'axe' || kind === 'mace' ? 2 : 1);
+    g.sound?.('swing', { kind: item && !item.skill ? 'tool' : kind });   // (the whoosh of every swing, a miss too: sound.js, by the weapon's weight)
     if (!targets.length) return false;
     const dmg = item?.dmg || (P.stats.has('claws') ? [[30, 'slash'], [10, 'poison']] : [[2, 'blunt']]), k = P.stats.damageK(kind) * this.blessK();
     let felt = 0, kill = false;
@@ -85,7 +86,7 @@ export class Combat {
     punch((HEFT[kind] ?? 0.15) + clamp(felt / 80, 0, 0.2) + (kill ? 0.12 : 0), { x: Math.sin(P.yaw), z: Math.cos(P.yaw) });
     if (kill || HEAVY.has(kind)) P.hitStop(kill ? 0.08 : 0.045);
     // (its sound: an axe's, a blade's (a dagger, a spear, the Chimera's claws), or a blunt one's (a club, a fist))
-    P.stats.train(kind, 12.5); g.sound?.('hit', { at: targets[0].pos.clone().setY(targets[0].pos.y + targets[0].T.h * 0.6), kind: kind === 'axe' ? 'axe' : kind === 'dagger' || kind === 'spear' || (!item && P.stats.has('claws')) ? 'blade' : 'blunt' });
+    P.stats.train(kind, 12.5); g.sound?.('hit', { at: targets[0].pos.clone().setY(targets[0].pos.y + targets[0].T.h * 0.6), kind: kind === 'axe' ? 'axe' : kind === 'dagger' || kind === 'spear' || (!item && P.stats.has('claws')) ? 'blade' : 'blunt', type: targets[0].type });
     return true;
   }
   // ---- a creature's blow lands on the player (from: where it came from, if not the creature: a thorn). Returns what
@@ -109,7 +110,7 @@ export class Combat {
         if (parry) { const stagger = !from && !c.boss && (!c.T.heavy || blk >= (dmg + soaked) * PARRY_FORCE); if (stagger) { c.hitT = 1.2; c.atkCd = 2.5; }
           g.hud.toast(stagger || from ? '<b>Parry!</b>' : '<b>Parried</b>, but it is too heavy to stagger'); }
         else this.g.owl?.hint?.('parry');   // (the first blow met on the guard: how to turn a block into a parry)
-      } else { S.add('stunned', 1.2); g.hud.toast('Your guard breaks'); }
+      } else { S.add('stunned', 1.2); g.hud.toast('Your guard breaks'); g.sound?.('guardBreak'); }
     }
     if (dmg <= 0.05) return 'blocked';
     const final = armorReduce(dmg, g.armor?.() ?? 0);

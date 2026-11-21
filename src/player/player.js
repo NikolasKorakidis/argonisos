@@ -12,6 +12,7 @@ import { RUN, SPRINT, SWIM, SNEAK, AIM, BLOCK_K, GRAV, JUMP_V } from './speeds.j
 import { SETTINGS } from '../ui/settings.js';
 import { Stats } from './stats.js';
 import { clamp, lerp } from '../util/math.js';
+import { GAIT } from '../audio/sound.js';
 
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const _lv = new THREE.Vector3();
@@ -53,7 +54,7 @@ export class Player {
     this.seat = null;
     this.stats.onDeath = () => this.die();
     // a footstep each time a foot comes down in the stride the legs are playing (hero.update), on the ground
-    this.hero.onFootfall = () => { if (this.onGround && !this.swimming) this.onStep?.('step'); };
+    this.hero.onFootfall = () => { if (this.onGround && !this.swimming) { GAIT.k = this.sneaking ? 0.5 : this.sprinting ? 1.3 : 1; this.onStep?.('step'); } };   // (louder sprinting, softer sneaking: sound.js)
   }
   spawn(x, z) { this.seat = null; this.pos.set(x, Math.max(groundAt(x, z), -SWIM_DEPTH), z); this.vel.set(0, 0, 0); this.hv.set(0, 0, 0); this.camInit = false; this.lookK = 0; this.lookOff.set(0, 0, 0); this.home = null; }
   get camForward() { return new THREE.Vector3(-Math.sin(this.camYaw) * Math.cos(this.camPitch), Math.sin(this.camPitch), -Math.cos(this.camYaw) * Math.cos(this.camPitch)); }
@@ -123,7 +124,7 @@ export class Player {
     this.speed = speed;
     // stamina for sprinting and swimming, skill XP by distance (12.5 xp per 10 ft sprinted / 5 ft swum)
     if (this.sprinting && speed > 3) { S.drain(5 * (1 + clamp(this.slope || 0, 0, 0.8)), dt, 'sprinting'); this.sprintD += speed * dt; if (this.sprintD > 3.05) { this.sprintD = 0; S.train('sprinting', 12.5); } }
-    if (this.swimming && speed > 0.3) { S.drain(5, dt, 'swimming'); this.swimD += speed * dt; if (this.swimD > 1.52) { this.swimD = 0; S.train('swimming', 12.5); } }
+    if (this.swimming && speed > 0.3) { S.drain(5, dt, 'swimming'); this.swimD += speed * dt; if (this.swimD > 1.52) { this.swimD = 0; S.train('swimming', 12.5); this.onStep?.('swim'); } }   // (a stroke's sound each stretch swum)
     if (this.sneaking && speed > 0.3) { S.drain(5, dt, 'sneaking'); this.sneakD = (this.sneakD || 0) + speed * dt; if (this.sneakD > 3.05) { this.sneakD = 0; S.train('sneaking', 12.5); } }
     if (this.sneaking && S.stamina <= 0.5) this.sneaking = false;
     if (this.swimming) { S.add('wet'); if (S.stamina <= 0.5 && speed > 0.3) S.damage(5 * dt); }
@@ -164,7 +165,7 @@ export class Player {
       this.jumpBuf = 0;
       const yaw = want.lengthSq() ? Math.atan2(want.x, want.z) : this.yaw + Math.PI;
       if (!S.use(DODGE.cost, 'jumping')) this.onToast?.('Too tired to roll');
-      else { H.action('roll', { upper: false, rate: 1.6, blend: 0.08, fade: 0.25, root: 'move', lock: true, feet: false, onDone: () => (this.dodge = null) }); this.dodge = { t: 0, yaw }; this.hv.set(0, 0, 0); this.onStep?.('jump'); }
+      else { H.action('roll', { upper: false, rate: 1.6, blend: 0.08, fade: 0.25, root: 'move', lock: true, feet: false, onDone: () => (this.dodge = null) }); this.dodge = { t: 0, yaw }; this.hv.set(0, 0, 0); this.onStep?.('roll'); }
     }
     if (this.dodge) { this.dodge.t += dt; if (this.dodge.t > 2) this.dodge = null; }
     if (this.jumpBuf > 0 && this.onGround && !this.swimming && this.swing <= 0 && held > 0.9) {
@@ -180,7 +181,7 @@ export class Player {
       // walk down slopes without bouncing: snap to the ground if it's just below
       if (this.onGround && this.vel.y <= 0 && this.pos.y - fl < 0.35 + speed * dt * 1.5) this.pos.y = fl;
       if (this.pos.y <= fl) {
-        if (wasAir) { this.onStep?.('land'); const fall = -this.vel.y; if (fall > 13) S.damage((fall - 13) * 2); H.landed(fall); }
+        if (wasAir) { GAIT.fall = -this.vel.y; this.onStep?.('land'); const fall = -this.vel.y; if (fall > 13) S.damage((fall - 13) * 2); H.landed(fall); }
         this.pos.y = fl; this.vel.y = 0; this.onGround = true; this.jumped = false;
       } else if (this.pos.y > fl + 0.05) this.onGround = false;
     }

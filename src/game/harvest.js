@@ -10,9 +10,7 @@ import { SPECIES, STRIDE, CELL } from '../world/flora.js';
 import { biomeWeights, hash2, WORLD } from '../world/gen.js';
 import { groundAt } from '../world/groundcut.js';
 import { burst, dust, addShake, punch, impact, spark } from '../render/fx.js';
-import { camera } from '../render/core.js';
-import { THUNDER } from '../audio/sound.js';
-import { SETTINGS } from '../ui/settings.js';
+import { voice } from '../audio/sound.js';
 import { trunkMat } from '../world/trees.js';
 import { clearGrass } from '../world/grass.js';
 import { clamp, smooth } from '../util/math.js';
@@ -133,41 +131,9 @@ function segSeg(p1, q1, p2, q2) {
   else { const c = _d1.dot(_r); if (e <= 1e-8) s = clamp(-c / a, 0, 1); else { const b = _d1.dot(_d2), dn = a * e - b * b; s = dn > 1e-8 ? clamp((b * f - c * e) / dn, 0, 1) : 0; t = (b * s + f) / e; if (t < 0) { t = 0; s = clamp(-c / a, 0, 1); } else if (t > 1) { t = 1; s = clamp((b - c) / a, 0, 1); } } }
   SS[0] = s; SS[1] = t;
 }
-// The logs' own sounds, made here (none of the recordings is a log rolling): a rumble of low brown noise for each log
-// rolling, louder and brighter the faster it goes, and a deep wooden thud when it lands or strikes something. Placed as
-// the game's other sounds are, by distance from the camera and to its side, under the effects slider.
-const SND = { buf: null };
-function audio() { const c = THUNDER.ctx(); return c && c.state === 'running' && THUNDER.out() ? c : null; }
-function heard(at, near, far) {
-  const p = camera.position, dx = at.x - p.x, dz = at.z - p.z, d = Math.hypot(dx, at.y - p.y, dz), h = Math.hypot(dx, dz) || 1, m = camera.matrixWorld.elements, rl = Math.hypot(m[0], m[2]) || 1;
-  const k = clamp(1 - Math.max(0, d - near) / (far - near), 0, 1);
-  return { k: k * k * (SETTINGS.sfx ?? 1), pan: clamp(((dx * m[0] + dz * m[2]) / rl / h) * Math.min(1, d / 2), -0.85, 0.85) };
-}
-function brown(c) {
-  if (SND.buf?.sampleRate === c.sampleRate) return SND.buf;
-  const n = c.sampleRate * 2, b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0); let last = 0;
-  for (let i = 0; i < n; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
-  return (SND.buf = b);
-}
-function logThud(at, k) {
-  const c = audio(); if (!c) return; const s = heard(at, 6, 80), v = Math.min(1.2, k) * s.k; if (v < 0.01) return;
-  const t = c.currentTime, p = c.createStereoPanner(); p.pan.value = s.pan; p.connect(THUNDER.out());
-  const o = c.createOscillator(), og = c.createGain(); o.frequency.setValueAtTime(78, t); o.frequency.exponentialRampToValueAtTime(34, t + 0.4);
-  og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.45 * v, t + 0.008); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.5); o.connect(og).connect(p); o.start(t); o.stop(t + 0.55);
-  for (const [type, f, q, vol, dur] of [['lowpass', 300, 0.7, 0.55, 0.45], ['bandpass', 620, 2.2, 0.22, 0.09]]) {   // (the body of the blow, and the knock of wood in it)
-    const n = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain(); n.buffer = brown(c); n.playbackRate.value = 0.9 + Math.random() * 0.2; fl.type = type; fl.frequency.value = f * (0.9 + Math.random() * 0.2); fl.Q.value = q;
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol * v, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); n.connect(fl).connect(g).connect(p); n.start(t, Math.random()); n.stop(t + dur + 0.05);
-  }
-}
-class Rumble {
-  constructor(c) {
-    this.c = c; this.src = c.createBufferSource(); this.src.buffer = brown(c); this.src.loop = true; this.f = c.createBiquadFilter(); this.f.type = 'lowpass'; this.f.Q.value = 0.8;
-    this.g = c.createGain(); this.g.gain.value = 0; this.p = c.createStereoPanner(); this.src.connect(this.f).connect(this.g).connect(this.p).connect(THUNDER.out()); this.src.start(c.currentTime, Math.random());
-  }
-  // how loud (by how fast it rolls, k 0..1, and how big it is) and from where
-  set(at, k, big) { const s = heard(at, 6, 70), t = this.c.currentTime; this.g.gain.setTargetAtTime(0.5 * k * big * s.k, t, 0.08); this.f.frequency.setTargetAtTime(90 + 260 * k, t, 0.1); this.p.pan.setTargetAtTime(s.pan, t, 0.05); }
-  stop() { const t = this.c.currentTime; this.g.gain.setTargetAtTime(0, t, 0.12); this.src.stop(t + 0.8); }
-}
+// The logs' own sounds are sound.js's (none of the recordings is a log rolling): a live voice for each log rolling, its
+// rumble louder and brighter the faster it goes and following it (voice('logRumble')), and a deep wooden thud, cracking
+// from a hard blow, when it lands or strikes something (logThud), placed and mixed as the game's other sounds are.
 
 export class Harvest {
   constructor(g) {
@@ -535,12 +501,13 @@ export class Harvest {
   // A moving log's sounds and dust: its rumble as it rolls; a thud, dust and a shiver through the tree it struck (and the
   // view kicked, if you stand near) when it lands hard or strikes something; puffs of dust kicked up as it goes
   logFx(l, dt) {
-    const rs = Math.abs(l.spin) * l.R, big = clamp(0.5 + l.R * l.L * 0.25, 0.5, 1.4), c = audio();
-    if (rs > 0.6 && l.touch && c) { l.rumble ||= new Rumble(c); l.rumble.set(l.mesh.position, clamp(rs / 7, 0, 1), big); } else if (l.rumble) { l.rumble.stop(); l.rumble = null; }
+    const rs = Math.abs(l.spin) * l.R, big = clamp(0.5 + l.R * l.L * 0.25, 0.5, 1.4);
+    // (the rumble kept a moment through a bounce, so it isn't torn down and made again each time the log leaves the ground)
+    if (rs > 0.6 && l.touch) { l.rumble ||= voice('logRumble'); l.rumble?.set(l.mesh.position, clamp(rs / 7, 0, 1), big); l.loose = 0; } else if (l.rumble && ((l.loose = (l.loose || 0) + dt) > 0.3 || rs <= 0.6)) { l.rumble.stop(); l.rumble = null; }
     l.fx -= dt;
     if (l.bang > 2.5 && l.fx <= 0) {
       l.fx = 0.15; const k = clamp((l.bang - 1.5) / 6, 0.15, 1) * big, p = l.struck ? new THREE.Vector3().lerpVectors(l.P[0], l.P[1], l.struck.u) : l.at.clone(), w = l.struck?.c;
-      logThud(p, k); dust(p, 6 + Math.round(10 * k), 0xa89a78, 0.35);
+      this.g.sound?.('logThud', { at: p, k }); dust(p, 6 + Math.round(10 * k), 0xa89a78, 0.35);
       if (w?.ref?.cx !== undefined && SPECIES[w.ref.sp]?.res === 'tree') this.g.veg.shake(w.ref.cx, w.ref.cz, w.ref.i, w.x - p.x, w.z - p.z, 2 * k); else if (w?.ref?.sp !== undefined) impact(p, 'stone', 0.3 * k);
       const P = this.g.player.pos, near = clamp(1 - Math.hypot(p.x - P.x, p.z - P.z) / 25, 0, 1) * k; if (near > 0.05) { punch(0.25 * near); addShake(0.12 * near); }
     } else if (rs > 1.5 && l.touch && (l.dustT = (l.dustT ?? 0) - dt) <= 0) { l.dustT = 0.3; dust(l.at.clone(), 3, 0xa89a78, 0.25); }
