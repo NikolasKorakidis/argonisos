@@ -51,10 +51,10 @@ const WOODY = {
   bush: { leafy: true, extra: [['fiber', 0.35, 1, 1]] }, myrtle: { leafy: true }, broom: { leafy: true, extra: [['fiber', 0.6, 1, 2]] }, redbush: { leafy: true, extra: [['fiber', 0.25, 1, 1]] },
   stump: { hits: 4, wood: 2 }, log: { hits: 5, wood: 3 }, driftwood: { hits: 3, wood: 2 }, tomato: { leafy: true, hits: 3, wood: [6, 8] },
 };
-// A felled tree's stump: three blows of an axe, one or two wood
-const STUMP = { hits: 3, wood: [1, 2] };
 // A tomato bush picked bare grows its fruit back in a game day; picking gives 8 to 12 tomatoes and now and then a seed
 const TOMATO = { regrow: 1, n: [8, 12], seed: 0.25 };
+// A felled tree's stump: three blows of an axe, one or two wood
+const STUMP = { hits: 3, wood: [1, 2] };
 const WOODY_SP = SPECIES.map((s) => WOODY[s.name] || null), BUSH_H = [0.9, 1.6], SP_TOMATO = SPECIES.findIndex((s) => s.name === 'tomato');
 // how far along a blow (from x, z the way dx, dz) a circle of radius r centred ox, oz from it is met, or null if it is missed
 const along = (ox, oz, r, dx, dz) => { const t = ox * dx + oz * dz; if (t < -r) return null; const px = ox - dx * t, pz = oz - dz * t, d2 = px * px + pz * pz, rr = (r + 0.35) ** 2; return d2 > rr ? null : Math.max(0, t - Math.sqrt(rr - d2)); };
@@ -151,7 +151,6 @@ function brown(c) {
 }
 function logThud(at, k) {
   const c = audio(); if (!c) return; const s = heard(at, 6, 80), v = Math.min(1.2, k) * s.k; if (v < 0.01) return;
-    if (c.ref.stump) return this.hitStump(c.ref.stump, item, at, dir);
   const t = c.currentTime, p = c.createStereoPanner(); p.pan.value = s.pan; p.connect(THUNDER.out());
   const o = c.createOscillator(), og = c.createGain(); o.frequency.setValueAtTime(78, t); o.frequency.exponentialRampToValueAtTime(34, t + 0.4);
   og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.45 * v, t + 0.008); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.5); o.connect(og).connect(p); o.start(t); o.stop(t + 0.55);
@@ -186,6 +185,7 @@ export class Harvest {
     if (!c) return false;
     const at = new THREE.Vector3(c.x - dir.x * c.r * 0.9, P.pos.y + 1.1, c.z - dir.z * c.r * 0.9);
     if (c.ref.log) return this.hitLog(c, item, at);
+    if (c.ref.stump) return this.hitStump(c.ref.stump, item, at, dir);
     const sp = SPECIES[c.ref.sp];
     if (sp.res === 'tree') return this.hitTree(c, sp, item, at, dir);
     if (sp.res === 'rock') return this.hitRock(c, sp, item, at, dir);
@@ -324,7 +324,6 @@ export class Harvest {
   // The collider c as it is now, or null if what it belonged to is gone (a tree felled, a log split, a wall pulled down):
   // a tree's or a log's is made again when its cell streams back in or the log moves, so they're known by what they are
   live(c) {
-    const P = this.g.player.pos; if (this.stumps.length > 512 && (!this.drawnAt || Math.hypot(P.x - this.drawnAt.x, P.z - this.drawnAt.z) > 32)) this.drawStumps();   // (the nearest 512 again, once you've come a way)
     const r = c.ref, { colliders, veg } = this.g;
     if (r?.log) return this.logs.includes(r.log) ? c : null;
     if (r?.cx === undefined) return colliders.groups.has(c.key) ? c : null;
@@ -359,6 +358,7 @@ export class Harvest {
   }
   update(dt) {
     this.growBack(dt); dt = Math.min(dt, 0.05); if (!(dt > 0)) return;
+    const P = this.g.player.pos; if (this.stumps.length > 512 && (!this.drawnAt || Math.hypot(P.x - this.drawnAt.x, P.z - this.drawnAt.z) > 32)) this.drawStumps();   // (the nearest 512 again, once you've come a way)
     for (const l of this.logs) if (l.kick !== undefined && l.asleep) { l.kick += dt; l.mesh.position.y = l.y0 + 0.05 * Math.sin(l.kick * 45) * Math.exp(-l.kick * 14); if (l.kick > 0.4) { l.mesh.position.y = l.y0; delete l.kick; } }
     for (let i = this.falling.length - 1; i >= 0; i--) if (this.topple(this.falling[i], dt)) this.falling.splice(i, 1);
     this.roll(dt);
