@@ -126,8 +126,8 @@ const isMeadowTree = (it, o, w) => SPECIES[it[o]].res === 'tree' && biomeWeights
 const reach2 = (it, o) => (it[o] === SP.titan ? 484 : 121);   // (the giants stand ~13 m apart: their neighbours within 22 m)
 const KEPT = new Map(), _lw = { p: 0, y: 0, v: 0, r: 0 };
 function count(list, x, z, upTo, r2 = 121) { let n = 0; for (let k = 0; k < list.length && n < upTo; k += 2) { const dx = list[k] - x, dz = list[k + 1] - z; if (dx * dx + dz * dz < r2) n++; } return n; }
-function treesOf(cx, cz, pass, others) {   // [x, z, ...] of the trees around a cell: as first laid out (pass 0), or those the first pass keeps (pass 1); others: only the neighbours'
-  const out = []; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { if (others && !i && !j) continue; const it = pass ? kept1(cx + i, cz + j) : rawCell(cx + i, cz + j); for (let o = 0; o < it.length; o += STRIDE) if (SPECIES[it[o]].res === 'tree' && it[o + 6] > 0 && (pass || !isRock(it[o + 2], it[o + 4]))) out.push(it[o + 2], it[o + 4]); }   // (a tree on bare rock won't stand: it doesn't count)
+function treesOf(cx, cz, pass, others) {   // [x, z, ...] of the trees around a cell: as first laid out (pass 0), those the first pass keeps (pass 1), or those once moved clear of the rocks (pass 2); others: only the neighbours'
+  const out = []; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) { if (others && !i && !j) continue; const it = pass === 2 ? pushed(cx + i, cz + j) : pass ? kept1(cx + i, cz + j) : rawCell(cx + i, cz + j); for (let o = 0; o < it.length; o += STRIDE) if (SPECIES[it[o]].res === 'tree' && it[o + 6] > 0 && (pass || !isRock(it[o + 2], it[o + 4]))) out.push(it[o + 2], it[o + 4]); }   // (a tree on bare rock won't stand: it doesn't count)
   return out;
 }
 function kept1(cx, cz) {
@@ -137,11 +137,20 @@ function kept1(cx, cz) {
   KEPT.set(k, r); if (KEPT.size > 160) KEPT.delete(KEPT.keys().next().value); return r;
 }
 export function layoutCell(cx, cz) {
-  const it = kept1(cx, cz).slice(), rocks = rocksAround(cx, cz), x0 = cx * CELL, z0 = cz * CELL, near = treesOf(cx, cz, 1, true);
+  const it = pushed(cx, cz).slice(), near = treesOf(cx, cz, 2, true);
   // (itself and two. Counted again until none goes: a tree that goes can leave another alone, which in thinner woods, a
-  // fifth fewer since Patch 20, left the odd tree standing on its own)
+  // fifth fewer since Patch 20, left the odd tree standing on its own. Counted once the trees have been moved out of the
+  // rocks, and those that couldn't be have gone, its neighbours' too: counted before, a tree that then went for a rock
+  // could leave a pair, Patch 24)
   for (let again = true; again;) { again = false; const own = []; for (let o = 0; o < it.length; o += STRIDE) if (SPECIES[it[o]].res === 'tree' && it[o + 6] > 0) own.push(it[o + 2], it[o + 4]);
     for (let o = 0; o < it.length; o += STRIDE) if (it[o + 6] > 0 && isMeadowTree(it, o, _lw) && count(near, it[o + 2], it[o + 4], 3, reach2(it, o)) + count(own, it[o + 2], it[o + 4], 3, reach2(it, o)) < 3) { it[o + 6] = 0; again = true; } }
+  return it;
+}
+// a cell's trees after the first pass, moved just clear of the rocks (and gone where they can't be, or under the giants)
+const PUSHED = new Map();
+function pushed(cx, cz) {
+  const key = cx + ',' + cz; let r = PUSHED.get(key); if (r) return r;
+  const it = kept1(cx, cz).slice(), rocks = rocksAround(cx, cz), x0 = cx * CELL, z0 = cz * CELL;
   for (let i = 0; i < it.length; i += STRIDE) {
     const sp = SPECIES[it[i]]; if (sp.res !== 'tree' || it[i] === SP.titan) continue;
     if (titanBand(it[i + 2], it[i + 4]) > 0.35 && hash2(cx * 131 + i, cz * 977 - i) < 0.75) { it[i + 6] = 0; continue; }   // the giants' shade: the understory thins out
@@ -160,7 +169,7 @@ export function layoutCell(cx, cz) {
     if (obstructed(rocks, it[i + 2], it[i + 4], tr) || isRock(it[i + 2], it[i + 4])) it[i + 6] = 0;   // nowhere to go in its cell (or pushed onto bare rock)
     else it[i + 3] = heightAt(it[i + 2], it[i + 4]) - 0.05;
   }
-  return it;
+  PUSHED.set(key, it); if (PUSHED.size > 160) PUSHED.delete(PUSHED.keys().next().value); return it;
 }
 const obstructed = (list, x, z, r) => { for (let k = 0; k < list.length; k += 3) if (Math.hypot(x - list[k], z - list[k + 1]) < list[k + 2] + r + 0.25) return true; return false; };
 // raw layouts, cached (neighbouring cells are asked for again and again)

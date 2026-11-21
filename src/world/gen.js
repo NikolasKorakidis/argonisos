@@ -98,18 +98,22 @@ export function peakHeight(x, z) {
 // can lie) and over it a cliff of bare rock, as limestone weathers in its beds. A band wanders up and down round the
 // mountain with the noise and is strong in places and all but gone in others; there are none on the summit's dome or
 // round the foot. The stepping only ever rises, so the land still falls away from the top everywhere. (BAND.c and w:
-// where in each band its cliff stands and how much of it the cliff takes)
+// where in each band its cliff stands and how much of it the cliff takes.) A cliff goes straight up from its shoulder,
+// with no easing in between: ground of a middling steepness, a little over what slides you back, could be hopped up
+// jump by jump (the Olympos suite's steep face), so there is as little of it as the mesh allows.
 // The path up is laid out before the bands are (setPeak), on the mountain as it was, and the bands give way round it
 // (near: 1 on the path, 0 from BAND.r1 out), so it climbs through each cliff band at a break, as mule tracks do,
 // rather than being cut into the cliffs: from afar its zigzags show as a smoother way up through them.
 // The beds aren't level: they dip BAND.dip across the massif (towards BAND.dir from the way the path faces), so the bands
 // climb round one flank and fall round the other, as tilted strata do, rather than ring it like a wedding cake.
-const BAND = { on: false, T: 62, k: 0.86, c: 0.62, w: 0.26, dip: 0.13, dir: 1.3, r0: 8, r1: 22 };
+const BAND = { on: false, T: 62, k: 0.86, c: 0.62, w: 0.17, dip: 0.13, dir: 1.3, r0: 11, r1: 15 };
 function bands(y, x, z, d, near) {
-  const k = BAND.k * (1 - near) * smooth(0.18, 0.3, d) * smooth(0.86, 0.62, d) * (0.3 + 0.7 * smooth(0.3, 0.6, noise(x * 0.0045 + 3.3, z * 0.0045 - 8.1))); if (k <= 0) return y;
+  // (each band at full strength or none: a band half there, its shoulders still steep and its cliffs not yet sheer, left
+  // long stretches of that middling ground)
+  const k = BAND.k * (1 - near) * smooth(0.2, 0.235, d) * smooth(0.84, 0.8, d) * smooth(0.4, 0.46, noise(x * 0.0045 + 3.3, z * 0.0045 - 8.1)); if (k <= 0) return y;
   const D = BAND.dip * ((x - PEAK.x) * Math.cos(PEAK.a + BAND.dir) + (z - PEAK.z) * Math.sin(PEAK.a + BAND.dir));
   const T = BAND.T * (0.85 + 0.3 * noise(x * 0.0025 - 6.2, z * 0.0025 + 2.7)), ph = (noise(x * 0.0022 + 9.4, z * 0.0022 - 4.1) - 0.5) * 0.8, u = (y + D) / T + ph, f = Math.floor(u), t = u - f;
-  return (f + (1 - k) * t + k * smooth(BAND.c - BAND.w, BAND.c + BAND.w, t) - ph) * T - D;
+  return (f + (1 - k) * t + k * Math.max(0, Math.min(1, (t - BAND.c + BAND.w) / (2 * BAND.w))) - ph) * T - D;
 }
 const peakDd = (d) => (Math.hypot(d, 0.2) - 0.2) / (Math.hypot(1, 0.2) - 0.2);   // (the softened distance out: a dome on top)
 // Crags and towers of rock standing up near the top, away from the path's side, and a second summit a little lower than
