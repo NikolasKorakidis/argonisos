@@ -55,11 +55,11 @@ fs.watch(ROOT, { recursive: true }, (_, name) => {
   }, 200);
 });
 
-// (this machine only: the project holds private files, and anyone on the same network could otherwise read it; HOST=0.0.0.0
-// to try the game from a phone on purpose)
-const HOST = process.env.HOST || '127.0.0.1';
+// (open to the local network, so the game can be tried from another computer or a phone at home; the private files stay
+// refused above whatever the case. npm run dev:local keeps it to this machine, e.g. on a network you don't trust)
+const HOST = process.env.HOST || '0.0.0.0';
 server.listen(PORT, HOST, () => {
   console.log(`Argonisos dev server: http://localhost:${PORT}  (pages reload when files change)`);
-  // (open to the network on purpose, npm run dev:lan: say where other machines find it; concept/ and the git histories stay refused)
+  // (and where other machines on the network find it)
   if (HOST !== '127.0.0.1') for (const list of Object.values(os.networkInterfaces())) for (const a of list) if (a.family === 'IPv4' && !a.internal) console.log(`  on your network: http://${a.address}:${PORT}`);
 });
