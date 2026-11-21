@@ -4,6 +4,7 @@
 // NEAR_R and MID_R put each tree in exactly one band, so the hand-overs are seamless. Layout comes from the workers.
 import * as THREE from 'three';
 import { propGeo, propMat, leafMat, TREE_BUILDERS, mergeParts, rr, isLow as PROP_LOW, A2C_FRAG } from './trees.js';
+import { ROCK_MAT } from './rock.js';
 import { SPECIES, STRIDE, CELL } from './flora.js';
 import { MIST_R0, MIST_R1 } from './reach.js';
 import { heightAt } from './gen.js';
@@ -209,7 +210,7 @@ function buildAtlas() {
   const prev = { rt: renderer.getRenderTarget(), cc: renderer.getClearColor(new THREE.Color()), ca: renderer.getClearAlpha(), sc: renderer.getScissorTest() };
   renderer.setRenderTarget(rt); renderer.setClearColor(0x3c4a30, 0); renderer.clear(); renderer.setScissorTest(true);   // (a leafy clear colour: shrunk far away, the edges blend to green, not black)
   SPECIES.forEach((sp, i) => {
-    const P = propGeo(sp.name, 0), g = new THREE.Group(), a = new THREE.InstancedMesh(P.geo, propMat, 1); a.setMatrixAt(0, I); g.add(a);
+    const P = propGeo(sp.name, 0), g = new THREE.Group(), a = new THREE.InstancedMesh(P.geo, P.mat || propMat, 1); a.setMatrixAt(0, I); g.add(a);
     if (P.cards) { const l = new THREE.InstancedMesh(P.cards, P.cardMat || leafMat, 1); l.setMatrixAt(0, I); g.add(l); }
     const bb = new THREE.Box3().setFromBufferAttribute(P.geo.attributes.position); if (P.cards) bb.union(new THREE.Box3().setFromBufferAttribute(P.cards.attributes.position));
     const w = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) * 1.04, h = (bb.max.y - bb.min.y) * 1.02, half = Math.max(w, h) / 2, cx = (bb.min.x + bb.max.x) / 2, cy = (bb.min.y + bb.max.y) / 2;
@@ -304,7 +305,8 @@ export class Vegetation {
   warmMeshes(also) {
     const g = new THREE.Group(), I = new THREE.Matrix4(), add = (geo, mat, more) => { const m = new THREE.InstancedMesh(geo, mat, 1); m.setMatrixAt(0, I); m.castShadow = m.receiveShadow = true; m.frustumCulled = false; g.add(m); if (more && also) add(geo, also(mat)); };
     for (let sp = 0; sp < SPECIES.length; sp++) for (let v = 0; v < 3; v++) { const P = this.geoFor(sp, v);
-      for (const far of [false, true]) { add(P.geo, cut(propMat, far), !far); if (P.cards) add(P.cards, cut(P.cardMat || leafMat, far), !far); } }
+      for (const far of [false, true]) { add(P.geo, cut(P.mat || propMat, far), !far); if (P.cards) add(P.cards, cut(P.cardMat || leafMat, far), !far); } }
+    add(this.geoFor(SPECIES.findIndex((s) => s.name === 'rock'), 0).geo, ROCK_MAT);   // (and the stone as the stones you pick up are drawn in it, uncut: pickups.js)
     return g;
   }
   // all of a block's trees as impostor cards: one instanced mesh
@@ -395,7 +397,7 @@ export class Vegetation {
       if (!b || b.cap < n) {
         if (b) for (const m of b.meshes) { this.group.remove(m); m.dispose(); }
         const P = this.geoFor(sp, v), cap = Math.ceil(n * 1.4) + 16, sh = !SPECIES[sp].noShadow;
-        const pair = (geo, cards, own) => { const t = new THREE.InstancedMesh(geo, cut(propMat, false), cap), ms = [t];
+        const pair = (geo, cards, own) => { const t = new THREE.InstancedMesh(geo, cut(P.mat || propMat, false), cap), ms = [t];
           if (cards) { const lm = new THREE.InstancedMesh(cards, cut(P.cardMat || leafMat, false), cap); if (!own) lm.instanceMatrix = t.instanceMatrix; ms.push(lm); } return ms; };
         // (a pack tree has a lighter version for the band's further half, from SPLIT out: its leaves thinned)
         const near = pair(P.geo, P.cards), far = P.geo2 ? pair(P.geo2, P.cards2) : [];
@@ -441,13 +443,13 @@ export class Vegetation {
       if (!b || b.cap < n) {
         if (b) for (const m of b.meshes) { this.group.remove(m); m.dispose(); }
         const it0 = refs[0].items, o0 = refs[1] * STRIDE, P = this.geoFor(it0[o0], it0[o0 + 1]), cap = Math.ceil(n * 1.3) + 32;
-        const trunk = new THREE.InstancedMesh(P.lo, cut(propMat, true), cap), meshes = [trunk];
+        const trunk = new THREE.InstancedMesh(P.lo, cut(P.mat || propMat, true), cap), meshes = [trunk];
         const lc = P.loCards === undefined ? P.cards : P.loCards;   // (a pack plant's far version has cards of its own, thinned)
         if (lc && P.leafFar) { const lm = new THREE.InstancedMesh(lc, cut(P.cardMat || leafMat, true), cap); lm.instanceMatrix = trunk.instanceMatrix; meshes.push(lm); }
         // (its shadow: past the near band a tree still casts into the shadow box, the same stand-in as nearer in, so a low
         // sun's long shadows don't appear and vanish as trees cross into the near band; its own instances, packed by the
         // shadow camera's view and kept even when the tree itself has dropped away behind the mist)
-        const shade = []; if (!SPECIES[it0[o0]].noShadow && !sinks(it0[o0])) { const st = new THREE.InstancedMesh(P.lo, cut(propMat, false), cap); shade.push(st);
+        const shade = []; if (!SPECIES[it0[o0]].noShadow && !sinks(it0[o0])) { const st = new THREE.InstancedMesh(P.lo, cut(P.mat || propMat, false), cap); shade.push(st);
           if (lc) { const sl = new THREE.InstancedMesh(lc, cut(P.cardMat || leafMat, false), cap); sl.instanceMatrix = st.instanceMatrix; shade.push(sl); }
           for (const q of shade) { q.layers.set(SHADE_LAYER); q.castShadow = true; q.frustumCulled = false; q.count = 0; } }
         P.lo.computeBoundingSphere(); const bs = P.lo.boundingSphere.clone(); if (meshes[1]) { lc.computeBoundingSphere(); bs.union(lc.boundingSphere); }
@@ -551,7 +553,7 @@ export class Vegetation {
   // One tree or rock as its own little object (for felling animations): instanced meshes of count 1 in a group
   single(sp, v) {
     const P = this.geoFor(sp, v), g = new THREE.Group(), I = new THREE.Matrix4();
-    const a = new THREE.InstancedMesh(P.geo, cut(propMat, false), 1); a.setMatrixAt(0, I); a.castShadow = a.receiveShadow = true; a.frustumCulled = false; g.add(a);
+    const a = new THREE.InstancedMesh(P.geo, cut(P.mat || propMat, false), 1); a.setMatrixAt(0, I); a.castShadow = a.receiveShadow = true; a.frustumCulled = false; g.add(a);
     if (P.cards) { const l = new THREE.InstancedMesh(P.cards, cut(P.cardMat || leafMat, false), 1); l.setMatrixAt(0, I); l.castShadow = true; l.frustumCulled = false; g.add(l); }
     return g;
   }

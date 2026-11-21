@@ -7,6 +7,7 @@ import QBUSH from '../../assets/models/qbushes.js';
 import { clamp, lerp } from '../util/math.js';
 import { patchWet } from './wetness.js';
 import { FLORA, floraGeo, TREE_TALL } from './flora-pack.js';
+import { ROCK_MAT, rockEdges } from './rock.js';
 
 let seed = 1337;
 const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -369,6 +370,7 @@ function qBuild(species, v) {
   return { geo, lo: geo, cards, cardMat: cards && Q_LEAF_MATS[species], leafFar: true };
 }
 const PROPS = {};  // key -> { geo, variants:[geo], chunks: Map }
+const STONY = new Set(['rock', 'boulder', 'pebbles']);   // (drawn in stone: rock.js)
 const TREE_TYPES = new Set(['olive', 'oak', 'cypress', 'pomegranate', 'fig', 'plane', 'qtree', 'qpine', 'fir', 'holm', 'qdead', 'dead']);   // (fitted by height; the rest by bulk)
 function propGeo(species, v) {
   const k = species + v;
@@ -387,6 +389,8 @@ function propGeo(species, v) {
     const box = new THREE.Box3(); for (const g of [P.geo, P.cards]) if (g) { g.computeBoundingBox(); box.union(g.boundingBox); }
     const g = floraGeo(species, v, box, TREE_TYPES.has(species)); if (g) Object.assign(P, { geo: g.geo, lo: g.lo || g.geo, cards: g.cards, loCards: g.lo ? g.loCards : g.cards, geo2: g.mid, cards2: g.mid ? g.midCards : null, cardMat: g.cards && packCardMat(g.map), leafFar: !!g.cards, packed: true });   // (geo2: the near band's further half, vegetation.js)
   }
+  // the rocks in stone of their own (rock.js: no wind, and the detail laid on in the shader), their faces' edges marked
+  if (STONY.has(species) && P.mat !== ROCK_MAT && (P.packed || !FLORA[species])) { for (const q of new Set([P.geo, P.lo])) rockEdges(q); P.mat = ROCK_MAT; }
   return P;
 }
 // the see-through parts of the packs' plants (flora-pack.js): one material per pack texture, cut out like the leaves and

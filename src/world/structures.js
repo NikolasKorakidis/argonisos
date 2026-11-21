@@ -16,6 +16,7 @@ import { clamp, seeded } from '../util/math.js';
 import { propGeo, propMat, leafMat } from './trees.js';
 import { GMAT, amphora, pithos, bowl, jug, tripod, acroterion, antefixes, cartWheel, firewood, leaves, mist, dice } from './greek.js';
 import { wettable } from './wetness.js';
+import { stony } from './rock.js';
 import { siteProp, sitePropAt, piece, pieceAt, hasPiece, chestParts } from './site-pack.js';
 import { buildTown, buildSpot } from './town.js';
 import { mergeGeometries } from '../../vendor/three/jsm/utils/BufferGeometryUtils.js';
@@ -122,6 +123,7 @@ export const SMAT = {
   glowCap: new THREE.MeshStandardMaterial({ color: 0xbfe6d6, emissive: 0x4cc8a8, emissiveIntensity: 0.8, roughness: 0.6 }),
 };
 for (const [k, o] of Object.entries({ marble: [0.72, 0.28], paving: [0.7, 0.3], stone: [0.66, 0.28], moss: [0.7, 0.45], tile: [0.68, 0.3], frieze: [0.72, 0.3], dark: [0.68, 0.3], rock: [0.66, 0.26], wood: [0.62, 0.32], plaster: [0.72, 0.35], flags: [0.66, 0.26], bone: [0.75, 0.35] })) wettable(SMAT[k], { dark: o[0], gloss: o[1] });   // (wetness.js)
+for (const k of ['rock', 'dark']) stony(SMAT[k], { wet: false });   // (the boulders and cairns in the island's stone, as the streamed rocks are: rock.js)
 const _nav = new THREE.Vector3();
 // the bones of the beasts' meals (other packs' models, site-pack.js), and the pack's pieces grown over with moss (the shrine's)
 const BONES = ['all/pnb-swamp-marshland/sm-prop-bone-pile-01', 'all/pnb-swamp-marshland/sm-prop-bone-ribcage-01', 'all/pnb-swamp-marshland/sm-prop-bone-pile-02', 'all/pnb-swamp-marshland/sm-prop-bone-skull-01'];
