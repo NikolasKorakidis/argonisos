@@ -27,6 +27,18 @@ export const PATCHES = [
         'No more hitch the first time shafts of sun break through, or when you look into a deep corner for the first time; the trees far off come in faster after a long jump, and a long walk through the woods no longer slowly fills the graphics memory.',
       ] },
       { t: 'Sound', icon: 'lyre', items: [
+        '<b>Boss fights no longer blast.</b> The boss\'s heavy music is still loud and clear over its storm, but the whole fight is about 5 dB quieter, the slams and roars sit with the music instead of over it, and nothing pumps or clips.',
+        'You can hear the warnings: the Minotaur\'s snort before he charges, the bones of the dead rattling as they come, a dryad\'s thorn leaving her hand. The music dips for a moment under the big ones.',
+        'Every swing whooshes, a miss too, quick for a dagger and heavy for a mace; creatures\' blows whoosh in just before they land.',
+        'New sounds for the roll, swimming strokes, eating, opening the pack, the map and the build menu, your guard breaking and a wall taking a blow. Landings sound as hard as the fall, footsteps are louder sprinting and softer sneaking, and Olympos\'s snow and the marsh\'s mud have steps of their own.',
+        'Maces, clubs, fists and kicks land with a solid thump instead of a faint tap. Blows on skeletons crack bone and blows on dryads knock wood, and each creature has a cry of its own: a hog\'s grunt, a giant\'s bellow, the dryads\' high call.',
+        'A creature you kill falls where it lies, not in your ear. A boss dies with a long, failing roar and the ground shakes as it comes down.',
+        'Rolling logs rumble and thud with the rest of the sounds: under the effects slider, quieter indoors, and no more clipping over a fight.',
+        'Music for more places: the climb up Olympos, the Giants\' caves (and a land you come into by night), and the shore at dawn and dusk. The title and boss music loop smoothly without their opening coming back every minute.',
+        'Indoors and in caves the world outside comes muffled, and caves, the labyrinth and your house ring like stone rooms.',
+        'A dawn chorus at sunrise; crickets only in the evening and at night; the wind falls quieter in fog; Olympos\'s summit sounds like wind and height, not a meadow. Long sounds like a roar follow their source as you turn.',
+        'Recordings are levelled more carefully, so one pickaxe blow or footstep is as loud as the next, and wooden floors no longer sound quieter than grass. Short ambience loops (leaves, wind, frogs, fires) no longer repeat audibly, and each campfire crackles in its own way.',
+        'Meat sizzles on a cooking stand while it cooks, and you hear it\'s done from across the camp. The guide\'s chime plays even with the music turned off, and the skill bell is a real bell.',
       ] },
       { t: 'Fights and survival', icon: 'sword', items: [
       ] },
