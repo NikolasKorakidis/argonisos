@@ -608,6 +608,9 @@ export function fires(list) {
 // soft rush) under the recorded flow where there is one, louder over the riffles. A fall: a deep roar (the rush of
 // brown noise, low, swelling slowly) and its hiss, the recorded flow slowed under them for its churn, heard from far
 // off and filling everything near the pool. The lake: water lapping at the shore (the waves' bed, slowed and dulled).
+// Each runs at its own pace and swells on its own clock, its loops started at their own places, so the falls, stacked
+// within a few hundred metres of one another and heard together from far off, never play one recording in step (two
+// copies of one loop in step comb each other and double the level); each is logged as its own sound.
 const WATERS = new Map(); let babbleBuf = null;
 function makeBabble(seconds) {
   const sr = ctx.sampleRate, n = Math.floor(sr * seconds), b = ctx.createBuffer(2, n, sr);
@@ -627,16 +630,16 @@ export function waters(list) {
   for (const w of list) {
     seen.add(w.id); let s = WATERS.get(w.id);
     if (!s) {
-      s = { g: ctx.createGain(), p: ctx.createStereoPanner(), lp: ctx.createBiquadFilter(), src: [], kind: w.kind }; s.g.gain.value = 0; s.lp.type = 'lowpass'; s.lp.Q.value = 0.5; s.lp.connect(s.g).connect(s.p).connect(ambW); WATERS.set(w.id, s);
-      const loop = (buf, rate, vol, filt) => { const g = ctx.createGain(); g.gain.value = vol; let n = g; if (filt) { const f = ctx.createBiquadFilter(); [f.type, f.frequency.value, f.Q.value] = filt; g.connect(f); n = f; } n.connect(s.lp); s.src.push(loopOf(buf, rate, g)); };
+      s = { g: ctx.createGain(), p: ctx.createStereoPanner(), lp: ctx.createBiquadFilter(), src: [], kind: w.kind, r: rnd(0.94, 1.06), ph: rnd(0, 6.28) }; s.g.gain.value = 0; s.lp.type = 'lowpass'; s.lp.Q.value = 0.5; s.lp.connect(s.g).connect(s.p).connect(ambW); WATERS.set(w.id, s);
+      const loop = (buf, rate, vol, filt) => { const g = ctx.createGain(); g.gain.value = vol; let n = g; if (filt) { const f = ctx.createBiquadFilter(); [f.type, f.frequency.value, f.Q.value] = filt; g.connect(f); n = f; } n.connect(s.lp); s.src.push(loopOf(buf, rate * s.r, g)); };
       const rec = (k, rates, vol, filt) => { if (!META[k]) return; fetchOne(k, 0).then((buf) => { if (buf && !s.gone) for (const r of rates) loop(buf, r, vol, filt); }); };
       if (w.kind === 'stream') { babbleBuf ||= makeBabble(9); loop(babbleBuf, 1, 0.55); loop(babbleBuf, 0.83, 0.35, ['highpass', 500, 0.5]); rec('bedStream', [0.97, 1.03], 0.5); }
       else if (w.kind === 'fall') { loop(brownBuf, 0.9, 1.1, ['lowpass', 420, 0.6]); loop(noiseBuf, 1, 0.22, ['bandpass', 1300, 0.5]); babbleBuf ||= makeBabble(9); loop(babbleBuf, 0.55, 0.5, ['lowpass', 1600, 0.5]); rec('bedStream', [0.52, 0.61], 0.6); }
       else { rec('bedWaves', [0.85], 0.8, ['lowpass', 1300, 0.5]); if (!META.bedWaves) loop(brownBuf, 0.7, 0.5, ['lowpass', 350, 0.5]); }
-      AUDIO.log?.push({ k: 'water:' + w.kind, i: -1, t, water: w.id, bus: 'amb' });
+      AUDIO.log?.push({ k: 'water:' + w.id, i: -1, t, water: w.kind, bus: 'amb' });
     }
     // (a fall carries a long way, swelling slowly as the spray gusts; a stream only some tens of metres)
-    const sp = w.kind === 'fall' ? spatial(w, 18, 420) : w.kind === 'stream' ? spatial(w, 4, 55) : spatial(w, 6, 45), swell = w.kind === 'fall' ? 0.85 + 0.15 * Math.sin(t * 0.6 + w.k * 9) * Math.sin(t * 0.23) : 1;
+    const sp = w.kind === 'fall' ? spatial(w, 18, 420) : w.kind === 'stream' ? spatial(w, 4, 55) : spatial(w, 6, 45), swell = w.kind === 'fall' ? 0.85 + 0.15 * Math.sin(t * 0.6 + s.ph) * Math.sin(t * 0.23 + s.ph * 1.7) : 1;
     ease(s.g.gain, (w.kind === 'fall' ? 0.95 : w.kind === 'stream' ? 0.42 : 0.3) * Math.min(1.3, w.k) * sp.k * swell, 0.3, t); ease(s.p.pan, sp.pan, 0.12, t); ease(s.lp.frequency, Math.min(16000, sp.lp), 0.2, t);
   }
   for (const [id, s] of WATERS) if (!seen.has(id)) { s.gone = true; s.g.gain.setTargetAtTime(0, t, 0.5); WATERS.delete(id); setTimeout(() => { s.src.forEach((x) => x.stop()); s.g.disconnect(); }, 3000); }
