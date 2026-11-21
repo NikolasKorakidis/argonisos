@@ -18,9 +18,13 @@ export const PATCHES = [
         'The sea is a deeper blue, the foam along the beach comes and goes in sets, and on Ultra its reflections are no longer speckled.',
         'The focus blur at the edges of the screen is gentler and never blurs the sky. You can turn it off: Focus blur, in the settings.',
         'A little more contrast in the picture; gold and bronze armour shines like metal; deer are a natural brown rather than orange.',
+        '<b>Softer grass.</b> Its tips are a natural green instead of lime and yellow, each blade catches the light a little on its own, the forest floor\'s grass is finer instead of rows of green spikes, and in the rain the meadows darken as wet grass does.',
+        'Where near trees give way to the simpler distant ones, they now blend through a fine speckle instead of a pattern of squares.',
       ] },
       { t: 'Smoother', icon: 'sprint', items: [
         'Fixed: a short freeze every time the sky\'s light was refreshed, felt most in the woods and when time runs fast.',
+        'The grass costs far less to draw, most of all in the forest, and the shadows under the trees, the far-off temples and the labyrinth take less work too: steadier frames in the woods, on every setting.',
+        'No more hitch the first time shafts of sun break through, or when you look into a deep corner for the first time; the trees far off come in faster after a long jump, and a long walk through the woods no longer slowly fills the graphics memory.',
       ] },
       { t: 'Sound', icon: 'lyre', items: [
       ] },
