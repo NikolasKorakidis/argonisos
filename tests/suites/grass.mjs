@@ -30,6 +30,30 @@ export default {
     await t.step('no grass in or over a rock, boulder or trunk (a clear space round each)', `${TEX.replace('N = 160, size = 600, x0 = -300, z0 = -300', 'N = 224, size = 140, x0 = -70, z0 = -70')} const F = await import('/src/world/flora.js'); let inside = 0, n = 0;
       for (let cz = -3; cz <= 1; cz += 3) for (let cx = -3; cx <= 1; cx += 3) { const so = F.solidsAround(cx + 1, cz + 1); for (let s = 0; s < so.length; s += 3) { const i = Math.floor((so[s] - x0) / size * N), j = Math.floor((so[s + 1] - z0) / size * N); if (i < 0 || j < 0 || i >= N || j >= N || so[s + 2] < 0.3) continue; n++; const c = at(i, j); if (c.amt > 0.01) inside++; } }
       return (n > 20 && inside === 0) || inside + ' of ' + n + ' rocks and trunks have grass in them';`);
+    // (graphics review, 21 Nov: after a jump the carpet was drawn round the new place on the old place's ground texture,
+    // clamped at its edge: blades at the old place's height, green streaks across the sky.) From a high meadow down to
+    // a low one, and the grass alone drawn at once, before the new texture is in: none
+    // of it may stand more than 5 m over the ground
+    const jump = await t.eval(`const Gm = await import('/src/world/grass.js'), G = await import('/src/world/gen.js'); let hx = 0, hz = 0, best = -1;   // (a high, grassy meadow: the highest found)
+      for (let x = -1400; x <= 1400; x += 40) for (let z = -1400; z <= 1400; z += 40) { const h = AG.heightAt(x, z); if (h > best && h < 140 && G.biomeWeights(x, z).p > 0.9 && !G.isRock(x, z)) { best = h; hx = x; hz = z; } }
+      AG.teleport(hx, hz); for (let i = 0; i < 300; i++) { const o = Gm.grassU.uOrigin.value, h = Gm.TEX_SIZE / 2; if (Math.hypot(o.x + h - P.pos.x, o.y + h - P.pos.z) < 30) break; await new Promise((r) => setTimeout(r, 100)); }
+      // (then down to where the old texture, clamped at its edge, would stand the blades highest over the ground)
+      const t1 = Gm.grassU.uHeight.value, N1 = t1.image.width, O1 = Gm.grassU.uOrigin.value.clone(), S1 = Gm.grassU.uSize.value; let tx = -220, tz = 360, lift = -1e9;
+      for (let x = -1400; x <= 1400; x += 50) for (let z = -1400; z <= 1400; z += 50) { if (Math.hypot(x - P.pos.x, z - P.pos.z) < 400 || G.biomeWeights(x, z).p < 0.6 || AG.heightAt(x, z) < 2) continue;
+        const i = Math.max(0, Math.min(N1 - 1, Math.floor((x - O1.x) / S1 * N1))), j = Math.max(0, Math.min(N1 - 1, Math.floor((z - O1.y) / S1 * N1))), o = (j * N1 + i) * 4, l = t1.image.data[o] - AG.heightAt(x, z); if (l > lift && t1.image.data[o + 1] > 0.3) { lift = l; tx = x; tz = z; } }   // (and grass growing there)
+      const high = P.pos.y; AG.teleport(tx, tz); for (let k = 0; k < 2; k++) await new Promise((r) => requestAnimationFrame(r));
+      const o = Gm.grassU.uOrigin.value, stale = Math.hypot(o.x + Gm.TEX_SIZE / 2 - P.pos.x, o.y + Gm.TEX_SIZE / 2 - P.pos.z) > Gm.TEX_SIZE / 2;
+      // (looked at from straight above, the camera's far end 5 m over the highest ground within the grass's reach: any blade drawn stands higher than that)
+      let top = -1e9; for (let x = -110; x <= 110; x += 5) for (let z = -110; z <= 110; z += 5) top = Math.max(top, AG.heightAt(P.pos.x + x, P.pos.z + z));
+      const T = AG.THREE, R = AG.renderer, rt = new T.WebGLRenderTarget(320, 320), cam = new T.OrthographicCamera(-110, 110, 110, -110, 1, 1000 - top - 5), keep = new Set([Gm.GRASS.mesh, Gm.GRASS.far, ...Gm.GRASS.flowers]), was = [];
+      cam.position.set(P.pos.x, 1000, P.pos.z); cam.up.set(0, 0, -1); cam.lookAt(P.pos.x, 0, P.pos.z); cam.updateMatrixWorld();
+      for (const c of AG.scene.children) if (!keep.has(c) && !c.isLight) { was.push([c, c.visible]); c.visible = false; } const bg = AG.scene.background; AG.scene.background = null;
+      const prev = R.getRenderTarget(), cc = R.getClearAlpha(); R.setRenderTarget(rt); R.setClearColor(0x000000, 0); R.clear(); R.render(AG.scene, cam); const px = new Uint8Array(320 * 320 * 4); R.readRenderTargetPixels(rt, 0, 0, 320, 320, px);
+      R.setRenderTarget(prev); R.setClearAlpha(cc); AG.scene.background = bg; for (const [c, v] of was) c.visible = v; rt.dispose();
+      let sky = 0; for (let i = 3; i < px.length; i += 4) if (px[i] > 0) sky++;
+      return { sky, high: Math.round(high), low: Math.round(P.pos.y), lift: Math.round(lift), stale };`);
+    t.metric("just after the jump (from / to, m up; how far the old ground texture's edge stands over the new ground; still in place)", `${jump.high} / ${jump.low}; ${jump.lift} m; ${jump.stale}`);
+    t.check('just after a long jump down from a height no grass hangs in the sky', jump.sky === 0, jump.sky + ' grass pixels more than 5 m over the ground');
     await t.step('no tall grass on bare rock', `${TEX} let bad = 0; for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const c = at(i, j); if (G.isRock(c.x, c.z) && (c.g >= 0 || c.tall > 0)) bad++; } return bad === 0 || bad + ' rock texels with grass';`);
   },
 };

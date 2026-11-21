@@ -55,6 +55,10 @@ const BLADE_N = 0.3, UNFLIP = { from: '#include <normal_fragment_begin>', to: '#
 // drawn here is put out of sight and left: most blades of each carpet aren't, somewhere in its tile (the near one's past
 // its hand-over and thinned further out, the far one's inside it and past the grass's edge, both under the meadow's clumps)
 const DROP = 'if (fade <= 0.0) { gl_Position = vec4(0.0, 0.0, -2.0, 1.0); return; }';
+// Nothing grows where the ground texture doesn't reach: just after a jump (a teleport, a respawn) the carpet is round the
+// new place a moment before the worker has baked its texture, and the old one, clamped at its edge, stood every blade at the
+// old place's height, green streaks across the sky (graphics review, 21 Nov)
+const COVERED = '{ vec2 tc = (wp - uOrigin) / uSize; fade *= step(0.0, min(tc.x, tc.y)) * step(max(tc.x, tc.y), 1.0); }';
 {
   const H = 0.5, bladeGeo = (segs) => {   // a tapered blade (one bend for the far carpet: nobody sees it bow out there)
     const g = new THREE.PlaneGeometry(0.14, H, 1, segs); g.translate(0, H / 2, 0);
@@ -76,6 +80,7 @@ const DROP = 'if (fade <= 0.0) { gl_Position = vec4(0.0, 0.0, -2.0, 1.0); return
           float dc = length(wp - uCenter), hand = smoothstep(${HAND[0].toFixed(1)}, ${HAND[1].toFixed(1)}, dc), r2 = fract(rnd * 91.73), r3 = fract(rnd * 53.17);
           ${far ? `float keep = ${FAR_KEEP.toFixed(4)}${FAR_THIN ? ` * mix(1.0, ${FAR_THIN[2].toFixed(2)}, smoothstep(${FAR_THIN[0].toFixed(1)}, ${FAR_THIN[1].toFixed(1)}, dc))` : ''}, fade = step(r3, hand * (1.0 - smoothstep(${GRASS_R.toFixed(1)}, ${GRASS_END.toFixed(1)}, dc)))${FAR_THIN ? ` * step(r2, keep / ${FAR_KEEP.toFixed(4)})` : ''};`
                 : `float keep = mix(1.0, 0.42, smoothstep(${THIN[0].toFixed(1)}, ${THIN[1].toFixed(1)}, dc)), fade = step(r2, keep) * step(r3, 1.0 - hand);`}
+          ${COVERED}
           ${DROP}
           ${far ? '' : `fade *= step(texture2D(uMeadow, (wp - uOrigin) / uSize).r * uClumps, fract(rnd * 27.31));   // (in Pedias the clumps grow instead, one for one as the meadow comes in)
           ${DROP}`}
@@ -144,6 +149,7 @@ const DROP = 'if (fade <= 0.0) { gl_Position = vec4(0.0, 0.0, -2.0, 1.0); return
         vec4 hm = texture2D(uHeight, (wp - uOrigin) / uSize);
         float rnd = fract(sin(dot(ip.xz, vec2(39.3, 11.7))) * 43758.5453);
         float fade = 1.0 - smoothstep(0.6, 1.0, length(wp - uCenter) / (uTile * 0.5));
+        ${COVERED}
         float gg = max(hm.g, 0.0), on = step(rnd, hm.a) * step(0.5, gg - floor(gg * 0.5) * 2.0) * step(gg, 1.99) * fade;   // (the amount, unpacked; none in tall grass)
         vec3 p = position * on * ${size.toFixed(2)} * (0.8 + rnd * 0.5);
         float bend = max(position.y, 0.0) * 0.12;
@@ -211,6 +217,7 @@ const clumpCarpet = (geo, map, tall) => {
         // ground over a stretch rather than vanishing whole
         float dc = length(wp - uCenter), hand = smoothstep(${HAND[0].toFixed(1)}, ${HAND[1].toFixed(1)}, dc);
         float keep = mix(1.0, 0.6, smoothstep(${THIN[0].toFixed(1)}, ${THIN[1].toFixed(1)}, dc)), fade = step(r2, keep) * smoothstep(r3, r3 + 0.15, 1.0 - hand);
+        ${COVERED}
         ${DROP}
         fade *= step(r4, texture2D(uMeadow, (wp - uOrigin) / uSize).r);   // (only in Pedias: where it fades into the next land, clumps give way to blades one for one)
         ${DROP}
