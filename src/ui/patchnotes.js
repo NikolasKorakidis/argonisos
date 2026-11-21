@@ -19,7 +19,6 @@ export const PATCHES = [
         'The focus blur at the edges of the screen is gentler and never blurs the sky. You can turn it off: Focus blur, in the settings.',
         'A little more contrast in the picture; gold and bronze armour shines like metal; deer are a natural brown rather than orange.',
         '<b>Softer grass.</b> Its tips are a natural green instead of lime and yellow, each blade catches the light a little on its own, the forest floor\'s grass is finer instead of rows of green spikes, and in the rain the meadows darken as wet grass does.',
-        'Where near trees give way to the simpler distant ones, they now blend through a fine speckle instead of a pattern of squares.',
       ] },
       { t: 'Smoother', icon: 'sprint', items: [
         'Fixed: a short freeze every time the sky\'s light was refreshed, felt most in the woods and when time runs fast.',
