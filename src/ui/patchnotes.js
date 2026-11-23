@@ -14,6 +14,15 @@ export const PATCHES = [
         '<b>If the graphics card drops the picture</b> (its driver resets or it runs out of memory), the game saves, says so, and picks up again when the picture comes back, or offers to reload, instead of freezing.',
         '<b>The performance overlay (F3)</b> now also shows the graphics card\'s own time, its memory and the game\'s, how often the resolution changed, the fire\'s shadow and the river\'s reflections; <b>F4</b> copies a full report you can paste to us.',
       ] },
+      { t: 'The pack', icon: 'gear', items: [
+        '<b>Ten slots on the hotbar.</b> The hotbar now has ten slots, on the keys 1 to 9 and 0, and the pack is ten wide: 40 slots instead of 32. Your saved pack comes across as you left it, everything in its row and its place along it, the hotbar too, with the new slots empty at the end of each row.',
+        '<b>Break down what you made.</b> Shift and right-click a crafted tool, weapon, shield or piece of armour in your pack to break it down for half of each of its materials, rounded down but at least one of each. It asks first, so a slip of the mouse costs nothing; take off what you are wearing before you break it down. Arrows go ten at a time. A plain right-click still uses or equips, as before.',
+        'The pack no longer grows or shifts when a thing has a long description: the description has a box of its own, which scrolls when there is more to read.',
+        'In a window too narrow for both, the compass now sits just below the hotbar instead of under it.',
+      ] },
+      { t: 'Controls', icon: 'goal', items: [
+        '<b>Esc in fullscreen.</b> Esc now always brings up the pause menu in fullscreen. In Chrome and Edge a tap pauses and you hold Esc to leave fullscreen; in browsers where Esc leaves fullscreen at once, leaving it during play now pauses the game, even with the pack or the map open. F11 now goes into the game\'s own fullscreen, the one where Esc still pauses.',
+      ] },
     ],
   },
   {
