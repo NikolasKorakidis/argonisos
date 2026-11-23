@@ -168,7 +168,7 @@ const WOOD = `#include <color_fragment>
     c = mix(c, vec3(l * 1.3) * vec3(1.06, 1.0, 0.9), wear * 0.55 * wood * near);   // (worn: paler and greyer)
     c *= 1.0 - 0.5 * seam * wood;
     diffuseColor.rgb = c;
-    wdRelief = (late * 0.6 + (fib - 0.5) * 0.25 - seam * 0.9 - wearR * 0.3) * near * wood;
+    wdRelief = (late * 0.15 * (1.0 - smoothstep(0.0, 1.0, uTexel)) + (fib - 0.5) * 0.12 - seam * 0.9 - wearR * 0.3) * near * wood;   // (the grain's lines only faintly, and not at all in texels: a thin line's slopes lit up white where the texel's colour no longer darkened it)
   }`;
 // the relief tilts the normal (bump mapping from screen-space derivatives, as the stone's does)
 const BUMP = (k) => `#include <normal_fragment_maps>
