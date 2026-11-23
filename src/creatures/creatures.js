@@ -32,11 +32,13 @@ const COMMIT = 0.3;
 // flee: how far an animal notices you and bolts, in metres (a deer from 18 m, as in Valheim, so that the bow and
 // sneaking are how you get one: senseK). drops: [item, min, max, chance]. fearFire: keeps out of the firelight (a lit fire within 7 m, or your lit torch);
 // fury: once you hurt it, or its family, it fights through fire until the fight is over (c.angered); torchShy: your torch
-// is no fire to it, but at its first sight of it in a fight it backs off that many seconds (c.torchSeen)
+// is no fire to it, but at its first sight of it in a fight it backs off that many seconds (c.torchSeen). (Patch 25, the
+// Greek reviewer: the deer's health 10-14 → 50-65, the hog's since Patch 21, so a deer takes as many blows as a hog; a fawn,
+// YOUNG_K, and a stag, by level, keep their shares of it.)
 export const TYPES = {
   rabbit: { name: 'Rabbit', hp: [3, 5], speed: [3 * FT, 15 * FT], passive: true, flee: 8, r: 0.3, h: 0.6, hops: true, mob: [1, 3], drops: [['rawMeat', 1, 1, 1], ['leather', 1, 1, 0.5], ['sharpBone', 1, 1, 0.2]] },
   fox: { name: 'Fox', hp: [7, 9], speed: [8 * FT, 20 * FT], passive: true, flee: 10, r: 0.4, h: 0.6, mob: [1, 2], drops: [['rawMeat', 1, 2, 1], ['foxHide', 1, 2, 0.5], ['sharpBone', 1, 1, 0.2]] },
-  deer: { name: 'Deer', hp: [10, 14], speed: [5 * FT, 25 * FT], passive: true, flee: 18, r: 0.6, h: 1.4, mob: [1, 2], drops: [['rawMeat', 3, 4, 1], ['leather', 4, 4, 1], ['sharpBone', 1, 2, 0.2], ['deerHide', 1, 2, 1]] },
+  deer: { name: 'Deer', hp: [50, 65], speed: [5 * FT, 25 * FT], passive: true, flee: 18, r: 0.6, h: 1.4, mob: [1, 2], drops: [['rawMeat', 3, 4, 1], ['leather', 4, 4, 1], ['sharpBone', 1, 2, 0.2], ['deerHide', 1, 2, 1]] },
   hog: { name: 'Hog', hp: [50, 65], speed: [8 * FT, 25 * FT], aggro: 10 * FT, retaliate: true, dmg: [8, 12, 'pierce'], reach: 1.6, fearFire: true, fury: true, r: 0.6, h: 0.9, mob: [1, 3], drops: [['rawMeat', 1, 3, 1], ['leather', 3, 3, 1], ['sharpBone', 1, 1, 0.2]] },
   dryadling: { name: 'Dryadling', hp: [15, 25], speed: [3 * FT, 15 * FT], sight: 18, dmg: [4, 6, 'slash'], reach: 1.4, fearFire: true, torchShy: 2, r: 0.35, h: 1.1, mob: [1, 3], weak: ['fire'], resist: ['poison'], drops: [['resin', 1, 2, 1], ['wood', 2, 4, 0.5]], blood: 0x6a8a3a },
   dryad: { name: 'Dryad', hp: [36, 44], block: 14, speed: [5 * FT, 12 * FT], sight: 24, dmg: [6, 8, 'slash'], ranged: { dmg: [4, 6, 'pierce'], range: 16, every: 4.5 }, reach: 1.7, r: 0.45, h: 2, mob: [2, 4], weak: ['fire'], resist: ['poison'], drops: [['resin', 1, 4, 1], ['wood', 2, 4, 1], ['dryadHeart', 1, 1, 0.2]], blood: 0x6a8a3a },

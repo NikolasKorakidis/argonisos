@@ -12,6 +12,12 @@ export default {
     await t.step('…he is a giant, five to six times the hero\'s height, and stands on his own feet (legs posed, nothing broken)', `const c = g.trial.boss; if (!c) return 'no boss'; const b = c.body; for (let i = 0; i < 60 && !b.ik; i++) await new Promise((r) => setTimeout(r, 100)); if (!b.ik || b.ik.legs.length !== 2) return 'no foot placement on the boss';
       b.obj.updateMatrixWorld(true); const box = new AG.THREE.Box3().setFromObject(b.obj), h = box.max.y - box.min.y; if (h < 1.9 * 5 || h > 1.9 * 6.3) return 'he is ' + h.toFixed(1) + ' m tall';
       const v = new V(), ys = b.ik.legs.map((L) => L.foot.getWorldPosition(v).y - c.pos.y); if (!ys.every(Number.isFinite) || Math.min(...ys.map(Math.abs)) > c.T.h * 0.15 || Math.max(...ys.map(Math.abs)) > c.T.h * 0.35) return 'feet at ' + ys.map((y) => y.toFixed(2)) + ' m'; return true;`);
+    // Patch 25 (the Greek reviewer: "Minotaur: HP ×5, and the camera perspective should not change"): 4500 health, his dead
+    // called at 1500 (a third, as before), and the follow camera kept all through his coming and the fight: no drawing
+    // back, no lift, no wider view (player.js BOSS_CAM, the Chimera's alone now)
+    await t.step('…his health is five times what it was (4500), his dead come at 1500, and the camera stays the follow camera', `const c = g.trial.boss; if (!c) return 'no boss'; let worst = 0;
+      for (let i = 0; i < 90; i++) { await frames(1); worst = Math.max(worst, P.bossK, P.bossCam ? 1 : 0, Math.abs(AG.camera.fov - 60) / 8); }
+      return (c.max === 4500 && c.hp <= 4500 && c.T.helpAt === 1500 && worst < 0.01 && P.camD <= P.camDist + 0.01) || JSON.stringify({ max: c.max, helpAt: c.T.helpAt, worst, fov: AG.camera.fov, camD: P.camD, camDist: P.camDist });`);
     await t.wait(5000);
     await t.step('…his coming broke the Labyrinth: about half its walls are down in rubble, their colliders gone, the rubble\'s in, the way open (no more routing by the gaps), and it is kept in the trial\'s state', `const R = g.structures.ruins.labyrinth, Co = g.colliders;
       if (!R.broken || !g.trial.st.broken?.labyrinth) return 'not broken: ' + JSON.stringify({ broken: R.broken, st: g.trial.st.broken }); if (Co.groups.has('ruin:labyrinth') || !Co.groups.get('rubble:labyrinth')?.length) return 'colliders not swapped';
@@ -54,6 +60,7 @@ export default {
     await t.step('…the Chimera, a giant too, fights (it has hurt the player) and its shrine is broken', `const c = g.trial.boss; if (!c || c.type !== 'chimera') return 'no chimera'; const v = new V(); for (const [k, b] of Object.entries(c.body.bones || {})) { b.getWorldPosition(v); if (!Number.isFinite(v.x + v.y + v.z)) return 'bone ' + k + ' not finite'; }
       c.body.obj.updateMatrixWorld(true); const s = new AG.THREE.Box3().setFromObject(c.body.obj).getSize(new V()); if (Math.max(s.x, s.z) < 18 || s.y < 7) return 'only ' + s.toArray().map((x) => x.toFixed(1)) + ' m';
       if (!g.structures.ruins.chimera.broken) return 'shrine not broken'; return window._taken() > 0 || 'no damage taken';`);
+    await t.step('…and its fight still draws the camera back to take it in (the Chimera keeps the boss camera)', `return (P.bossCam && P.bossK > 0.3) || JSON.stringify({ bossCam: P.bossCam, bossK: P.bossK });`);
     await t.shot('chimera');
     // creatures come and go all game long: whatever a body put on the GPU must go with it (a leak shows as ~9 geometries
     // per creature, over 200 a round; a few may still come from the land streaming in nearby)
