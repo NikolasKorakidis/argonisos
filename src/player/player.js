@@ -41,10 +41,11 @@ const LOOK = { r: 30, speed: 3, low: 0.15, pitch: 1.5, near: 0.8, far: 14 };
 // back, the point it looks at lift metres higher, the view a few degrees wider (fov); and while a boss arrives (focus:
 // where it comes down) it turns to look that way
 const BOSS_CAM = { dist: 13, lift: 2.6, fov: 8, in: 0.9, out: 0.5 };
-// The camera held off what's solid (Patch 25, like Valheim: occlusion.js castCamera): how far over the ground the line to it
+// The camera held off what's solid (Patch 25, like Valheim: occlusion.js castCamera): the sphere swept (r, m; the seated free
+// camera's smaller, low, so it may come down close over the grass and the floors), how far over the ground the line to it
 // keeps (m), how quickly it eases back out once the way clears (1/s; in, it comes at once), and how close to the hero's
 // middle it may come before he is hidden from it, and how far it must go again before he's back (m)
-const CAM = { over: 0.35, out: 3.5, hide: [0.45, 0.6] }, HIDE_LAYER = 6;
+const CAM = { r: 0.25, low: 0.06, over: 0.35, out: 3.5, hide: [0.55, 0.7] }, HIDE_LAYER = 6;
 // Stunned (a boss's roar, a guard broken): no moving, jumping or striking; the hero reels (the big stagger played slow and
 // whole) and sways dazed on his feet, and the view swims: blurred, greyed and wavering (DAZE: its blur in px, how much
 // colour goes and how far it wavers, in degrees), easing in at once and out over its last moments
@@ -329,7 +330,7 @@ export class Player {
     if (L) {
       // the point looked at: moved off the hero, kept over the ground and out of walls (stopped where one stands between)
       target.add(this.lookOff); target.y = Math.max(target.y, this.groundHere(target.x, target.z, target.y) + LOOK.low);
-      const b = target.distanceTo(this.camT) > 0.05 ? this.cast(this.camT, target, LOOK.low * 0.6) : null; if (b !== null) { target.sub(this.camT).setLength(b).add(this.camT); this.lookOff.copy(target).sub(this.camT); }
+      const b = target.distanceTo(this.camT) > 0.05 ? this.cast(this.camT, target, { ground: false, flora: false, r: CAM.low }) : null; if (b !== null) { target.sub(this.camT).setLength(b).add(this.camT); this.lookOff.copy(target).sub(this.camT); }
     }
     const fov = lerp(60 + BOSS_CAM.fov * bk, 50, k); if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
     const off = new THREE.Vector3(Math.sin(this.camYaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(this.camYaw) * Math.cos(pitch)).multiplyScalar(dist);
@@ -345,15 +346,15 @@ export class Player {
     // solid thing between (CAM: a hill, a wall, a roof, a rock, a trunk; never leaves): in at once when something comes
     // between, out again eased as it clears, so brushing past a trunk is one quick step in and a glide back, no pumping
     if (jump || !this.camW) (this.camW ||= new THREE.Vector3()).copy(want); else this.camW.lerp(want, Math.min(1, dt * lerp(14 + k * 10, 6, L)));
-    const dir = this.camW.clone().sub(target), full = dir.length(), free = this.cast(target, this.camW, lerp(CAM.over, LOOK.low * 0.6, L)) ?? full;
+    const dir = this.camW.clone().sub(target), full = dir.length(), free = this.cast(target, this.camW, { over: lerp(CAM.over, LOOK.low * 0.6, L), r: lerp(CAM.r, CAM.low, L) }) ?? full;
     this.camD = jump || this.camD === undefined ? free : Math.min(free, full, this.camD + Math.max(0, full - this.camD) * e(CAM.out));
     this.camFree = free; camera.position.copy(target).addScaledVector(dir.normalize(), this.camD);
     const wf = waterAt(camera.position.x, camera.position.z); if (wf > 0.05 && camera.position.y < wf + 0.2 && target.y > wf) camera.position.y = wf + 0.2;   // (pulled in over the water, still over it)
     camera.lookAt(dir.negate().add(target)); this.hideNear();   // (at a point beyond the one looked at, the same way: pulled right in to it, the view still faces the hero's way)
   }
   // How far the camera may go from a towards b before it meets something solid (occlusion.js castCamera, installed as
-  // camCast), or null with no world to cast against (the creator, a test that turns it off)
-  cast(a, b, over) { const f = this.camCast?.(a, b, over === undefined ? undefined : { over }); return f === undefined || f === null ? null : f; }
+  // camCast; o its options), or null with no world to cast against (the creator, a test that turns it off)
+  cast(a, b, o) { const f = this.camCast?.(a, b, o); return f === undefined || f === null ? null : f; }
   // The camera pulled right in to the hero (backed into a corner): his body would fill the view from inside, so it is
   // drawn only into the sun's shadows meanwhile (the trees' shadow layer, vegetation.js SHADE_LAYER: the shadow cameras
   // see it, the view doesn't), and back once the camera is clear of him (CAM.hide: in and out, metres from his middle)

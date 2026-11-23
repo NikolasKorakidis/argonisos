@@ -118,7 +118,9 @@ export class Occlusion {
 //     them), and the rock of a cave you're in (structures.js rayBlock)
 //   the ground (groundAt, with the buildings' cuts and banks), the sphere's middle kept o.over metres over it
 // A shape the start is already inside is let be: the camera isn't held at the hero by a wall he leans on.
-// o: { r, over } to change the sphere's radius or the ground's margin (the seated free camera comes down over the grass).
+// o: { r, over, ground, flora } to change the sphere's radius or the ground's margin (the seated free camera comes down over
+// the grass), or leave out the ground (ground: false) or the trees and rocks (flora: false): the point the free camera looks
+// at, kept over the ground where it is, goes where you take it among the trees, only walls and roofs stopping it as before.
 export const CAST = { r: 0.25, over: 0.35, trunk: 4.5, titan: 26, roofUp: 2.5, floorDown: 1, step: 0.35 };
 const TRUNK = SPECIES.map((s) => (s.name === 'titan' ? CAST.titan : CAST.trunk));
 let T0 = 0, T1 = 1;
@@ -136,6 +138,7 @@ export function castCamera(g, a, b, o = {}) {
   const mx = a.x + dx / 2, mz = a.z + dz / 2, half = Math.hypot(dx, dz) / 2;
   // the collider grid's cylinders
   for (const c of g.colliders.near(mx, mz, half + R + 1)) {
+    if (o.flora === false && c.ref?.sp !== undefined) continue;
     const y0 = c.y ?? -1e9, y1 = c.h !== undefined ? y0 + c.h : c.ref?.sp !== undefined ? y0 + TRUNK[c.ref.sp] * (c.ref.s || 1) : 1e9;
     T0 = 0; T1 = best; if (inCircle(a.x, a.z, dx, dz, c.x, c.z, c.r + R) && within(a.y, dy, y0 - R, y1 + R) && entered(best)) best = T0;
   }
@@ -161,7 +164,7 @@ export function castCamera(g, a, b, o = {}) {
   // a cave's rock (marched in its own field: a ray, the sphere's radius taken off where it meets)
   const rock = S?.rayBlock?.(a, b); if (rock !== null && rock !== undefined) best = Math.min(best, Math.max(0, (rock - R) / len));
   // the ground, sampled along the way (and halved down to where it meets), under the start allowed for: a hero lying low
-  const over = Math.min(o.over ?? CAST.over, a.y - groundAt(a.x, a.z) - 0.05), n = Math.ceil((len * best) / CAST.step);
+  const over = Math.min(o.over ?? CAST.over, a.y - groundAt(a.x, a.z) - 0.05), n = o.ground === false ? 0 : Math.ceil((len * best) / CAST.step);
   for (let i = 1, prev = 0; i <= n; i++) {
     const t = (best * i) / n; _ca.set(a.x + dx * t, a.y + dy * t, a.z + dz * t); if (_ca.y >= groundAt(_ca.x, _ca.z) + over) { prev = t; continue; }
     let lo = prev, hi = t; for (let k = 0; k < 5; k++) { const m = (lo + hi) / 2; _ca.set(a.x + dx * m, a.y + dy * m, a.z + dz * m); if (_ca.y >= groundAt(_ca.x, _ca.z) + over) lo = m; else hi = m; }
