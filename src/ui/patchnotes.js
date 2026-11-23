@@ -14,6 +14,11 @@ export const PATCHES = [
         '<b>If the graphics card drops the picture</b> (its driver resets or it runs out of memory), the game saves, says so, and picks up again when the picture comes back, or offers to reload, instead of freezing.',
         '<b>The performance overlay (F3)</b> now also shows the graphics card\'s own time, its memory and the game\'s, how often the resolution changed, the fire\'s shadow and the river\'s reflections; <b>F4</b> copies a full report you can paste to us.',
       ] },
+      { t: 'Sound', icon: 'lyre', items: [
+        '<b>Music all the while you\'re in a land.</b> Each land\'s music now plays the whole time you are in it, on and on with no gaps, instead of once as you arrive and then minutes of silence, and it fades into the next land\'s as you cross over. It is also a little quieter, so it sits behind the world. <b>By night the meadows have the title\'s theme</b>, fading in at dusk and back to their own music at dawn. The boss fights, your home by the fire, the story, the climb up Olympos, the caves and the shore at dawn and dusk keep their own music as before.',
+        '<b>No birdsong in the rain.</b> The birds fall silent as the rain starts and sing again once it stops; the wind and the thunder carry on.',
+        'Your footsteps are half as loud, and the wind a little quieter.',
+      ] },
       { t: 'The pack', icon: 'gear', items: [
         '<b>Ten slots on the hotbar.</b> The hotbar now has ten slots, on the keys 1 to 9 and 0, and the pack is ten wide: 40 slots instead of 32. Your saved pack comes across as you left it, everything in its row and its place along it, the hotbar too, with the new slots empty at the end of each row.',
         '<b>Break down what you made.</b> Shift and right-click a crafted tool, weapon, shield or piece of armour in your pack to break it down for half of each of its materials, rounded down but at least one of each. It asks first, so a slip of the mouse costs nothing; take off what you are wearing before you break it down. Arrows go ten at a time. A plain right-click still uses or equips, as before.',
