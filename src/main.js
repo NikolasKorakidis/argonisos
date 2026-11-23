@@ -21,7 +21,7 @@ import { SPECIES, STRIDE } from './world/flora.js';
 import { colliders } from './world/colliders.js';
 import { input, endFrame, hit, down } from './input.js';
 import { Player } from './player/player.js';
-import { Inventory } from './game/inventory.js';
+import { Inventory, COLS, hotKey } from './game/inventory.js';
 import { ITEMS } from './game/items.js';
 import { cutTerrain, updateCuts } from './world/groundcut.js';
 import { LIGHT_U } from './world/trees.js';
@@ -90,7 +90,7 @@ function respawn() {
   const bed = S.bed || SPAWN; player.revive(bed.x, bed.z); snapWeather();
   hud.toast('Zeus lifts you up again. <b>Zeus\'s Favour</b> carries you for a while.');
 }
-// hotbar: 1-8 use the item in that slot (equip a tool or weapon, eat food)
+// hotbar: 1-9 and 0 use the item in that slot (equip a tool or weapon, eat food)
 hud.onUse = (i) => useSlot(i);
 function useSlot(i) {
   const s = inv.slots[i]; if (!s) return; const d = ITEMS[s.id];
@@ -185,7 +185,7 @@ function loop() {
   const pauseKey = hit('KeyP') || (hit('Escape') && performance.now() - (game.pausedAt || 0) > 400);   // (the Esc that just paused us via the mouse release doesn't unpause)
   if (game.started && pauseKey && !hud.open && !game.map?.open && !game.owl?.open && !game.owl?.reading && !game.buildMenu?.open && !(game.build?.sel && !game.paused)) game.pause(!game.paused);
   if (!busy && !game.buildMenu?.open && (hit('Tab') || hit('KeyI') || (hit('Escape') && hud.open))) hud.toggle();
-  if (!busy && !input.uiOpen) for (let k = 1; k <= 8; k++) if (hit('Digit' + k)) useSlot(k - 1);
+  if (!busy && !input.uiOpen) for (let k = 0; k < COLS; k++) if (hit('Digit' + hotKey(k))) useSlot(k);   // (0 is the tenth)
   if (hit('F3')) setPerfOverlay(!SETTINGS.perf);
   if (hit('F4') && PERF.on) copyPerf(renderer).then((ok) => hud.toast(ok ? 'Performance report copied: paste it to us' : 'Could not copy: the report is in the browser\'s console (F12)'));
   if (S.debug !== PERF.on) { S.debug = GPU.on = PERF.on; $('dbg').classList.toggle('hidden', !S.debug); }   // (the overlay and the old debug line together)

@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { loadPack, bake } from '../assets.js';
 import { ITEMS } from './items.js';
+import { regrid } from './inventory.js';
 import { SKILLS, BASE } from '../player/stats.js';
 
 const KEY = 'argonisos.world.v1', BAK = KEY + '.bak', LOST = 'argonisos.saveLost';
@@ -61,7 +62,7 @@ function loadSave(g, d) {
   if (d.S.guide) Object.assign(g.guide.st, d.S.guide);
   if (S.trial?.fight) { (S.trial.paid ||= {})[S.trial.fight] = true; delete S.trial.fight; }   // (saved mid-fight: the beast is gone, its tribute still on the altar, trial.js)
   // the pack and the hero
-  g.inv.load({ slots: d.inv.slots || [], seen: d.inv.seen || [] });   // (seen keeps more than items: '@workbench'; inventory.js leaves out unknown slots)
+  g.inv.load({ slots: regrid(d.inv.slots || [], d.inv.cols || 8), seen: d.inv.seen || [] });   // (seen keeps more than items: '@workbench'; inventory.js leaves out unknown slots; a save without cols is from the 8-wide pack, before Patch 25)
   for (const s of g.inv.slots) if (s?.worn && !wearable(s)) delete s.worn;
   const st = d.player.stats || {}; P.stats.health = st.health ?? BASE.health; P.stats.stamina = st.stamina ?? BASE.stamina; P.stats.cond = st.cond || {};
   for (const k of Object.keys(SKILLS)) Object.assign(P.stats.skills[k], st.skills?.[k]);

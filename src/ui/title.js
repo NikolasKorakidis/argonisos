@@ -3,7 +3,7 @@ import { hasSave, clearSave, SAVE_LOST } from '../game/save.js';
 import { input, lock, unlock } from '../input.js';
 import { PATCHES, notesPanel, notesUnread } from './patchnotes.js';
 import { characterCreator } from './creator.js';
-import { SETTINGS, PRESETS, ULTRA_NOTE, RES, applyGraphics, setGraphics, setRes, setVol, setMusic, setSfx, setAmbience, setSens, setCalmFlash, setFocusBlur, SHAKES, setShake, setPerfOverlay, toggleFullscreen, isFullscreen, onFullscreenChange } from './settings.js';
+import { SETTINGS, PRESETS, ULTRA_NOTE, RES, applyGraphics, setGraphics, setRes, setVol, setMusic, setSfx, setAmbience, setSens, setCalmFlash, setFocusBlur, setColour, PIXELS, setPixel, SHAKES, setShake, setPerfOverlay, toggleFullscreen, isFullscreen, onFullscreenChange } from './settings.js';
 // which build this is (the commit and date the deploy stamps into index.html), so we can tell what GitHub Pages is serving
 const BUILD = document.querySelector('meta[name=build]')?.content || '';
 
@@ -57,6 +57,8 @@ export function pauseMenu(g) {
     <p class="hint gfxNote hidden">${ULTRA_NOTE}</p>
     <div class="set"><span>Resolution</span><div class="seg" id="sRes">${RES.map(([v, l]) => `<button data-v="${v}">${l}</button>`).join('')}</div></div>
     <div class="set"><span>Focus blur</span><button class="btn small" id="sFocus"></button></div>
+    <div class="set"><span>Colour</span><input type="range" id="sCol" min="0" max="100"></div>
+    <div class="set"><span>Pixel texture</span><div class="seg" id="sPix">${PIXELS.map(([v, l]) => `<button data-v="${v}">${l}</button>`).join('')}</div></div>
     <div class="set"><span>Volume</span><input type="range" id="sVol" min="0" max="100"></div>
     <div class="set"><span>Effects</span><input type="range" id="sSfx" min="0" max="100"></div>
     <div class="set"><span>Ambience</span><input type="range" id="sAmb" min="0" max="100"></div>
@@ -65,14 +67,14 @@ export function pauseMenu(g) {
     <div class="set"><span>Reduce flashing</span><button class="btn small" id="sCalm"></button></div>
     <div class="set"><span>Camera shake</span><div class="seg" id="sShake">${SHAKES.map(([v, l]) => `<button data-v="${v}">${l}</button>`).join('')}</div></div>
     <div class="set"><span>Performance overlay <small>(F3)</small></span><button class="btn small" id="sPerf"></button></div>
-    <p class="hint">Esc or P pauses · in fullscreen, hold Esc to leave it · the world saves itself every minute</p></div></div>`;
+    <p class="hint">Esc or P pauses · F11 for fullscreen, where Esc still pauses: hold it to leave · the world saves itself every minute</p></div></div>`;
   document.body.appendChild(pm);
   const sync = () => {
     pm.querySelector('#sFs').textContent = isFullscreen() ? 'On' : 'Off'; const tf = document.querySelector('#tFs b'); if (tf) tf.textContent = isFullscreen() ? 'Exit Fullscreen' : 'Fullscreen';
     pm.querySelectorAll('#sGfx button').forEach((b) => b.classList.toggle('on', b.dataset.v === SETTINGS.graphics)); pm.querySelector('.gfxNote').classList.toggle('hidden', SETTINGS.graphics !== 'ultra');
     pm.querySelectorAll('#sRes button').forEach((b) => b.classList.toggle('on', +b.dataset.v === SETTINGS.res));
     pm.querySelector('#sCalm').textContent = SETTINGS.calmFlash ? 'On' : 'Off'; pm.querySelector('#sFocus').textContent = SETTINGS.focusBlur ? 'On' : 'Off'; pm.querySelector('#sPerf').textContent = SETTINGS.perf ? 'On' : 'Off'; pm.querySelectorAll('#sShake button').forEach((b) => b.classList.toggle('on', b.dataset.v === SETTINGS.shake));
-    pm.querySelector('#sVol').value = Math.round(SETTINGS.volume * 100); pm.querySelector('#sMus').value = Math.round(SETTINGS.music * 100); pm.querySelector('#sSfx').value = Math.round(SETTINGS.sfx * 100); pm.querySelector('#sAmb').value = Math.round(SETTINGS.ambience * 100); pm.querySelector('#sSens').value = Math.round(SETTINGS.sens * 100);
+    pm.querySelector('#sVol').value = Math.round(SETTINGS.volume * 100); pm.querySelector('#sMus').value = Math.round(SETTINGS.music * 100); pm.querySelector('#sSfx').value = Math.round(SETTINGS.sfx * 100); pm.querySelector('#sAmb').value = Math.round(SETTINGS.ambience * 100); pm.querySelector('#sSens').value = Math.round(SETTINGS.sens * 100); pm.querySelector('#sCol').value = Math.round(SETTINGS.colour * 100); pm.querySelectorAll('#sPix button').forEach((b) => b.classList.toggle('on', b.dataset.v === SETTINGS.pixel));
   };
   pm.querySelector('#sFs').onclick = async () => { await toggleFullscreen((m) => g.hud.toast(m)); sync(); };
   // (to or from Ultra, its view distances come only with a reload: settings.js)
@@ -83,6 +85,8 @@ export function pauseMenu(g) {
   pm.querySelector('#sSfx').oninput = (e) => setSfx(e.target.value / 100);
   pm.querySelector('#sAmb').oninput = (e) => setAmbience(e.target.value / 100);
   pm.querySelector('#sSens').oninput = (e) => setSens(e.target.value / 100);
+  pm.querySelector('#sCol').oninput = (e) => setColour(e.target.value / 100);
+  pm.querySelector('#sPix').onclick = (e) => { const b = e.target.closest('button'); if (b) { setPixel(b.dataset.v); sync(); } };
   pm.querySelector('#sCalm').onclick = () => { setCalmFlash(!SETTINGS.calmFlash); sync(); };
   pm.querySelector('#sFocus').onclick = () => { setFocusBlur(!SETTINGS.focusBlur); sync(); };
   pm.querySelector('#sPerf').onclick = () => { setPerfOverlay(!SETTINGS.perf); sync(); };
@@ -102,4 +106,14 @@ export function pauseMenu(g) {
   pm.querySelector('#pNew').onclick = () => { if (!confirm('Start a new trial? Your saved world will be lost.')) return; clearSave(); g.save = () => false; location.reload(); };
   // the browser keeps the Esc press that frees the mouse to itself, so losing the mouse mid-game pauses too
   input.onUnlock = () => { if (g.started && !g.paused && !input.uiOpen && !g.player.dead) g.pause(true); };
+  // Fullscreen asks for Esc for itself (Keyboard Lock, settings.js), so a tap pauses and you hold it to leave. Where the
+  // browser won't give it (Safari, Firefox), Esc leaves fullscreen and the page never hears it, and with the pack or the
+  // map open the mouse is free already: so leaving fullscreen mid-game pauses as well, any panel closed so the menu shows
+  document.addEventListener('fullscreenchange', () => {
+    if (document.fullscreenElement || !g.started || g.paused || g.player.dead || g.owl?.open || g.owl?.reading) return;
+    if (g.hud.open) g.hud.toggle(false); if (g.map?.open) g.map.toggle(false); if (g.buildMenu?.open) g.buildMenu.toggle(false);
+    g.pause(true);
+  });
+  // F11 makes the game's own fullscreen, the one Esc can still pause in, rather than the browser's
+  addEventListener('keydown', (e) => { if (e.code !== 'F11' || e.repeat) return; e.preventDefault(); toggleFullscreen((m) => g.hud.toast(m)).then(sync); });
 }

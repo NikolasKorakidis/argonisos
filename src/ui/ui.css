@@ -148,11 +148,14 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 
 /* ---------- inventory ---------- */
 #invPanel { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:20; display:flex; gap:14px; align-items:flex-start; }
-#invPanel .grid { display:grid; grid-template-columns:repeat(8, 56px); gap:5px; }
+#invPanel .grid { display:grid; grid-template-columns:repeat(10, 56px); gap:5px; }
+#packPnl .pbody { width:605px; box-sizing:content-box; }   /* the grid's own width (10 × 56px and the gaps): nothing written under it may widen the panel */
 #invPanel .grid .slot { width:56px; height:56px; font-size:34px; cursor:grab; }
 #invPanel .grid .row0 { margin-bottom:6px; }
 #invPanel .hot { grid-column:1 / -1; height:4px; margin:2px 0 4px; background:var(--dots); opacity:.45; }
-#invInfo { min-height:46px; margin-top:12px; font-size:14px; color:var(--ink2); line-height:1.35; }
+#invInfo { height:calc(4 * 1.35em); overflow-y:auto; margin-top:12px; padding-right:4px; font-size:14px; color:var(--ink2); line-height:1.35; overflow-wrap:anywhere; }   /* four lines, whatever the item: a longer one scrolls, the panel never grows */
+#invInfo .brk { font-size:12.5px; } #invInfo .kbd { height:16px; min-width:18px; font-size:10px; }
+#invHelp { margin:8px 0 0; font-size:12.5px; color:var(--ink2); } #invHelp .kbd { height:17px; min-width:18px; font-size:10px; }
 #invInfo b { color:var(--ink); font-family:Stoix,Cinzel,serif; }
 #invFoot { display:flex; align-items:center; gap:14px; margin-top:12px; font-size:13px; color:var(--ink2); }
 #invFoot .ic { font-size:18px; }
@@ -187,7 +190,7 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
 #craftDetail .big { width:72px; height:72px; font-size:50px; display:flex; align-items:center; justify-content:center; border-radius:50%;
                     background:radial-gradient(circle at 50% 40%, var(--clay3), var(--clay) 60%, var(--clay2)); box-shadow:0 0 0 1px var(--glaze), 0 0 0 4px rgba(244,230,196,.35); }
 #craftDetail h3 { margin:0; font:700 18px Stoix,Cinzel,serif; }
-#craftDetail .desc { margin:0; color:var(--ink2); font-size:13.5px; line-height:1.4; }
+#craftDetail .desc { margin:0; color:var(--ink2); font-size:13.5px; line-height:1.4; max-height:calc(5 * 1.4em); overflow-y:auto; }   /* (a long description scrolls rather than stretching the panel) */
 #craftDetail .cost { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
 #craftDetail .cost .slot { width:48px; height:48px; font-size:30px; }
 #craftDetail .cost .slot.no em { color:#ffb4a4; }
@@ -223,6 +226,9 @@ svg.ic { width:1em; height:1em; display:inline-block; vertical-align:-.14em; fle
            -webkit-mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); mask:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent); }
 #compass::after { content:""; position:absolute; left:10%; right:10%; bottom:0; height:2px; background:var(--clay); opacity:.8; }
 #compass > i { position:absolute; left:50%; bottom:2px; margin-left:-5px; border:5px solid transparent; border-bottom-color:var(--gold); }
+/* the ten-slot hotbar reaches ~590px from the left: in a window too narrow for the compass to clear it, the compass (and the
+   boss's bar and the toasts under it) drop below the hotbar, still centred */
+@media (max-width:1680px) { #compass { top:104px; } #bossBar { top:158px; } #toasts { top:164px; } }
 #compassStrip { position:absolute; inset:0; }
 #compassStrip span { position:absolute; top:9px; transform:translateX(-50%); font:700 15px Cinzel,serif; color:var(--cream); white-space:nowrap; }
 #compassStrip span.mid { top:8px; color:rgba(244,230,196,.5); }
@@ -376,6 +382,7 @@ body.titling > *:not(canvas):not(#title):not(#notes):not(#creator), body.creatin
 #dropAsk { position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:45; width:min(360px,90vw); text-align:center; }
 #dropAsk .big { width:64px; height:64px; margin:0 auto 6px; font-size:44px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:radial-gradient(circle at 50% 40%, var(--clay3), var(--clay) 60%, var(--clay2)); box-shadow:0 0 0 1px var(--glaze); }
 #dropAsk h3 { margin:0 0 4px; font:700 18px Stoix,Cinzel,serif; } #dropAsk p { margin:0 0 14px; color:var(--ink2); font-size:14px; }
+#dropAsk p .back { display:block; margin-top:6px; color:var(--ink); font-weight:700; } #dropAsk p .back .ic { font-size:20px; vertical-align:-.3em; }
 #dropAsk .btns { display:flex; gap:10px; justify-content:center; } #dropAsk .btn { min-width:120px; }
 /* the game UI isn't a document: dragging items mustn't select text */
 #hud, #invPanel, #craftPanel, #chestPanel, #pause, #devPanel .pnl > h2, #title, #owlTalk, #dropAsk, #mapPanel { -webkit-user-select:none; user-select:none; }

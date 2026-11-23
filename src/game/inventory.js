@@ -1,8 +1,20 @@
-// The player's pack: 8 × 4 slots, the top row doubling as the hotbar (keys 1-8), and a carry limit of 300.
+// The player's pack: 10 × 4 slots, the top row doubling as the hotbar (keys 1-9 and 0), and a carry limit of 300.
 // Over the limit you can still walk, but not run. Equipment (hands, armour) stays in its slot and is flagged as worn.
 import { ITEMS } from './items.js';
 
-export const COLS = 8, ROWS = 4, MAX_WEIGHT = 300;
+export const COLS = 10, ROWS = 4, MAX_WEIGHT = 300;
+// The number key of each hotbar slot: 1 to 9, then 0 for the tenth, as on the keyboard's top row
+export const hotKey = (i) => String((i + 1) % 10);
+// A pack saved by a version with another width (8 until Patch 25) laid out on this one: each thing keeps its row and its
+// place along it, so the hotbar stays as it was and the new slots at the end of each row come empty; anything a narrower
+// layout can't hold where it was goes into the first free slot below the hotbar (none can be lost: the pack only grows)
+export function regrid(slots, cols = COLS) {
+  if (cols === COLS) return slots;
+  const out = new Array(Math.max(COLS * ROWS, slots.length)).fill(null), rest = [];
+  slots.forEach((s, i) => { if (!s) return; const r = Math.floor(i / cols), c = i % cols; if (c < COLS && r < ROWS && !out[r * COLS + c]) out[r * COLS + c] = s; else rest.push(s); });
+  for (const s of rest) { let e = out.indexOf(null, COLS); if (e < 0) e = out.indexOf(null); if (e < 0) { e = out.length; out.push(null); } out[e] = s; }
+  return out;
+}
 
 export class Inventory {
   constructor() {
@@ -45,7 +57,7 @@ export class Inventory {
     else { this.slots[a] = B; this.slots[b] = A; }
     this.onChange?.();
   }
-  // halve a pile into the first empty slot of the pack (below the hotbar: a split pile of stones has no place on keys 1-8),
+  // halve a pile into the first empty slot of the pack (below the hotbar: a split pile of stones has no place on the number keys),
   // the hotbar only when the pack is full
   split(a) {
     const A = this.slots[a]; if (!A || A.n < 2) return; let e = this.slots.indexOf(null, COLS); if (e < 0) e = this.slots.indexOf(null); if (e < 0) return;
@@ -70,6 +82,6 @@ export class Inventory {
   }
   drop(i) { const s = this.slots[i]; this.slots[i] = null; this.onChange?.(); return s; }
   worn(slot) { return this.slots.find((s) => s?.worn === slot) || null; }
-  toJSON() { return { slots: this.slots, seen: [...this.seen] }; }
+  toJSON() { return { slots: this.slots, cols: COLS, seen: [...this.seen] }; }   // (cols: how wide the pack was, for regrid)
   load(o) { this.slots = o.slots.map((s) => (s && ITEMS[s.id] ? s : null)); while (this.slots.length < COLS * ROWS) this.slots.push(null); this.seen = new Set(o.seen); this.onChange?.(); }
 }

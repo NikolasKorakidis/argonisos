@@ -2,7 +2,7 @@
 import { icon, glyph } from './icons.js';
 import { ITEMS } from '../game/items.js';
 import { usedIn } from '../game/crafting.js';
-import { COLS, ROWS, MAX_WEIGHT } from '../game/inventory.js';
+import { COLS, ROWS, MAX_WEIGHT, hotKey } from '../game/inventory.js';
 import { CONDITIONS, SKILLS, xpForLevel, Stats } from '../player/stats.js';
 import { input, lock, unlock } from '../input.js';
 import { sound } from '../audio/sound.js';
@@ -31,7 +31,8 @@ export class HUD {
     this.inv = null; this.player = null; this.last = {}; this.open = false; this.sel = -1; this.skillQ = []; this.skillT = null;
     // inventory screen
     const p = el('div'); p.id = 'invPanel'; p.className = 'hidden';
-    p.innerHTML = `<div class="pnl"><h2>Pack</h2><button class="xbtn" id="invX">${icon('close')}</button><div class="pbody"><div class="grid" id="invGrid"></div><div id="invInfo"></div><div id="invFoot"></div></div></div>
+    p.innerHTML = `<div class="pnl" id="packPnl"><h2>Pack</h2><button class="xbtn" id="invX">${icon('close')}</button><div class="pbody"><div class="grid" id="invGrid"></div><div id="invInfo"></div><div id="invFoot"></div>
+      <p id="invHelp">Drag to move · <span class="kbd">Shift</span> split · <span class="kbd">RMB</span> use · <span class="kbd">Shift</span>+<span class="kbd">RMB</span> break down · drag out to drop</p></div></div>
       <div class="pnl" id="charPanel"><h2>Hero</h2><div class="pbody" id="charBody"></div></div>`;
     document.body.appendChild(p); this.panel = p;
     $('invX').onclick = () => this.toggle(false);
@@ -136,9 +137,9 @@ export class HUD {
     if (this.open) this.drawChar();
   }
   slotHTML(s, i, hot) {
-    if (!s) return `<div class="slot empty" data-i="${i}">${hot ? `<b>${i + 1}</b>` : ''}</div>`;
+    if (!s) return `<div class="slot empty" data-i="${i}">${hot ? `<b>${hotKey(i)}</b>` : ''}</div>`;
     const d = ITEMS[s.id], dur = d.dur ? `<div class="dur"><i style="width:${(s.dur / d.dur) * 100}%;${s.dur / d.dur < 0.25 ? 'background:#d65446' : ''}"></i></div>` : '';
-    return `<div class="slot${s.worn ? ' worn' : ''}${i === this.sel ? ' sel' : ''}${d.dur && s.dur <= 0 ? ' broken' : ''}" data-i="${i}" title="${d.name}${d.dur && s.dur <= 0 ? ' (broken: mend it at a workbench)' : ''}">${hot ? `<b>${i + 1}</b>` : ''}${icon(d.icon || 'stone')}${s.n > 1 ? `<em>${s.n}</em>` : ''}${dur}</div>`;
+    return `<div class="slot${s.worn ? ' worn' : ''}${i === this.sel ? ' sel' : ''}${d.dur && s.dur <= 0 ? ' broken' : ''}" data-i="${i}" title="${d.name}${d.dur && s.dur <= 0 ? ' (broken: mend it at a workbench)' : ''}">${hot ? `<b>${hotKey(i)}</b>` : ''}${icon(d.icon || 'stone')}${s.n > 1 ? `<em>${s.n}</em>` : ''}${dur}</div>`;
   }
   drawHotbar() { $('hotbar').innerHTML = this.inv.slots.slice(0, COLS).map((s, i) => this.slotHTML(s, i, true)).join(''); }
   // ---- inventory screen
@@ -148,17 +149,30 @@ export class HUD {
     this.onToggle?.(on);
     if (on) this.fit();
   }
-  // Ask before throwing something away
-  confirmDrop(i) {
+  // Ask before something in the pack is lost: a small box over it, Enter or the button to go on, Esc or "Keep it" not to.
+  // yes runs only if the slot still holds the same thing (it may have been moved or used meanwhile)
+  ask(i, title, text, verb, yes) {
     const s = this.inv.slots[i]; if (!s) return; const d = ITEMS[s.id];
     let box = document.getElementById('dropAsk'); if (!box) { box = el('div', 'pnl'); box.id = 'dropAsk'; document.body.appendChild(box); }
-    box.innerHTML = `<div class="pbody"><div class="big">${icon(d.icon || 'stone')}</div><h3>Drop ${d.name}${s.n > 1 ? ` ×${s.n}` : ''}?</h3><p>${s.worn ? 'You are using it. ' : ''}It will lie on the ground where you stand.</p>
-      <div class="btns"><button class="btn ghost" id="dropNo">Keep it</button><button class="btn" id="dropYes">Drop</button></div></div>`;
+    box.innerHTML = `<div class="pbody"><div class="big">${icon(d.icon || 'stone')}</div><h3>${title}</h3><p>${text}</p>
+      <div class="btns"><button class="btn ghost" id="dropNo">Keep it</button><button class="btn" id="dropYes">${verb}</button></div></div>`;
     box.classList.remove('hidden');
-    const done = (yes) => { box.classList.add('hidden'); removeEventListener('keydown', key, true); if (yes && this.inv.slots[i] === s) this.onDrop?.(i); this.drawGrid(); };
+    const done = (ok) => { box.classList.add('hidden'); removeEventListener('keydown', key, true); if (ok && this.inv.slots[i] === s) yes(); this.drawGrid(); };
     const key = (e) => { if (e.code === 'Escape') { e.stopPropagation(); done(false); } if (e.code === 'Enter') done(true); };
     addEventListener('keydown', key, true);
     box.querySelector('#dropNo').onclick = () => done(false); box.querySelector('#dropYes').onclick = () => done(true);
+  }
+  // Ask before throwing something away
+  confirmDrop(i) {
+    const s = this.inv.slots[i]; if (!s) return; const d = ITEMS[s.id];
+    this.ask(i, `Drop ${d.name}${s.n > 1 ? ` ×${s.n}` : ''}?`, `${s.worn ? 'You are using it. ' : ''}It will lie on the ground where you stand.`, 'Drop', () => this.onDrop?.(i));
+  }
+  // Break a crafted thing down for half its materials (Shift + right-click: crafting.js salvage), asked first, since a
+  // slip of the mouse would cost the gear; worn things and plain materials are refused with a word why
+  confirmBreak(i) {
+    const b = this.salvage?.(i); if (!b) return; if (typeof b === 'string') { this.toast(b); return; }
+    const d = ITEMS[b.id], back = Object.entries(b.mats).map(([m, k]) => `${icon(ITEMS[m].icon || 'stone')} ${k} ${ITEMS[m].name.toLowerCase()}`).join(', ');
+    this.ask(i, `Break down ${d.name}${b.n > 1 ? ` ×${b.n}` : ''}?`, `You get back half of what it took: <span class="back">${back}</span>`, 'Break down', () => this.onBreak?.(i));
   }
   // Scale the screen down to fit small windows
   fit() {
@@ -170,7 +184,7 @@ export class HUD {
     const g = $('invGrid'); let drag = null, ghost = null;
     g.addEventListener('pointerdown', (e) => {
       const s = e.target.closest('.slot'); if (!s) return; const i = +s.dataset.i;
-      if (e.button === 2) { this.onUse?.(i); return; }                                  // right click: use / equip / eat
+      if (e.button === 2) { if (e.shiftKey) this.confirmBreak(i); else this.onUse?.(i); return; }   // right click: use / equip / eat; with Shift: break down
       if (this.onSlotClick?.(i)) { this.drawGrid(); return; }                          // a chest is open: click moves things across
       if (!this.inv.slots[i]) return;
       if (e.shiftKey) { this.inv.split(i); return; }
@@ -194,7 +208,7 @@ export class HUD {
     const g = $('invGrid'), sl = this.inv.slots;
     g.innerHTML = sl.slice(0, COLS).map((s, i) => this.slotHTML(s, i, true)).join('') + '<div class="hot"></div>' + sl.slice(COLS).map((s, i) => this.slotHTML(s, i + COLS, false)).join('');
     const w = this.inv.weight;
-    $('invFoot').innerHTML = `${icon('weight')}<span class="${w > MAX_WEIGHT ? 'heavy' : ''}">${w.toFixed(1)} / ${MAX_WEIGHT}</span><button class="btn small" id="invSort" title="Merge piles and sort by name (the hotbar and worn things stay put)">Sort Items</button><span style="margin-left:auto">Drag to move · <span class="kbd">Shift</span> split · <span class="kbd">RMB</span> use · drag out to drop</span>`;
+    $('invFoot').innerHTML = `${icon('weight')}<span class="${w > MAX_WEIGHT ? 'heavy' : ''}">${w.toFixed(1)} / ${MAX_WEIGHT}</span><button class="btn small" id="invSort" title="Merge piles and sort by name (the hotbar and worn things stay put)">Sort Items</button>`;
     void ROWS;
   }
   info(i) {
@@ -207,7 +221,8 @@ export class HUD {
     if (d.dur) bits.push(`Durability ${Math.ceil(s.dur)} / ${d.dur}`);
     bits.push(`Weight ${(d.weight * s.n).toFixed(1)}`);
     const use = usedIn(s.id);   // (what it goes into: crafting.js)
-    box.innerHTML = `<b>${d.name}</b>${s.n > 1 ? ` ×${s.n}` : ''}<br>${d.note ? d.note + '<br>' : ''}${bits.join(' · ')}${use.length ? `<br><i>Used in ${use.slice(0, 6).join(', ')}${use.length > 6 ? ` and ${use.length - 6} more` : ''}</i>` : ''}`;
+    box.innerHTML = `<b>${d.name}</b>${s.n > 1 ? ` ×${s.n}` : ''}<br>${d.note ? d.note + '<br>' : ''}${bits.join(' · ')}${use.length ? `<br><i>Used in ${use.slice(0, 6).join(', ')}${use.length > 6 ? ` and ${use.length - 6} more` : ''}</i>` : ''}${this.breakable?.(s.id) ? '<br><i class="brk"><span class="kbd">Shift</span>+<span class="kbd">RMB</span> break down for half its materials</i>' : ''}`;
+    box.scrollTop = 0; box.title = box.scrollHeight > box.clientHeight + 1 ? box.textContent : '';   // (the box keeps its size: a long one scrolls, and says it all on hover too)
   }
   drawChar() {
     const S = this.player.stats, armor = this.armor?.() ?? 0;
