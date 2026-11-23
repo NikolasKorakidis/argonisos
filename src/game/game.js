@@ -10,6 +10,7 @@ import { Combat } from './combat.js';
 import { Acts } from './acts.js';
 import { Structures } from '../world/structures.js';
 import { Trial } from './trial.js';
+import { Loot } from './loot.js';
 import { SITES } from '../world/sites.js';
 import { WorldMap } from '../ui/map.js';
 import { Owl } from './owl.js';
@@ -42,6 +43,7 @@ export function installGame(g) {
   g.structures = new Structures(g);
   g.creatures = new Creatures(g);
   g.trial = new Trial(g);
+  g.loot = new Loot(g);   // (the jars, baskets and woodpiles left about the places: E searches them)
   g.map = new WorldMap(g);
   g.owl = new Owl(g);
   g.guide = new Guide(g);
@@ -146,6 +148,7 @@ export function installGame(g) {
     if (p) { const K = KINDS[p.kind], id = p.kind === 'drop' ? p.item : K.item, n = p.kind === 'drop' ? p.n : 1, name = ITEMS[id]?.name ?? String(id); return { kind: 'pickup', p, label: `${K.verb || 'Pick up'} ${K.label || name}${n > 1 ? ` ×${n}` : ''}`, sub: K.label ? `+${K.n[0]} ${name.toLowerCase()}` : '' }; }
     const ow = g.owl.interactable(player.pos) || g.graves.interactable(player.pos); if (ow) return ow;
     const tr = g.trial.interactable(player.pos); if (tr) return tr;
+    const lt = g.loot.interactable(player.pos, f); if (lt) return lt;
     const s = g.build?.interactable?.(player.pos, f); if (s) return s;
     const tb = g.harvest.tomatoBush(); if (tb) return { label: tb.ready ? 'Pick tomatoes' : 'No ripe tomatoes', sub: 'Tomato bush', use: () => g.harvest.pickTomatoes(tb) };
     const t = g.harvest.fruitTree(); if (t) return { kind: 'fruit', t, label: t.ready ? `Pick ${t.fruit[0]}s` : 'Picked clean' };
@@ -216,7 +219,7 @@ export function installGame(g) {
   };
   g.lateUpdate = (dt) => { updateFx(dt, camera); updateLights(); g.occlusion.update(dt); };
   hud.onToggle = (on) => { if (on) g.crafting.open(); };
-  g.loaded = load(g);
+  g.loaded = load(g); g.loot.sync();   // (what the save says was searched, shown emptied)
   // (a save that couldn't be read: load kept a copy of it beside the save and starts the page again on a new trial,
   // saving nothing meanwhile; the title screen and a toast say so, save.js)
   if (g.loaded === 'lost') { g.loaded = false; g.save = () => false; location.reload(); }

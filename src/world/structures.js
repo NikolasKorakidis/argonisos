@@ -127,7 +127,7 @@ for (const [k, o] of Object.entries({ marble: [0.72, 0.28], paving: [0.7, 0.3], 
 for (const k of ['rock', 'dark']) stony(SMAT[k], { wet: false });   // (the boulders and cairns in the island's stone, as the streamed rocks are: rock.js)
 // the water of Olympos's spring (mtnSpot): clear, dark and glossy over the basin's stone
 const SPRING = new THREE.MeshStandardMaterial({ color: 0x2c4a52, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.82, envMapIntensity: 0.9 });
-const _nav = new THREE.Vector3();
+const _nav = new THREE.Vector3(), _tip = new THREE.Vector3();
 // the bones of the beasts' meals (other packs' models, site-pack.js), and the pack's pieces grown over with moss (the shrine's)
 const BONES = ['all/pnb-swamp-marshland/sm-prop-bone-pile-01', 'all/pnb-swamp-marshland/sm-prop-bone-ribcage-01', 'all/pnb-swamp-marshland/sm-prop-bone-pile-02', 'all/pnb-swamp-marshland/sm-prop-bone-skull-01'];
 // the pieces a Giant's cave takes from the packs (site-pack.js loads them): his fire, the bones of big beasts, skulls
@@ -195,12 +195,15 @@ function boulder(P, x, y, z, s, mat = SMAT.rock, sx = 1, sy = 1, sz = 1) {
   for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i); const h = Math.sin(v.x * 12.99 + v.y * 78.23 + v.z * 37.72 + x * 3.1) * 43758.55, f = 0.75 + 0.35 * Math.sin(v.x * 3.1 + x) * Math.cos(v.y * 2.7 + z) + (h - Math.floor(h) - 0.5) * 0.1; p.setXYZ(i, v.x * f * sx, v.y * f * sy, v.z * f * sz); }
   g.computeVertexNormals(); g.scale(s, s, s).translate(x, y, z); P.push([g, mat]);
 }
-function mergeByMat(P) {
-  const by = new Map(); for (const [g, m] of P) { const gg = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(gg.attributes)) if (!['position', 'normal', 'uv'].includes(k)) gg.deleteAttribute(k); if (!gg.attributes.uv) gg.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(gg.attributes.position.count * 2), 2)); (by.get(m) || by.set(m, []).get(m)).push(gg); }
-  const out = []; for (const [m, gs] of by) { let total = 0; for (const g of gs) total += g.attributes.position.count; const pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uv = new Float32Array(total * 2); let o = 0;
-    for (const g of gs) { pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3); uv.set(g.attributes.uv.array, o * 2); o += g.attributes.position.count; }
+// (stores: the props worth searching among them, Structures.stash: where each one's triangles went is kept, so it can be
+// emptied in place)
+function mergeByMat(P, stores = []) {
+  const mine = new Map(); for (const st of stores) for (const g of st.geos) mine.set(g, st);
+  const by = new Map(); for (const [g, m] of P) { const gg = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(gg.attributes)) if (!['position', 'normal', 'uv'].includes(k)) gg.deleteAttribute(k); if (!gg.attributes.uv) gg.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(gg.attributes.position.count * 2), 2)); (by.get(m) || by.set(m, []).get(m)).push(gg); if (mine.has(g)) mine.set(gg, mine.get(g)); }
+  const out = []; for (const [m, gs] of by) { let total = 0; for (const g of gs) total += g.attributes.position.count; const pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uv = new Float32Array(total * 2), runs = []; let o = 0;
+    for (const g of gs) { pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3); uv.set(g.attributes.uv.array, o * 2); const st = mine.get(g); if (st) { const q = { o, n: g.attributes.position.count }; (st.ranges ||= []).push(q); runs.push(q); } o += g.attributes.position.count; }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.computeBoundingSphere();
-    const mesh = new THREE.Mesh(g, m); mesh.castShadow = mesh.receiveShadow = true; out.push(mesh); }
+    const mesh = new THREE.Mesh(g, m); mesh.castShadow = mesh.receiveShadow = true; out.push(mesh); for (const q of runs) q.mesh = mesh; }
   return out;
 }
 
@@ -333,6 +336,7 @@ export class Structures {
   constructor(g) {
     this.g = g; this.groups = []; this.solids = []; this.tops = []; this.roofs = []; this.uses = []; this.lights = []; this.flames = [];
     this.anchors = [];   // (the edges of the holes in the old houses' roofs, where a roof patch snaps: anchorsNear)
+    this.stores = [];    // (the props worth searching: stash, empty; game/loot.js)
     this.build();
   }
   // register helpers (site-local → world, sites only rotate about y)
@@ -357,12 +361,13 @@ export class Structures {
   }
   w(ctx, x, z, y = 0) { const c = Math.cos(ctx.rot), sn = Math.sin(ctx.rot); return new THREE.Vector3(ctx.s.x + x * c + z * sn, ctx.s.y + y, ctx.s.z - x * sn + z * c); }
   solid(ctx, x, z, r, h = 99, y = 0) { const p = this.w(ctx, x, z, y); this.solids.push({ x: p.x, z: p.z, r, y: p.y, h }); }
-  wall(ctx, x0, z0, x1, z1, h, t = 0.45) { const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.ceil(len / (t * 1.4))); for (let i = 0; i <= n; i++) this.solid(ctx, x0 + (x1 - x0) * (i / n), z0 + (z1 - z0) * (i / n), t, h); }
+  // (a wall's posts are marked so: nothing is searched through one, game/loot.js)
+  wall(ctx, x0, z0, x1, z1, h, t = 0.45) { const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.ceil(len / (t * 1.4))); for (let i = 0; i <= n; i++) { this.solid(ctx, x0 + (x1 - x0) * (i / n), z0 + (z1 - z0) * (i / n), t, h); this.solids[this.solids.length - 1].wall = true; } }
   stepTops(ctx, w, d, n, sh) { for (let i = 0; i < n; i++) { const k = (n - i) * 0.6; this.top(ctx, -w / 2 - k, w / 2 + k, -d / 2 - k, d / 2 + k, (i + 1) * sh); } }
   top(ctx, x0, x1, z0, z1, y, roof) { const t = { ctx, x0, x1, z0, z1, y }; (roof ? this.roofs : this.tops).push(t); }
   // merge the site's parts, and keep grass off its footprint (a circle of radius r, or a w × d rectangle)
   finish(ctx, foot) {
-    for (const m of mergeByMat(ctx.P)) ctx.grp.add(m);
+    for (const m of mergeByMat(ctx.P, this.stores.filter((st) => st.ctx === ctx))) ctx.grp.add(m);
     if (!foot) return; const key = 'site' + ctx.s.x.toFixed(0) + ctx.s.z.toFixed(0);
     if (foot.r) clearGrass(key, { x: ctx.s.x, z: ctx.s.z, r: foot.r });
     else { const c = this.w(ctx, foot.x || 0, foot.z || 0); clearGrass(key, { x: c.x, z: c.z, hw: foot.w / 2, hd: foot.d / 2, rot: ctx.rot }); }
@@ -718,9 +723,10 @@ export class Structures {
       this.solid(ctx, wx, wz, 0.9); }
     { const ox = -3.0, oz = D / 2 + 1.6; P.push([new THREE.SphereGeometry(0.85, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2).translate(ox, 0.3, oz), GMAT.clay], [new THREE.CylinderGeometry(0.95, 1.0, 0.3, 14).translate(ox, 0.15, oz), SMAT.stone], [new THREE.CircleGeometry(0.3, 10, 0, Math.PI).translate(ox, 0.3, oz + 0.86), GMAT.ash]);
       P.push([new THREE.CylinderGeometry(0.35, 0.38, 0.18, 12).translate(ox + 1.1, 0.09, oz + 0.3), SMAT.stone]); this.solid(ctx, ox, oz, 1.0); }
-    for (const [x, z, sc] of [[-3.3, D / 2 + 4.5, 0.9], [-2.4, D / 2 + 5.2, 0.8], [-3.4, D / 2 + 5.4, 0.75]]) { pithos(P, x, -0.35, z, sc); this.solid(ctx, x, z, 0.5 * sc); }
-    amphora(P, 3.4, 0, D / 2 + 0.7, 1.0, 0.18); amphora(P, 3.0, 0.22, D / 2 + 1.3, 1.0, 1.45, 0.8); amphora(P, 3.55, 0, D / 2 + 1.1, 0.9);
-    firewood(P, -2.2, 0, D / 2 + 0.55, Math.PI / 2, 1.3, 3); cartWheel(P, W / 2 - 0.25, 0, D / 2 + 4.6, Math.PI / 2, 0.18);
+    const sub = { sub: 'Abandoned house' };   // (the jars and the firewood worth searching: stash)
+    for (const [x, z, sc] of [[-3.3, D / 2 + 4.5, 0.9], [-2.4, D / 2 + 5.2, 0.8], [-3.4, D / 2 + 5.4, 0.75]]) { this.stash(ctx, 'pithos', () => pithos(P, x, -0.35, z, sc), x, z, 0, sub); this.solid(ctx, x, z, 0.5 * sc); }
+    for (const [x, y, z, sc, tilt, rot] of [[3.4, 0, D / 2 + 0.7, 1.0, 0.18, 0], [3.0, 0.22, D / 2 + 1.3, 1.0, 1.45, 0.8], [3.55, 0, D / 2 + 1.1, 0.9, 0, 0]]) this.stash(ctx, 'amphora', () => amphora(P, x, y, z, sc, tilt, rot), x, z, 0, sub);
+    this.stash(ctx, 'woodpile', () => firewood(P, -2.2, 0, D / 2 + 0.55, Math.PI / 2, 1.3, 3), -2.2, D / 2 + 0.55, 0, sub); cartWheel(P, W / 2 - 0.25, 0, D / 2 + 4.6, Math.PI / 2, 0.18);
     this.plant(ctx, 'olive', 1, 2.6, 0, D / 2 + 5.4, 1.15); this.solid(ctx, 2.6, D / 2 + 5.4, 0.6);
     this.finish(ctx, { w: W + 1.5, d: D + 1.5 });
   }
@@ -739,6 +745,63 @@ export class Structures {
     }
     this.solid(ctx, x, z, 0.55, 0.75, y);
     this.uses.push({ kind: 'loot', at: this.w(ctx, x, z, y), r: 1.8, lid, ...use });
+  }
+  // ---- The props worth searching (game/loot.js: what each kind holds, and E there): a jar, a basket, a woodpile... put on
+  // the site's list as ever (parts: what it pushed, or a function that pushes it), at x, y, z in the site's frame, found by
+  // looking within r of it (none without anything to show: a pack piece missing). Its
+  // id is its site and where it stands in it (the town and the farmhouse by name, being one each), never its place in a
+  // list, so what a save remembers doesn't move when props are added. finish() notes where its triangles went in the
+  // merged meshes (ranges), so emptying it moves its own corners there and costs no mesh of its own; a far version
+  // (farVersion) keeps it as it stood, too small to tell from there.
+  stash(ctx, kind, parts, x, z, y = 0, { r = 1.2, sub } = {}) {
+    if (typeof parts === 'function') { const n = ctx.P.length; parts(); parts = ctx.P.slice(n); } if (!parts.length) return null;
+    const s = ctx.s, key = s.kind === 'house' || s.kind === 'town' ? s.kind : `${s.kind}@${Math.round(s.x)},${Math.round(s.z)}`;
+    const st = { id: `${key}:${kind}@${x.toFixed(1)},${z.toFixed(1)}`, kind, ctx, geos: parts.map((p) => p[0]), at: this.w(ctx, x, z, y), r, sub };
+    this.stores.push(st); return st;
+  }
+  // A store searched, shown so (look, loot.js KINDS): 'pile', a woodpile down to its bottom layer of logs; 'heap', sacks
+  // and straw, what lies across the top taken and the rest slumped half down, empty; 'pot', jars and amphorae, what was
+  // stacked on them gone and each one standing tipped over on its side (outward, from a group); 'basket', the same with
+  // what lay in it gone. Done on its pieces: the runs of triangles joined by shared corners (a jar and each handle, every
+  // log), those on the ground each carrying what rests within its outline (its handles, lid or contents).
+  empty(st, look) {
+    if (st.emptied) return; st.emptied = true; if (!look || !st.ranges) return;
+    const parts = [];
+    for (const { mesh, o, n } of st.ranges) {
+      const p = mesh.geometry.attributes.position.array, par = Int32Array.from({ length: n }, (_, i) => i), seen = new Map();
+      const find = (i) => { while (par[i] !== i) i = par[i] = par[par[i]]; return i; };
+      for (let i = 0; i < n; i++) { const j = (o + i) * 3, k = `${Math.round(p[j] * 500)},${Math.round(p[j + 1] * 500)},${Math.round(p[j + 2] * 500)}`, s = seen.get(k); if (s === undefined) seen.set(k, i); else par[find(i)] = find(s); }
+      for (let i = 0; i < n; i += 3) { par[find(i + 1)] = find(i); par[find(i + 2)] = find(i); }
+      const by = new Map();
+      for (let i = 0; i < n; i++) { const r = find(i), j = (o + i) * 3; let q = by.get(r); if (!q) by.set(r, (q = { mesh, vs: [], b: [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity] })); q.vs.push(o + i); for (let c = 0; c < 3; c++) { q.b[c] = Math.min(q.b[c], p[j + c]); q.b[c + 3] = Math.max(q.b[c + 3], p[j + c]); } }
+      parts.push(...by.values());
+    }
+    if (!parts.length) return;
+    const y0 = Math.min(...parts.map((q) => q.b[1])), h = Math.max(...parts.map((q) => q.b[4])) - y0, eps = Math.max(0.03, h * 0.08), wide = (q) => Math.max(q.b[3] - q.b[0], q.b[5] - q.b[2]);
+    const ground = parts.filter((q) => q.b[1] <= y0 + eps), groups = new Map(ground.map((q) => [q, [q]])), gone = [];
+    for (const u of parts) {
+      if (groups.has(u)) continue; if (look === 'pile') { gone.push(u); continue; }
+      // (its host: the smallest piece on the ground whose outline, a little grown, holds this one's)
+      const host = ground.filter((q) => { const m = Math.max(0.05, 0.15 * wide(q)); return u.b[0] >= q.b[0] - m && u.b[3] <= q.b[3] + m && u.b[2] >= q.b[2] - m && u.b[5] <= q.b[5] + m; }).sort((a, b) => wide(a) - wide(b))[0];
+      const inner = host && Math.abs((u.b[0] + u.b[3] - host.b[0] - host.b[3]) / 2) < 0.35 * (host.b[3] - host.b[0]) && Math.abs((u.b[2] + u.b[5] - host.b[2] - host.b[5]) / 2) < 0.35 * (host.b[5] - host.b[2]);
+      if (!host || (look === 'basket' && inner)) gone.push(u); else groups.get(host).push(u);
+    }
+    const touched = new Set(), mid = (q) => [(q.b[0] + q.b[3]) / 2, (q.b[2] + q.b[5]) / 2];
+    const move = (list, f) => { for (const q of list) { const P = q.mesh.geometry.attributes.position.array, N = q.mesh.geometry.attributes.normal.array; touched.add(q.mesh); for (const v of q.vs) f(P, N, v * 3); } };
+    for (const q of gone) { const j = q.vs[0] * 3, [x, y, z] = [q.mesh.geometry.attributes.position.array[j], q.mesh.geometry.attributes.position.array[j + 1], q.mesh.geometry.attributes.position.array[j + 2]]; move([q], (P, N, i) => { P[i] = x; P[i + 1] = y; P[i + 2] = z; }); }   // (each piece taken folded to a point: nothing left to draw)
+    const r = seeded([...st.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 2147483646, 7) + 1), all = ground.reduce((a, q) => [a[0] + mid(q)[0] / ground.length, a[1] + mid(q)[1] / ground.length], [0, 0]);
+    for (const [host, list] of groups) {
+      const [cx, cz] = mid(host), hh = host.b[4] - host.b[1];
+      if (look === 'heap') { move(list, (P, N, i) => { P[i] = cx + (P[i] - cx) * 1.12; P[i + 1] = host.b[1] + (P[i + 1] - host.b[1]) * 0.5; P[i + 2] = cz + (P[i + 2] - cz) * 1.12; }); continue; }
+      if (look === 'pile' || hh < (look === 'basket' ? 0.4 : 0.7) * wide(host)) continue;   // (a tray or a flat dish stays as it lies)
+      // tipped over toward d (from the group's middle, or a way of its own), turned 85° about the level line across d through
+      // a point its own half-width up, so it comes to rest on its side
+      let dx = cx - all[0], dz = cz - all[1]; if (Math.hypot(dx, dz) < 0.1) { const a = r() * Math.PI * 2; dx = Math.cos(a); dz = Math.sin(a); } const l = Math.hypot(dx, dz); dx /= l; dz /= l;
+      const R = wide(host) / 2, py = host.b[1] + R, q = new THREE.Quaternion().setFromAxisAngle(_tip.set(dz, 0, -dx), 1.48), m = new THREE.Matrix4().makeRotationFromQuaternion(q);
+      move(list, (P, N, i) => { _tip.set(P[i] - cx, P[i + 1] - py, P[i + 2] - cz).applyMatrix4(m); P[i] = _tip.x + cx; P[i + 1] = _tip.y + py; P[i + 2] = _tip.z + cz; _tip.set(N[i], N[i + 1], N[i + 2]).applyMatrix4(m); N[i] = _tip.x; N[i + 1] = _tip.y; N[i + 2] = _tip.z; });
+    }
+    for (const { mesh, o, n } of st.ranges) if (touched.has(mesh)) for (const a of [mesh.geometry.attributes.position, mesh.geometry.attributes.normal]) { a.addUpdateRange(o * 3, n * 3); a.needsUpdate = true; }
+    SHADOW.farDirty = true;   // (the far shadow map holds only what stands still: drawn again)
   }
   // ---- A house from the Ancient Empire kit's pieces (site-pack.js: one model each), laid out on the kit's 2.5 m grid the
   // way compose.py lays out the town's whole, but piece by piece so a site can leave out what it likes. o: { x, z (its
@@ -823,15 +886,17 @@ export class Structures {
     put('plStool', 2.2, -2.6, 0.4); jug(P, 2.9, 0.78, -2.6, 1.1); bowl(P, 3.0, 0.78, -2.1);
     pithos(P, -3.05, -0.25, -0.2, 0.7); P.push([new THREE.CylinderGeometry(0.5, 0.6, 0.03, 12).translate(-2.5, 0.035, -0.4), new THREE.MeshStandardMaterial({ color: 0xc9a85a, roughness: 1 })]);   // a cracked jar, its grain spilt
     // the storeroom: its jars, a heap of the roof that fell in, a beam across the breach, straw
-    for (const [x, z, sc] of [[-5.7, 1.2, 0.9], [-5.6, 2.1, 0.8], [-4.4, 1.0, 0.75]]) { pithos(P, x, -0.3, z, sc); this.solid(ctx, x, z, 0.5 * sc); }
-    amphora(P, -5.8, 0, 3.2, 1.0, 1.4, 0.4); amphora(P, -5.5, 0, 4.6, 0.9); put('twStrawBundle', -4.5, 4.7, 0.6);
+    // (these, the woodpile and basket on the porch and the jars in the yard worth searching: stash, game/loot.js)
+    const sub = { sub: 'Abandoned house' }, keep = (kind, k, x, z, rot, sc) => this.stash(ctx, kind, () => put(k, x, z, rot, sc), x, z, 0, sub);
+    for (const [x, z, sc] of [[-5.7, 1.2, 0.9], [-5.6, 2.1, 0.8], [-4.4, 1.0, 0.75]]) { this.stash(ctx, 'pithos', () => pithos(P, x, -0.3, z, sc), x, z, 0, sub); this.solid(ctx, x, z, 0.5 * sc); }
+    this.stash(ctx, 'amphora', () => amphora(P, -5.8, 0, 3.2, 1.0, 1.4, 0.4), -5.8, 3.2, 0, sub); this.stash(ctx, 'amphora', () => amphora(P, -5.5, 0, 4.6, 0.9), -5.5, 4.6, 0, sub); keep('bundle', 'twStrawBundle', -4.5, 4.7, 0.6);
     for (let k = 0; k < 10; k++) boulder(P, rr2(-5.9, -4.2), 0.02, rr2(2.6, 4.2), rr2(0.15, 0.32), SMAT.stone, 1.3, 0.6, 1);
     for (let k = 0; k < 12; k++) P.push([uvBox(0.32, 0.03, 0.4).rotateX(rr2(-0.5, 0.5)).rotateY(rr2(0, 3)).translate(rr2(-6.0, -4.0), 0.05 + rr2(0, 0.2), rr2(2.4, 4.8)), SMAT.tile]);
     P.push([uvBox(0.16, 0.16, 3.0).rotateX(0.5).rotateY(0.15).translate(-5.0, 0.8, 3.4), GMAT.oldWood]); this.solid(ctx, -5.2, 3.6, 0.6, 1.2);
     for (const [z, k] of [[1.3, 1], [2.4, 0.55]]) P.push([uvBox(2.7 * k, 0.16, 0.16).translate(-3.75 - 1.35 * k, STOREY - 0.12, z), GMAT.oldWood]);   // (the last of its roof beams, one broken off)
     for (let k = 0; k < 14; k++) { const t = r(), [x, z] = t < 0.5 ? [-3.75 + rr2(-0.5, 0.6), rr2(3.1, 5.4)] : [rr2(-6.1, -3.9), 5.5 + rr2(-0.5, 0.6)]; boulder(P, x, 0.05, z, rr2(0.14, 0.3), SMAT.stone, 1.3, 0.7, 1); }   // (the fallen walls' stones)
     // the porch: firewood stacked against the storeroom, a basket
-    put('twLogs', -3.2, 1.5, Math.PI / 2, 0.9); this.solid(ctx, -3.2, 1.5, 0.4, 1); put('twBasket', -2.2, 0.9, 0.5, 0.9);
+    keep('woodpile', 'twLogs', -3.2, 1.5, Math.PI / 2, 0.9); this.solid(ctx, -3.2, 1.5, 0.4, 1); keep('basket', 'twBasket', -2.2, 0.9, 0.5, 0.9);
     // the yard's walls: dry stone, a gateway on the south, the south-east fallen half down
     const yz = 9, wall = (a, b, c, d, h, ruin = 0) => { rubble(P, a, b, c, d, h, SMAT.stone, ruin, rr2); this.wall(ctx, a, b, c, d, h * (ruin ? 0.7 : 1), 0.4); };
     wall(-6.25, 5.6, -6.25, yz, 1.0); wall(-6.25, yz, -1.2, yz, 1.0); wall(1.2, yz, 5.5, yz, 1.0, 0.55); wall(5.5, yz, 5.5, 0.6, 1.0); wall(5.5, 0.6, 3.95, 0.6, 1.0);
@@ -842,7 +907,7 @@ export class Structures {
     put('twBench', 4.75, 4.9, Math.PI / 2, 0.9); this.solid(ctx, 4.75, 4.9, 0.5, 0.6);
     put('twWell', 2.3, 7.6, 0.3, 0.75); this.solid(ctx, 2.3, 7.6, 1.2);
     put('twKiln', -4.7, 7.5, 1.2, 0.72); this.solid(ctx, -4.7, 7.5, 0.85, 1.3);
-    for (const [k, x, z, rad, sc] of [['twJars', -2.6, 8.2, 0.6, 0.9], ['twVase', -5.6, 6.1, 0.3, 0.9], ['twJar', -5.0, 6.0, 0.3, 1]]) { put(k, x, z, (x * 7 + z) % 6.3, sc); this.solid(ctx, x, z, rad, 1.2); }
+    for (const [kind, k, x, z, rad, sc] of [['jars', 'twJars', -2.6, 8.2, 0.6, 0.9], ['amphora', 'twVase', -5.6, 6.1, 0.3, 0.9], ['jar', 'twJar', -5.0, 6.0, 0.3, 1]]) { keep(kind, k, x, z, (x * 7 + z) % 6.3, sc); this.solid(ctx, x, z, rad, 1.2); }
     cartWheel(P, 5.2, 0, 1.6, Math.PI / 2, 0.18);
     this.plant(ctx, 'olive', 1, 8.6, 0, 5.2, 0.85); this.solid(ctx, 8.6, 5.2, 0.5);   // (outside the yard's east wall)
     { const c = this.w(ctx, -5, 3); clearGrass('farmWing', { x: c.x, z: c.z, hw: 1.35, hd: 2.65, rot: ctx.rot }); }   // (no grass in the storeroom)
@@ -1109,7 +1174,7 @@ export class Structures {
     else for (let k = 0; k < 10; k++) { const q = (k / 10) * Math.PI * 2; boulder(P, hx + Math.cos(q) * 1.0, hy + 0.12, hz + Math.sin(q) * 1.0, 0.24, SMAT.rock); }
     for (let k = 0; k < 4; k++) P.push([new THREE.CylinderGeometry(0.09, 0.11, 1.2, 6).rotateZ(Math.PI / 2).rotateY(k * 0.8).translate(hx, hy + 0.14, hz), GMAT.ember]);
     this.fire(ctx, hx, hy + 0.25, hz, 1.5); this.flames.push(offeringFire(ctx.grp, hx, hy + 0.3, hz, i, 0x3a3734));
-    firewood(P, hx + 2.4, hy, hz + 1.4, 1.3, 1.6, 4);
+    this.stash(ctx, 'woodpile', () => firewood(P, hx + 2.4, hy, hz + 1.4, 1.3, 1.6, 4), hx + 2.4, hz + 1.4, hy, { sub: 'Giant cave' });   // (his firewood worth taking: game/loot.js)
     // his supper on the spit, turning over the fire on two forked posts
     for (const sx of [-1, 1]) P.push([new THREE.CylinderGeometry(0.07, 0.09, 1.75, 6).translate(hx + sx * 1.3, hy + 0.87, hz), W], [new THREE.ConeGeometry(0.1, 0.3, 5).rotateZ(sx * 0.6).translate(hx + sx * 1.36, hy + 1.8, hz), W]);
     P.push([new THREE.CylinderGeometry(0.045, 0.045, 3.0, 6).rotateZ(Math.PI / 2).translate(hx, hy + 1.68, hz), W]);

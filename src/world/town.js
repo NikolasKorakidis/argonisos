@@ -18,6 +18,11 @@ const HOUSE = {
   twHouseD: { w: 4, d: 2, door: 1, gone: [[0, 3]], roof: 'half' }, twHouseE: { w: 3, d: 2, door: 1, gone: [[2, 1], [3, 1]], roof: 'none' }, twHouseF: { w: 2, d: 2, door: 1, roof: 'full', hole: 0 },
   twShed: { w: 1, d: 1, door: 0, roof: 'full' }, twShell: { w: 3, d: 1, door: 1, gone: [[2, 1], [2, 2]], roof: 'none' },
 };
+// The props left about worth searching (structures.js stash, game/loot.js), by piece: what kind of store each one is.
+// The roadside shrine's jar and vase are offerings and stay, as does the jar the cart broke (put's own `as`, false)
+const STORE = { twJar: 'jar', twJars: 'jars', twVase: 'amphora', twVases: 'amphorae', twBasket: 'basket', twBaskets: 'baskets', twSack: 'sack', twSacks: 'sacks', twStraw: 'straw', twStrawBundle: 'bundle', twLogs: 'woodpile' };
+// what each of the small scenes is called where E is shown (s.v)
+const SPOT = ['Roadside shrine', 'Lost cart', 'Fallen colonnade', 'Shepherd\'s camp', 'Farmer\'s hut', 'Old well', 'Old lookout', 'Vineyard'];
 // a point of a piece (its own lx, lz) placed at x, z turned rot, in the site's frame
 const at = (x, z, rot, lx, lz) => [x + lx * Math.cos(rot) + lz * Math.sin(rot), z - lx * Math.sin(rot) + lz * Math.cos(rot)];
 function wallOf(st, ctx, x, z, rot, a, b, c, d, h = STOREY) { const [x0, z0] = at(x, z, rot, a, b), [x1, z1] = at(x, z, rot, c, d); st.wall(ctx, x0, z0, x1, z1, h, 0.25); }
@@ -59,7 +64,7 @@ function templeRuin(st, ctx, x, z, rot) {
 
 export function buildTown(st, s) {
   const ctx = st.site(s, 0.35), P = ctx.P, rnd = seeded(97), rr = (a, b) => a + rnd() * (b - a);
-  const put = (k, x, z, rot = 0, r = 0, sc = 1, y = 0) => { P.push(...piece(k, x, y, z, rot, sc)); if (r) st.solid(ctx, x, z, r); };
+  const put = (k, x, z, rot = 0, r = 0, sc = 1, y = 0, as = STORE[k]) => { const pk = piece(k, x, y, z, rot, sc); P.push(...pk); if (as) st.stash(ctx, as, pk, x, z, y, { r: Math.max(1.1, r + 0.6), sub: 'Abandoned town' }); if (r) st.solid(ctx, x, z, r); };
   const bare = (key, x, z, hw, hd) => { const c = st.w(ctx, x, z); clearGrass('town' + key, { x: c.x, z: c.z, hw, hd, rot: ctx.rot }); };
   // the streets: paved, crossing at the square (and the grass worn off them)
   for (const sz of [-1, 1]) {
@@ -98,7 +103,7 @@ export function buildTown(st, s) {
     }
   }
   // the smithy's yard: forge, anvil, kiln, logs and straw, a cart left with its shafts down
-  put('twForge', -14, 22.5, 0.3, 1.3); put('twAnvil', -11.4, 20.3, 1.1, 0.5); put('twKiln', -19, 25, 0.8, 1.2); put('twLogs', -11.6, 25.4, 0.4, 0.6); put('twLogs', -12.6, 26.1, 1.6, 0);
+  put('twForge', -14, 22.5, 0.3, 1.3, 1, 0, 'forge'); put('twAnvil', -11.4, 20.3, 1.1, 0.5); put('twKiln', -19, 25, 0.8, 1.2); put('twLogs', -11.6, 25.4, 0.4, 0.6); put('twLogs', -12.6, 26.1, 1.6, 0, 1, 0, 'logs');
   put('twStraw', -20.5, 16.8, 0.2, 0.8); put('twStraw', -22.2, 18.6, 1.1, 0.8); put('twStrawBundle', -18.6, 15.5, 0.5, 0.3); put('twCartB', -8.8, 26.5, 0.7, 1.2); put('twGrind', -16.2, 16.6, 0.4, 0.7);
   put('twSacks', -9.6, 21.8, 1.4, 0.8); put('twJar', -15.8, 19.4, 0, 0.35);
   // the walled garden: two vine pergolas, fruit trees, a fence with its gate gone
@@ -135,21 +140,21 @@ export function buildTown(st, s) {
 // ---- the small scenes about the island: one of eight kinds each (s.v), turned by where it stands
 export function buildSpot(st, s) {
   const ctx = st.site(s, ((s.x * 0.37 + s.z * 0.11) % 6.28 + 6.28) % 6.28), P = ctx.P;
-  const put = (k, x, z, rot = 0, r = 0, sc = 1, y = 0) => { P.push(...piece(k, x, y, z, rot, sc)); if (r) st.solid(ctx, x, z, r); };
+  const put = (k, x, z, rot = 0, r = 0, sc = 1, y = 0, as = STORE[k]) => { const pk = piece(k, x, y, z, rot, sc); P.push(...pk); if (as) st.stash(ctx, as, pk, x, z, y, { r: Math.max(1.1, r + 0.6), sub: SPOT[s.v] }); if (r) st.solid(ctx, x, z, r); };
   const plant = (n, v, x, z, sc, r = 0) => { st.plant(ctx, n, v, x, st.groundY(ctx, x, z), z, sc); if (r) st.solid(ctx, x, z, r); };
   switch (s.v) {
     case 0:   // a roadside shrine: a goddess with her water jar on a pedestal, censers, offerings, two cypresses and a bench
       put('twPlinth', 0, -1, 0, 0.45); put('twStatue', 0, -1, 0, 0, 1, 1.0); put('twCenser', -0.9, -0.3, 0, 0.25); put('twCenser', 0.9, -0.3, 0.5, 0.25);
-      put('twBowl', 0, 0.2, 0, 0, 0.5); put('twVase', -1.4, -1.2, 0.3, 0.35); put('twJar', 1.3, -1.4, 1.2, 0.35); put('twBench', 0, 2.6, Math.PI, 0.6);
+      put('twBowl', 0, 0.2, 0, 0, 0.5); put('twVase', -1.4, -1.2, 0.3, 0.35, 1, 0, false); put('twJar', 1.3, -1.4, 1.2, 0.35, 1, 0, false); put('twBench', 0, 2.6, Math.PI, 0.6);
       plant('cypress', 0, -2.6, -2, 0.9, 0.4); plant('cypress', 1, 2.6, -2, 0.95, 0.4); break;
     case 1:   // a cart lost on the way to market: its load spilt, a sack split open, straw, a broken jar
       put('twCart', 0, 0, 0.3, 1.5); put('twSacks', 1.8, 1.4, 0.8, 0.8); put('twSack', -1.6, 1.8, 1.9, 0.3); put('twBaskets', -1.9, -1.2, 0.5, 0.8);
-      put('twStrawBundle', 2.2, -1.5, 1.4, 0.3); put('twJar', 0.6, 2.6, 2.2, 0.35); plant('broom', 0, -3, 2.5, 1); break;
+      put('twStrawBundle', 2.2, -1.5, 1.4, 0.3); put('twJar', 0.6, 2.6, 2.2, 0.35, 1, 0, false); plant('broom', 0, -3, 2.5, 1); break;
     case 2:   // a fallen colonnade: a column still up, its fellows' drums in the grass, a heap of marble, a broken statue
       put('twColumnBase', -2, -1.5, 0, 0.45); put('twColumn', 0, -1.5, 0, 0.4); put('twColumnBase', 2, -1.5, 0, 0.45); put('twDrum', 1.2, 1.2, 1.3, 0); put('twDrum', -1.8, 1.6, 0.4, 0);
       put('twMarblePile', 3.4, 2, 0.6, 1.2); put('twRubbleA', -3.4, 0.4, 2.1, 0); put('twStatueBroken', -0.6, 3, 2.8, 0.5); plant('myrtle', 1, 4, -1.5, 1.1); break;
     case 3:   // a shepherd's camp: a fire ring with logs, straw stacks, a fence for the flock, baskets and a sack
-      put('twFirepit', 0, 0, 0, 0, 0.5); put('twLogs', 1.3, 0.9, 0.7, 0.4); put('twStraw', -2.6, -1.4, 0.4, 0.8); put('twStraw', -2.4, 1.2, 1.7, 0.8);
+      put('twFirepit', 0, 0, 0, 0, 0.5); put('twLogs', 1.3, 0.9, 0.7, 0.4, 1, 0, 'logs'); put('twStraw', -2.6, -1.4, 0.4, 0.8); put('twStraw', -2.4, 1.2, 1.7, 0.8);
       for (let i = 0; i < 3; i++) put('twFence', 1.5 + i * 2.6, -3, 0, 0); st.wall(ctx, 0.2, -3, 8, -3, 1.4, 0.15);
       put('twBasket', 1.8, -1.4, 0.4, 0.3); put('twSack', -0.8, 1.9, 1.1, 0.3); break;
     case 4:   // a farmer's hut: the shed, a fence, straw, the grinding stone and his handcart
