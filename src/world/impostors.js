@@ -135,7 +135,7 @@ export function bakeImpostors(models) {
   const H = Math.ceil((y + row) / 4) * 4;
   if (!ATLAS.col || ATLAS.h !== H) {
     ATLAS.col?.dispose(); ATLAS.nrm?.dispose();
-    const opt = { minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false, depthBuffer: true };
+    const opt = { minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, generateMipmaps: false, depthBuffer: false };
     ATLAS.col = new THREE.WebGLRenderTarget(W, H, { ...opt, colorSpace: THREE.SRGBColorSpace }); ATLAS.nrm = new THREE.WebGLRenderTarget(W, H, opt); ATLAS.h = H;
   }
   for (const e of E) { e.rect = [e.x / W, e.y / H, e.size / W, e.size / H]; ATLAS.byKey.set(e.key, e); }
@@ -143,8 +143,11 @@ export function bakeImpostors(models) {
   const prev = { rt: renderer.getRenderTarget(), cc: renderer.getClearColor(new THREE.Color()), ca: renderer.getClearAlpha(), sc: renderer.getScissorTest(), vp: renderer.getViewport(new THREE.Vector4()), ac: renderer.autoClear };
   const sc = new THREE.Scene(), cam = new THREE.OrthographicCamera(), maps = new Set();
   renderer.autoClear = false; renderer.setClearColor(0x000000, 0); renderer.setScissorTest(true);
+  // (each pass painted into a target of its own with a depth buffer, then copied into the atlas, which keeps none: the
+  // two depth buffers, 63 MB each on Ultra, were only ever needed while painting)
   for (const [pass, rt] of [[0, ATLAS.col], [1, ATLAS.nrm]]) {
-    renderer.setRenderTarget(rt); renderer.setViewport(0, 0, W, H); renderer.setScissor(0, 0, W, H); renderer.clear();
+    const bake = new THREE.WebGLRenderTarget(W, H, { magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter, generateMipmaps: false, depthBuffer: true, colorSpace: rt.texture.colorSpace });
+    renderer.setRenderTarget(bake); renderer.setViewport(0, 0, W, H); renderer.setScissor(0, 0, W, H); renderer.clear();
     for (const e of E) {
       renderer.setViewport(e.x, e.y, e.size, e.size); renderer.setScissor(e.x, e.y, e.size, e.size);
       for (const [geo, mat] of e.parts) {
@@ -156,6 +159,9 @@ export function bakeImpostors(models) {
         const mesh = new THREE.Mesh(g, m); mesh.frustumCulled = false; sc.add(mesh); renderer.render(sc, cam); sc.remove(mesh); g.dispose();
       }
     }
+    renderer.setRenderTarget(rt); const gl = renderer.getContext(), from = renderer.properties.get(bake).__webglFramebuffer, to = renderer.properties.get(rt).__webglFramebuffer;
+    renderer.state.bindFramebuffer(gl.READ_FRAMEBUFFER, from); renderer.state.bindFramebuffer(gl.DRAW_FRAMEBUFFER, to); renderer.setScissorTest(false);
+    gl.blitFramebuffer(0, 0, W, H, 0, 0, W, H, gl.COLOR_BUFFER_BIT, gl.NEAREST); renderer.state.bindFramebuffer(gl.READ_FRAMEBUFFER, null); renderer.setRenderTarget(null); renderer.setScissorTest(true); bake.dispose();
   }
   // the mipmaps, once each, now that every view is in
   for (const rt of [ATLAS.col, ATLAS.nrm]) { rt.texture.generateMipmaps = true; renderer.setRenderTarget(rt); renderer.render(sc, cam); rt.texture.generateMipmaps = false; }
