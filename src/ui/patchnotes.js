@@ -4,6 +4,19 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-25', name: 'Patch 25', title: 'Steady', date: '23 November 2026',
+    intro: 'Steadier frames on Ultra, by the fire and on big screens, less graphics memory, and a game that survives the graphics card dropping its picture.',
+    sections: [
+      { t: 'Smoother', icon: 'sprint', items: [
+        '<b>Steadier by the fire.</b> Carrying a torch no longer redraws the fire\'s shadows every frame, a camp of two fires no longer swaps its shadows back and forth as you turn, the shadows are drawn from what stands by the fire alone, and the first fire of a visit no longer stutters as you walk up to it.',
+        '<b>Ultra on big screens.</b> Ultra no longer draws more than a 4K picture\'s worth of pixels when it sharpens the picture above your screen\'s own resolution, and while it does it uses four samples of smoothing instead of eight, which looked the same: far less graphics memory, and less work for spray, mist and smoke.',
+        'Less graphics memory and steadier frames everywhere: the pictures of the distant trees and the sky\'s light no longer keep or remake what they don\'t need, and the compass no longer costs a little every frame.',
+        '<b>If the graphics card drops the picture</b> (its driver resets or it runs out of memory), the game saves, says so, and picks up again when the picture comes back, or offers to reload, instead of freezing.',
+        '<b>The performance overlay (F3)</b> now also shows the graphics card\'s own time, its memory and the game\'s, how often the resolution changed, the fire\'s shadow and the river\'s reflections; <b>F4</b> copies a full report you can paste to us.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-24', name: 'Patch 24', title: 'Footwork', date: '21 November 2026',
     intro: 'Surer footing for the hero, rocks that look like stone, a grander Olympos with a smoother path up it, a river falling from it to the sea, and a gentler storm seen from its top.',
     sections: [
