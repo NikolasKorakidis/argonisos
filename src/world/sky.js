@@ -17,9 +17,10 @@ export const DAY_SECONDS = 32 * 60, DAY_FRACTION = 24 / 32;
 // picture is drawn without the post passes: they leave the tone mapping out). The first cut of Patch 20 left the land
 // black but for a pool round the hero, the sky's light a sixth of what it had been: a clear night now reads at about a
 // tenth of the day's brightness in the meadows and the woods (a mean of 25 to 35 of 255 on screen), cloud shuts it out.
-// The Greek reviewer (23 Nov) found that too bright: the moon's and the sky's light now a third less, so a clear night
-// reads about a third darker on screen, the land still dark against the lighter air and the fires all the brighter for it
-export const MOON = { k: 0.72, col: 0xb0bccf, sky: 3.6, skyCol: 0x40547e, ground: 0x2a3242, air: 0x142240, horizon: 0x2a3a5a, exposure: 0.62 };
+// The Greek reviewer (23 Nov) found that too bright: the moon's and the sky's light now little more than half, so a clear
+// night reads about a third darker on screen (with the woods' night air, atmosphere.js AIR), the land still dark against
+// the lighter air and the fires all the brighter for it
+export const MOON = { k: 0.6, col: 0xb0bccf, sky: 3.0, skyCol: 0x40547e, ground: 0x2a3242, air: 0x142240, horizon: 0x2a3a5a, exposure: 0.62 };
 
 export const skyDome = new THREE.Mesh(new THREE.SphereGeometry(5000, 48, 24), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
