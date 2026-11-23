@@ -45,6 +45,13 @@ export const PATCHES = [
         '<b>The camera stays where it is in the Minotaur\'s fight.</b> It no longer draws back and up when he comes: you fight him with the camera you always have. The Chimera\'s fight still draws the camera back to fit the beast in.',
         '<b>Deer are tougher</b>, as hogs became in Patch 21: four or five blows of the Crude Axe instead of one, a fawn two. A well-aimed arrow from hiding still drops one.',
       ] },
+      { t: 'The look', icon: 'sun', items: [
+        '<b>Muted, earthy colour.</b> The world\'s colours are half as strong as before, as in Valheim, while the sun, fire and magic keep their glow and the sky keeps more of its blue. The new <b>Colour</b> slider in the settings sets it anywhere from grey to the old full colour.',
+        '<b>Pixel texture.</b> Rock, bark, planks and the ground now show their detail in small square texels, like the low-resolution textures of Valheim, while the light and shadows on them stay smooth. Choose Off, Mild (the default) or Strong in the settings.',
+        '<b>Darker nights.</b> Moonlit nights are about a third darker. You can still make out the hills and the trees against the sky, and a fire now stands out all the more.',
+        '<b>Only the leaves move in the wind.</b> The wind now stirs only the grass, the flowers and the leaves of trees and bushes. Trunks, branches, columns and ruins stand still, so nothing bends or stretches oddly in a storm. A tree you strike still shakes.',
+        '<b>Bark, planks and petals.</b> Tree trunks have bark with fibres and furrows, each tree its own shade, with moss on the shaded side in the woods. Building pieces show grain along each plank, dark seams, worn edges and a tone of their own, and darken in the rain. The old columns and walls and the hearth\'s stones look like the island\'s rocks, and the meadow flowers have veined petals, deeper in colour at the base.',
+      ] },
     ],
   },
   {
