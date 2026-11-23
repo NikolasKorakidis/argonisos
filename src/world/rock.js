@@ -155,8 +155,9 @@ const FRAG = `#include <color_fragment>
     float m = smoothstep(1.0 - cover, 1.16 - cover, sc.b * 0.6 + fc.b * 0.25 + broad * 0.15 + (up - 0.5) * 0.4 + (clamp(vStoneH, 0.0, 1.5) - 0.6) * 0.3) * smoothstep(0.0, 0.55, up + (fc.b - 0.5) * 0.5);
     vec3 lich = vec3(l0 * (0.82 + 0.3 * fc.g)) * mix(vec3(1.2, 1.17, 0.96), vec3(0.52, 0.86, 0.28), wood);   // (over the cracks: it grows across them)
     c = mix(c, lich, m * mix(0.75, 1.0, wood));
+    float mr = smoothstep(1.0 - cover, 1.16 - cover, s.b * 0.6 + f.b * 0.25 + texture2D(uStoneTex, vStoneP.xz / 17.0 + sd).a * 0.15 + (up - 0.5) * 0.4 + (clamp(vStoneH, 0.0, 1.5) - 0.6) * 0.3) * smoothstep(0.0, 0.55, up + (f.b - 0.5) * 0.5);   // (the lichen from the smooth look, for the relief: from the texels it would step, and the light with it)
     diffuseColor.rgb = c;
-    stoneRelief = (s.g * 0.6 + f.g * 0.5 + seam * 0.4) * near * (1.0 - m * 0.5);
+    stoneRelief = (s.g * 0.6 + f.g * 0.5 + seam * 0.4) * near * (1.0 - mr * 0.5);
   }`;
 // the relief tilts the normal (bump mapping from screen-space derivatives, as the terrain's rock does)
 const BUMP = `#include <normal_fragment_maps>

@@ -175,7 +175,7 @@ const FLOOR = `
       // pale colour under the moon's silver light read as frost or snow among the dark grass
       fc *= (1.0 - 0.3 * smoothstep(-0.02, 0.05, fc.r - fc.g)) * (1.0 - 0.35 * uNight * (1.0 - vRock));
       diffuseColor.rgb = fc;
-      float floorRelief = smoothstep(0.56, 0.74, flr.g) * (0.4 + flr.g * 0.4) * fy * fd;   // (the moss cushions stand up; the roots only darken: thin lines in relief caught the firelight texel by texel)`;
+      float floorRelief = smoothstep(0.56, 0.74, flr.g) * (0.4 + flr.g * 0.4) * fy * fd, fpoolR = smoothstep(0.52, 0.68, flr.a) * fv;   // (the pools' shine from the smooth look too)   // (the moss cushions stand up; the roots only darken: thin lines in relief caught the firelight texel by texel)`;
 export function rockGround(mat) {
   const base = mat.onBeforeCompile;
   mat.onBeforeCompile = (sh, r) => {
@@ -211,7 +211,7 @@ export function rockGround(mat) {
       // (the ground's painterly strokes, main.js groundDetail at a third of a metre's scale, in texels too)
       .replace('#include <map_fragment>', '#ifdef USE_MAP\n diffuseColor *= pixelTex(map, vMapUv, uTexel * 3.0);\n#endif')
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-      roughnessFactor = min(roughnessFactor, mix(1.0, 0.35, fpool));   // (standing water in the marsh's hollows shines)`)
+      roughnessFactor = min(roughnessFactor, mix(1.0, 0.35, fpoolR));   // (standing water in the marsh's hollows shines)`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       {   // the relief tilts the normal (bump mapping from screen-space derivatives)
         vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition), r1 = cross(sy, normal), r2 = cross(normal, sx);

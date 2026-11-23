@@ -35,7 +35,7 @@ export const BARK_TEX = (() => {
   const t = new THREE.DataTexture(d, N, N); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter;
   t.generateMipmaps = true; t.anisotropy = 8; t.needsUpdate = true;
   // (the tone the fibres and furrows give, on average, so it can be divided out and the bark's mean stays its colour)
-  let m = 0; for (let k = 0; k < N * N; k++) { const g = d[k * 4 + 1] / 255, s = Math.min(1, Math.max(0, (g - 0.12) / 0.6)); m += (0.42 + 0.8 * s * s * (3 - 2 * s)) * (0.8 + 0.4 * d[k * 4] / 255); }
+  let m = 0; for (let k = 0; k < N * N; k++) { const g = d[k * 4 + 1] / 255, s = Math.min(1, Math.max(0, (g - 0.45) / 0.5)); m += (0.42 + 0.8 * s * s * (3 - 2 * s)) * (0.8 + 0.4 * d[k * 4] / 255); }
   t.userData.mean = m / (N * N); return t;
 })();
 
@@ -128,7 +128,7 @@ const BARK = `#include <color_fragment>
     vec4 s = texture2D(uBarkTex, vec2(p.z * 0.85, p.y * 0.16)) * aw.x + texture2D(uBarkTex, vec2(p.x * 0.85 + 0.5, p.y * 0.16)) * aw.z + texture2D(uBarkTex, p.xz * 0.85 + 0.25) * aw.y;
     vec2 tk = uTexel / vec2(0.85, 0.16);
     vec4 sc = pixelTex(uBarkTex, vec2(p.z * 0.85, p.y * 0.16), tk) * aw.x + pixelTex(uBarkTex, vec2(p.x * 0.85 + 0.5, p.y * 0.16), tk) * aw.z + pixelTex(uBarkTex, p.xz * 0.85 + 0.25, uTexel / 0.85) * aw.y;
-    float ridge = smoothstep(0.12, 0.72, s.g), ridgeC = smoothstep(0.12, 0.72, sc.g), tone = (0.42 + 0.8 * ridgeC) * (0.8 + 0.4 * sc.r) / uBarkMean;
+    float ridge = smoothstep(0.45, 0.95, s.g), ridgeC = smoothstep(0.45, 0.95, sc.g), tone = (0.42 + 0.8 * ridgeC) * (0.8 + 0.4 * sc.r) / uBarkMean;
     vec3 c = c0 * mix(1.0, tone, near * bark);
     // each tree its own hue and shade: a little warmer or greyer, lighter or darker
     c *= mix(vec3(1.0), mix(vec3(1.06, 1.0, 0.92), vec3(0.95, 0.99, 1.06), fract(vWdS * 3.7)) * (0.86 + 0.28 * fract(vWdS * 7.3)), bark);
@@ -139,9 +139,10 @@ const BARK = `#include <color_fragment>
     float side = smoothstep(-0.35, 0.75, dot(wn.xz, vec2(-0.53, 0.848))) * 0.75 + 0.25 * smoothstep(0.3, 0.9, wn.y), foot = 1.0 - smoothstep(0.4, 3.5, vWdO.y);
     float cover = wood * (0.32 * side + 0.38 * foot * (0.5 + 0.5 * side));
     float m = smoothstep(1.0 - cover, 1.18 - cover, sc.b * 0.75 + sc.a * 0.35 + (1.0 - ridgeC) * 0.12) * bark;
+    float mr = smoothstep(1.0 - cover, 1.18 - cover, s.b * 0.75 + s.a * 0.35 + (1.0 - ridge) * 0.12) * bark;   // (the same from the smooth look, for the relief: from the texels it would step, and the light with it)
     c = mix(c, vec3(l0) * vec3(0.62, 1.0, 0.34) * 1.05, m * 0.85);
     diffuseColor.rgb = c;
-    wdRelief = (ridge * 0.9 + s.r * 0.25) * near * bark * (1.0 - m * 0.6);
+    wdRelief = (ridge * 0.9 + s.r * 0.25) * near * bark * (1.0 - mr * 0.6);
   }`;
 const WOOD = `#include <color_fragment>
   float wdRelief = 0.0;
@@ -158,7 +159,8 @@ const WOOD = `#include <color_fragment>
     float tone = (1.0 - 0.32 * gc.x) * (0.92 + 0.16 * gc.y) / (1.0 - 0.32 * 0.14 * aa.x);   // (divided by its average: the plank keeps its colour)
     // the plank's edges: the distance to the nearest one on this face (on a face one of the three is nil: the next is it)
     vec3 e = max(H.xyz - abs(L), 0.0); float e1 = min(e.x, min(e.y, e.z)), e3 = max(e.x, max(e.y, e.z)), e2 = e.x + e.y + e.z - e1 - e3;
-    float seam = 1.0 - smoothstep(0.0, max(0.008, fwidth(e2) * 1.5), e2), wear = (1.0 - smoothstep(0.0, 0.045, e2)) * smoothstep(0.35, 0.7, wdN(vec2(along * 6.0 + hs * 13.0, (Ls.y + Ls.z) * 20.0)));
+    float seam = 1.0 - smoothstep(0.0, max(0.008, fwidth(e2) * 1.5), e2), ew = 1.0 - smoothstep(0.0, 0.045, e2);
+    float wear = ew * smoothstep(0.35, 0.7, wdN(vec2(along * 6.0 + hs * 13.0, (Ls.y + Ls.z) * 20.0))), wearR = ew * smoothstep(0.35, 0.7, wdN(vec2(L.x * 6.0 + hs * 13.0, (L.y + L.z) * 20.0)));   // (wearR: the smooth one, for the relief)
     // each piece its own tone (from where it stands) and each plank a little apart from its neighbours
     float pt = (0.88 + 0.24 * vWdS) * (0.93 + 0.14 * fract(hs * 11.3));
     vec3 c = c0 * mix(1.0, tone, near * wood) * mix(1.0, pt, wood) * mix(vec3(1.0), mix(vec3(1.04, 1.0, 0.94), vec3(0.97, 1.0, 1.04), fract(hs * 2.9 + vWdS)), wood);
@@ -166,7 +168,7 @@ const WOOD = `#include <color_fragment>
     c = mix(c, vec3(l * 1.3) * vec3(1.06, 1.0, 0.9), wear * 0.55 * wood * near);   // (worn: paler and greyer)
     c *= 1.0 - 0.5 * seam * wood;
     diffuseColor.rgb = c;
-    wdRelief = (late * 0.6 + (fib - 0.5) * 0.25 - seam * 0.9 - wear * 0.3) * near * wood;
+    wdRelief = (late * 0.6 + (fib - 0.5) * 0.25 - seam * 0.9 - wearR * 0.3) * near * wood;
   }`;
 // the relief tilts the normal (bump mapping from screen-space derivatives, as the stone's does)
 const BUMP = (k) => `#include <normal_fragment_maps>
