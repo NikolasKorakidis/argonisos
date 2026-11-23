@@ -75,7 +75,7 @@ function applyColour() {
 }
 export function setColour(v) { SETTINGS.colour = v; store(); applyColour(); }
 // Pixel texture: the surfaces' own detail in texels, as Valheim's low-resolution textures (render/pixel.js), off, mild
-// (seven to the metre) or strong (four); the light on them, the shadows and the bloom stay smooth either way
+// (sixteen to the metre) or strong (eight); the light on them, the shadows and the bloom stay smooth either way
 export const PIXELS = [['off', 'Off'], ['mild', 'Mild'], ['strong', 'Strong']];
 const applyPixel = () => { PIXEL_U.uTexel.value = PIXEL[SETTINGS.pixel] ?? PIXEL.mild; };
 export function setPixel(v) { SETTINGS.pixel = v; store(); applyPixel(); }
