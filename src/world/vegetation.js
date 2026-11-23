@@ -175,7 +175,7 @@ TREE_BUILDERS.tomato = (v) => { const P = []; for (let k = 0; k < 5; k++) P.push
   return P; };
 TREE_BUILDERS.driftwood = (v) => [[lying(0.12, 0.07, 2.2 + (v % 3) * 0.6), PALE], [new THREE.CylinderGeometry(0.03, 0.05, 0.7, 5).rotateZ(Math.PI / 2).rotateY(0.6).translate(0.5, 0.12, 0.25), PALE]];
 
-// ---- materials with the near/far cut-off (wind sway stays as in the base material)
+// ---- materials with the near/far cut-off (on top of the base material's own: the bark, the stone, the leaves' wind)
 const VEG_U = { uVegC: { value: new THREE.Vector2() }, uNearR: { value: NEAR_R }, uMidR: { value: MID_R }, uImpR: { value: RING_R }, uFarR: { value: FAR_R }, uShadeR: { value: 0 } };
 const cutMats = new Map();
 // Between bands a tree doesn't pop from one version to the next: across a few metres each pixel is drawn by exactly

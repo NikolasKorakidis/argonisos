@@ -143,7 +143,8 @@ const COVERED = '{ vec2 tc = (wp - uOrigin) / uSize; fade *= step(0.0, min(tc.x,
     const fm = new THREE.MeshStandardMaterial({ roughness: 0.7 }); fm.defines = { SUN_SHADOW_CHEAP: '' };
     fm.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, grassU);
-      sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight;\n` + sh.vertexShader.replace('#include <begin_vertex>', `
+      sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight; attribute vec3 aPet; varying vec3 vPet;\n` + sh.vertexShader.replace('#include <begin_vertex>', `
+        vPet = aPet;
         vec3 ip = instanceMatrix[3].xyz;
         vec2 wp = ip.xz + uTile * floor((uCenter - ip.xz) / uTile + 0.5);
         vec4 hm = texture2D(uHeight, (wp - uOrigin) / uSize);
@@ -156,17 +157,24 @@ const COVERED = '{ vec2 tc = (wp - uOrigin) / uSize; fade *= step(0.0, min(tc.x,
         p.x += sin(uWind * 1.9 + wp.x * 0.35 + wp.y * 0.22) * bend;
         p.xz += uWindDir * max(position.y, 0.0) * uWindStr * 0.18;   // (nodding downwind)
         vec3 transformed = p + vec3(wp.x, hm.r - 0.03, wp.y) - ip;`);
+      // a petal (aPet: across it, from its foot to its tip, and whether it is one) deeper and a little warmer at its foot,
+      // paler at its tip, with fine veins fanning up it from the foot; the veins only where they are wider than a pixel
+      // (the Greek reviewer, 23 Nov: the flowers as worked over as the rocks)
+      sh.fragmentShader = 'varying vec3 vPet;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+        if (vPet.z > 0.5) { float fa = (vPet.x - 0.5) / (0.18 + vPet.y), vw = abs(fract(fa * 3.0 + 0.5) - 0.5), fw = fwidth(fa * 3.0);
+          float vein = (1.0 - smoothstep(0.0, 0.08 + fw, vw)) * (1.0 - smoothstep(0.15, 0.4, fw)) * smoothstep(0.05, 0.25, vPet.y) * (1.0 - smoothstep(0.75, 1.0, vPet.y));
+          diffuseColor.rgb *= mix(vec3(0.66, 0.6, 0.62), vec3(1.06), smoothstep(0.0, 0.85, vPet.y)) * (1.0 - 0.16 * vein); }`);
     };
     const im = new THREE.InstancedMesh(geo, fm, count), mm = new THREE.Matrix4(), cc = new THREE.Color();
     for (let i = 0; i < count; i++) { im.setMatrixAt(i, mm.makeTranslation(rr(0, T), 0, rr(0, T))); im.setColorAt(i, cc.setHex(colors[Math.floor(rand() * colors.length)])); }
     im.frustumCulled = false; im.receiveShadow = true; im.userData.max = count; GRASS.flowers.push(im); scene.add(im); return im;
   };
-  const merge = (parts) => {           // tiny manual merge of non-indexed geometries with vertex colours
-    const pos = [], nor = [], col = [];
-    for (const [g, c] of parts) { const gg = g.index ? g.toNonIndexed() : g; gg.computeVertexNormals(); const cl = new THREE.Color(c);
-      pos.push(...gg.attributes.position.array); nor.push(...gg.attributes.normal.array); for (let i = 0; i < gg.attributes.position.count; i++) col.push(cl.r, cl.g, cl.b); }
+  const merge = (parts) => {           // tiny manual merge of non-indexed geometries with vertex colours (and where a petal's corners lie on it: aPet)
+    const pos = [], nor = [], col = [], pet = [];
+    for (const [g, c, petal] of parts) { const gg = g.index ? g.toNonIndexed() : g; gg.computeVertexNormals(); const cl = new THREE.Color(c), uv = gg.attributes.uv;
+      pos.push(...gg.attributes.position.array); nor.push(...gg.attributes.normal.array); for (let i = 0; i < gg.attributes.position.count; i++) { col.push(cl.r, cl.g, cl.b); pet.push(petal ? uv.getX(i) : 0, petal ? uv.getY(i) : 0, petal ? 1 : 0); } }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); return g;
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setAttribute('aPet', new THREE.Float32BufferAttribute(pet, 3)); return g;
   };
   // Daisy / poppy head: flat petal disc + centre on a stem (instance colour tints the petals)
   // Petal rings: each petal a tapered quad tilted up (cup) around a centre, on a stem with two leaves
@@ -175,7 +183,7 @@ const COVERED = '{ vec2 tc = (wp - uOrigin) / uSize; fade *= step(0.0, min(tc.x,
     for (let i = 0; i < petals; i++) {
       const g = new THREE.PlaneGeometry(wid, len, 1, 1); g.translate(0, len / 2, 0);
       const a = g.attributes.position; for (let k = 0; k < a.count; k++) if (a.getY(k) < 0.01) a.setX(k, a.getX(k) * 0.3);   // narrow base
-      g.rotateX(-Math.PI / 2 + cup); g.rotateY(i / petals * Math.PI * 2); g.translate(0, stemH, 0); P.push([g, petalCol]);
+      g.rotateX(-Math.PI / 2 + cup); g.rotateY(i / petals * Math.PI * 2); g.translate(0, stemH, 0); P.push([g, petalCol, true]);
     }
     P.push([new THREE.OctahedronGeometry(len * 0.32, 0).translate(0, stemH + 0.01, 0), eyeCol]);
     P.push([new THREE.CylinderGeometry(0.01, 0.013, stemH, 3).translate(0, stemH / 2, 0), 0x3f6a2a]);

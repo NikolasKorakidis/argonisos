@@ -7,7 +7,9 @@ import QBUSH from '../../assets/models/qbushes.js';
 import { clamp, lerp } from '../util/math.js';
 import { patchWet } from './wetness.js';
 import { FLORA, floraGeo, TREE_TALL } from './flora-pack.js';
-import { ROCK_MAT, rockEdges } from './rock.js';
+import { ROCK_MAT, rockEdges, stony } from './rock.js';
+import { barky } from './wood.js';
+import { SPECIES } from './flora.js';
 
 let seed = 1337;
 const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
@@ -24,12 +26,13 @@ function mesh(geo, mat, x = 0, y = 0, z = 0, parent) { const m = new THREE.Mesh(
 
 const windUniformEarly = { value: 0 };
 // the sun (or moon) for light shining through leaves and grass blades: direction towards it, and its colour × strength
-// The wind everything bends with (set by wind.js each frame): its direction across the ground and its strength (0 calm,
-// about 0.25 in a breeze, 1 and more in a storm)
+// The wind (set by wind.js each frame): its direction across the ground and its strength (0 calm, about 0.25 in a breeze,
+// 1 and more in a storm). It moves only the grass, the flowers and the leaves (the Greek reviewer, 23 Nov: the wind that
+// moved everything, trunks bending and columns swaying, looked wrong): trunks, limbs, rocks and ruins stand still.
 export const WIND_U = { uWindDir: { value: new THREE.Vector2(0.94, 0.34) }, uWindStr: { value: 0.25 } };
 export const LIGHT_U = { uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(0, 0, 0) } };
 // --- Props: every tree/rock species is one merged geometry, drawn with InstancedMesh per 100 m chunk
-// (frustum culling per chunk keeps thousands of trees cheap). Trees sway in the wind in the vertex shader.
+// (frustum culling per chunk keeps thousands of trees cheap). Only their leaves move in the wind (leafMat).
 const trunkMat = flat(0x7a4f2c), rockMat = flat(0x8e887e);
 // Leaf-cluster texture (drawn once): ~30 pointed leaves with midribs on transparent background, near-neutral so species tint it
 const leafTex = (() => {
@@ -382,6 +385,8 @@ function thinCards(g, n, k) {
   out.computeBoundingSphere(); return out;
 }
 const STONY = new Set(['rock', 'boulder', 'pebbles']);   // (drawn in stone: rock.js)
+const BARKY = new Set([...SPECIES.filter((s) => s.res === 'tree').map((s) => s.name), 'birch', 'aleppo', 'carob', 'arbutus', 'autumn', 'stump', 'log', 'branch', 'roots', 'driftwood']);   // (in bark: wood.js)
+const RUINS = new Set(['colfall', 'colstand', 'herm', 'wallruin']);   // (in stone without the rocks' edges)
 const TREE_TYPES = new Set(['olive', 'oak', 'cypress', 'pomegranate', 'fig', 'plane', 'qtree', 'qpine', 'fir', 'holm', 'qdead', 'dead']);   // (fitted by height; the rest by bulk)
 function propGeo(species, v) {
   const k = species + v;
@@ -405,8 +410,11 @@ function propGeo(species, v) {
     const box = new THREE.Box3(); for (const g of [P.geo, P.cards]) if (g) { g.computeBoundingBox(); box.union(g.boundingBox); }
     const g = floraGeo(species, v, box, TREE_TYPES.has(species)); if (g) Object.assign(P, { geo: g.geo, lo: g.lo || g.geo, cards: g.cards, loCards: g.lo ? g.loCards : g.cards, geo2: g.mid, cards2: g.mid ? g.midCards : null, cardMat: g.cards && packCardMat(g.map), leafFar: !!g.cards, packed: true });   // (geo2: the near band's further half, vegetation.js)
   }
-  // the rocks in stone of their own (rock.js: no wind, and the detail laid on in the shader), their faces' edges marked
+  // the rocks in stone of their own (rock.js: the detail laid on in the shader), their faces' edges marked
   if (STONY.has(species) && P.mat !== ROCK_MAT && (P.packed || !FLORA[species])) { for (const q of new Set([P.geo, P.lo])) rockEdges(q); P.mat = ROCK_MAT; }
+  // the trees' trunks and limbs, and the dead wood lying about, in bark (wood.js); the ruins in stone, as the rocks
+  else if (BARKY.has(species) && P.mat !== BARK_MAT && (P.packed || !FLORA[species])) P.mat = BARK_MAT;
+  else if (RUINS.has(species) && P.mat !== RUIN_MAT && (P.packed || !FLORA[species])) P.mat = RUIN_MAT;
   return P;
 }
 // the see-through parts of the packs' plants (flora-pack.js): one material per pack texture, cut out like the leaves and
@@ -416,19 +424,14 @@ function packCardMat(map) {
   if (!PACK_CARDS.has(map)) { const m = new THREE.MeshStandardMaterial({ map, color: 0xa3ad92, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85, alphaToCoverage: true }); m.onBeforeCompile = leafMat.onBeforeCompile; PACK_CARDS.set(map, m); }
   return PACK_CARDS.get(map);
 }
+// (still in the wind: the bushes' stems, the ground cover and what else is vertex-coloured; they darken in the rain, with
+// only a little gloss, as the far trees' crowns share this material)
 const propMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
-propMat.onBeforeCompile = (sh) => {
-  patchWet(sh, { dark: 0.66, gloss: 0.75, shine: 0.1 });   // bark and stone darken in the rain (only a little gloss: the far trees' crowns share this material)
-  sh.uniforms.uWind = windUniformEarly; Object.assign(sh.uniforms, WIND_U);
-  sh.vertexShader = 'uniform float uWind, uWindStr; uniform vec2 uWindDir;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-    vec4 ipp = instanceMatrix[3];
-    float sway = max(position.y - 2.0, 0.0) * 0.018 * (1.0 + uWindStr);
-    transformed.x += sin(uWind * 1.1 + ipp.x * 0.13 + ipp.z * 0.07) * sway;
-    transformed.z += cos(uWind * 0.9 + ipp.z * 0.11) * sway * 0.7;
-    // and the whole tree leans downwind, swaying as the gusts come and go (the wind turned into the tree's own frame)
-    vec3 wl = normalize(transpose(mat3(instanceMatrix)) * vec3(uWindDir.x, 0.0, uWindDir.y));
-    transformed.xz += wl.xz * pow(max(position.y - 1.5, 0.0), 1.3) * uWindStr * (0.022 + 0.014 * sin(uWind * 0.9 + ipp.x * 0.07 + ipp.z * 0.05));`);
-};
+propMat.onBeforeCompile = (sh) => { patchWet(sh, { dark: 0.66, gloss: 0.75, shine: 0.1 }); };
+propMat.customProgramCacheKey = () => 'prop';
+// the trees' bark (wood.js) and the ruins' stone (rock.js), each one program
+const BARK_MAT = barky(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { dark: 0.62, gloss: 0.72, shine: 0.1 });
+const RUIN_MAT = stony(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { wet: { dark: 0.6, gloss: 0.7, shine: 0.1 } });
 // Leaf and impostor cut-outs: instead of a hard alpha test (which shimmers as you move), the edge is sharpened to about one
 // pixel and handed to the MSAA samples as coverage (alpha to coverage), so leaves get smooth, stable edges
 export const A2C_FRAG = `#ifdef USE_ALPHATEST
@@ -450,13 +453,15 @@ leafMat.onBeforeCompile = (sh) => {
     #else
       vLeafW = (modelMatrix * vec4(transformed, 1.0)).xyz;
     #endif`);
+  // (the leaves alone move: the trunk and its limbs stand still, so the crown only stirs about where its cards hang, a few
+  // centimetres at most, further in a strong wind, never leaving the twigs it grows on; and each card flutters)
   sh.vertexShader = 'uniform float uWind, uWindStr; uniform vec2 uWindDir;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
     vec4 ipp = instanceMatrix[3];
-    float sway = max(position.y - 2.0, 0.0) * 0.02 * (1.0 + uWindStr), flut = 1.0 + uWindStr * 1.6;   // (leaves flutter harder in a strong wind)
-    transformed.x += sin(uWind * 1.1 + ipp.x * 0.13 + ipp.z * 0.07) * sway + sin(uWind * 4.0 * (1.0 + uWindStr * 0.5) + position.x * 3.0 + position.y) * 0.035 * flut;
-    transformed.z += cos(uWind * 0.9 + ipp.z * 0.11) * sway * 0.7 + cos(uWind * 3.6 * (1.0 + uWindStr * 0.5) + position.z * 3.0) * 0.03 * flut;
-    vec3 wl = normalize(transpose(mat3(instanceMatrix)) * vec3(uWindDir.x, 0.0, uWindDir.y));   // (leaning downwind with the trunk)
-    transformed.xz += wl.xz * pow(max(position.y - 1.5, 0.0), 1.3) * uWindStr * (0.022 + 0.014 * sin(uWind * 0.9 + ipp.x * 0.07 + ipp.z * 0.05));`);
+    float stir = min(max(position.y - 1.5, 0.0) * 0.012, 0.06) * (1.0 + uWindStr), flut = 1.0 + uWindStr * 1.6;   // (leaves flutter harder in a strong wind)
+    transformed.x += sin(uWind * 1.1 + ipp.x * 0.13 + ipp.z * 0.07) * stir + sin(uWind * 4.0 * (1.0 + uWindStr * 0.5) + position.x * 3.0 + position.y) * 0.035 * flut;
+    transformed.z += cos(uWind * 0.9 + ipp.z * 0.11) * stir * 0.7 + cos(uWind * 3.6 * (1.0 + uWindStr * 0.5) + position.z * 3.0) * 0.03 * flut;
+    vec3 wl = normalize(transpose(mat3(instanceMatrix)) * vec3(uWindDir.x, 0.0, uWindDir.y));   // (pressed a little downwind)
+    transformed.xz += wl.xz * stir * uWindStr * (0.8 + 0.4 * sin(uWind * 0.9 + ipp.x * 0.07 + ipp.z * 0.05));`);
 };
 
 const isLow = () => PROP_LO;
