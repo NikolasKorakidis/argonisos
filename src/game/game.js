@@ -159,7 +159,7 @@ export function installGame(g) {
   };
 
   // ---- per frame
-  const _bw = { p: 0, y: 0, v: 0, r: 0 }, _look = new THREE.Vector3(), _a = new THREE.Vector3(), _b = new THREE.Vector3();
+  const _bw = { p: 0, y: 0, v: 0, r: 0 }, _look = new THREE.Vector3(), _a = new THREE.Vector3(), _b = new THREE.Vector3(), torchAt = new THREE.Vector3();
   // walls round you: of eight ways out at head height, six or more meet a wall within 6 m (what you built, or a site's)
   const walled = (P) => { let n = 0; _a.set(P.x, P.y + 1.5, P.z); for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; _b.set(P.x + Math.cos(a) * 6, P.y + 1.5, P.z + Math.sin(a) * 6); if (g.build.rayBlock(_a, _b) !== null || g.structures.rayBlock?.(_a, _b) != null) n++; } return n >= 6; };
   // reaching the top of Olympos
@@ -212,7 +212,7 @@ export function installGame(g) {
     g.trial.update(dt);
     // loot from kills is picked up as you walk over it
     for (const d of [...g.pickups.drops]) if (d.extra?.auto && Math.hypot(d.x - player.pos.x, d.z - player.pos.z) < 1.8 && Math.abs(d.y - player.pos.y) < 2) { g.pickups.take(d); g.give(d.item, d.n); g.sound('pick'); }
-    if (g.torchLight?.parent) askLight(g.torchLight.getWorldPosition(new THREE.Vector3()), 7 + Math.sin(performance.now() * 0.02) * 0.6 + Math.random() * 0.4, 14);
+    if (g.torchLight?.parent) askLight(g.torchLight.getWorldPosition(torchAt), 7 + Math.sin(performance.now() * 0.02) * 0.6 + Math.random() * 0.4, 14, undefined, undefined, false);   // (it moves: never the fire's shadow caster, render/lights.js)
   };
   g.lateUpdate = (dt) => { updateFx(dt, camera); updateLights(); g.occlusion.update(dt); };
   hud.onToggle = (on) => { if (on) g.crafting.open(); };

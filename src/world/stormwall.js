@@ -13,7 +13,7 @@
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from '../../vendor/three/jsm/postprocessing/Pass.js';
 import { biomeWeights, heightAt } from './gen.js';
-import { scene, camera, composer, atmosphere, renderer, GFX, hemi } from '../render/core.js';
+import { scene, camera, composer, atmosphere, renderer, GFX, hemi, CONTEXT } from '../render/core.js';
 import { ATMO } from '../render/atmosphere.js';
 import { WIND } from './wind.js';
 import { WEATHER } from './weather.js';
@@ -186,7 +186,8 @@ function wallInView(dt, inside) {
   const seen = !inside && FIELD.tiles.some((b) => b.distanceToPoint(p) < far && _frustum.intersectsBox(b));
   seenT = seen ? 0.5 : seenT - dt; return seenT > 0;
 }
-// the cloud noise, baked once on the GPU into a 64³ texture, a layer at a time
+// the cloud noise, baked once on the GPU into a 64³ texture, a layer at a time (and again after a lost context)
+CONTEXT.restored.push(() => { U.tNoise.value = null; });
 function bakeNoise(r) {
   const S = 64, rt = new THREE.WebGL3DRenderTarget(S, S, S, { depthBuffer: false }), t = rt.texture;
   t.wrapS = t.wrapT = t.wrapR = THREE.RepeatWrapping; t.magFilter = t.minFilter = THREE.LinearFilter; t.generateMipmaps = false;

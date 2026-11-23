@@ -220,7 +220,7 @@ export class Trial {
       const d = Math.hypot(P.pos.x - at.x, P.pos.z - at.z), k = Math.max(0, 1 - d / 22);
       if (k > 0 && !P.dead) { const dir = new THREE.Vector3(P.pos.x - at.x, 0, P.pos.z - at.z).normalize(); g.acts?.hurt?.(30); P.hv.addScaledVector(dir, 6 + 10 * k); P.vel.y = 3 + 4 * k; P.onGround = false; if (k > 0.4) P.stats.add('stunned', 0.8); }
     }
-    if (A.landed && t < ARRIVE.land + 0.25) askLight(at.clone().setY(at.y + 4), 60, 70, 0xffe2b0);   // (the flash lighting the ruin)
+    if (A.landed && t < ARRIVE.land + 0.25) askLight(at.clone().setY(at.y + 4), 60, 70, 0xffe2b0, undefined, false);   // (the flash lighting the ruin)
     if (t > ARRIVE.done) { this.arrival = null; P.focus = null; }
   }
   // a fight over without the kill: the tribute stays on the altar (and the beast's dead go back into the ground)
@@ -450,7 +450,7 @@ export class Trial {
         // reaching out 24 m and spreading as it goes, its light on the ground)
         { const f = fwd(), mouth = c.body.point?.('mouth')?.addScaledVector(f, 1.5) || at(T.h * 0.62).addScaledVector(f, T.body?.[1] ?? T.r + 1.2);
           for (let i = 0; i < 5; i++) { const s = Math.random(); burst(mouth.clone().addScaledVector(f, s * 20).add(new THREE.Vector3((Math.random() - 0.5) * s * 8, -s * (mouth.y - c.pos.y) * 0.75, (Math.random() - 0.5) * s * 8)), { color: Math.random() < 0.5 ? 0xff7a20 : 0xffc040, n: 4, speed: 4 + s * 6, size: 0.25 + s * 0.6, grav: -2, life: 0.5, glow: Math.random() < 0.3 }); }
-          askLight(mouth.clone().addScaledVector(f, 8), 40, 30, 0xff8a30);
+          askLight(mouth.clone().addScaledVector(f, 8), 40, 30, 0xff8a30, undefined, false);
           m.tick = (m.tick || 0) - dt;
           if (m.tick <= 0) { m.tick = 0.25; if (d < 26 && Math.abs(angDiff(toP, c.yaw)) < 0.45 && landed(g.combat.hitPlayer(c, [9, 13, 'fire']))) P.stats.add('burning', 3); } }
         return m.t <= 0 ? over(true) : 'breath';
@@ -489,7 +489,7 @@ export class Trial {
       const b = this.bolts[i]; b.t -= dt; if (b.h) b.h.set(Math.min(1, 1 - b.t / b.warn) * (0.65 + 0.35 * Math.sin(b.t * 40)));
       if (b.t > 0) continue; this.bolts.splice(i, 1); b.h?.done(); this.struck = (this.struck || 0) + 1;   // (struck: how many so far, for the tests)
       strike({ at: b.p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 40, 190, (Math.random() - 0.5) * 40)), ground: b.p, light: 1.3, big: b.big });
-      spark(b.p.clone().setY(b.p.y + 0.4), 24); burst(b.p.clone().setY(b.p.y + 0.3), { color: 0x4a4038, n: 18, speed: 6, size: 0.18, up: 6 }); dust(b.p.clone().setY(b.p.y + 0.5), 8, 0x6a6a72, 0.6); cracks(b.p, { r: 2.6, life: 9 }); askLight(b.p.clone().setY(b.p.y + 3), 30, 25, 0xc8d8ff);
+      spark(b.p.clone().setY(b.p.y + 0.4), 24); burst(b.p.clone().setY(b.p.y + 0.3), { color: 0x4a4038, n: 18, speed: 6, size: 0.18, up: 6 }); dust(b.p.clone().setY(b.p.y + 0.5), 8, 0x6a6a72, 0.6); cracks(b.p, { r: 2.6, life: 9 }); askLight(b.p.clone().setY(b.p.y + 3), 30, 25, 0xc8d8ff, undefined, false);
       if (!b.warn) continue;   // (a far bolt, or the enrage's: lightning only)
       if (!P.dead && Math.hypot(P.pos.x - b.p.x, P.pos.z - b.p.z) < STORM.r) g.combat.hitPlayer({ pos: b.p, dmgK: 1, T: {}, body: {} }, STORM.dmg, { from: b.p });   // (the bolt as the blow's source)
       for (const k of g.creatures.list) if (!k.dead && (k.boss ? g.creatures.gap(k, b.p.x, b.p.z).d < k.T.r + STORM.r : k.pos.distanceTo(b.p) < STORM.r + k.T.r)) { g.creatures.hurt(k, [[k.boss ? STORM.boss : 999, 'force']], b.p); if (k.boss && !this.boltTold) { this.boltTold = true; g.hud.toast('Zeus\'s lightning strikes the beast!'); } }

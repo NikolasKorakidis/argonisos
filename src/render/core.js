@@ -73,17 +73,19 @@ export function setShadowSky(k, fade = 0) { sunFar.color.setRGB(k, fade / 100, 0
 // so the vegetation can draw into each map only what lies in its box (vegetation.js). What moves, or is too small to
 // see from afar, is marked userData.nearShadow (the hero, creatures, pickups) and casts into the near map alone: the far
 // map holds only what stands still, so it needn't be drawn again until you have walked on (followShadow).
-const drawShadows = renderer.shadowMap.render, one = [], _off = [];
-renderer.shadowMap.render = function (lights, scn, cam) {
+// (patched again when a lost context comes back: three makes a new shadow map renderer then)
+const one = [], _off = [];
+const patchShadows = () => { const drawShadows = renderer.shadowMap.render; renderer.shadowMap.render = function (lights, scn, cam) {
   if (this.autoUpdate === false && this.needsUpdate === false) return;   // (no maps to draw: as three's own, e.g. the shelter maps' draws, wetness.js)
   const mask = cam.layers.mask;
   for (const L of lights) { if (L.shadow.autoUpdate === false && !L.shadow.needsUpdate) continue;
     one[0] = L; cam.layers.mask = L.shadow.camera.layers.mask; SHADOW.onPass?.(L);
     if (L === sunFar) scn.traverse((o) => { if (o.userData.nearShadow) o.traverse((m) => { if (m.castShadow) { m.castShadow = false; _off.push(m); } }); });
-    drawShadows.call(this, one, scn, cam);
+    drawShadows.call(this, one, L.shadow.casters || scn, cam);   // (the fire's cube walks only its own list of casters: lights.js)
     for (const m of _off) m.castShadow = true; _off.length = 0; }
   cam.layers.mask = mask; SHADOW.onPass?.(null);
-};
+}; };
+patchShadows();
 // The sun's shadow in every lit material: the near map where it reaches (eased into the far one over its outer tenth),
 // the far one beyond (eased out to full light at its own edge). Each look is five bilinear looks (twenty texels) round
 // the point, spread wider where the caster stands high above it (the gap measured at the centre: up to three times as
@@ -147,7 +149,7 @@ THREE.ShaderChunk.shadowmap_pars_fragment = THREE.ShaderChunk.shadowmap_pars_fra
     #endif`);
 }
 
-export const GFX = { level: 'high', post: true, scale: Math.min(devicePixelRatio, 2) };
+export const GFX = { level: 'high', post: true, scale: Math.min(devicePixelRatio, 2), samples: 4 };
 
 // (the scene's depth is kept with its colour, for the atmosphere pass)
 const sceneRT = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: 4 }); sceneRT.depthTexture = new THREE.DepthTexture(innerWidth, innerHeight);
@@ -166,15 +168,40 @@ fitLens(bloom, { camera, scene, atmo: ATMO, gfx: GFX });   // (light on the lens
 composer.addPass(new OutputPass());
 // The scene's antialiasing: 4× on Low to High, 8× on Ultra where the card allows (alpha-to-coverage then gives leaf
 // edges nine steps of see-through instead of five). The scene's buffer takes it; disposed, it is made again at the new
-// count when next drawn.
+// count when next drawn. While Ultra draws the picture larger than the screen and shrinks it (ADAPT.k over 1), 4×: each
+// pixel of the screen is then already made of two or more drawn ones, so eight samples a drawn pixel added nothing one
+// could see, and they made the scene's buffer the biggest thing on the card (8 samples of 8 bytes, and the depth's 8 of
+// 4, for each of up to 14 million pixels: 1.4 GB) and every see-through thing drawn over it (spray, mist, smoke, leaves)
+// eight times the memory traffic.
 const MAX_SAMPLES = renderer.getContext().getParameter(renderer.getContext().MAX_SAMPLES) || 4;
 // The target the scene is drawn into this frame: shaders are compiled for it (main.js warmUp), as three makes a different
 // program for a picture drawn to the screen (tone mapped there) than for one drawn into the composer's buffer
 export const sceneTarget = () => (GFX.post ? sceneRT : null);
-export function setSamples(n) {
-  n = Math.min(n, MAX_SAMPLES); if (sceneRT.samples === n) return;
+export function setSamples(n) { GFX.samples = n; fitSamples(); }
+function fitSamples() {
+  const n = Math.min(ADAPT.k > 1 ? Math.min(GFX.samples, 4) : GFX.samples, MAX_SAMPLES); if (sceneRT.samples === n) return;
   sceneRT.samples = n; sceneRT.dispose();   // (the scene's buffer only: the other has none, see above)
 }
+
+// The graphics card can take the page's drawing away (its driver reset after a frame ran too long, the card out of
+// memory, a laptop switching cards): WebGL then loses all it held there. Three asks the browser for it back (it prevents
+// the default) and, given it, makes its own things again on their next use; what was drawn once into a buffer and kept
+// (the distant trees' pictures, the sky's light, the storm's noise, the shadow maps) is drawn again by the hooks in
+// CONTEXT.restored. Each loss is counted and logged with what was being drawn (the performance overlay shows it, and
+// its copied report carries it, ui/perf.js); main.js saves the game and tells the player.
+export const CONTEXT = { lost: 0, back: 0, at: 0, log: [], onLost: [], restored: [] };
+const CTX_LOG = 'argonisos.gpu-log';
+try { CONTEXT.log = JSON.parse(localStorage.getItem(CTX_LOG) || '[]'); } catch { /* none kept */ }
+function ctxNote(what) {
+  const e = { when: new Date().toISOString(), what, px: `${renderer.domElement.width}×${renderer.domElement.height}`, k: ADAPT.k, samples: sceneRT.samples };
+  CONTEXT.log = [...CONTEXT.log, e].slice(-10); try { localStorage.setItem(CTX_LOG, JSON.stringify(CONTEXT.log)); } catch { /* private mode */ }
+  console.warn(`Argonisos: the graphics context was ${what}`, e);
+}
+renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); CONTEXT.lost++; CONTEXT.at = performance.now(); ctxNote('lost'); for (const f of CONTEXT.onLost) f(); });
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  CONTEXT.back++; ctxNote('restored'); patchShadows(); redrawFar(); queries.length = 0; timer = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  for (const f of CONTEXT.restored) try { f(); } catch (err) { console.error('Argonisos: after the context came back', err); }
+});
 
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
@@ -183,7 +210,7 @@ addEventListener('resize', () => {
 
 // Render one frame, timing it on the GPU where the browser allows (EXT_disjoint_timer_query_webgl2): GPU.ms, smoothed.
 // renderer.info counts the whole frame (all passes), reset here each frame.
-const gl = renderer.getContext(), timer = gl.getExtension('EXT_disjoint_timer_query_webgl2'), queries = [];
+const gl = renderer.getContext(), queries = []; let timer = gl.getExtension('EXT_disjoint_timer_query_webgl2');
 export const GPU = { ms: 0, ok: !!timer, on: false };   // (on: timed only while the performance overlay shows it, main.js)
 renderer.info.autoReset = false;
 // (the first frame, under the loading screen, is drawn once more before it with the sun's shafts and the shade (AO) both
@@ -205,13 +232,14 @@ export function render() {
 // when the GPU has room again it climbs back. Steps of 10%, at most one every two seconds, with a dead band in between so
 // it never hunts; it never goes above the resolution chosen in the settings (on Ultra it may: up to half as much again,
 // drawn larger than the screen and shrunk to it, when the card has room; a step above the screen's own it had to leave is
-// not tried again for two minutes, so a card just short of it doesn't stutter every twenty seconds).
+// not tried again for ten minutes, so a card just short of it doesn't stutter every twenty seconds: it was two, and each
+// try and each retreat made every buffer of the frame again, a hitch every two minutes on Ultra).
 // (Decided on the frame time alone: some browsers' GPU timers report the whole frame interval, not the GPU's work. While
 // the world is still streaming in it waits; and a step it had to leave for being too slow isn't retried for 20 s.)
 // It goes by the typical frame of the last second and a half (the middle one, and the one nine in ten beat), not an
 // average: one hitch (a shader compiled, a cell streamed in) dragged the average over the line, the picture dropped a
 // step, and changing the resolution makes every buffer again, a hitch of its own; the drawing was never too slow.
-export const ADAPT = { on: true, k: 1, t: 3, frame: 16.7, until: {}, min: 0.7, max: 1 };
+export const ADAPT = { on: true, k: 1, t: 3, frame: 16.7, until: {}, min: 0.7, max: 1, changes: 0 };
 const RECENT = new Float32Array(90), SORTED = new Float32Array(90); let recentN = 0, recentI = 0;
 export function adaptResolution(dt, loading) {
   const ms = Math.min(dt, 0.1) * 1000; ADAPT.frame += (ms - ADAPT.frame) * 0.05; RECENT[recentI] = ms; recentI = (recentI + 1) % RECENT.length; recentN = Math.min(recentN + 1, RECENT.length);
@@ -220,12 +248,14 @@ export function adaptResolution(dt, loading) {
   const n = recentN, q = SORTED.subarray(0, n); q.set(RECENT.subarray(0, n)); q.sort(); const mid = q[n >> 1], p90 = q[Math.floor(n * 0.9)];
   const now = performance.now(), slow = mid > 19.5, up = Math.min(ADAPT.max, +(ADAPT.k + 0.1).toFixed(1)), roomy = p90 < 17.3 && !(ADAPT.until[up] > now) && !(up > 1 && !bigEnough(up));
   const k = slow ? Math.max(ADAPT.min, +(ADAPT.k - 0.1).toFixed(1)) : roomy ? up : ADAPT.k;
-  if (slow && k !== ADAPT.k) ADAPT.until[ADAPT.k] = now + (ADAPT.k > 1 ? 120000 : 20000);
+  if (slow && k !== ADAPT.k) ADAPT.until[ADAPT.k] = now + (ADAPT.k > 1 ? 600000 : 20000);
   if (k !== ADAPT.k) { ADAPT.k = k; ADAPT.t = 2.5; recentN = 0; setScale(); } else ADAPT.t = 0.5;   // (the frames before the change don't count after it)
 }
-// (above the screen's own resolution: never wider than 5120 pixels drawn, 4K's width and a third)
-const bigEnough = (k) => innerWidth * GFX.scale * k <= 5120;
-export function setScale() { const s = GFX.scale * ADAPT.k; renderer.setPixelRatio(s); composer.setPixelRatio(s); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); }
+// (above the screen's own resolution: never more pixels drawn than 4K's, 3840 × 2160. It was 5120 wide: on a 4K screen
+// that drew 14 million pixels, every buffer of the frame made over at each step, a gigabyte and a half of them)
+const bigEnough = (k) => innerWidth * innerHeight * (GFX.scale * k) ** 2 <= 3840 * 2160 * 1.001;
+// (each change of size makes every buffer of the frame again: counted for the performance overlay, ui/perf.js)
+export function setScale() { const s = GFX.scale * ADAPT.k; ADAPT.changes++; renderer.setPixelRatio(s); composer.setPixelRatio(s); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); fitSamples(); }
 
 // Keep the sun's shadow boxes round the player, snapped to shadow-map texels so edges don't shimmer as you move: the near
 // one a little ahead along the view (what lies behind the camera needs less of its detail), drawn every frame; the far
@@ -250,6 +280,7 @@ function boxAt(L, target, dir) {
   L.target.position.copy(centre); L.position.copy(centre).addScaledVector(dir, SHADOW.depth / 2);
 }
 const FAR_LAYERS = sunFar.shadow.camera.layers, farAt = new THREE.Vector3(1e9, 0, 0), farDir = new THREE.Vector3(); let farMask = null, farT = 0;
+function redrawFar() { farAt.set(1e9, 0, 0); sunFar.shadow.needsUpdate = true; }   // (the far map drawn again at once: a lost context)
 export function followShadow(target, dir, farOn = true) {
   camera.getWorldDirection(_e); _e.y = 0; const l = _e.length();
   boxAt(sun, _e.multiplyScalar(l > 1e-3 ? SHADOW.nearR * SHADOW.ahead / l : 0).add(target), dir);
