@@ -177,3 +177,14 @@ again) per minute and over 33 ms, and the last hitch's cause: a shader compile, 
 it took most of the frame, or the browser and GPU when the game's code was quick. Below it a graph of the last 240
 frames (green, yellow over a refresh, red over 33 ms, with the game's own time in pale). The old debug line shows with
 it. Off, it costs a flag test per section; on, a few timestamps and one canvas column a frame (`src/ui/perf.js`).
+Since 21 November (a player on Ultra, RTX 5080: "a lot of performance drops… and crashing") it also shows the MSAA
+samples, the GPU's own time where the browser's timer works, the memory on the card (every texture, render buffer and
+vertex buffer the page makes, counted as it is made and freed: `VRAM` in `perf.js`) and the JS heap, how many programs
+were made since load, how often the fire's shadow is drawn and from how many casters, whether the river's copy of the
+scene is being made, how often the resolution changed and how often the graphics context was lost. **F4** (with the
+overlay on) copies a report to the clipboard and prints it in the console: the overlay's text, every section of the
+loop with its usual and worst time, the last hitches with their causes, the biggest things on the card, the lost
+contexts (also kept in `localStorage`, `argonisos.gpu-log`), the graphics card's name and the browser. That report is
+what to ask a player for. `tests/suites/perf-steady.mjs` holds the counts this round fixed: no program linked by a
+fire or by swimming, the fire's shadow at most every other frame, no texture or render buffer made over and over, and a
+second round of the same walk leaving programs, memory and the scene where the first left them.
