@@ -346,7 +346,7 @@ export class Player {
     // solid thing between (CAM: a hill, a wall, a roof, a rock, a trunk; never leaves): in at once when something comes
     // between, out again eased as it clears, so brushing past a trunk is one quick step in and a glide back, no pumping
     if (jump || !this.camW) (this.camW ||= new THREE.Vector3()).copy(want); else this.camW.lerp(want, Math.min(1, dt * lerp(14 + k * 10, 6, L)));
-    const dir = this.camW.clone().sub(target), full = dir.length(), free = this.cast(target, this.camW, { over: lerp(CAM.over, LOOK.low * 0.6, L), r: lerp(CAM.r, CAM.low, L) }) ?? full;
+    const dir = this.camW.clone().sub(target), full = dir.length(), free = this.cast(target, this.camW, { over: lerp(CAM.over, LOOK.low, L), r: lerp(CAM.r, CAM.low, L) }) ?? full;
     this.camD = jump || this.camD === undefined ? free : Math.min(free, full, this.camD + Math.max(0, full - this.camD) * e(CAM.out));
     this.camFree = free; camera.position.copy(target).addScaledVector(dir.normalize(), this.camD);
     const wf = waterAt(camera.position.x, camera.position.z); if (wf > 0.05 && camera.position.y < wf + 0.2 && target.y > wf) camera.position.y = wf + 0.2;   // (pulled in over the water, still over it)

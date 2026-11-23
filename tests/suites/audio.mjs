@@ -41,13 +41,14 @@ export default {
     // (the loudest of the wind's beds alone, the wind held still, weighed with and without its trim in turn)
     await t.step('the wind 30% quieter (-3 dB)', `${A} const S2 = await import('/src/audio/sound.js'); AG.S.still = true; Mu.stopMusic(0.1, 1e9); await wait(3000);
       const b = A.levels().beds, k = ['bedWindSoft', 'bedWindMid', 'bedWindStrong'].sort((p, q) => (b[q] ?? 0) - (b[p] ?? 0))[0]; if (!(b[k] > 0.01)) return 'no wind heard: ' + JSON.stringify(b);
-      A.solo = k; const trim = S2.MIX.wind, weigh = async (x) => { S2.MIX.wind = x; await wait(3000); let p = 0; for (let i = 0; i < 20; i++) { p += 10 ** (A.meters().amb.lufs / 10); await wait(100); } return p / 20; };
-      // (in turn, four times each: the recording swells and falls by a dB or two of its own over seconds)
-      let full = 0, now = 0; for (let r = 0; r < 4; r++) { full += await weigh(1); now += await weigh(trim); } S2.MIX.wind = trim; A.solo = null; AG.S.still = false;
-      const lu = (p) => +(10 * Math.log10(p / 4)).toFixed(1); window._wind = { bed: k, full: lu(full), now: lu(now), d: +(lu(now) - lu(full)).toFixed(1) };
-      return (window._wind.d < -2 && window._wind.d > -4.5) || JSON.stringify(window._wind);`);
+      // (judged by the bed's own gain, untrimmed and trimmed in turn, four times each: the recording swells and falls by
+      // several dB of its own over seconds, more than the trim, so its loudness is only shown)
+      A.solo = k; const trim = S2.MIX.wind, weigh = async (x) => { S2.MIX.wind = x; await wait(3000); let p = 0, gn = 0; for (let i = 0; i < 20; i++) { p += 10 ** (A.meters().amb.lufs / 10); gn += A.levels().beds[k] ?? 0; await wait(100); } return [p / 20, gn / 20]; };
+      let full = 0, now = 0, gf = 0, gt = 0; for (let r = 0; r < 4; r++) { const [p1, g1] = await weigh(1), [p2, g2] = await weigh(trim); full += p1; now += p2; gf += g1; gt += g2; } S2.MIX.wind = trim; A.solo = null; AG.S.still = false;
+      const lu = (p) => +(10 * Math.log10(p / 4)).toFixed(1); window._wind = { bed: k, full: lu(full), now: lu(now), d: +(lu(now) - lu(full)).toFixed(1), gain: +(20 * Math.log10(gt / gf)).toFixed(1) };
+      return (window._wind.gain < -2 && window._wind.gain > -4.5) || JSON.stringify(window._wind);`);
     const wind = await t.eval('return window._wind;');
-    t.metric('the wind alone (its loudest bed, ambience LUFS): untrimmed → now', `${wind.bed} ${wind.full} → ${wind.now} (${wind.d} dB)`);
+    t.metric('the wind alone (its loudest bed, ambience LUFS): untrimmed → now', `${wind.bed} ${wind.full} → ${wind.now} (${wind.d} dB; its gain ${wind.gain} dB)`);
     await t.step('a melee hit: an axe\'s on flesh, a dagger\'s blade', `${A} P.yaw = 0; const c = g.creatures.spawn('hog', P.pos.x, P.pos.z + 1.4, { level: 0 }); c.hp = c.max = 9999;
       g.combat.strike(It.crudeAxe); await wait(120); g.combat.strike(It.crudeDagger); g.creatures.remove(c);
       return (got('axeHit').length === 1 && got('swordHit').length === 1 && got('axeHit')[0].vol > 0.2) || JSON.stringify(A.log);`);

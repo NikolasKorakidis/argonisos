@@ -59,12 +59,13 @@ export default {
     // no texture or render buffer made over and over while playing (fires and river together): a few, once, as things
     // are first seen (the sky's two kept bakes, a torch's), never one a frame or one a bake
     t.check('no texture or render buffer is made frame after frame while playing', c5.allocs - c0.allocs <= 16, `${c5.allocs - c0.allocs} made over ${c5.frame - c0.frame} frames`);
-    // two rounds of the same walk: the second leaves everything where the first did
+    // rounds of the same walk: after the first, each leaves everything where the one before did
     const round = `AG.S.time = 0.3; for (let r = 150; r < 1200; r += 10) { const x = r * 0.7, z = r * 0.7; if (AG.biomeWeights(x, z).y > 0.9) { AG.teleport(x, z, 0.9, 0.05); break; } } await sleep(2500); ${walk(6000, 'P.camYaw += 0.01;')}
       AG.S.time = 0.8; const f = window._fA.pos; AG.teleport(f.x + 3, f.z + 5, 0, -0.1); await sleep(2500); ${walk(3000, 'P.camYaw += 0.03;')}
       AG.S.time = 0.3; const RM = await import('/src/world/river.js'), L = RM.RIVER.lake; AG.teleport(L.x, L.z); await sleep(2500); ${walk(4000, 'P.camYaw += 0.02;')}
       AG.teleport(40, -30, 0, -0.1); await until(() => AG.terrain.pending === 0, 30000); await sleep(5000); for (const c of [...g.creatures.list]) g.creatures.remove(c); await frames(2); return true;`;   // (each round ends at the same place, settled and with no animals about, so what is there is the same)
-    await t.eval(round); const r1 = await t.eval(counts); await t.eval(round); const r2 = await t.eval(counts);
+    // (a round first to see everything once: the first walk past a species makes its batch of trees, kept from then on)
+    await t.eval(round); await t.eval(round); const r1 = await t.eval(counts); await t.eval(round); const r2 = await t.eval(counts);
     t.metric('two rounds of woods, fire and lake', `programs ${r1.progs} → ${r2.progs} · card ${r1.vram} → ${r2.vram} MB · geometries ${r1.geo} → ${r2.geo} · objects ${r1.objs} → ${r2.objs}`);
     t.check('a second round of the same walk adds no programs, memory on the card or objects', r2.progs === r1.progs && r2.vram - r1.vram <= 8 && r2.objs - r1.objs <= 12 && r2.geo - r1.geo <= 24, JSON.stringify({ progs: r2.progs - r1.progs, vram: r2.vram - r1.vram, objs: r2.objs - r1.objs, geo: r2.geo - r1.geo }));
   },
