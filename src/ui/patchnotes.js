@@ -25,6 +25,12 @@ export const PATCHES = [
         'The pack no longer grows or shifts when a thing has a long description: the description has a box of its own, which scrolls when there is more to read.',
         'In a window too narrow for both, the compass now sits just below the hotbar instead of under it.',
       ] },
+      { t: 'Searching', icon: 'chest', items: [
+        '<b>Search what was left behind.</b> The jars, amphorae, baskets, sacks, straw and woodpiles about the abandoned town, the old farmhouse, the little places along the roads and the Giants\' caves can now be searched with E, once each, as in Valheim: look at one and the prompt says what it is, "Search the amphora" or "Take the wood (20)".',
+        'What you find goes by what it is: a woodpile gives 20 wood (the small stack by a shepherd\'s fire 8 to 12), straw gives fiber, jars and amphorae olives, seeds, resin or rope, baskets fruit, acorns or fiber, sacks acorns, seeds or fiber, and the smithy\'s forge a little coal and stone, now and then with an old axe or club left to mend. Some jars hold nothing but dust.',
+        'A searched woodpile is down to its bottom logs, a jar or a basket lies tipped over and a sack slumps empty, and it stays so: your save remembers each one. The farmhouse\'s old chest is as it was.',
+        'The offerings at the roadside shrines, under the old olives, in the temple and on Olympos are the gods\' and stay where they are.',
+      ] },
       { t: 'Controls', icon: 'goal', items: [
         '<b>Esc in fullscreen.</b> Esc now always brings up the pause menu in fullscreen. In Chrome and Edge a tap pauses and you hold Esc to leave fullscreen; in browsers where Esc leaves fullscreen at once, leaving it during play now pauses the game, even with the pack or the map open. F11 now goes into the game\'s own fullscreen, the one where Esc still pauses.',
       ] },
