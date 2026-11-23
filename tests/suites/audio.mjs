@@ -5,7 +5,8 @@
 // places and moments, so none of them blasts over the others. Patch 23: the boss fight's mix (the music loud and clear over
 // the storm but the whole no louder than -13 LUFS, nothing clipping), the warnings heard, the rolling log's sounds in the
 // mix, the actions that were silent (a swing, a roll, a stroke swimming, a landing by its fall, eating, the pack), the
-// chime on the effects, and the music of Olympos and the shore.
+// chime on the effects, and the music of Olympos and the shore. Patch 25: no birds in the rain, the footsteps -6 dB, the
+// wind -3 dB, the lands' music -3 dB and playing all the while you're in a land, crossfaded from one land into the next.
 import { visit } from '../lib/places.mjs';
 
 // (A: sound.js's AUDIO; M: music.js's MUSIC; got: what of the log is that sound)
@@ -27,6 +28,26 @@ export default {
       return (n >= 75 && m === 14 && A.has('swordHit') && M.last === 'story') || JSON.stringify({ n, m, last: M.last });`);
     await visit(t, 'meadow');
     await t.eval(`${A} AG.S.still = false; AG.S.timeScale = 0; Mu.stopMusic(0.3); A.log = []; M.log = []; return true;`);
+    // (the birds' beds, the dawn chorus with them, by day; the rain left to come in at its own pace)
+    await t.step('no birdsong in the rain: the birds fall silent as it starts and sing again once it stops', `${A} AG.S.time = 0.32; AG.setWeather('clear'); AG.WEATHER.k.rain = 0;
+      const lv = () => { const b = A.levels().beds; return +((b.bedBirds ?? 0) + (b.loopBirds ?? 0)).toFixed(3); }, t0 = performance.now(), sec = () => +((performance.now() - t0) / 1000).toFixed(1);
+      let before = 0; for (let i = 0; i < 150 && (before = lv()) < 0.05; i++) await wait(100); if (before < 0.05) return 'no birds by day: ' + JSON.stringify(A.levels().beds);
+      const t1 = sec(); AG.setWeather('lightRain'); let gone = null, at = 0; for (let i = 0; i < 300 && gone === null; i++) { if (lv() < 0.004) { gone = +(sec() - t1).toFixed(1); at = +AG.WEATHER.k.rain.toFixed(2); } else await wait(100); }
+      let most = 0; for (let i = 0; i < 30; i++) { most = Math.max(most, lv()); await wait(100); }
+      const t2 = sec(); AG.setWeather('clear'); AG.WEATHER.k.rain = 0; let back = null; for (let i = 0; i < 200 && back === null; i++) { if (lv() > 0.05) back = +(sec() - t2).toFixed(1); else await wait(100); }
+      window._birds = { before, gone, rainThen: at, inRain: most, back }; return (gone !== null && most < 0.004 && back !== null) || JSON.stringify(window._birds);`);
+    const birds = await t.eval('return window._birds;');
+    t.metric('birds and rain (bed level by day; seconds after the rain began until silent, the rain then; loudest in the rain; seconds to sing again)', `${birds.before} · silent ${birds.gone} s (rain ${birds.rainThen}) · ${birds.inRain} in the rain · back ${birds.back} s`);
+    // (the loudest of the wind's beds alone, the wind held still, weighed with and without its trim in turn)
+    await t.step('the wind 30% quieter (-3 dB)', `${A} const S2 = await import('/src/audio/sound.js'); AG.S.still = true; Mu.stopMusic(0.1, 1e9); await wait(3000);
+      const b = A.levels().beds, k = ['bedWindSoft', 'bedWindMid', 'bedWindStrong'].sort((p, q) => (b[q] ?? 0) - (b[p] ?? 0))[0]; if (!(b[k] > 0.01)) return 'no wind heard: ' + JSON.stringify(b);
+      A.solo = k; const trim = S2.MIX.wind, weigh = async (x) => { S2.MIX.wind = x; await wait(3000); let p = 0; for (let i = 0; i < 20; i++) { p += 10 ** (A.meters().amb.lufs / 10); await wait(100); } return p / 20; };
+      // (in turn, four times each: the recording swells and falls by a dB or two of its own over seconds)
+      let full = 0, now = 0; for (let r = 0; r < 4; r++) { full += await weigh(1); now += await weigh(trim); } S2.MIX.wind = trim; A.solo = null; AG.S.still = false;
+      const lu = (p) => +(10 * Math.log10(p / 4)).toFixed(1); window._wind = { bed: k, full: lu(full), now: lu(now), d: +(lu(now) - lu(full)).toFixed(1) };
+      return (window._wind.d < -2 && window._wind.d > -4.5) || JSON.stringify(window._wind);`);
+    const wind = await t.eval('return window._wind;');
+    t.metric('the wind alone (its loudest bed, ambience LUFS): untrimmed → now', `${wind.bed} ${wind.full} → ${wind.now} (${wind.d} dB)`);
     await t.step('a melee hit: an axe\'s on flesh, a dagger\'s blade', `${A} P.yaw = 0; const c = g.creatures.spawn('hog', P.pos.x, P.pos.z + 1.4, { level: 0 }); c.hp = c.max = 9999;
       g.combat.strike(It.crudeAxe); await wait(120); g.combat.strike(It.crudeDagger); g.creatures.remove(c);
       return (got('axeHit').length === 1 && got('swordHit').length === 1 && got('axeHit')[0].vol > 0.2) || JSON.stringify(A.log);`);
@@ -88,17 +109,40 @@ export default {
     t.metric('mix: the Minotaur fight (LUFS, loudest moment, peak dBFS)', Object.entries(boss).filter(([b]) => b !== 'lyre').map(([b, x]) => `${b} ${x.lufs} (${x.top}, ${x.peak})`).join(' · '));
     t.check('the boss fight: the music loud and clear (over the ambience and its storm, not far under the blows), the whole about -15 LUFS (-14 at most), never clipping', boss.music.lufs > boss.amb.lufs + 3 && boss.music.lufs > boss.sfx.lufs - 3 && boss.out.lufs < -14 && boss.out.lufs > -21 && boss.out.peak < -0.5, JSON.stringify(boss));
     await visit(t, 'forest');
-    await t.step('coming into a land after the quiet plays its track (and not before the quiet is over)', `${A} AG.S.still = false; Mu.stopMusic(0.2); await wait(800); M.ended = {}; M.last = null; M.log = [];
-      M.D.land = 0; await wait(1500); if (M.D.land !== 1) return 'not in Yleos: ' + M.D.land;
-      M.quiet = 100; M.D.landT = 25; await wait(500); const early = cur(); M.quiet = 0; await wait(500);
-      return (early === null && cur() === 'yleos' && M.log.length === 1) || JSON.stringify({ early, now: cur(), log: M.log });`);
+    // (silent: nothing playing, or the music bus under -60 LUFS; the longest such spell, in seconds)
+    const hush = `let run = 0, worst = 0; const look = () => { const q = !cur() || A.meters().music.lufs < -60; run = q ? run + 0.1 : 0; worst = Math.max(worst, run); };`;
+    await t.step('in a land its music plays all the time: a few seconds after you come in, whatever the quiet, 30% under the others, and on from one round into the next without a break', `${A} ${hush} AG.S.still = false; Mu.stopMusic(0.2, 1e9); await wait(800); M.ended = {}; M.last = null; M.log = []; M.quiet = 1e9;
+      M.rest = 0; M.D.land = 0; const t0 = performance.now(); for (let i = 0; i < 100 && cur() !== 'yleos'; i++) await wait(100); const came = +((performance.now() - t0) / 1000).toFixed(1);
+      if (cur() !== 'yleos') return 'no Yleos: ' + JSON.stringify({ now: cur(), land: M.D.land, log: M.log });
+      const p = M.playing.find((q) => !q.out), vol = p.vol; for (let i = 0; i < 50 && !(p.el?.duration > 0); i++) await wait(100);
+      // (on to the end of this round; if the stream can't seek, it plays out)
+      await wait(2000); try { p.el.currentTime = Math.max(0, p.el.duration - 8); } catch { /* plays out */ } const t1 = performance.now(); let after = 0;
+      while (performance.now() - t1 < 80000 && after < 60) { look(); if (M.log.length >= 2) after++; await wait(100); }
+      window._round = { came, vol, rounds: M.log.map((e) => e.key), worst: +worst.toFixed(1) };
+      return (came < 8 && vol === 0.7 && M.log.length === 2 && M.log[1].key === 'yleos' && worst < 1.5) || JSON.stringify(window._round);`);
+    const round = await t.eval('return window._round;');
+    t.metric('a land\'s music: seconds to start on coming in · rounds · longest silence (s)', `${round.came} · ${round.rounds.join(' → ')} · ${round.worst}`);
+    await t.step('crossing into another land crossfades into its music, never silent on the way; in Pedias by night the title\'s theme, crossfaded in at dusk and out at dawn', `${A} ${hush} window._back = [P.pos.x, P.pos.z]; M.log = []; AG.teleport(-220, 360);
+      for (let i = 0; i < 150 && cur() !== 'pedias'; i++) { look(); await wait(100); } for (let i = 0; i < 40; i++) { look(); await wait(100); } const day = cur(), w1 = worst;
+      AG.S.time = 0.86; for (let i = 0; i < 200 && cur() !== 'menu'; i++) { look(); await wait(100); } for (let i = 0; i < 60; i++) { look(); await wait(100); } const q = M.playing.find((p) => !p.out), night = q?.key, nl = q?.land, w2 = worst; worst = run = 0;
+      AG.S.time = 0.3; for (let i = 0; i < 200 && cur() !== 'pedias'; i++) { look(); await wait(100); } for (let i = 0; i < 40; i++) { look(); await wait(100); } const dawn = cur();
+      AG.teleport(...window._back); window._pedias = { day, night, dawn, silent: [w1, w2, +worst.toFixed(1)].map((x) => +x.toFixed(1)) };
+      return (day === 'pedias' && night === 'menu' && nl === 0 && dawn === 'pedias' && w1 < 1.5 && w2 < 2.5 && worst < 2.5) || JSON.stringify({ ...window._pedias, land: M.D.land, log: M.log });`);
+    const ped = await t.eval('return window._pedias;');
+    t.metric('Pedias: by day → by night → at dawn · longest silence on crossing in, at dusk, at dawn (s)', `${ped.day} → ${ped.night} → ${ped.dawn} · ${ped.silent.join(' / ')}`);
+    await t.page.waitForFunction(() => AG.terrain.pending === 0, null, { timeout: 90000 });
+    await t.step('the lands\' music 30% quieter (-3 dB) than a track at full', `${A} const go = async (o) => { Mu.stopMusic(0.1, 1e9); await wait(1500); Mu.playTrack('pedias', o); await wait(3500); let p = 0; for (let i = 0; i < 50; i++) { p += 10 ** (A.meters().music.lufs / 10); await wait(100); } return +(10 * Math.log10(p / 50)).toFixed(1); };
+      const full = await go({ vol: 1 }), land = await go(); Mu.stopMusic(0.3); window._land = { full, land, d: +(land - full).toFixed(1) };
+      return (window._land.d < -2.3 && window._land.d > -4) || JSON.stringify(window._land);`);
+    const land = await t.eval('return window._land;');
+    t.metric('Pedias\'s track, seconds 3.5 to 8.5 (music LUFS): at full → as a land\'s', `${land.full} → ${land.land} (${land.d} dB)`);
     await t.step('the music follows its slider', `${A} const St = await import('/src/ui/settings.js'), v0 = St.SETTINGS.music; St.setMusic(0); await wait(400); const off = A.meters().music.lufs;
       St.setMusic(0.5); let on = -200; for (let i = 0; i < 20; i++) { await wait(100); on = Math.max(on, A.meters().music.lufs); } St.setMusic(v0);
       return (off < -90 && on > -60) || JSON.stringify({ off, on });`);
-    await t.step('sitting by your fire a little while plays the home track', `${A} Mu.stopMusic(0.2); await wait(800); M.ended = {}; M.log = []; AG.S.freeBuild = true;
+    await t.step('sitting by your fire a little while plays the home track (over the land\'s music)', `${A} Mu.stopMusic(0.2); await wait(800); M.ended = {}; M.log = []; AG.S.freeBuild = true;
       const x = P.pos.x + 1.6, z = P.pos.z; B.place('campfire', new V(x, AG.heightAt(x, z), z), 0); g.acts.sit(); const sat = g.acts.pose?.kind === 'sit';
       for (let i = 0; i < 120 && cur() !== 'base'; i++) await wait(100); const home = cur(); g.acts.stand?.();
-      return (home === 'base' && M.log.length === 1) || JSON.stringify({ sat, home, log: M.log, homeT: M.D.homeT });`);
+      return (home === 'base' && M.log.filter((e) => e.key === 'base').length === 1) || JSON.stringify({ sat, home, log: M.log, homeT: M.D.homeT });`);
     await t.step('the actions that were silent: a swing (a miss too), a roll, a stroke swimming, a landing by its fall, footsteps by gait, eating, the pack, a guard broken, a piece struck', `${A} const S2 = await import('/src/audio/sound.js'); A.log = []; A.calls = [];
       for (const c of [...g.creatures.list]) g.creatures.remove(c); P.yaw = 0; g.combat.strike(It.crudeAxe); const swing = got('whoosh').length;
       P.onStep('roll'); await wait(500); const roll = got('roll').length; P.onStep('swim'); const swim = got('swimStroke').length;
@@ -107,6 +151,15 @@ export default {
       g.sound('eat', { food: It.raspberries?.food }); g.hud.toggle(true); g.hud.toggle(false); In.uiOpen = false; g.sound('guardBreak'); g.sound('pieceHit', { at: P.pos.clone() });
       const ok = swing === 1 && roll >= 1 && swim === 1 && lands.length === 2 && lands[1] > lands[0] * 1.6 && steps.length === 2 && steps[1] > steps[0] * 1.8 && called('eat') === 1 && called('ui') === 2 && got('parryHit').length >= 1 && called('pieceHit') === 1;
       return ok || JSON.stringify({ swing, roll, swim, lands, steps, calls: A.calls.map((e) => e.k), log: A.log.map((e) => e.k) });`);
+    // (each step's loudest moment on the effects bus, the beds silenced, eight steps on grass or bare earth and on stone,
+    // as power)
+    await t.step('the hero\'s footsteps at half their loudness (-6 dB)', `${A} const S2 = await import('/src/audio/sound.js'); A.solo = 'none'; Mu.stopMusic(0.1, 1e9); S2.GAIT.k = 1; await wait(1500);
+      const top = async () => { let m = -200; for (let i = 0; i < 14; i++) { m = Math.max(m, A.meters().sfx.lufs); await wait(40); } return m; };
+      const weigh = async (x) => { S2.MIX.step = x; let p = 0; for (let i = 0; i < 8; i++) { g.sound('step', i % 2 ? 'stone' : 'ground'); p += 10 ** (await top() / 10); await wait(300); } return +(10 * Math.log10(p / 8)).toFixed(1); };
+      const trim = S2.MIX.step, full = await weigh(1), now = await weigh(trim); S2.MIX.step = trim; A.solo = null; M.rest = 0; window._steps = { full, now, d: +(now - full).toFixed(1) };
+      return (window._steps.d < -4.5 && window._steps.d > -7.5) || JSON.stringify(window._steps);`);
+    const steps = await t.eval('return window._steps;');
+    t.metric('a footstep\'s loudest moment (effects LUFS): untrimmed → now', `${steps.full} → ${steps.now} (${steps.d} dB)`);
     await t.step('a rolling log: its rumble a live voice in the mix, following it, and its thud and crack', `${A} const S2 = await import('/src/audio/sound.js'); A.log = []; A.calls = [];
       const v = S2.voice('logRumble'), at = P.pos.clone().add(new V(4, 0, 0)); v.set(at, 1, 1); await wait(400); const m = A.meters().sfx.lufs; at.x += 3; v.set(at, 0.5, 1); v.stop();
       g.sound('logThud', { at, k: 1 }); const src = await (await fetch('/src/game/harvest.js')).text();
@@ -134,19 +187,19 @@ export default {
     // ---- the mix: effects, ambience and music at a few places and moments. The beds are weighed with the storm wall's
     // lightning held (its thunder is heard all over the island, now and then: it has a place of its own at the end)
     const mix = {};
-    await t.eval(`${A} AG.S.still = false; AG.S.timeScale = 0; AG.S.time = 0.3; AG.STORM_WALL.quiet = true; AG.setWeather('clear'); AG.WEATHER.k.rain = 0; Mu.stopMusic(0.2); for (const c of [...g.creatures.list]) g.creatures.remove(c); AG.teleport(300, -300); return true;`);
+    await t.eval(`${A} AG.S.still = false; AG.S.timeScale = 0; AG.S.time = 0.3; AG.STORM_WALL.quiet = true; AG.setWeather('clear'); AG.WEATHER.k.rain = 0; Mu.stopMusic(0.2, 1e9); for (const c of [...g.creatures.list]) g.creatures.remove(c); AG.teleport(300, -300); return true;`);
     await t.page.waitForFunction(() => AG.terrain.pending === 0, null, { timeout: 90000 }); await t.wait(5000);
     mix['meadow, day'] = await t.eval(`${A} ${meter(6)}`);
     await t.eval(`${A} Mu.playTrack('pedias'); return true;`); await t.wait(3000);
     mix['meadow, day, with music'] = await t.eval(`${A} ${meter(6)}`);
-    await t.eval(`${A} Mu.stopMusic(0.2); P.yaw = 0; window._foe = g.creatures.spawn('hog', P.pos.x, P.pos.z + 1.4, { level: 0 }); window._foe.hp = window._foe.max = 1e6; return true;`); await t.wait(1500);
+    await t.eval(`${A} Mu.stopMusic(0.2, 1e9); P.yaw = 0; window._foe = g.creatures.spawn('hog', P.pos.x, P.pos.z + 1.4, { level: 0 }); window._foe.hp = window._foe.max = 1e6; return true;`); await t.wait(1500);
     mix['a fight'] = await t.eval(`${A} const foe = window._foe; let k = 0; const iv = setInterval(() => { k++; P.yaw = Math.atan2(foe.pos.x - P.pos.x, foe.pos.z - P.pos.z); g.combat.strike(k % 3 ? It.crudeDagger : It.crudeAxe); if (k % 4 === 0) { P.stats.heal(99); g.combat.hitPlayer(foe, [3, 4, 'pierce']); } }, 600);
       const r = await (async () => { ${meter(6)} })(); clearInterval(iv); g.creatures.remove(foe); return r;`);
     await t.eval(`${A} AG.setWeather('heavyRain'); AG.WEATHER.k.rain = 1; return true;`); await t.wait(4000);
     mix['meadow, heavy rain'] = await t.eval(`${A} ${meter(6)}`);
     await t.eval(`${A} AG.setWeather('clear'); AG.WEATHER.k.rain = 0; return true;`);
     await visit(t, 'forest');
-    await t.eval(`${A} AG.S.still = false; AG.S.time = 0.86; AG.STORM_WALL.quiet = true; return true;`); await t.wait(5000);
+    await t.eval(`${A} AG.S.still = false; AG.S.time = 0.86; AG.STORM_WALL.quiet = true; M.rest = 0; return true;`); await t.wait(5000);   // (the land's music with it, as it now always is)
     mix['forest, night'] = await t.eval(`${A} ${meter(6)}`);
     await t.eval(`${A} AG.S.time = 0.3; AG.STORM_WALL.quiet = false; AG.teleport(6, 4); return true;`); await t.page.waitForFunction(() => AG.terrain.pending === 0, null, { timeout: 90000 }); await t.wait(4000);
     mix['the shore, 700 m from the storm wall'] = await t.eval(`${A} ${meter(10)}`);
