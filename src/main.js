@@ -149,8 +149,8 @@ const warmUp = () => { if (warmed) return; warmed = 2; const w = veg.warmMeshes(
   // (and each program's link finished and looked at now: the browser links them only when first asked, which three does
   // the first time the program draws, so a program compiled here still stalled the frame that first used it)
   // (and the fire's shadow drawn once with them all, for its own shaders: render/lights.js)
-  const fire = warmFireShadow(w, player.hero.root);
-  try { renderer.compile(scene, camera); if (fire) renderer.render(scene, camera); for (const p of renderer.info.programs) p.getUniforms(); } catch { /* a warm-up only */ } fire?.(); renderer.setRenderTarget(rt); scene.remove(w); for (const m of w.children) m.dispose?.(); };
+  const fire = warmFireShadow(w, player.hero.root), unhide = player.hero.warmAll?.();   // (and every part the hero may wear: hero.js)
+  try { renderer.compile(scene, camera); if (fire) renderer.render(scene, camera); for (const p of renderer.info.programs) p.getUniforms(); } catch { /* a warm-up only */ } fire?.(); unhide?.(); renderer.setRenderTarget(rt); scene.remove(w); for (const m of w.children) m.dispose?.(); };
 // (and the meadow's grass clumps in, so their shaders are compiled with the rest: grass.js)
 const loaded = () => Math.min(GRASS.settled ? 1 : 0.97, (terrain.drawn > 40 && terrain.pending === 0 ? 0.6 : terrain.drawn / 70) + (player.hero.model ? 0.25 : 0) + (veg.near.size > 6 ? 0.15 : 0));
 const readiness = () => { const k = loaded(); if (k >= 1) warmUp(); return warmed === 2 ? 1 : Math.min(k, 0.97); };

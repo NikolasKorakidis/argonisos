@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { FootIK, soleOf } from './footik.js';
 import { Cape, CAPE_MODEL } from './cape.js';
+import { heroMaterial, restLook, KIND } from './hero-look.js';
 import { loadFBX, loadGLB, loadPack, loadTex } from '../assets.js';
 import { clamp, lerp, smooth } from '../util/math.js';
 
@@ -21,11 +22,12 @@ export const BODIES = { man: { file: 'hero', height: 1.95, tint: 0xb4aeb4, name:
 // ---- The hero's look, chosen in the character creator and kept with the saved game. Hair, beards and wreaths are
 // Synty's (Ancient Empire and Generic: pack/heroLooks, each a part of its own, fitted on the head like the helmets);
 // colours are the body's palette recoloured where it shows skin, hair, brows, eyes and cloth (lookMaterial)
-// [id, name, colour]: the colour each takes, in sRGB
-export const SKINS = [['pale', 'Pale', 0xffd8c0], ['fair', 'Fair', 0xffcbad], ['olive', 'Olive', 0xe0ae84], ['tan', 'Sun-browned', 0xc89068], ['bronze', 'Bronze', 0xa8704c], ['brown', 'Brown', 0x845438], ['dark', 'Dark', 0x5e3c28], ['deep', 'Deep', 0x40281c]];
-export const HAIR_COLOURS = [['black', 'Black', 0x1a1614], ['darkBrown', 'Dark brown', 0x30221a], ['brown', 'Brown', 0x4f402c], ['chestnut', 'Chestnut', 0x693a22], ['auburn', 'Auburn', 0x80341e], ['copper', 'Copper', 0xa05228], ['darkBlond', 'Dark blond', 0x8c6c40], ['blond', 'Blond', 0xc4a060], ['grey', 'Grey', 0x8c8882], ['white', 'White', 0xdcd8ce]];
-export const EYES = [['brown', 'Brown', 0x2a1a10], ['dark', 'Dark', 0x100c0a], ['hazel', 'Hazel', 0x3a2c14], ['green', 'Green', 0x1e3622], ['blue', 'Blue', 0x1c2e4c], ['grey', 'Grey', 0x30363c]];   // (dark: the eye is a flat little panel, a bright one reads as paint)
-export const CLOTHS = [['linen', 'Linen', 0xb8ae9a], ['white', 'White', 0xdcd8d0], ['saffron', 'Saffron', 0xd29628], ['madder', 'Madder red', 0xa02c1e], ['purple', 'Tyrian purple', 0x6a1e48], ['indigo', 'Indigo', 0x2c3a6a], ['olive', 'Olive', 0x66693a], ['umber', 'Umber', 0x6e5034]];
+// [id, name, colour]: the colour each takes, in sRGB. Muted, earthy (Valheim's way: the reviewer, 23 Nov): skins a little
+// greyer, hair dyes nearer natural, clothes the colours of wool, linen and plant dyes, each still unlike its neighbours
+export const SKINS = [['pale', 'Pale', 0xf0d6c4], ['fair', 'Fair', 0xe8c6ae], ['olive', 'Olive', 0xcca886], ['tan', 'Sun-browned', 0xb88c6c], ['bronze', 'Bronze', 0x9a7054], ['brown', 'Brown', 0x7a5640], ['dark', 'Dark', 0x5a3e2e], ['deep', 'Deep', 0x3e2a20]];
+export const HAIR_COLOURS = [['black', 'Black', 0x1c1916], ['darkBrown', 'Dark brown', 0x2f241d], ['brown', 'Brown', 0x4c3f30], ['chestnut', 'Chestnut', 0x5e3c2a], ['auburn', 'Auburn', 0x703a26], ['copper', 'Copper', 0x8e5634], ['darkBlond', 'Dark blond', 0x846e4a], ['blond', 'Blond', 0xb49e72], ['grey', 'Grey', 0x8a8781], ['white', 'White', 0xd0ccc2]];
+export const EYES = [['brown', 'Brown', 0x2a1a10], ['dark', 'Dark', 0x100c0a], ['hazel', 'Hazel', 0x3a2c14], ['green', 'Green', 0x263828], ['blue', 'Blue', 0x26344a], ['grey', 'Grey', 0x32373b]];   // (dark: the eye is a flat little panel, a bright one reads as paint)
+export const CLOTHS = [['linen', 'Linen', 0xb0a68e], ['white', 'White', 0xcfc9ba], ['saffron', 'Saffron', 0xb88a3e], ['madder', 'Madder red', 0x8a3c2c], ['purple', 'Tyrian purple', 0x5e2e46], ['indigo', 'Indigo', 0x36425e], ['olive', 'Olive', 0x62643e], ['umber', 'Umber', 0x6a5038]];
 // [id, name, part(s)] (the parts in pack/heroLooks; 'hair' is the Greek warriors' curls, from pack/heroArmour), and whom
 // it suits first ('m' / 'f': the creator lists those first for the body chosen, and Randomise picks among them)
 const G = (n) => 'SM_Gen_Chr_Attach_' + n, AE = (n) => 'SM_Chr_Hair_' + n;
@@ -64,19 +66,14 @@ const lin = (hex) => new THREE.Color(hex);   // (three keeps colours linear: the
 // The palette's cells (in the refit model's UVs: u across, v up from the bottom of Synty's Generic_01_A), as Synty's own
 // SkinMask / HairMask place them, and the colours they hold, which the chosen ones replace
 const BASE = { skin: lin(0xffcbad), hair: lin(0x4f402c), cloth: lin(0xc6c2be), curls: lin(0x3e2616) };   // (curls: the Greek warriors' hair, in their own palette)
-// The armour's bare arms and legs (the Greek warriors' palette has its skin in two columns) take the chosen skin too
-// (and the armour's gold and bronze, told by their colour in the texture, are metal: polished, taking the sky's light, not
-// matte yellow plastic; the review of 20 Nov)
-function armourSkin(m, U) {
-  m.onBeforeCompile = (s) => {
-    if (U) s.uniforms.uSkin = U.uSkin;
-    s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>\n${U ? 'uniform vec3 uSkin;' : ''}`)
-      .replace('#include <map_fragment>', `#include <map_fragment>
-      ${U ? 'if (vMapUv.x > 0.505 && vMapUv.x < 0.575 && vMapUv.y < 0.125) diffuseColor.rgb *= uSkin;' : ''}
-      float metalR = max(diffuseColor.r, 1e-3), metalK = smoothstep(0.15, 0.28, diffuseColor.r) * smoothstep(0.42, 0.55, diffuseColor.g / metalR) * (1.0 - smoothstep(0.18, 0.3, diffuseColor.b / metalR));   // (bright, yellow to orange, little blue: not leather, cloth or skin)`)
-      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n      metalnessFactor = mix(metalnessFactor, 0.6, metalK); roughnessFactor = mix(roughnessFactor, 0.38, metalK);');
-  };
-  m.customProgramCacheKey = () => (U ? 'heroArmourSkin' : 'heroArmourMetal'); return m;
+// The armour's material (painted: hero-look.js). Its bare arms and legs (the Greek warriors' palette has its skin in two
+// columns) take the chosen skin; its gold and bronze, told by their colour, are metal (painted highlights and bevels, not
+// polished plastic: the reviews of 20 and 23 Nov); its dark warm browns are leather straps, the rest is cloth
+function armourMaterial(map, U) {
+  return heroMaterial({ map, color: 0xc4c4c4, key: U ? 'heroArmourSkin' : 'heroArmourMetal', U: U ? { uSkin: U.uSkin } : {}, pars: U ? 'uniform vec3 uSkin;' : '', sort: `
+    ${U ? `if (q.x > 0.505 && q.x < 0.575 && q.y < 0.125) { diffuseColor.rgb *= uSkin; hKind = ${KIND.skin}; } else` : ''}
+    if (hMetal(diffuseColor.rgb) > 0.5) { hKind = ${KIND.metal}; diffuseColor.rgb = hMute(diffuseColor.rgb, 0.85); }
+    else { hKind = hLeather(diffuseColor.rgb) > 0.5 ? ${KIND.leather} : ${KIND.cloth}; diffuseColor.rgb = hMute(diffuseColor.rgb, 0.75); }` });
 }
 // The bare pieces worn over the body (shells: the Corinthian set) were made on the Greek warriors' slimmer body, and a
 // low-poly shell over a low-poly body lets the body's corners through its faces. Two passes, in the rest pose, once per
@@ -173,25 +170,20 @@ function newBrows(head, mat) {
   m.bind(head.skeleton, head.bindMatrix); m.receiveShadow = true; m.frustumCulled = false;
   return m;
 }
-// The body's material, its palette recoloured where it shows skin (by how much the chosen skin differs from the palette's,
-// so lips and stubble keep their shade), hair (the hair cell: Synty's hair and beards, all made on it), the brows (a near
-// black band on the man, too heavy: the hair's colour, a little darker), the eyes and the cloth (a grey column)
+// The body's material (painted: hero-look.js), its palette recoloured where it shows skin (by how much the chosen skin
+// differs from the palette's, so lips and stubble keep their shade), hair (the hair cell: Synty's hair and beards, all
+// made on it), the brows (a near black band on the man, too heavy: the hair's colour, a little darker), the eyes and the
+// cloth (a grey column); whatever else the palette holds is muted
 function lookMaterial(map, tint) {
   const U = { uSkin: { value: new THREE.Color(1, 1, 1) }, uShade: { value: new THREE.Color(1, 1, 1) }, uHair: { value: new THREE.Color(1, 1, 1) }, uBrow: { value: new THREE.Color(0.02, 0.02, 0.02) }, uEyes: { value: new THREE.Color(0, 0, 0) }, uCloth: { value: new THREE.Color(1, 1, 1) } };
-  const m = new THREE.MeshStandardMaterial({ map, color: tint, roughness: 0.8, metalness: 0 });
-  m.onBeforeCompile = (s) => {
-    Object.assign(s.uniforms, U);
-    s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 uSkin, uShade, uHair, uBrow, uEyes, uCloth;').replace('#include <map_fragment>', `#include <map_fragment>
-      { vec2 q = vMapUv;
-        if (q.x < 0.0361 && q.y > 0.1577 && q.y < 0.1743) diffuseColor.rgb = diffuse * uShade;   // (the man's stubble, a pale grey mask: the skin in shadow)
-        else if (q.x < 0.0415 && q.y > 0.1289 && q.y < 0.2188) diffuseColor.rgb *= uSkin;
-        else if (q.x > 0.042 && q.x < 0.0586 && q.y > 0.1875 && q.y < 0.2031) diffuseColor.rgb *= uHair;
-        else if (q.x > 0.245 && q.x < 0.256 && q.y > 0.0996 && q.y < 0.2188) diffuseColor.rgb *= uCloth;
-        else if (q.y < 0.0156 && q.x > 0.0938 && q.x < 0.125) diffuseColor.rgb = diffuse * uBrow;
-        else if (q.y < 0.0156 && q.x < 0.0313) diffuseColor.rgb = diffuse * uEyes; }`);
-  };
-  m.customProgramCacheKey = () => 'heroLook';
-  m.userData.look = U; return m;
+  return heroMaterial({ map, color: tint, key: 'heroLook', U, pars: 'uniform vec3 uSkin, uShade, uHair, uBrow, uEyes, uCloth;', sort: `
+    if (q.x < 0.0361 && q.y > 0.1577 && q.y < 0.1743) { diffuseColor.rgb = diffuse * uShade; hKind = ${KIND.skin}; }   // (the man's stubble, a pale grey mask: the skin in shadow)
+    else if (q.x < 0.0415 && q.y > 0.1289 && q.y < 0.2188) { diffuseColor.rgb *= uSkin; hKind = ${KIND.skin}; }
+    else if (q.x > 0.042 && q.x < 0.0586 && q.y > 0.1875 && q.y < 0.2031) { diffuseColor.rgb *= uHair; hKind = ${KIND.hair}; }
+    else if (q.x > 0.245 && q.x < 0.256 && q.y > 0.0996 && q.y < 0.2188) { diffuseColor.rgb *= uCloth; hKind = ${KIND.cloth}; }
+    else if (q.y < 0.0156 && q.x > 0.0938 && q.x < 0.125) diffuseColor.rgb = diffuse * uBrow;
+    else if (q.y < 0.0156 && q.x < 0.0313) diffuseColor.rgb = diffuse * uEyes;
+    else diffuseColor.rgb = hMute(diffuseColor.rgb, 0.75);` });
 }
 // How the right hand holds a handle, in the hand bone's space (+x thumb side, +y fingers, +z palm; units of the rig, ~0.8 cm):
 // where the handle's grip point sits, how far the handle tips from across the palm, and how far each finger joint curls
@@ -410,6 +402,8 @@ export class Hero {
     this.wrap.remove(this.placeholder); this.wrap.add(obj); this.model = obj;
     // the cape (cape.js), fitted to this body while it stands in its rest pose, shown when worn
     this.cape = gl && cape ? new Cape(cape, obj, bones, this.parts) : null; this.show();
+    // (where every painted part lies in the rest pose, for its painted detail: hero-look.js)
+    if (gl) { const all = []; obj.traverse((m) => { if (m.isMesh) all.push(m); }); if (this.cape) all.push(this.cape.mesh); restLook(all, this.wrap); }
     this.skin = null;
     this.mixer = new THREE.AnimationMixer(obj);
     // Bones are in centimetres: attachment points sit in bone space, the objects on them undo the model scale
@@ -432,10 +426,11 @@ export class Hero {
     src.traverse((m) => { if (!m.isSkinnedMesh) return; if (m.name === 'base_head') headA = m; if (looks ? !m.name.startsWith('base_') : m.name.startsWith('wear_') || m.name === 'hair') { wear.push(m); map ||= m.material.map; } });
     const headB = host?.children.find((m) => m.name === 'base_head');
     const box = (m) => m.geometry.boundingBox.clone().applyMatrix4(m.bindMatrix), Ba = headA && headB && box(headA), Bb = Ba && box(headB);
-    const mat = looks || armourSkin(new THREE.MeshStandardMaterial({ map, color: 0xc4c4c4, roughness: 0.8, metalness: 0 }), this.mat?.userData.look);
-    // (the wreaths are coloured from the Ancient Empire's palette, not the body's; the curls take the chosen hair colour)
-    if (looks) this.wreathMat ||= new THREE.MeshStandardMaterial({ map: loadTex('pack/tex/empire.webp'), color: 0xb4b4b4, roughness: 0.75, metalness: 0 });
-    else { this.curlsMat = new THREE.MeshStandardMaterial({ map, color: 0xffffff, roughness: 0.85, metalness: 0 }); this.curlsMat.userData.base = map; }
+    const mat = looks || armourMaterial(map, this.mat?.userData.look);
+    // (the wreaths are coloured from the Ancient Empire's palette, not the body's: the golden one metal, the laurel left
+    // plain; the curls take the chosen hair colour)
+    if (looks) this.wreathMat ||= heroMaterial({ map: loadTex('pack/tex/empire.webp'), color: 0xb4b4b4, key: 'heroWreath', sort: `if (hMetal(diffuseColor.rgb) > 0.5) hKind = ${KIND.metal}; diffuseColor.rgb = hMute(diffuseColor.rgb, 0.8);` });
+    else { this.curlsMat = heroMaterial({ map, key: 'heroHair', sort: `hKind = ${KIND.hair};` }); this.curlsMat.userData.base = map; }
     const ca = new THREE.Vector3(), cb = new THREE.Vector3(), ja = new THREE.Vector3(), jb = new THREE.Vector3(), v = new THREE.Vector3(), inv = new THREE.Matrix4();
     for (const m of wear) {
       const list = m.skeleton.bones.map((b) => bones[b.name]); if (!host || list.some((b) => !b)) continue;
@@ -451,6 +446,13 @@ export class Hero {
       m.material = m.name === 'hair' ? this.curlsMat : /Crown/.test(m.name) ? this.wreathMat : mat; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false;
     }
     if (host && !looks) overBody(wear.filter((m) => m.userData.shell && m.parent === host), host.children.filter((m) => /^base_/.test(m.name)));
+  }
+  // Every part shown for a moment and then put back as it was (main.js warmUp: the armour's, the cape's, the hair's and
+  // the wreaths' programs compiled with the rest, so putting one on later doesn't stall a frame)
+  warmAll() {
+    const was = [...Object.values(this.parts || {}), ...(this.cape ? [this.cape.group] : [])].map((m) => [m, m.visible]);
+    for (const [m] of was) m.visible = true;
+    return () => { for (const [m, v] of was) m.visible = v; };
   }
   // Show the armour worn ({ head, body, legs }: item ids). The pack's hero carries each piece as a part of its own
   // (wear_<id>, from dress) and its own body in three (base_head, base_body, base_legs): armour takes the place of the
