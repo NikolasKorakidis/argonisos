@@ -31,9 +31,12 @@ export function dust(pos, n = 14, color = 0xb8a684, size = 0.35) { burst(pos, { 
 //   about 0.1 for a twig, 0.3 for an axe in a trunk, 0.45 for a pickaxe on rock, 0.6 for a tree crashing down beside you.
 // - addShake(k): a rumble that dies away over a second or so (a boss's slam, thunder, the storm wall's buffeting).
 // SHAKE.k is the setting (On 1, Reduced 0.4, Off 0: settings.js); every shake goes through it.
+// GAIN: every shake a tenth stronger (a Greek reviewer, 23 Nov: "camera shake 10% stronger"), whatever asked for it, and
+// CAP the most the view may turn on any axis however many come at once (radians: 4.5°, more than a boss's landing at its
+// peak, so only a pile of them meets it), so a slam, a roar and a blow landing together never throw the view about.
 export const SHAKE = { k: 1 };
 export const shake = { k: 0, kicks: [], n: 0, last: 0 };   // (n, last: how many punches so far and the last one's strength, for the tests)
-const PUNCH_T0 = 0.035, PUNCH_END = 0.28, PUNCH_A = 0.045, RUMBLE_A = 0.02;   // (seconds; radians at full strength: 2.6° and 1.1°)
+const PUNCH_T0 = 0.035, PUNCH_END = 0.28, PUNCH_A = 0.045, RUMBLE_A = 0.02, GAIN = 1.1, CAP = 0.08;   // (seconds; radians at full strength: 2.6° and 1.1°, before GAIN)
 export function addShake(k) { shake.k = Math.min(1, shake.k + k); }
 // a rumble held at k for as long as it's asked for each frame (the ground shaking as a boss comes)
 export function rumble(k) { shake.k = Math.max(shake.k, Math.min(1, k)); }
@@ -60,8 +63,9 @@ function applyShake(dt, camera) {
     pitch += a * (Math.sin(t * 37) * 0.6 + Math.sin(t * 61 + 1.3) * 0.4); yaw += a * (Math.sin(t * 43 + 2.1) * 0.6 + Math.sin(t * 71 + 0.4) * 0.4); roll += a * 0.5 * Math.sin(t * 29 + 4);
     shake.k = Math.max(0, shake.k - dt * 2.5);
   }
-  const k = SHAKE.k; if (!k || !(pitch || yaw || roll)) return;
-  camera.rotateY(yaw * k); camera.rotateX(pitch * k); camera.rotateZ(roll * k);
+  const k = SHAKE.k * GAIN, cap = (a) => Math.max(-CAP, Math.min(CAP, a * k)); shake.turn = 0; if (!k || !(pitch || yaw || roll)) return;
+  shake.turn = Math.max(Math.abs(cap(yaw)), Math.abs(cap(pitch)), Math.abs(cap(roll)));   // (the largest turn this frame, for the tests)
+  camera.rotateY(cap(yaw)); camera.rotateX(cap(pitch)); camera.rotateZ(cap(roll));
 }
 // What a blow throws up, by what it struck: wood chips and pale splinters off a trunk or log, stone chips, dust and a
 // spark off rock, leaves and twigs off a bush, a puff and a few sparks off a creature's hide. k: how hard (0 to 1)

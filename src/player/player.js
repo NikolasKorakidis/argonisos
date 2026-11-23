@@ -36,10 +36,15 @@ const TURN_MAX = 12;
 // The free camera while seated (seat.look: sitting on the ground, game/acts.js): how far from the hero it may go (m), how fast WASD and Q / E move that point (m/s, Shift three times as fast), how close to the
 // ground it may come (m), the pitch it may reach either way (radians) and the wheel's range (m)
 const LOOK = { r: 30, speed: 3, low: 0.15, pitch: 1.5, near: 0.8, far: 14 };
-// The boss camera (Patch 21): in a fight with one of the giant bosses (bossCam, from trial.js) the follow camera eases back
-// and up so the beast fits in the view: at least dist metres back, the point it looks at lift metres higher, the view a
-// few degrees wider (fov); and while a boss arrives (focus: where it comes down) it turns to look that way
+// The boss camera (Patch 21): in a fight with the Chimera (bossCam, from trial.js; the Minotaur's keeps the follow camera
+// since Patch 25, TYPES bossCam) the follow camera eases back and up so the beast fits in the view: at least dist metres
+// back, the point it looks at lift metres higher, the view a few degrees wider (fov); and while a boss arrives (focus:
+// where it comes down) it turns to look that way
 const BOSS_CAM = { dist: 13, lift: 2.6, fov: 8, in: 0.9, out: 0.5 };
+// The camera held off what's solid (Patch 25, like Valheim: occlusion.js castCamera): how far over the ground the line to it
+// keeps (m), how quickly it eases back out once the way clears (1/s; in, it comes at once), and how close to the hero's
+// middle it may come before he is hidden from it, and how far it must go again before he's back (m)
+const CAM = { over: 0.35, out: 3.5, hide: [0.45, 0.6] }, HIDE_LAYER = 6;
 // Stunned (a boss's roar, a guard broken): no moving, jumping or striking; the hero reels (the big stagger played slow and
 // whole) and sways dazed on his feet, and the view swims: blurred, greyed and wavering (DAZE: its blur in px, how much
 // colour goes and how far it wavers, in degrees), easing in at once and out over its last moments
@@ -319,24 +324,43 @@ export class Player {
     const k = this.aimK, dist = lerp(lerp(this.camDist, Math.max(this.camDist, BOSS_CAM.dist), bk), 2.3, k), pitch = this.camPitch;
     const right = new THREE.Vector3(Math.cos(this.camYaw), 0, -Math.sin(this.camYaw));
     const target = this.camT.clone().addScaledVector(right, (0.45 + 0.35 * k) * (1 - L)); target.y -= 0.15 * k; target.y += BOSS_CAM.lift * bk;
+    // (the shoulder looked over is out of the wall the hero's right side is against: cast to from his head, CAM)
+    if (!L) { const free = this.cast(this.camT, target); if (free !== null) target.sub(this.camT).setLength(free).add(this.camT); }
     if (L) {
       // the point looked at: moved off the hero, kept over the ground and out of walls (stopped where one stands between)
       target.add(this.lookOff); target.y = Math.max(target.y, this.groundHere(target.x, target.z, target.y) + LOOK.low);
-      const b = target.distanceTo(this.camT) > 0.05 ? this.camBlock?.(this.camT, target) : null; if (b !== undefined && b !== null) { target.sub(this.camT).setLength(Math.max(0, b - 0.3)).add(this.camT); this.lookOff.copy(target).sub(this.camT); }
+      const b = target.distanceTo(this.camT) > 0.05 ? this.cast(this.camT, target, LOOK.low * 0.6) : null; if (b !== null) { target.sub(this.camT).setLength(b).add(this.camT); this.lookOff.copy(target).sub(this.camT); }
     }
     const fov = lerp(60 + BOSS_CAM.fov * bk, 50, k); if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
     const off = new THREE.Vector3(Math.sin(this.camYaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(this.camYaw) * Math.cos(pitch)).multiplyScalar(dist);
-    const want = target.clone().add(off), over = lerp(0.4, LOOK.low, L);
-    // keep the camera out of hills between it and the player (free, it may come down close over the grass)
-    for (let i = 1; i <= 6; i++) { const p = target.clone().lerp(want, i / 6), g = groundAt(p.x, p.z) + over; if (p.y < g) { want.y += g - p.y; } }
-    const wc = waterAt(want.x, want.z); want.y = Math.max(want.y, groundAt(want.x, want.z) + lerp(0.5, LOOK.low, L), wc > 0.05 ? wc + 0.3 : -0.6);   // (and over the river's water, never under it)
+    // where the camera would be with nothing in the way: over the ground where it stands (free, it may come down close over
+    // the grass) and over the river's water, never under it
+    const want = target.clone().add(off), wc = waterAt(want.x, want.z); want.y = Math.max(want.y, groundAt(want.x, want.z) + lerp(0.5, LOOK.low, L), wc > 0.05 ? wc + 0.3 : -0.6);
     if (L) {
       // (free: over floors too, and never further than LOOK.r from the hero)
       const fromHero = want.clone().sub(raw); if (fromHero.length() > LOOK.r) want.copy(raw).add(fromHero.setLength(LOOK.r));
       want.y = Math.max(want.y, this.groundHere(want.x, want.z, want.y) + LOOK.low);
     }
-    // ...and out of walls and roofs: pull in to just in front of whatever is between
-    const block = this.camBlock?.(target, want); if (block !== undefined && block !== null) { const dir = want.clone().sub(target); want.copy(target).add(dir.setLength(Math.max(0.6 * (1 - L) + 0.2 * L, block - 0.25))); }
-    if (jump) camera.position.copy(want); else camera.position.lerp(want, Math.min(1, dt * lerp(14 + k * 10, 6, L))); camera.lookAt(target);
+    // That point followed smoothly (camW), then the camera put on the line from the shoulder to it, in front of the first
+    // solid thing between (CAM: a hill, a wall, a roof, a rock, a trunk; never leaves): in at once when something comes
+    // between, out again eased as it clears, so brushing past a trunk is one quick step in and a glide back, no pumping
+    if (jump || !this.camW) (this.camW ||= new THREE.Vector3()).copy(want); else this.camW.lerp(want, Math.min(1, dt * lerp(14 + k * 10, 6, L)));
+    const dir = this.camW.clone().sub(target), full = dir.length(), free = this.cast(target, this.camW, lerp(CAM.over, LOOK.low * 0.6, L)) ?? full;
+    this.camD = jump || this.camD === undefined ? free : Math.min(free, full, this.camD + Math.max(0, full - this.camD) * e(CAM.out));
+    this.camFree = free; camera.position.copy(target).addScaledVector(dir.normalize(), this.camD);
+    const wf = waterAt(camera.position.x, camera.position.z); if (wf > 0.05 && camera.position.y < wf + 0.2 && target.y > wf) camera.position.y = wf + 0.2;   // (pulled in over the water, still over it)
+    camera.lookAt(dir.negate().add(target)); this.hideNear();   // (at a point beyond the one looked at, the same way: pulled right in to it, the view still faces the hero's way)
+  }
+  // How far the camera may go from a towards b before it meets something solid (occlusion.js castCamera, installed as
+  // camCast), or null with no world to cast against (the creator, a test that turns it off)
+  cast(a, b, over) { const f = this.camCast?.(a, b, over === undefined ? undefined : { over }); return f === undefined || f === null ? null : f; }
+  // The camera pulled right in to the hero (backed into a corner): his body would fill the view from inside, so it is
+  // drawn only into the sun's shadows meanwhile (the trees' shadow layer, vegetation.js SHADE_LAYER: the shadow cameras
+  // see it, the view doesn't), and back once the camera is clear of him (CAM.hide: in and out, metres from his middle)
+  hideNear() {
+    const c = camera.position, p = this.pos, h = Math.hypot(c.x - p.x, c.z - p.z), up = c.y - p.y, inside = up > -0.2 && up < 2 && h < (this.heroHidden ? CAM.hide[1] : CAM.hide[0]);
+    if (inside) { const set = (this.hidMeshes ||= new Set()); this.root.traverse((m) => { if ((m.isMesh || m.isSkinnedMesh) && !set.has(m)) { set.add(m); m.userData.camMask = m.layers.mask; m.layers.set(HIDE_LAYER); } }); }
+    else if (this.heroHidden) { for (const m of this.hidMeshes) m.layers.mask = m.userData.camMask ?? 1; this.hidMeshes.clear(); }
+    this.heroHidden = inside;
   }
 }

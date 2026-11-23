@@ -1,12 +1,16 @@
-// Keeping the hero in view: whatever stands between the camera and the hero fades to see-through, and comes back when
-// the view is clear. Only the obstructing things change, and shared materials are never touched:
-//   building pieces: each piece already owns its materials, so those fade directly (and are restored exactly)
-//   site buildings: their meshes share materials, so an obstructing mesh gets its own faded copy until it's clear
-//   trees and rocks: drawn as instances of shared batches, so that one tree is hidden from its batch and a faded single
-//                    copy stands in its place until the view is clear
+// Keeping the hero in view (Patch 25: the Greek reviewer, 23 Nov: "instead of the things in front of the camera disappearing
+// when they block it, the camera itself should move closer to the player, like Valheim"). Two parts:
+//   the camera's collision (castCamera, below): the follow camera is cast from the hero's head to where it wants to be
+//     and stops in front of the first solid thing on the way (player.js updateCamera), so walls, rocks, trunks, roofs and
+//     the ground no longer fade: they hold the camera off instead
+//   foliage: Valheim lets the camera through leaves, and so does this; a tree whose crown comes between the camera and the
+//     hero, or that the camera stands among, still fades (Occlusion). Trees are drawn as instances of shared batches, so
+//     that one tree is hidden from its batch and a faded single copy stands in its place until the view is clear. (Building
+//     pieces and the sites' buildings faded here too until Patch 25.)
 import * as THREE from 'three';
 import { camera } from './core.js';
-import { STRIDE } from '../world/flora.js';
+import { STRIDE, SPECIES } from '../world/flora.js';
+import { groundAt } from '../world/groundcut.js';
 
 const ray = new THREE.Raycaster(), _a = new THREE.Vector3(), _d = new THREE.Vector3(), _m = new THREE.Matrix4();
 const FADE = 0.28, KEEP = 0.25;   // opacity when faded; seconds an object stays faded after it stops obstructing
@@ -38,7 +42,7 @@ function spare(c) { const src = c.userData.fadeSrc; (SPARE.get(src) || SPARE.set
 export function fadeAhead(src, coverage = false) { if (SPARE.get(src)?.length) return SPARE.get(src)[0]; const c = fadedCopy(src, coverage); spare(c); return c; }
 
 export class Occlusion {
-  constructor(g) { this.g = g; this.faded = new Map(); this.t = 0; }   // key → { kind, ..., seen }
+  constructor(g) { this.g = g; this.faded = new Map(); this.t = 0; g.player.camCast = (a, b, o) => castCamera(g, a, b, o); }   // key → { kind, ..., seen }
   update(dt) {
     const g = this.g, P = g.player; if (!P || P.dead || g.S.fly) { this.clearAll(); return; }
     this.t -= dt; const now = performance.now() / 1000;
@@ -68,11 +72,9 @@ export class Occlusion {
       if (clear && e.k > 0.97) { this.restore(e); this.faded.delete(key); }
     }
   }
-  // what can obstruct: building pieces near the camera, site buildings, nearby trees and rocks
+  // what can obstruct: nearby trees (and rocks: the camera is held off those, so only their tops ever come between)
   candidates() {
-    const g = this.g, out = this.cand ||= [], c = camera.position; out.length = 0;   // (one list for both rays, kept)
-    for (const p of g.build.near(c.x, c.z, 14)) for (const m of p.inner.children) out.push(m);
-    for (const grp of g.structures.groups) if (grp.position.distanceTo(c) < 70) for (const m of grp.children) if (m.isMesh) out.push(m);
+    const g = this.g, out = this.cand ||= []; out.length = 0;   // (one list for both rays, kept)
     for (const b of g.veg.batches.values()) if (b.meshes[0].count) for (const m of b.meshes) if (!m.userData.shade) out.push(m);   // (not the shadows' stand-ins: the ray's layer never meets them)
     // a faded tree is out of its batch: its stand-in copy has to keep catching the ray, or it would pop back and fade again
     for (const e of this.faded.values()) if (e.kind === 'tree') e.single.traverse((m) => { if (m.isMesh) out.push(m); });
@@ -81,40 +83,89 @@ export class Occlusion {
   keyOf(hit) {
     const o = hit.object;
     if (o.userData.fadeKey) return o.userData.fadeKey;
-    if (o.userData.piece) return 'p:' + o.userData.piece.uid;
     if (o.userData.batch && hit.instanceId !== undefined) { const t = this.g.veg.treeAt(o, hit.instanceId); hit.tree = t; return `t:${t.cell.cx},${t.cell.cz},${t.i}`; }
-    if (o.parent && this.g.structures.groups.includes(o.parent)) return 's:' + o.uuid;
     return null;
   }
   fade(key, hit, now) {
-    const o = hit.object, e = { key, seen: now, k: 1 };
-    if (key[0] === 'p') { const p = o.userData.piece; e.kind = 'piece'; e.piece = p; e.orig = p.mats.map((m) => ({ m, transparent: m.transparent, opacity: m.opacity, depthWrite: m.depthWrite })); }
-    else if (key[0] === 's') { e.kind = 'site'; e.mesh = o; e.origMat = o.material; e.mat = [].concat(o.material).map((m) => fadedCopy(m)); o.material = Array.isArray(o.material) ? e.mat : e.mat[0]; }
-    else {
-      const { cell: c, i } = hit.tree, veg = this.g.veg, it = c.items, s = i * STRIDE;
-      if (veg.removed.has(`${c.cx},${c.cz},${i}`)) return null;
-      e.kind = 'tree'; e.cell = c; e.i = i;
-      const single = veg.single(it[s], it[s + 1]); single.position.set(it[s + 2], it[s + 3], it[s + 4]); single.rotation.y = it[s + 5]; single.scale.setScalar(it[s + 6]);
-      e.mats = []; single.traverse((m) => { if (m.isMesh) { const cm = fadedCopy(m.material, false); m.material = cm; m.castShadow = false; m.userData.fadeKey = key; e.mats.push(cm); } });
-      this.g.scene.add(single); e.single = single;
-      veg.hideTree(c, i, true);
-    }
+    const e = { key, seen: now, k: 1, kind: 'tree' }, { cell: c, i } = hit.tree, veg = this.g.veg, it = c.items, s = i * STRIDE;
+    if (veg.removed.has(`${c.cx},${c.cz},${i}`)) return null;
+    e.cell = c; e.i = i;
+    const single = veg.single(it[s], it[s + 1]); single.position.set(it[s + 2], it[s + 3], it[s + 4]); single.rotation.y = it[s + 5]; single.scale.setScalar(it[s + 6]);
+    e.mats = []; single.traverse((m) => { if (m.isMesh) { const cm = fadedCopy(m.material, false); m.material = cm; m.castShadow = false; m.userData.fadeKey = key; e.mats.push(cm); } });
+    this.g.scene.add(single); e.single = single;
+    veg.hideTree(c, i, true);
     this.faded.set(key, e); return e;
   }
-  apply(e, k) {
-    if (e.kind === 'piece') for (const m of e.piece.mats) { m.transparent = true; m.depthWrite = k > 0.95; m.opacity = k; }
-    else if (e.kind === 'site') for (const m of e.mat) m.opacity = k;
-    else if (e.kind === 'tree') for (const m of e.mats) m.opacity = k;
-  }
+  apply(e, k) { for (const m of e.mats) m.opacity = k; }
   restore(e) {
-    if (e.kind === 'piece') { for (const o of e.orig) { o.m.transparent = o.transparent; o.m.opacity = o.opacity; o.m.depthWrite = o.depthWrite; } }
-    else if (e.kind === 'site') { e.mesh.material = e.origMat; for (const m of e.mat) spare(m); }
-    else if (e.kind === 'tree') {
-      this.g.veg.dropSingle(e.single); for (const m of e.mats) spare(m);
-      // put the instance back, unless the tree was felled meanwhile or its cell was rebuilt
-      const { cx, cz } = e.cell, live = this.g.veg.near.get(cx + ',' + cz) === e.cell;
-      if (live) this.g.veg.hideTree(e.cell, e.i, false);
-    }
+    this.g.veg.dropSingle(e.single); for (const m of e.mats) spare(m);
+    // put the instance back, unless the tree was felled meanwhile or its cell was rebuilt
+    const { cx, cz } = e.cell, live = this.g.veg.near.get(cx + ',' + cz) === e.cell;
+    if (live) this.g.veg.hideTree(e.cell, e.i, false);
   }
   clearAll() { for (const e of this.faded.values()) this.restore(e); this.faded.clear(); }
+}
+
+// ---- The camera's collision. A sphere of CAST.r metres swept from a (the hero's head, or the shoulder the camera looks
+// over) to b (where the camera would be): how far it gets before it meets something solid, in metres (the whole way if
+// nothing). What's solid, all of it from what the game already keeps for walking, never the meshes:
+//   the collider grid (colliders.js: trunks, rocks and boulders, posts, the sites' walls and columns, logs, rubble), each a
+//     standing cylinder; a tree's only up to where its crown begins (CAST.trunk, the giants' far higher), above which the
+//     camera goes through the leaves
+//   the pieces you built, by their solid boxes and their surfaces (floors, stairs, roof panels: build.js def.solids, tops;
+//     an open door not), so a roof keeps the camera under it
+//   the sites' roofs (from where the rooms' ceilings are to about the ridge) and floors and steps (a metre's depth under
+//     them), and the rock of a cave you're in (structures.js rayBlock)
+//   the ground (groundAt, with the buildings' cuts and banks), the sphere's middle kept o.over metres over it
+// A shape the start is already inside is let be: the camera isn't held at the hero by a wall he leans on.
+// o: { r, over } to change the sphere's radius or the ground's margin (the seated free camera comes down over the grass).
+export const CAST = { r: 0.25, over: 0.35, trunk: 4.5, titan: 26, roofUp: 2.5, floorDown: 1, step: 0.35 };
+const TRUNK = SPECIES.map((s) => (s.name === 'titan' ? CAST.titan : CAST.trunk));
+let T0 = 0, T1 = 1;
+// (narrow [T0, T1] to the part of the sweep where lo ≤ a + b·t ≤ hi; false once nothing is left)
+const within = (a, b, lo, hi) => { if (Math.abs(b) < 1e-9) return a >= lo && a <= hi; let s = (lo - a) / b, e = (hi - a) / b; if (s > e) { const q = s; s = e; e = q; } if (s > T0) T0 = s; if (e < T1) T1 = e; return T0 <= T1; };
+// (...and to where (ox, oz) + (dx, dz)·t lies within rr of (cx, cz))
+const inCircle = (ox, oz, dx, dz, cx, cz, rr) => { const px = ox - cx, pz = oz - cz, A = dx * dx + dz * dz, B = 2 * (px * dx + pz * dz), C = px * px + pz * pz - rr * rr;
+  if (A < 1e-12) return C <= 0; const D = B * B - 4 * A * C; if (D < 0) return false; const q = Math.sqrt(D); return within(0, 1, (-B - q) / (2 * A), (-B + q) / (2 * A)); };
+// (a hit only if the sweep enters the shape after its start: entering at 0 means the start was inside)
+const entered = (best) => T0 > 1e-6 && T0 < best;
+const _ca = new THREE.Vector3();
+export function castCamera(g, a, b, o = {}) {
+  const R = o.r ?? CAST.r, dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, len = Math.hypot(dx, dy, dz); if (len < 1e-4) return len;
+  let best = 1;   // (the share of the way that's free)
+  const mx = a.x + dx / 2, mz = a.z + dz / 2, half = Math.hypot(dx, dz) / 2;
+  // the collider grid's cylinders
+  for (const c of g.colliders.near(mx, mz, half + R + 1)) {
+    const y0 = c.y ?? -1e9, y1 = c.h !== undefined ? y0 + c.h : c.ref?.sp !== undefined ? y0 + TRUNK[c.ref.sp] * (c.ref.s || 1) : 1e9;
+    T0 = 0; T1 = best; if (inCircle(a.x, a.z, dx, dz, c.x, c.z, c.r + R) && within(a.y, dy, y0 - R, y1 + R) && entered(best)) best = T0;
+  }
+  // the pieces you built: each one's boxes and surfaces in its own frame (turned with it)
+  for (const p of g.build.near(mx, mz, half + R + 2)) {
+    const d = p.def; if (d.door && p.state?.open) continue;
+    const cs = Math.cos(-p.rot), sn = Math.sin(-p.rot), lx = a.x - p.pos.x, lz = a.z - p.pos.z, ox = lx * cs + lz * sn, oz = -lx * sn + lz * cs, oy = a.y - p.pos.y, ux = dx * cs + dz * sn, uz = -dx * sn + dz * cs;
+    for (const q of d.solids || []) { T0 = 0; T1 = best; if (within(ox, ux, q[0] - q[3] / 2 - R, q[0] + q[3] / 2 + R) && within(oz, uz, q[2] - q[5] / 2 - R, q[2] + q[5] / 2 + R) && within(oy, dy, q[1] - q[4] / 2 - R, q[1] + q[4] / 2 + R) && entered(best)) best = T0; }
+    for (const q of d.tops || []) {
+      // (a surface as a board: 0.25 m deep under it and a little over, the sphere's radius more each way, sloping with a
+      // stair or a roof panel: k its rise along z)
+      const ya = q.y ?? q.y0, k = q.y !== undefined || q.z1 === q.z0 ? 0 : (q.y1 - q.y0) / (q.z1 - q.z0), rv = R * Math.sqrt(1 + k * k);
+      T0 = 0; T1 = best; if (within(ox, ux, Math.min(q.x0, q.x1) - R, Math.max(q.x0, q.x1) + R) && within(oz, uz, Math.min(q.z0, q.z1) - R, Math.max(q.z0, q.z1) + R) && within(oy - ya - k * (oz - q.z0), dy - k * uz, -0.25 - rv, 0.05 + rv) && entered(best)) best = T0;
+    }
+  }
+  // the sites' roofs and floors, in each site's own frame
+  const S = g.structures;
+  if (S) for (const [list, lo, hi] of [[S.roofs, -R, CAST.roofUp + R], [S.tops, -CAST.floorDown - R, 0.05 + R]]) for (const t of list) {
+    if (Math.abs(mx - t.ctx.s.x) > 80 || Math.abs(mz - t.ctx.s.z) > 80) continue;
+    const [ox, oz] = S.local(t, a.x, a.z), [ex, ez] = S.local(t, b.x, b.z), y = t.ctx.s.y + t.y;
+    T0 = 0; T1 = best; if (within(ox, ex - ox, t.x0 - R, t.x1 + R) && within(oz, ez - oz, t.z0 - R, t.z1 + R) && within(a.y, dy, y + lo, y + hi) && entered(best)) best = T0;
+  }
+  // a cave's rock (marched in its own field: a ray, the sphere's radius taken off where it meets)
+  const rock = S?.rayBlock?.(a, b); if (rock !== null && rock !== undefined) best = Math.min(best, Math.max(0, (rock - R) / len));
+  // the ground, sampled along the way (and halved down to where it meets), under the start allowed for: a hero lying low
+  const over = Math.min(o.over ?? CAST.over, a.y - groundAt(a.x, a.z) - 0.05), n = Math.ceil((len * best) / CAST.step);
+  for (let i = 1, prev = 0; i <= n; i++) {
+    const t = (best * i) / n; _ca.set(a.x + dx * t, a.y + dy * t, a.z + dz * t); if (_ca.y >= groundAt(_ca.x, _ca.z) + over) { prev = t; continue; }
+    let lo = prev, hi = t; for (let k = 0; k < 5; k++) { const m = (lo + hi) / 2; _ca.set(a.x + dx * m, a.y + dy * m, a.z + dz * m); if (_ca.y >= groundAt(_ca.x, _ca.z) + over) lo = m; else hi = m; }
+    best = lo; break;
+  }
+  return best * len;
 }
