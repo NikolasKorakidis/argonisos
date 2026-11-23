@@ -72,7 +72,7 @@ const BASE = { skin: lin(0xffcbad), hair: lin(0x4f402c), cloth: lin(0xc6c2be), c
 function armourMaterial(map, U) {
   return heroMaterial({ map, color: 0xc4c4c4, key: U ? 'heroArmourSkin' : 'heroArmourMetal', U: U ? { uSkin: U.uSkin } : {}, pars: U ? 'uniform vec3 uSkin;' : '', sort: `
     ${U ? `if (q.x > 0.505 && q.x < 0.575 && q.y < 0.125) { diffuseColor.rgb *= uSkin; hKind = ${KIND.skin}; } else` : ''}
-    if (hMetal(diffuseColor.rgb) > 0.5) { hKind = ${KIND.metal}; diffuseColor.rgb = hMute(diffuseColor.rgb, 0.85); }
+    if (hMetal(diffuseColor.rgb) > 0.5) { hKind = ${KIND.metal}; hBronze = hBronzeK(diffuseColor.rgb); }
     else { hKind = hLeather(diffuseColor.rgb) > 0.5 ? ${KIND.leather} : ${KIND.cloth}; diffuseColor.rgb = hMute(diffuseColor.rgb, 0.75); }` });
 }
 // The bare pieces worn over the body (shells: the Corinthian set) were made on the Greek warriors' slimmer body, and a

@@ -9,27 +9,30 @@
 //     painted edge on its bevels and dark creases; folds and crevices are darkened by how concave the surface is there.
 //     Skin and the face's features stay clean, so brows, eyes and mouth read from afar. The patterns are laid on the
 //     body in its rest pose, in metres (aRest: they don't swim as the body moves), on the shared grid of texels
-//     (render/pixel.js: pixelSnap and the Pixel texture setting), so the hero's detail has the world's texels.
+//     (render/pixel.js: pixelSnap and the Pixel texture setting), so the hero's detail is in texels as the world's is (half their size).
 // Every material kind is one program (its key), with the same uniforms (PIXEL_U among them).
 import * as THREE from 'three';
 import { PIXEL, PIXEL_GLSL, PIXEL_U } from '../render/pixel.js';
 
 // Each fragment's kind, as sort sets hKind: SKIN, CLOTH, LEATHER, METAL, HAIR, PLAIN (a face's feature, left as it is)
 export const KIND = { skin: '0.0', cloth: '1.0', leather: '2.0', metal: '3.0', hair: '4.0', plain: '5.0' };
-// How many of the world's texels to one of the hero's: the world's are 14 cm (Mild), a body's width; the hero's 3.5 cm
-const DENSER = 4;
+// How many of the hero's texels to one of the world's: the world's are 6 cm on Mild (16 a metre), a little coarse for a
+// figure under 2 m tall; the hero's 3 cm, a weave still made out from the play camera (6 cm on Strong)
+const DENSER = 2;
 
 const VERT_PARS = 'attribute vec4 aRest; attribute vec3 aRestN; varying vec4 vRest; varying vec3 vRestN;';
 const FRAG_PARS = `${PIXEL_GLSL}
   varying vec4 vRest; varying vec3 vRestN;
   float hKind = 5.0;   // (what this fragment is: KIND in hero-look.js)
+  float hBronze = 0.0, hLit = 0.0;   // (metal that is bronze, not gold; how lit by the lights this fragment is, 0 to 1)
   float hLuma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
   vec3 hMute(vec3 c, float k) { return mix(vec3(hLuma(c)), c, k); }   // (the atlas's colours less saturated, Valheim's muted ones)
   float hHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-  // Gold and bronze told by their colour (bright, yellow to orange, little blue: not leather, cloth or skin)
-  // (or a bright pink-orange: the Corinthian set's bronze, which is redder)
-  float hMetal(vec3 c) { float r = max(c.r, 1e-3), gr = c.g / r, br = c.b / r; return max(smoothstep(0.15, 0.28, c.r) * smoothstep(0.42, 0.55, gr) * (1.0 - smoothstep(0.18, 0.3, br)),
-    step(0.3, c.r) * step(0.38, gr) * step(gr, 0.6) * step(br, 0.36)); }
+  // Gold told by its colour (yellow to orange, little blue: not leather, cloth or skin, which has more blue), and bronze
+  // (the Corinthian set's: redder than the gold, its darkest shade still lighter than the leather's)
+  float hGold(vec3 c) { float r = max(c.r, 1e-3); return smoothstep(0.06, 0.12, c.r) * smoothstep(0.42, 0.55, c.g / r) * (1.0 - smoothstep(0.18, 0.3, c.b / r)); }
+  float hBronzeK(vec3 c) { float r = max(c.r, 1e-3), gr = c.g / r; return step(0.1, c.r) * step(0.3, gr) * step(gr, 0.5) * step(c.b / r, 0.25); }
+  float hMetal(vec3 c) { return max(hGold(c), hBronzeK(c)); }
   // Leather told by its colour: dark, warm and not grey (straps, belts, sandals)
   float hLeather(vec3 c) { float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b)); return step(c.b, c.g) * step(c.g, c.r) * step(0.3, (mx - mn) / max(mx, 1e-3)) * step(mx, 0.3); }
   // The painted detail, on the face of the rest pose's box that the surface turns to most (a flat projection: no blur
@@ -44,39 +47,47 @@ const FRAG_PARS = `${PIXEL_GLSL}
     // (lit from above in the paint itself, as hand-painted models are: the sky's light, which lights the hero more than
     // the sun does, then still shapes the form; skin's darker side warmer, as a painter shades it; the face's features
     // left as they are)
-    float top = smoothstep(-0.6, 0.8, vRestN.y); if (hKind < 4.5) c *= hKind < 0.5 ? mix(vec3(0.84, 0.74, 0.7), vec3(1.08), top) : vec3(0.8 + 0.28 * top);
-    if (hKind < 0.5) {   // skin: clean, only its hollows a little darker and redder (under the brow, by the nose)
-      c *= mix(vec3(1.0), vec3(0.82, 0.68, 0.62), fold * 0.8);
+    float top = smoothstep(-0.6, 0.8, vRestN.y); if (hKind < 2.5 || (hKind > 3.5 && hKind < 4.5)) c *= hKind < 0.5 ? mix(vec3(0.82, 0.72, 0.68), vec3(1.08), top) : vec3(0.78 + 0.3 * top);
+    if (hKind < 0.5) {   // skin: clean, only its hollows darker and redder (under the brow, by the nose)
+      c *= mix(vec3(1.0), vec3(0.76, 0.6, 0.54), fold);
     } else if (hKind < 1.5) {   // cloth: over and under threads, a little uneven, the folds dark, the ridges caught
-      float over = mod(cell.x + cell.y, 2.0), th = over > 0.5 ? f.y : f.x, w = mix(0.965, 1.03, over) * (1.0 - 0.1 * pow(2.0 * th - 1.0, 2.0)) * (0.955 + 0.09 * n);   // (faint: a painted cloth, not a gingham)
-      c *= mix(1.0, w, fine) * (1.0 - 0.45 * fold) * (1.0 + 0.12 * ridge) * (1.0 - 0.2 * smoothstep(0.4, 0.9, hLuma(c)));   // (white undyed wool, never paper white)
+      float over = mod(cell.x + cell.y, 2.0), th = over > 0.5 ? f.y : f.x, w = mix(0.95, 1.04, over) * (1.0 - 0.12 * pow(2.0 * th - 1.0, 2.0)) * (0.93 + 0.14 * n);   // (just seen from the play camera: a painted cloth, not a gingham)
+      c *= mix(1.0, w, fine) * (1.0 - 0.6 * fold) * (1.0 + 0.14 * ridge) * (1.0 - 0.2 * smoothstep(0.4, 0.9, hLuma(c)));   // (white undyed wool, never paper white)
     } else if (hKind < 2.5) {   // leather: darker, in blotches two texels across, worn paler on its edges
-      c *= 0.8 * mix(1.0, 0.9 + 0.18 * hHash(floor(g * 0.5)), fine) * (1.0 - 0.4 * fold) * (1.0 + 0.25 * ridge);
-    } else if (hKind < 3.5) {   // metal: a darker body lit from above, pale paint on its bevels, its creases dark
-      c = hMute(c, 1.2) * (0.6 + 0.3 * clamp(vRestN.y * 0.5 + 0.5, 0.0, 1.0)) * mix(1.0, 0.94 + 0.1 * n, fine);   // (richer than the rest: gold must still read as gold)
-      c = mix(c, min(c * 1.9, vec3(1.0)), 0.75 * smoothstep(0.06, 0.3, -cav)) * (1.0 - 0.5 * fold);   // (the bevels in the metal's own hue, paler)
-    } else if (hKind < 4.5) {   // hair: streaks down it (each texel column its own, in runs of four), its clumps' crevices dark
-      c *= mix(1.0, 0.82 + 0.3 * hHash(vec2(cell.x, floor(cell.y * 0.25))), fine) * (1.0 - 0.5 * fold) * (1.0 + 0.15 * ridge);
+      c *= 0.8 * mix(1.0, 0.9 + 0.18 * hHash(floor(g * 0.5)), fine) * (1.0 - 0.55 * fold) * (1.0 + 0.25 * ridge);
+    } else if (hKind < 3.5) {   // metal: a dark body lit from above, pale paint on its bevels, its creases dark
+      // (bronze an olive brown from the texel's lightness, never a skin's peach: the Corinthian set read as bare skin;
+      // gold richer than the rest, so it still reads as gold)
+      c = hBronze > 0.5 ? vec3(0.7, 0.52, 0.2) * min(hLuma(c), 0.3) : hMute(c, 1.2);
+      c *= (0.5 + 0.38 * top) * mix(1.0, 0.94 + 0.1 * n, fine);
+      c = mix(c, min(c * 2.1 + vec3(0.02, 0.016, 0.008), vec3(1.0)), 0.8 * smoothstep(0.1, 0.32, -cav)) * (1.0 - 0.6 * fold);   // (the bevels pale, in the metal's own hue)
+    } else if (hKind < 4.5) {   // hair: streaks down it (each texel column its own, in runs of six), its clumps' crevices dark
+      c *= mix(1.0, 0.72 + 0.45 * hHash(vec2(cell.x, floor(cell.y / 6.0))), fine) * (1.0 - 0.65 * fold) * (1.0 + 0.2 * ridge);
     }
     return c;
   }`;
-// The light, painted: the ramp, the warm edge on skin, metal's spot (the rest of three's lighting, shadows and the sky's
+// The light, painted: the ramp, the warm edge on skin, metal's band (the rest of three's lighting, shadows and the sky's
 // light from every side, as for every other material)
 const LIGHT = `
   void RE_Direct_Hero( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight ) {
     float nl = dot( geometryNormal, directLight.direction ), w = saturate( nl * 0.85 + 0.15 );
-    float ramp = 0.62 * smoothstep( 0.12, 0.34, w ) + 0.3 * smoothstep( 0.34, 1.0, w );   // (the lit side nearly flat, the shade side flat: one soft edge between)
-    vec3 irr = ramp * directLight.color;
-    float edge = exp( -pow( ( nl - 0.04 ) / 0.15, 2.0 ) );   // (where the light turns away: warm on skin, as blood shows through it)
-    irr += directLight.color * edge * ( hKind < 0.5 ? vec3( 0.26, 0.1, 0.04 ) : vec3( 0.04, 0.025, 0.01 ) );
+    float ramp = 0.06 + 0.84 * smoothstep( 0.2, 0.3, w ) + 0.1 * smoothstep( 0.45, 1.0, w );   // (two bands: the lit side nearly flat, the shade side flat, a soft edge between)
+    vec3 irr = ramp * directLight.color; hLit = max( hLit, ramp * saturate( dot( directLight.color, vec3( 0.7 ) ) ) );
+    float edge = exp( -pow( ( nl - 0.12 ) / 0.11, 2.0 ) );   // (on that edge: warm on skin, as blood shows through it, a little on everything)
+    irr += directLight.color * edge * ( hKind < 0.5 ? vec3( 0.3, 0.12, 0.05 ) : vec3( 0.06, 0.035, 0.015 ) );
     reflectedLight.directDiffuse += irr * BRDF_Lambert( material.diffuseColor );
-    if ( hKind > 2.5 && hKind < 3.5 ) {
+    if ( hKind > 2.5 && hKind < 3.5 ) {   // (metal's highlight: one crisp painted band, pale)
       float nh = saturate( dot( geometryNormal, normalize( directLight.direction + geometryViewDir ) ) );
-      reflectedLight.directSpecular += directLight.color * smoothstep( 0.86, 0.92, nh ) * step( 0.0, nl ) * mix( material.diffuseColor, vec3( 1.0 ), 0.45 ) * 0.32;
+      reflectedLight.directSpecular += directLight.color * smoothstep( 0.9, 0.92, nh ) * step( 0.0, nl ) * mix( material.diffuseColor, vec3( 1.0, 0.95, 0.85 ), 0.6 ) * 0.5;
     }
   }
   #undef RE_Direct
   #define RE_Direct RE_Direct_Hero`;
+
+// Metal's side away from the lights catches the sky, cool, most at a glancing angle (a painter's blue in a bronze's
+// shadow): from the light the sky gives this point, so none in a cave or by night
+const SKY = `if ( hKind > 2.5 && hKind < 3.5 ) reflectedLight.indirectSpecular += mix( material.diffuseColor, vec3( 0.3, 0.42, 0.6 ), 0.6 ) * dot( irradiance + iblIrradiance, vec3( 0.2126, 0.7152, 0.0722 ) ) * RECIPROCAL_PI
+    * ( 0.05 + 0.3 * pow( 1.0 - saturate( dot( geometryNormal, geometryViewDir ) ), 2.0 ) ) * ( 1.0 - hLit );`;
 
 // A material of the hero's: map and colour as before, rough and not metal (metal is painted, not reflected), the
 // shader painted as above. key: its program's; U: its own uniforms; pars: their GLSL declarations; sort: GLSL run on
@@ -88,7 +99,8 @@ export function heroMaterial({ map, color = 0xffffff, key, U = {}, pars = '', so
     s.vertexShader = s.vertexShader.replace('#include <common>', `#include <common>\n${VERT_PARS}`).replace('#include <begin_vertex>', '#include <begin_vertex>\nvRest = aRest; vRestN = aRestN;');
     s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>\n${pars}\n${FRAG_PARS}`)
       .replace('#include <map_fragment>', `#include <map_fragment>\n{ vec2 q = vMapUv; ${sort} }\ndiffuseColor.rgb = hPaint(diffuseColor.rgb);`)
-      .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>\n${LIGHT}`);
+      .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>\n${LIGHT}`)
+      .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${SKY}`);
   };
   m.customProgramCacheKey = () => key;
   m.userData.look = U; return m;
