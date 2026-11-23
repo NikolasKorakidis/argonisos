@@ -28,6 +28,17 @@ export const PATCHES = [
       { t: 'Controls', icon: 'goal', items: [
         '<b>Esc in fullscreen.</b> Esc now always brings up the pause menu in fullscreen. In Chrome and Edge a tap pauses and you hold Esc to leave fullscreen; in browsers where Esc leaves fullscreen at once, leaving it during play now pauses the game, even with the pack or the map open. F11 now goes into the game\'s own fullscreen, the one where Esc still pauses.',
       ] },
+      { t: 'The camera', icon: 'you', items: [
+        '<b>The camera comes in instead of things vanishing.</b> When a wall, a roof, a rock, a cliff, a tree trunk or a hill comes between the camera and you, the camera now moves in closer in front of it, as in Valheim, instead of the thing turning see-through. It comes in at once and glides back out when the way is clear. Indoors it stays inside the room and under the ceiling.',
+        'Leaves don\'t push the camera: it passes through the crowns of trees as before, and a crown that comes between you and the camera still fades.',
+        'Backed right into a corner, the camera no longer looks out from inside your hero: you are hidden from it until it has room again.',
+        'The camera shakes a little harder (a tenth more) at every blow, slam, roar and thunderclap, never past a sensible limit however many come at once.',
+      ] },
+      { t: 'Fights', icon: 'bull', items: [
+        '<b>The Minotaur is five times as tough</b>: 4500 health instead of 900. His dead come to his aid at 1500 health instead of 300, still a third of him, and Zeus\'s lightning hurts him five times as much. He becomes enraged at half his health as before. The fight takes four or five minutes with the first weapons instead of one. A spear wears out after 100 blows that land, so bring a spare or your bow.',
+        '<b>The camera stays where it is in the Minotaur\'s fight.</b> It no longer draws back and up when he comes: you fight him with the camera you always have. The Chimera\'s fight still draws the camera back to fit the beast in.',
+        '<b>Deer are tougher</b>, as hogs became in Patch 21: four or five blows of the Crude Axe instead of one, a fawn two. A well-aimed arrow from hiding still drops one.',
+      ] },
     ],
   },
   {
