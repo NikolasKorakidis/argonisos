@@ -30,14 +30,15 @@ const FIND = (dir, len, need) => `const F = await import('/src/world/flora.js'),
 const HOOK = `const RC = await import('/src/render/core.js'), AM = await import('/src/render/atmosphere.js'), gl = AG.renderer.getContext();
   if (!window._cap) { const draw = RC.composer.render.bind(RC.composer), _sv = new (await import('three')).Vector4(), _px = new Uint8Array(4); window._cap = { on: false };
     // (l: brightness per pixel, 0-255, w × h → its means per 8×8 block, per tile and over all, and the change from last time)
-    const measure = (l, w, h, prev, out) => { const bw = Math.floor(w / 8), bh = Math.floor(h / 8), blk = new Float32Array(bw * bh); let all = 0;
+    // (skip: tiles left out of the largest tile change, those whose depth changed a lot since last time: see deep below)
+    const measure = (l, w, h, prev, out, skip) => { const bw = Math.floor(w / 8), bh = Math.floor(h / 8), blk = new Float32Array(bw * bh); let all = 0;
       for (let y = 0; y < bh * 8; y++) for (let x = 0; x < bw * 8; x++) { const v = l[y * w + x]; blk[(y >> 3) * bw + (x >> 3)] += v; all += v; }
       for (let i = 0; i < blk.length; i++) blk[i] /= 64; const mean = all / (bw * bh * 64);
       const TX = 8, TY = 6, tile = new Float32Array(TX * TY), tn = new Float32Array(TX * TY);
       for (let by = 0; by < bh; by++) for (let bx = 0; bx < bw; bx++) { const t = Math.floor(by * TY / bh) * TX + Math.floor(bx * TX / bw); tile[t] += blk[by * bw + bx]; tn[t]++; }
       for (let i = 0; i < tile.length; i++) tile[i] /= tn[i];
       if (prev) { const db = []; let mx = 0, tm = 0; for (let i = 0; i < blk.length; i++) { const v = Math.abs(blk[i] - prev.blk[i]); db.push(v); if (v > mx) mx = v; }
-        for (let i = 0; i < tile.length; i++) tm = Math.max(tm, Math.abs(tile[i] - prev.tile[i]));
+        for (let i = 0; i < tile.length; i++) if (!skip?.[i]) tm = Math.max(tm, Math.abs(tile[i] - prev.tile[i]));
         db.sort((a, b) => a - b); Object.assign(out, { mean: Math.abs(mean - prev.mean), tile: tm, block: mx, p99: db[Math.floor(db.length * 0.99)], lum: +mean.toFixed(1) }); }
       return { blk, tile, mean }; };
     const readRT = (rt) => { if (!rt || rt.width < 8) return null; AG.renderer.setRenderTarget(rt); const f = new Float32Array(rt.width * rt.height * 4); gl.readPixels(0, 0, rt.width, rt.height, gl.RGBA, gl.FLOAT, f); return f; };
@@ -53,8 +54,19 @@ const HOOK = `const RC = await import('/src/render/core.js'), AM = await import(
       for (let y = 0; y < hh; y++) for (let x = 0; x < hw; x++) { const i = y * hw + x;
         if (haze && haze.length === hw * hh * 4) hl[i] = 255 * (0.2126 * haze[i * 4] + 0.7152 * haze[i * 4 + 1] + 0.0722 * haze[i * 4 + 2]);
         if (sh) shl[i] = 255 * sk * sh[((y >> 1) * qw + (x >> 1)) * 4]; }
-      const hz = {}, sf = {}; c.prevHaze = measure(hl, hw, hh, c.prevHaze, hz); c.prevSh = measure(shl, hw, hh, c.prevSh, sf);
-      if (hz.mean !== undefined) { row.haze = hz; row.shafts = sf; }
+      // where the scene itself changed: the depth (the shade-in-corners pass's, which keeps each pixel's distance beside how
+      // open it is, at half the size or full on Ultra), out to as far as the haze is marched, compared with last time's.
+      // A tile where a fifth of its pixels or more now lie at a quite different distance (a trunk beside the camera sliding off
+      // the screen's edge to show a sunlit glade behind it) has a new scene in it, and the haze there changes with it: that
+      // tile's change isn't judged at this step (tester's flake, Nov: "out of the wood at 9:00")
+      let skip = null; const ao = U.ao.value > 0.5 && A.aoRT ? readRT(A.aoRT[1]) : null;
+      if (ao) { const aw = A.aoRT[1].width, ah = A.aoRT[1].height, z = new Float32Array(aw * ah); for (let i = 0; i < aw * ah; i++) z[i] = Math.min(ao[i * 4 + 1], 94);
+        if (c.prevZ && c.prevZ.length === z.length) { const moved = new Float32Array(48), n = new Float32Array(48);
+          for (let y = 0; y < ah; y++) for (let x = 0; x < aw; x++) { const i = y * aw + x, tl = Math.floor(y * 6 / ah) * 8 + Math.floor(x * 8 / aw), a = z[i], b = c.prevZ[i]; n[tl]++; if (Math.abs(a - b) > Math.max(2, 0.5 * Math.min(a, b))) moved[tl]++; }
+          skip = Array.from(moved, (m, i) => m / n[i] > 0.2); }
+        c.prevZ = z; }
+      const hz = {}, sf = {}; c.prevHaze = measure(hl, hw, hh, c.prevHaze, hz, skip); c.prevSh = measure(shl, hw, hh, c.prevSh, sf);
+      if (hz.mean !== undefined) { row.haze = hz; row.shafts = sf; if (skip) hz.deep = skip.filter(Boolean).length; }
       // whether the camera stands in the sun: its own spot looked up in the far shadow map the haze is lit through (one
       // texel read back), as the haze's march does it
       const F = A.far?.shadow?.map; if (F && U.woodK.value > 0.0001) { const q = _sv.set(AG.camera.position.x, AG.camera.position.y, AG.camera.position.z, 1).applyMatrix4(U.shadowMat.value); q.divideScalar(q.w);
@@ -75,7 +87,7 @@ async function walk(t, p, { time, back = false, frames }) {
   await t.eval(`AG.S.time = ${time}; AG.teleport(${x}, ${z}, Math.atan2(${-dx}, ${-dz}), 0.02); P.camDist = 2; P.root.visible = false; window._cap.on = false; return true;`);
   await t.page.waitForFunction(() => AG.terrain.pending === 0, null, { timeout: 90000 });
   await t.wait(6000);
-  await t.eval(`Object.assign(window._cap, { on: true, last: 0, prev: null, rows: [], frames: [], keep: ${frames ? 6 : 0} }); return true;`);
+  await t.eval(`Object.assign(window._cap, { on: true, last: 0, prev: null, prevHaze: null, prevSh: null, prevZ: null, rows: [], frames: [], keep: ${frames ? 6 : 0} }); return true;`);
   await t.wait(600);
   await t.page.keyboard.down('KeyW'); await t.wait((p.len / 4.6 + 0.4) * 1000); await t.page.keyboard.up('KeyW'); await t.wait(500);
   const r = await t.eval(`window._cap.on = false; return { rows: window._cap.rows, frames: window._cap.frames, at: [P.pos.x, P.pos.z] };`);
@@ -94,6 +106,9 @@ async function walk(t, p, { time, back = false, frames }) {
 // crown comes between, and comes back in the next sunfleck, as it does in a real wood. That is the scene changing (a
 // branch crossing the sun, as for the shafts), not light switching with where you stand: the far shadow map, read at the
 // camera, says when it happens (since Patch 20's taller, thinner woods, the walk towards the sun crosses such a fleck).
+// Likewise a tile isn't judged on a step where much of the scene in it now lies at another distance (the depth, read back
+// beside the picture): a trunk by the camera sliding off the screen's edge shows the glade behind it, and the haze in that
+// tile changes because what it lies over did. The 4× limit stands for every other tile and step.
 const SPIKE = 4, FLOOR = { mean: 0.3, tile: 2 }, PICTURE_STEP = 30, PICTURE_TOP = 220;
 const fmt = (S) => ['mean', 'tile', 'block'].map((k) => `${k} ${r1(S[k].median)}/${r1(S[k].p90)}/${r1(S[k].max)}`).join(' · ');
 // each step's change over the median of the six steps before and after it
@@ -103,9 +118,9 @@ const sunSteps = (rows) => { const s = new Set(); s.n = 0; rows.forEach((r, i) =
 function judge(t, name, w) {
   const of = (rows) => ({ mean: stats(rows.map((r) => r.mean)), tile: stats(rows.map((r) => r.tile)), block: stats(rows.map((r) => r.block)) }), zero = { mean: 0, tile: 0, block: 0 };
   const haze = w.rows.map((r) => r.haze || zero), shafts = w.rows.map((r) => r.shafts || zero), S = of(w.rows), H = of(haze), F = of(shafts);
-  const skip = sunSteps(w.rows), sunNo = skip.n;
+  const skip = sunSteps(w.rows), sunNo = skip.n, deep = w.rows.reduce((n, r) => n + (r.haze?.deep || 0), 0);
   const jump = { haze: [local(haze.map((r) => r.mean), FLOOR.mean, skip), local(haze.map((r) => r.tile), FLOOR.tile, skip)], picture: local(w.rows.map((r) => r.mean), 0.5), top: Math.max(...w.rows.map((r) => r.lum)) };
-  t.metric(name, `${w.rows.length} steps, walked ${w.walked.toFixed(0)} m · picture ${fmt(S)}, brightest ${r1(jump.top)}, largest jump ${r1(jump.picture)}× · haze ${fmt(H)}, largest jump ${r1(jump.haze[0])}× (mean) ${r1(jump.haze[1])}× (tile)${sunNo ? `, not judged where the camera stepped into or out of the sun (${sunNo}×)` : ''} · shafts ${fmt(F)} (median/p90/max of the changes, 0-255)`);
+  t.metric(name, `${w.rows.length} steps, walked ${w.walked.toFixed(0)} m · picture ${fmt(S)}, brightest ${r1(jump.top)}, largest jump ${r1(jump.picture)}× · haze ${fmt(H)}, largest jump ${r1(jump.haze[0])}× (mean) ${r1(jump.haze[1])}× (tile)${sunNo ? `, not judged where the camera stepped into or out of the sun (${sunNo}×)` : ''}${deep ? `, ${deep} tiles not judged where the scene's depth changed` : ''} · shafts ${fmt(F)} (median/p90/max of the changes, 0-255)`);
   t.check(`${name}: the woods' haze never jumps (no step over ${SPIKE}× the steps round it), the picture never leaps or blows out`,
     w.rows.length > 20 && jump.haze[0] <= SPIKE && jump.haze[1] <= SPIKE && S.mean.max <= PICTURE_STEP && jump.top <= PICTURE_TOP,
     `haze jumps ${r1(jump.haze[0])}× / ${r1(jump.haze[1])}×, picture step ${r1(S.mean.max)} (limit ${PICTURE_STEP}), brightest ${r1(jump.top)} (limit ${PICTURE_TOP})`);
