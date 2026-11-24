@@ -1,6 +1,6 @@
 // Argonisos: the trial of Zeus. Entry point: builds the world and the player, runs the frame loop.
 import * as THREE from 'three';
-import { renderer, scene, camera, render, followShadow, setShadowSky, SHADOW, groundDetail, sun, GPU, ADAPT, adaptResolution, sceneTarget, hemi } from './render/core.js';
+import { renderer, scene, camera, render, followShadow, setShadowSky, SHADOW, groundDetail, sun, GPU, ADAPT, adaptResolution, sceneTarget, hemi, CONTEXT } from './render/core.js';
 import { Terrain, rockGround } from './world/terrain.js';
 import { WorkerPool } from './world/pool.js';
 import { Vegetation } from './world/vegetation.js';
@@ -13,14 +13,15 @@ import { skyDome, updateSky, fogSky, sunDir, moonDir, lightDir, LIGHT, DAY_SECON
 import { updateWeather, setWeather, snapWeather, WEATHER } from './world/weather.js';
 import { updateClouds } from './world/clouds.js';
 import { setHeightTexture, updateWater } from './world/water.js';
-import { buildRiverWater, updateRiverWater, riverWarm } from './world/river-water.js';
+import { buildRiverWater, updateRiverWater, riverWarm, RIVER_GFX } from './world/river-water.js';
+import { FIRE_SHADOW, warmFireShadow } from './render/lights.js';
 import { buildStormWall, updateStormWall, STORM_WALL } from './world/stormwall.js';
 import { updateLightning } from './world/lightning.js';
 import { SPECIES, STRIDE } from './world/flora.js';
 import { colliders } from './world/colliders.js';
 import { input, endFrame, hit, down } from './input.js';
 import { Player } from './player/player.js';
-import { Inventory } from './game/inventory.js';
+import { Inventory, COLS, hotKey } from './game/inventory.js';
 import { ITEMS } from './game/items.js';
 import { cutTerrain, updateCuts } from './world/groundcut.js';
 import { LIGHT_U } from './world/trees.js';
@@ -34,7 +35,7 @@ import { titleScreen, pauseMenu } from './ui/title.js';
 import { devMenu } from './ui/devmenu.js';
 import { wettable, updateShelter, WET } from './world/wetness.js';
 import { updateWindLines } from './world/wind.js';
-import { perfBegin, perfEnd, lap, PERF } from './ui/perf.js';
+import { perfBegin, perfEnd, lap, PERF, copyPerf } from './ui/perf.js';
 import { SETTINGS, setPerfOverlay } from './ui/settings.js';
 import { fadeAhead } from './render/occlusion.js';
 import { updateMusic, MUSIC } from './audio/music.js';
@@ -89,7 +90,7 @@ function respawn() {
   const bed = S.bed || SPAWN; player.revive(bed.x, bed.z); snapWeather();
   hud.toast('Zeus lifts you up again. <b>Zeus\'s Favour</b> carries you for a while.');
 }
-// hotbar: 1-8 use the item in that slot (equip a tool or weapon, eat food)
+// hotbar: 1-9 and 0 use the item in that slot (equip a tool or weapon, eat food)
 hud.onUse = (i) => useSlot(i);
 function useSlot(i) {
   const s = inv.slots[i]; if (!s) return; const d = ITEMS[s.id];
@@ -147,15 +148,32 @@ const warmUp = () => { if (warmed) return; warmed = 2; const w = veg.warmMeshes(
   const rt = renderer.getRenderTarget(); renderer.setRenderTarget(sceneTarget());   // (compiled for the buffer the scene is drawn into: render/core.js)
   // (and each program's link finished and looked at now: the browser links them only when first asked, which three does
   // the first time the program draws, so a program compiled here still stalled the frame that first used it)
-  try { renderer.compile(scene, camera); for (const p of renderer.info.programs) p.getUniforms(); } catch { /* a warm-up only */ } renderer.setRenderTarget(rt); scene.remove(w); for (const m of w.children) m.dispose?.(); };
+  // (and the fire's shadow drawn once with them all, for its own shaders: render/lights.js)
+  const fire = warmFireShadow(w, player.hero.root), unhide = player.hero.warmAll?.();   // (and every part the hero may wear: hero.js)
+  try { renderer.compile(scene, camera); if (fire) renderer.render(scene, camera); for (const p of renderer.info.programs) p.getUniforms(); } catch { /* a warm-up only */ } fire?.(); unhide?.(); renderer.setRenderTarget(rt); scene.remove(w); for (const m of w.children) m.dispose?.(); };
 // (and the meadow's grass clumps in, so their shaders are compiled with the rest: grass.js)
 const loaded = () => Math.min(GRASS.settled ? 1 : 0.97, (terrain.drawn > 40 && terrain.pending === 0 ? 0.6 : terrain.drawn / 70) + (player.hero.model ? 0.25 : 0) + (veg.near.size > 6 ? 0.15 : 0));
 const readiness = () => { const k = loaded(); if (k >= 1) warmUp(); return warmed === 2 ? 1 : Math.min(k, 0.97); };
+// The graphics card taking the picture away (render/core.js CONTEXT): the game saved at once and a word to the player;
+// when it comes back the distant trees' pictures are painted again and the warning goes. If it hasn't come back in ten
+// seconds, a button to reload (the save is there).
+const gpuNote = document.createElement('div'); gpuNote.id = 'gpuLost'; gpuNote.className = 'hidden';
+gpuNote.style.cssText = 'position:fixed;left:50%;top:38%;transform:translateX(-50%);z-index:80;max-width:30em;padding:14px 18px;background:rgba(20,14,10,.9);color:#f4e6c4;border-radius:6px;font:15px/1.4 "Alegreya Sans",sans-serif;text-align:center';
+document.body.appendChild(gpuNote);
+CONTEXT.onLost.push(() => {
+  try { game.save?.(); } catch { /* the save is best-effort here */ }
+  gpuNote.innerHTML = 'The graphics card stopped drawing the game (its driver reset, or it ran out of memory). Your game is saved; waiting for it to come back…';
+  gpuNote.classList.remove('hidden'); const n = CONTEXT.lost;
+  setTimeout(() => { if (CONTEXT.back >= n) return; gpuNote.innerHTML += '<br><br>It hasn\'t come back. <button id="gpuReload">Reload the game</button><br><small>If this happens again, a lower graphics preset or resolution may help. F3 then F4 copies a report for us.</small>'; gpuNote.querySelector('#gpuReload').onclick = () => location.reload(); }, 10000);
+});
+CONTEXT.restored.push(() => { veg.bakeImpostors(); warmed = 0; gpuNote.classList.add('hidden'); hud.toast('The picture is back. If the game stutters, try a lower graphics preset (F3 shows the details).'); });   // (and the warm-up run again, below)
 pauseMenu(game); devMenu(game);
 if (new URLSearchParams(location.search).has('play')) game.started = true; else titleScreen(game, readiness);
 const clockText = () => { const t = S.time, h = t < DAY_FRACTION ? 6 + (t / DAY_FRACTION) * 15 : (21 + ((t - DAY_FRACTION) / (1 - DAY_FRACTION)) * 9) % 24; return `Day ${S.day} · ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor((h % 1) * 6) * 10).padStart(2, '0')}`; };
 
 // ---- Loop
+// (what the performance overlay shows besides its own measures: asked only when it writes its text, ui/perf.js)
+const perfMore = () => ({ preset: SETTINGS.graphics, res: ADAPT.k, w: renderer.domElement.width, h: renderer.domElement.height, samples: sceneTarget()?.samples ?? 0, gpu: GPU, fire: FIRE_SHADOW, water: RIVER_GFX, changes: ADAPT.changes, lost: CONTEXT.lost, back: CONTEXT.back, ctxLog: CONTEXT.log });
 const clock = new THREE.Clock(); let fpsT = 0, frames = 0, fps = 60, atmo = { overcast: 0, dark: 0 }, mistT = 0, mistAim = 30, mistTop = 30;
 function loop() {
   requestAnimationFrame(loop); perfBegin(renderer);   // (the performance overlay, F3: ui/perf.js; nothing while it's off)
@@ -167,8 +185,9 @@ function loop() {
   const pauseKey = hit('KeyP') || (hit('Escape') && performance.now() - (game.pausedAt || 0) > 400);   // (the Esc that just paused us via the mouse release doesn't unpause)
   if (game.started && pauseKey && !hud.open && !game.map?.open && !game.owl?.open && !game.owl?.reading && !game.buildMenu?.open && !(game.build?.sel && !game.paused)) game.pause(!game.paused);
   if (!busy && !game.buildMenu?.open && (hit('Tab') || hit('KeyI') || (hit('Escape') && hud.open))) hud.toggle();
-  if (!busy && !input.uiOpen) for (let k = 1; k <= 8; k++) if (hit('Digit' + k)) useSlot(k - 1);
+  if (!busy && !input.uiOpen) for (let k = 0; k < COLS; k++) if (hit('Digit' + hotKey(k))) useSlot(k);   // (0 is the tenth)
   if (hit('F3')) setPerfOverlay(!SETTINGS.perf);
+  if (hit('F4') && PERF.on) copyPerf(renderer).then((ok) => hud.toast(ok ? 'Performance report copied: paste it to us' : 'Could not copy: the report is in the browser\'s console (F12)'));
   if (S.debug !== PERF.on) { S.debug = GPU.on = PERF.on; $('dbg').classList.toggle('hidden', !S.debug); }   // (the overlay and the old debug line together)
   if (hit('F9') && !busy) game.setFly(!S.fly);
   if (S.debug && hit('KeyT')) S.timeScale = S.timeScale === 1 ? 60 : 1;
@@ -213,7 +232,7 @@ function loop() {
   updateAtmosphere(camera, { dt, player: focus, mistTop, fogNear: scene.fog.near, fogFar: scene.fog.far, wp: bw.p, wy: bw.y + bw.v, night: LIGHT.night, giant: GIANTWOOD.k, sunDir, sunCol: sun.color, sunK: Math.min(1.4, sun.intensity / 2.4), fogCol: scene.fog.color, day: LIGHT.day, dusk: LIGHT.dusk, overcast: atmo.overcast, rays: 1, still: S.still, wetAir: Math.min(1, WEATHER.k.rain * 0.6 + (WEATHER.k.fog || 0)),
     mist: Math.min(1, LIGHT.mist + (WEATHER.k.fog || 0) * 0.4) * (S.fly ? 0.5 : 1), mistDen: 0.01 + biomeWeights(focus.x, focus.z).y * 0.012, ground: Math.min(heightAt(focus.x, focus.z), 60) });   // (mist lies in the valleys: from a summit you look down on it)
   lap('ambient, air'); render(); lap('render'); adaptResolution(dt, terrain.pending > 0 || !game.started);
-  endFrame(); perfEnd(renderer.info.render, { preset: SETTINGS.graphics, res: ADAPT.k, w: renderer.domElement.width, h: renderer.domElement.height });
+  endFrame(); perfEnd(renderer.info.render, perfMore);
   frames++; fpsT += dt; if (fpsT > 0.5) { fps = frames / fpsT; frames = 0; fpsT = 0; }
   if (S.debug) {
     const p = focus, w = biomeWeights(p.x, p.z);

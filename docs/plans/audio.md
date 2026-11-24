@@ -1,4 +1,4 @@
-# Sound and music (Patch 21, mix and coverage reworked in Patch 23)
+# Sound and music (Patch 21, mix and coverage reworked in Patch 23, the reviewer's trims and the lands' music in Patch 25)
 
 The team's audio (`incoming assets/audio/`, git-ignored) and where each file plays. Conversion: `node tools/assets/sounds.mjs`
 (manifest `sounds`, `soundGroups`, `music`) into `assets/sounds/pack/` (git-ignored; backed up by `tools/assets/backup.mjs`,
@@ -73,13 +73,13 @@ From the first packs (Footsteps - Essentials, Classic Footstep SFX, 96 General L
 
 | Key | Moment |
 | --- | --- |
-| stepGrass, stepDirt, stepRock, stepWood, stepWater, stepLeaves, stepSand | footsteps by ground; the meadow's grass or bare earth by patches of 7 m (not at random each step); louder sprinting (×1.3), softer sneaking (×0.5) |
+| stepGrass, stepDirt, stepRock, stepWood, stepWater, stepLeaves, stepSand | footsteps by ground; the meadow's grass or bare earth by patches of 7 m (not at random each step); louder sprinting (×1.3), softer sneaking (×0.5); since Patch 25 all at half their loudness (`MIX.step`, -6 dB), the camera's distance still taking its share |
 | stepSnow, stepMud | Olympos's snow (above `PEAK.snow`), the marsh's mud (Valtos) |
 | landGrass, landRock, landWood, landWater, landSand, landSnow, landMud | landings, louder and lower the harder the fall (×0.6 for a hop to ×1.6), a thud under a long drop; slowed, a creature's body falling (its kill), heavier for a giant |
 | roll | the dodge roll: the body and cloth going over in tall grass, then a landing and a step |
 | swimStroke | a stroke each 1.5 m swum, slowed |
 | whoosh | every swing (a miss too), by the weapon's weight (fists and daggers quick, maces slow); a creature's blow just before it lands (a giant's or a boss's slow and heavy); a dryad's thorn leaving her hand |
-| growl | a hog's cry (sped up); the giant's call under its own; slowed, the Minotaur's snort |
+| growl | a hog's cry (sped up: the only creature voice a hog has); the giant's call under its own; slowed, the Minotaur's snort |
 | giantCall | a giant noticing you and coming on (a gorilla, slowed) |
 | bell | the skill banner's bell (a hand bell's high C, pitched to each note) |
 | stoneHit | the wrong tool on rock, high and short |
@@ -102,10 +102,10 @@ so it's heard with the music off), the food done on a cooking stand (`cooked`: h
 ## Ambience (sound.js `updateAmbience`, beds faded every frame)
 | Bed | Files | When |
 | --- | --- | --- |
-| bedWindSoft / Mid / Strong | wind-1..2 / wind-4 / wind-3, wind-5 | by the wind's strength (wind.js), each swelling with the gusts; half as loud in fog; high on Olympos (200-330 m up) the mid and strong winds and a thin whistle come in |
-| bedGrass | wind-soft-grass | open Pedias meadow (less where trees stand), not high on Olympos |
+| bedWindSoft / Mid / Strong | wind-1..2 / wind-4 / wind-3, wind-5 | by the wind's strength (wind.js), each swelling with the gusts; half as loud in fog; high on Olympos (200-330 m up) the mid and strong winds and a thin whistle come in; since Patch 25 30% under (`MIX.wind`, -3 dB), with the gusts (`windGust`) and the synthesised rumble and whistle, not the storm wall's roar |
+| bedGrass | wind-soft-grass | open Pedias meadow (less where trees stand), not high on Olympos; under `MIX.wind` too |
 | bedLeaves | leaves-rustle-1 | wherever trees stand round you |
-| bedBirds | birdsong-1..2 | by day, rising with the light (no step at dusk), 40% louder in the first hour of sunrise; hushed by fog and the marsh; none on Olympos's head |
+| bedBirds | birdsong-1..2 | by day, rising with the light (no step at dusk), 40% louder in the first hour of sunrise; hushed by fog and the marsh; none on Olympos's head; none in the rain (Patch 25: they sang on at a sixth in a downpour): silent as it starts (gone by rain 0.15, a drizzle's first seconds), back as it stops, and no owl calls in it either |
 | loopBirds | the first pack's dawn chorus | over the birdsong at sunrise (`PLACE.morning`: the sun climbing) |
 | bedCricketsP, bedCricketsY | pedias-crickets-night-1..2, yleos-crickets-night-1..2 | from dusk (not at dawn), by the land you're in; less deep in the trees |
 | bedFrogs | swamps-ambience-frogs-1..2 | near the marsh, louder by night and in rain |
@@ -129,15 +129,27 @@ so it's heard with the music off), the food done on a cooking stand (`cooked`: h
 ## Music (music.js)
 - Title screen and character creator: menu (Main-Menu), looped between its loop points (the intro plays once).
 - A new trial begins: story (Story-Telling); again for the owl's first talk, unless it's still playing or just ended.
-- Coming into a place (20 s after you're well inside it; 8 s for a cave), and at dawn and dusk: pedias, yleos, or swamp
-  (Valtos, behind the storm); oros on the climb up Olympos (above 150 m on its flanks); erebos in the Giants' caves, and
-  for a land come into by night; on the shore at dawn and dusk (sea a third of the way round you), nisia and sirenReef in turn. Only
-  when nothing plays and the quiet is over: after a track ends, 3 to 6 minutes of no music. The same recording never
-  twice running unless 10 minutes have passed.
+- The lands (Patch 25, the reviewer's ask: before, a land's track played once on coming in and at dawn and dusk, then
+  3 to 6 minutes of silence): pedias, yleos or swamp (Valtos, behind the storm) plays all the while you're in that land,
+  4 s after you come into it (`ARRIVE`), round after round: each round starts 3.5 s before the last ends and the two
+  crossfade (the tracks are 48 to 61 s; Pedias and the Swamp end in their own fade, Yleos, the menu's recording, stops
+  where it would loop). Crossing into another land crossfades into its music over some 4 s. By night (`LIGHT.night`
+  over 0.6, until it falls under 0.4) Pedias has menu instead (the reviewer's answer: the title's theme as the meadows'
+  night music), looped between its loop points and crossfaded in at dusk and out at dawn over some 6 s; another land
+  come into by night opens with erebos, unless it was the last heard or played in 10 minutes, then its own track. The land tracks play 30%
+  under the others (`LAND_VOL` 0.7, -3 dB); the bosses', the story's, the home's and the places' are as they were.
+- The places keep Valheim's way: oros on the climb up Olympos (above 150 m on its flanks, 20 s in) and erebos in the
+  Giants' caves (8 s in), and at dawn and dusk, once, then 3 to 6 minutes of no music (`QUIET`); the land's music fades
+  out as you go into them, and comes back as you leave once their track is over. On the shore at dawn and dusk (sea a
+  third of the way round you) nisia and sirenReef in turn come in over the land's music, which picks up after them. The
+  same place's recording never twice running unless 10 minutes have passed.
 - Home (Inside-Base): 8 s by your own lit fire (within 5 m, sitting or not) or under your own roof, if it hasn't played
-  for 4 minutes and nothing has for 45 s; fades as you leave. A minute or two of quiet follows.
+  for 4 minutes, over the land's music (not over the story or a place's track); fades as you leave, the land's coming
+  back.
 - Bosses: bossMinotaur, bossChimera from the tribute until the boss dies or you flee, looped between their loop points
-  (decoded whole when the tribute is laid: about 60 MB while a fight lasts, let go of as it ends); then the quiet.
+  (decoded whole when the tribute is laid: about 60 MB while a fight lasts, let go of as it ends); then 10 s of hush
+  before the land's music (`MUSIC.rest`, which the tests also use to weigh the world without music:
+  `stopMusic(fade, rest)`).
 - Crossfades of 3 s; the music dips under loud thunder and the bosses' big warnings.
 - Not played: sailing, acheron (no sailing or underworld yet).
 
@@ -212,6 +224,22 @@ Each alone, its loudest moment on the effects bus (LUFS, outside a fight), befor
 | a boss's blow on you | -11.6 | -17.6 |
 | a swing / a roll / eating / the pack opening / the guard breaking | silent | -28.1 / -29.6 / -26.9 / about -33 / -19.1 |
 
+## The reviewer's trims (Patch 25)
+`MIX` in sound.js (`step` 0.5, `wind` 0.7) and `LAND_VOL` in music.js (0.7); the suite weighs each with and without its
+trim in one run (`tests/suites/audio.mjs`). Measured (`AUDIO.meters()`, LUFS):
+
+| What | Before | After |
+| --- | --- | --- |
+| a footstep's loudest moment (effects, eight on grass, earth and stone, as power) | -35.2 | -41.5 (-6.3 dB) |
+| the wind alone (its loudest bed, the soft breeze, the wind held; ambience) | -33.7 / -34.2 | -37.1 / -38.4 (-3.4 / -4.2 dB in two runs: the recording swells by a dB or two of its own, so the suite now weighs it four times each way) |
+| Pedias's track, seconds 3.5 to 8.5 (music) | -25.7 | -28.3 (-2.6 dB) |
+| meadow, day: ambience / output | -30.1 / -25.2 | -32.8 / -27.8 |
+| meadow, a land's track: music / ambience / output | -25.6 / -30.2 / -19.4 | -28.4 / -30.8 / -21.5 |
+
+The birds by day (their beds 0.42) were silent 12 s after a light rain began (it had reached 0.28), stayed so through it,
+and sang again within half a second of it stopping. A land's music starts 4.9 s after you come into it and runs from one
+round into the next with no silence (the suite listens through a round's end and a crossing from Yleos into Pedias).
+
 ## Odd files
 - Byte-identical pairs: `arrow-fly-1` = `arrow-release-1`, `seathe-weapon-1` = `sword-hit-1`, `boulder-1` = `slam-1`,
   `WEATHER/arrow-hit-target-1` = `COMBAT/arrow-hit-target-1`. `thunder-4` is `thunder-2` 25 ms later. Each is used once.
@@ -242,7 +270,9 @@ For the player (most often heard):
 13. A torch held in the hand: a burning loop (30 s+) and a whoosh as you swing it.
 
 Creatures (each has a pitched stand-in now):
-14. Hog: grunts as idle calls (5), squeal for alert and charge (3), hurt (3), death (2), footsteps (4).
+14. Hog: grunts as idle calls (5), squeal for alert and charge (3), hurt (3), death (2), footsteps (4). Asked for by the
+    reviewer (Patch 25): no pack has a pig or a boar (searched: the team's FINALS and OLD, the first packs, 96 General
+    Library, the Nature Sounds Pack), so the hog still cries with the first pack's monster growl sped up.
 15. Deer: alarm bark or snort (3), hooves bolting (4), hurt and death (2). Fox: alert yip (2), hurt (2). Rabbit: a thump and
     a squeak (2).
 16. Dryad and dryadling: a wooden creak or whisper voice for alert (3), hurt (3), death (2); a leafy whoosh for the thorn

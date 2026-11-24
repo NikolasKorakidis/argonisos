@@ -6,6 +6,8 @@
 // z = 0 and the slope climbs towards -z up to the ridge.
 import * as THREE from 'three';
 import { wettable } from '../world/wetness.js';
+import { stony } from '../world/rock.js';
+import { wetKept } from '../world/wood.js';
 
 // ---- materials: painted planks, rough beams, golden thatch
 function canvasTex(w, h, draw, repeat = [1, 1]) {
@@ -40,14 +42,16 @@ export const MAT = {
   beam: new THREE.MeshStandardMaterial({ map: beamTex, roughness: 0.9 }),
   thatch: new THREE.MeshStandardMaterial({ map: thatchTex, roughness: 0.95, side: THREE.DoubleSide }),
   dark: new THREE.MeshStandardMaterial({ color: 0x4e3622, roughness: 0.9 }),
-  stone: new THREE.MeshStandardMaterial({ color: 0x8f887e, roughness: 0.95, flatShading: true }),
+  // (the fire rings' stones as the island's rocks are, rock.js; wet as part of its own patch, so a placed piece's copy
+  // keeps both, wood.js wetKept)
+  stone: wetKept(stony(new THREE.MeshStandardMaterial({ color: 0x8f887e, roughness: 0.95, flatShading: true }), { wet: false }), { dark: 0.6, gloss: 0.3, shine: 0.1 }),
   fur: new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 1 }),
   cloth: new THREE.MeshStandardMaterial({ color: 0xd9c8a0, roughness: 0.95 }),
   iron: new THREE.MeshStandardMaterial({ color: 0x4a4440, roughness: 0.6, metalness: 0.4 }),
   ember: new THREE.MeshStandardMaterial({ color: 0x3a1a0a, emissive: 0xff5a10, emissiveIntensity: 1.6, roughness: 1 }),
 };
 // how each material takes the rain: how much darker, how glossy when soaked (wetness.js)
-for (const [k, o] of Object.entries({ plank: [0.62, 0.32], beam: [0.62, 0.32], thatch: [0.72, 0.55], dark: [0.66, 0.32], stone: [0.66, 0.26], fur: [0.75, 0.6], cloth: [0.72, 0.6], iron: [0.85, 0.25] })) if (MAT[k]) wettable(MAT[k], { dark: o[0], gloss: o[1] });
+for (const [k, o] of Object.entries({ plank: [0.62, 0.32], beam: [0.62, 0.32], thatch: [0.72, 0.55], dark: [0.66, 0.32], fur: [0.75, 0.6], cloth: [0.72, 0.6], iron: [0.85, 0.25] })) if (MAT[k]) wettable(MAT[k], { dark: o[0], gloss: o[1] });
 
 // ---- geometry helpers. A box with UVs in metres (so textures tile at a constant size)
 function box(w, h, d, x = 0, y = 0, z = 0, uvScale = 1 / 3) {

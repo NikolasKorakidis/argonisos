@@ -6,7 +6,7 @@ export default {
   async run(t) {
     await t.page.waitForFunction(() => AG.game.pickups.visible.length > 20, null, { timeout: 60000 });
     await t.step('7  a branch gives 2 wood when picked up', `const v = g.pickups.visible.find((v) => v.kind === 'branch'); P.spawn(v.x, v.z - 0.9); P.yaw = 0; const w0 = inv.count('wood'), b0 = inv.count('branch'); g.interact(); return (inv.count('wood') === w0 + 2 && inv.count('branch') === b0) || 'wood ' + w0 + '→' + inv.count('wood') + ' branch ' + inv.count('branch');`);
-    await t.step('9  Sort Items merges and orders the pack (hotbar untouched)', `inv.slots.fill(null); inv.slots[0] = { id: 'hammer', n: 1, dur: 200 }; inv.slots[9] = { id: 'wood', n: 30 }; inv.slots[12] = { id: 'stone', n: 4 }; inv.slots[20] = { id: 'wood', n: 40 }; inv.slots[22] = { id: 'crudeAxe', n: 1, dur: 30 }; g.hud.toggle(true); document.getElementById('invSort').click(); const r = inv.slots.slice(8, 13).map((s) => (s ? s.id + ':' + s.n : '-')).join(' '); g.hud.toggle(false); return (inv.slots[0].id === 'hammer' && r === 'crudeAxe:1 stone:4 wood:50 wood:20 -') || r;`);
+    await t.step('9  Sort Items merges and orders the pack (hotbar untouched)', `inv.slots.fill(null); inv.slots[0] = { id: 'hammer', n: 1, dur: 200 }; inv.slots[11] = { id: 'wood', n: 30 }; inv.slots[14] = { id: 'stone', n: 4 }; inv.slots[22] = { id: 'wood', n: 40 }; inv.slots[24] = { id: 'crudeAxe', n: 1, dur: 30 }; g.hud.toggle(true); document.getElementById('invSort').click(); const r = inv.slots.slice(10, 15).map((s) => (s ? s.id + ':' + s.n : '-')).join(' '); g.hud.toggle(false); return (inv.slots[0].id === 'hammer' && r === 'crudeAxe:1 stone:4 wood:50 wood:20 -') || r;`);
     await t.page.evaluate(() => { const g = AG.game; g.give('hammer'); g.give('wood', 60); g.give('stone', 30); g.give('rope', 20); g.give('leather', 5); g.give('resin', 3); for (const k of ['b:wall', 'b:floor', 'b:workbench', 'b:campfire', 'b:cookingStand', 'b:roof63']) g.crafting.known.add(k); g.useSlot(g.inv.slots.findIndex((s) => s?.id === 'hammer' && !s.worn)); });
     await t.step('12 the hammer menu opens with Crafting first', `g.buildMenu.toggle(true); const tabs = [...document.querySelectorAll('#buildMenu nav button')].map((b) => b.textContent); return (g.buildMenu.open && g.buildMenu.cat === 'Crafting' && tabs[0].startsWith('Crafting')) || tabs.join(' | ') + ' cat ' + g.buildMenu.cat;`);
     await t.page.keyboard.press('KeyE'); await t.wait(150);
@@ -40,12 +40,13 @@ export default {
     await t.step('19 a level-2 creature shows two owl icons', `const c = g.creatures.spawn('hog', P.pos.x + 4, P.pos.z, { level: 2 }); c.state = 'chase'; return true;`);
     await t.wait(800);
     await t.step('19 …(owls on its plate, no stars)', `const pl = [...document.querySelectorAll('.plate')].find((e) => e.textContent.includes('Hog')); return (pl && pl.querySelectorAll('i.lvl svg').length === 2 && !pl.textContent.includes('★')) || (pl ? pl.innerHTML.slice(0, 160) : 'no plate');`);
-    await t.step('18 a wall between the camera and the hero fades', `for (const c of [...g.creatures.list]) g.creatures.remove(c); const x = P.pos.x, z = P.pos.z; const cx = x, cz = z + 6; AG.S.freeBuild = true; const wall = B.place('wall', new V(x, AG.heightAt(x, z + 3), z + 3), 0); window._wall = wall; P.camYaw = 0; P.camPitch = -0.1; P.camDist = 7; P.camBlock = () => null; return true;`);
-    await t.wait(1200);
-    await t.step('18 …(it is see-through now, others are not)', `const w = window._wall; const op = w.mats.map((m) => m.opacity.toFixed(2)).join(','); const others = B.placed.filter((q) => q !== w).every((q) => q.mats.every((m) => m.opacity === 1)); return (w.mats.every((m) => m.opacity < 0.6) && others) || 'opacity ' + op + ' others ok ' + others;`);
-    await t.step('18 …and returns to normal when the view is clear', `P.camYaw = Math.PI; return true;`);
+    // (since Patch 25 a wall between doesn't fade: the camera comes in front of it, like Valheim, and goes back out after)
+    await t.step('18 a wall between the camera and the hero holds the camera in front of it', `for (const c of [...g.creatures.list]) g.creatures.remove(c); const x = P.pos.x, z = P.pos.z; AG.S.freeBuild = true; P.camYaw = 0; P.camPitch = -0.1; P.camDist = 7; await frames(30); const wall = B.place('wall', new V(x, AG.heightAt(x, z + 3), z + 3), 0); window._wall = wall; return true;`);
+    await t.wait(600);
+    await t.step('18 …(in front of the wall, the wall still solid)', `const w = window._wall, c = AG.camera.position; return (c.z < w.pos.z - 0.1 && P.camD < 3.4 && w.mats.every((m) => m.opacity === 1)) || JSON.stringify({ camZ: c.z - w.pos.z, camD: P.camD, op: w.mats.map((m) => m.opacity) });`);
+    await t.step('18 …and back out when the view is clear', `P.camYaw = Math.PI; return true;`);
     await t.wait(1500);
-    await t.step('18 …(restored exactly)', `const w = window._wall; return w.mats.every((m) => m.opacity === 1 && m.transparent === false && m.depthWrite === true) || w.mats.map((m) => [m.opacity, m.transparent, m.depthWrite]).join(' ');`);
+    await t.step('18 …(the full distance again)', `return P.camD > 6.5 || 'camera at ' + P.camD.toFixed(2) + ' m';`);
     await t.shot('hud');
 
     // ---- Patch 23, fights and survival: each fix of the gameplay review with its own check
@@ -101,5 +102,36 @@ export default {
       g.owl.next(); const back = !document.querySelector('#owlCounsel').classList.contains('hidden'); document.getElementById('counselX').click(); g.owl.st.done = ['intro', 'fight', 'night', 'house', 'temple', 'death']; g.owl.st.queue = [];
       return (list.join() === 'intro,fight,temple' && shown === 'Guard and Roll' && back && window._back && !/fear fire/.test(TOPICS.yleos[0].body)) || JSON.stringify({ list, shown, back, closed: window._back });`);
     await t.step('23 the clock\'s figures are Cinzel\'s, not Stoix\'s slashed zero', `const f = getComputedStyle(document.querySelector('#clock span')).fontFamily; return /^"?Cinzel/.test(f) || f;`);
+    // ---- Patch 25, the pack: a ten-slot hotbar, a pack panel that keeps its size, breaking crafted things down, and Esc
+    // in fullscreen (which headless Chrome can't enter: its leaving and the mouse's release are sent as the browser would)
+    const K = `const key = async (code) => { dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true })); await frames(2); dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true })); await frames(1); };
+      const rclick = (i, shiftKey) => document.querySelector('#invGrid .slot[data-i="' + i + '"]').dispatchEvent(new PointerEvent('pointerdown', { button: 2, shiftKey, bubbles: true }));
+      const asked = () => !document.getElementById('dropAsk')?.classList.contains('hidden') && !!document.getElementById('dropAsk');`;
+    await t.step('25 the hotbar has ten slots, numbered 1 to 9 and 0', `const { COLS } = await import('/src/game/inventory.js'); inv.slots.fill(null); inv.onChange(); await frames(15); const b = [...document.querySelectorAll('#hotbar .slot b')].map((e) => e.textContent).join('');
+      return (COLS === 10 && inv.slots.length === 40 && b === '1234567890') || JSON.stringify({ COLS, n: inv.slots.length, b });`);
+    await t.step('25 keys 1 to 9 and 0 take up the ten hotbar slots, each its own', `${K} for (const s of inv.slots) if (s) delete s.worn; inv.slots.fill(null);
+      const ids = ['crudeAxe', 'crudeClub', 'crudeDagger', 'hammer', 'pickaxe', 'lightstoneAxe', 'lightstoneDagger', 'torch', 'crudeSpear', 'lightstoneSpear']; ids.forEach((id, i) => { inv.slots[i] = { id, n: 1, dur: g.ITEMS[id].dur }; }); inv.onChange();
+      if (g.hud.open) g.hud.toggle(false); const got = [];
+      for (let k = 0; k < 10; k++) { await key('Digit' + ((k + 1) % 10)); got.push(inv.slots[k].worn === 'hand' && inv.slots.filter((s) => s?.worn).length === 1 ? 'ok' : 'slot ' + k + ': ' + inv.slots.map((s) => s?.worn || '-').join(' ')); }
+      for (const s of inv.slots) if (s) delete s.worn; inv.onChange(); return got.every((x) => x === 'ok') || got.filter((x) => x !== 'ok').join('; ');`);
+    await t.step('25 the pack panel keeps its size, whatever the description (a long one scrolls in its box)', `const { ITEMS } = await import('/src/game/items.js'); inv.slots.fill(null); g.hud.toggle(true); await frames(2); const pn = document.getElementById('packPnl'), box = document.getElementById('invInfo'), sizes = new Set(); let scrolls = false;
+      const keep = ITEMS.wood.note; ITEMS.wood.note = 'A very long description that goes on and on, '.repeat(16) + 'Unbroken' + 'x'.repeat(120);
+      for (const id of Object.keys(ITEMS)) { inv.slots[10] = { id, n: 1, ...(ITEMS[id].dur ? { dur: ITEMS[id].dur } : {}) }; g.hud.info(10); sizes.add(pn.offsetWidth + 'x' + pn.offsetHeight); if (id === 'wood') scrolls = box.scrollHeight > box.clientHeight; }
+      inv.slots[10] = null; g.hud.info(10); sizes.add(pn.offsetWidth + 'x' + pn.offsetHeight); ITEMS.wood.note = keep; g.hud.toggle(false);
+      return (sizes.size === 1 && scrolls) || JSON.stringify({ sizes: [...sizes], scrolls });`);
+    await t.step('25 Shift + right-click breaks a crafted thing down for half its materials, asked first; a plain right-click still uses it', `${K} for (const s of inv.slots) if (s) delete s.worn; inv.slots.fill(null); inv.slots[12] = { id: 'crudeAxe', n: 1, dur: 40 }; inv.onChange(); g.hud.toggle(true); await frames(2); const out = {};
+      rclick(12, true); await frames(2); out.asked = asked() && inv.slots[12]?.id === 'crudeAxe'; document.getElementById('dropNo').click(); out.kept = !asked() && inv.slots[12]?.id === 'crudeAxe';
+      rclick(12, true); await frames(2); document.getElementById('dropYes').click(); await frames(2); out.gone = !inv.slots.some((s) => s?.id === 'crudeAxe'); out.back = ['wood', 'stone', 'rope'].map((m) => inv.count(m)).join();
+      inv.slots.fill(null); inv.slots[13] = { id: 'crudeArrow', n: 25 }; inv.slots[14] = { id: 'crudeDagger', n: 1, dur: 30 }; inv.slots[15] = { id: 'stone', n: 10 }; inv.onChange(); await frames(1);
+      rclick(13, true); await frames(2); document.getElementById('dropYes').click(); await frames(2); out.arrows = inv.count('crudeArrow') + ':' + inv.count('wood') + ',' + inv.count('feather');
+      rclick(15, true); await frames(2); out.stone = !asked() && inv.count('stone') === 10;
+      rclick(14, false); await frames(2); out.used = inv.slots[14]?.worn === 'hand' && !asked(); rclick(14, true); await frames(2); out.wornRefused = !asked() && inv.slots[14]?.id === 'crudeDagger';
+      g.hud.toggle(false); for (const s of inv.slots) if (s) delete s.worn; inv.slots.fill(null); inv.onChange();
+      return (out.asked && out.kept && out.gone && out.back === '2,2,1' && out.arrows === '15:2,1' && out.stone && out.used && out.wornRefused) || JSON.stringify(out);`);
+    await t.step('25 leaving fullscreen mid-game opens the pause menu, the pack closed first', `const { input } = await import('/src/input.js'); const menu = () => !document.getElementById('pause').classList.contains('hidden'); const out = {};
+      document.dispatchEvent(new Event('fullscreenchange')); await frames(2); out.plain = g.paused && menu(); g.pause(false); await frames(2);
+      g.hud.toggle(true); document.dispatchEvent(new Event('fullscreenchange')); await frames(2); out.pack = g.paused && menu() && !g.hud.open; g.pause(false); await frames(2);
+      input.uiOpen = false; document.dispatchEvent(new Event('pointerlockchange')); await frames(2); out.mouse = g.paused && menu(); g.pause(false); await frames(2);
+      return (out.plain && out.pack && out.mouse && !g.paused) || JSON.stringify(out);`);
   },
 };

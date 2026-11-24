@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { renderer, bloom, sun, sunFar, SHADOW, shadowSoftness, camera, GFX, ADAPT, setScale, setSamples } from '../render/core.js';
 import { SETTINGS_KEY, BOOT_GFX, ULTRA } from '../render/quality.js';
 import { ATMO, AQ } from '../render/atmosphere.js';
+import { PIXEL, PIXEL_U } from '../render/pixel.js';
 import { setFireShadow } from '../render/lights.js';
 import { GRASS, clumpShare } from '../world/grass.js';
 import { setVolume, setMusicVolume, setSfxVolume, setAmbienceVolume } from '../audio/sound.js';
@@ -17,7 +18,7 @@ import { SHAKE } from '../render/fx.js';
 import { showPerf } from './perf.js';
 
 const KEY = SETTINGS_KEY;
-export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, sfx: 1, ambience: 1, music: 0.5, sens: 1, fullscreen: false, look: null, calmFlash: false, shake: 'on', perf: false, focusBlur: true };
+export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, sfx: 1, ambience: 1, music: 0.5, sens: 1, fullscreen: false, look: null, calmFlash: false, shake: 'on', perf: false, focusBlur: true, colour: 0.5, pixel: 'mild' };
 try { Object.assign(SETTINGS, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* defaults */ }
 SETTINGS.graphics = BOOT_GFX;   // (?gfx=… in the address picks one for this visit: quality.js)
 const store = () => { try { localStorage.setItem(KEY, JSON.stringify(SETTINGS)); } catch { /* private mode */ } };
@@ -50,6 +51,7 @@ export function applyGraphics() {
   fresh(sun, Q.shadow); if (Q.farShadow) fresh(sunFar, Q.farShadow); renderer.shadowMap.type = type; SHADOW.far = !!Q.farShadow; shadowSoftness();
   setFireShadow(!!Q.fireShadow);   // (the nearest fire's shadows: render/lights.js)
   ATMO.ao.value = Q.ao ? 1 : 0; ATMO.focus.value = SETTINGS.focusBlur ? Q.focus ?? 1.25 : 0; AQ.aoFull = !!Q.aoFull; AQ.shaftsHalf = !!Q.shaftsHalf;
+  applyColour(); applyPixel();
   setSamples(Q.msaa || 4); [ADAPT.min, ADAPT.max] = Q.adapt || [0.7, 1]; if (ADAPT.k > ADAPT.max || ADAPT.k < ADAPT.min) { ADAPT.k = Math.min(ADAPT.max, Math.max(ADAPT.min, ADAPT.k)); setScale(); }
   if (GRASS.mesh) GRASS.mesh.count = Math.floor(GRASS.mesh.instanceMatrix.count * Q.grass);
   for (const f of GRASS.flowers) f.count = Math.floor(f.userData.max * Q.flowers);
@@ -64,6 +66,19 @@ export function setMusic(v) { SETTINGS.music = v; store(); setMusicVolume(v); }
 export function setSfx(v) { SETTINGS.sfx = v; store(); setSfxVolume(v); }
 export function setAmbience(v) { SETTINGS.ambience = v; store(); setAmbienceVolume(v); }
 export function setSens(s) { SETTINGS.sens = s; store(); input.sens = s; }
+// How much colour the world keeps, 0 (grey) to 1 (as painted): half by default (the Greek reviewer, 23 Nov: Valheim's
+// muted earth). Laid on in the atmosphere pass's grade, before the bloom, so the sun, fire and magic keep theirs; on Low,
+// which has no such pass, by the page over the picture alone (the HUD keeps its colours either way)
+function applyColour() {
+  const c = Math.min(1, Math.max(0, SETTINGS.colour ?? 0.5)); ATMO.colour.value = c;
+  renderer.domElement.style.filter = GFX.post || c >= 0.999 ? '' : `saturate(${c.toFixed(2)})`;
+}
+export function setColour(v) { SETTINGS.colour = v; store(); applyColour(); }
+// Pixel texture: the surfaces' own detail in texels, as Valheim's low-resolution textures (render/pixel.js), off, mild
+// (sixteen to the metre) or strong (eight); the light on them, the shadows and the bloom stay smooth either way
+export const PIXELS = [['off', 'Off'], ['mild', 'Mild'], ['strong', 'Strong']];
+const applyPixel = () => { PIXEL_U.uTexel.value = PIXEL[SETTINGS.pixel] ?? PIXEL.mild; };
+export function setPixel(v) { SETTINGS.pixel = v; store(); applyPixel(); }
 // The focus blur at the edges of the view (the review of 20 Nov: on High it read as a low-resolution picture): on or off
 export function setFocusBlur(on) { SETTINGS.focusBlur = on; store(); applyGraphics(); }
 // Reduce flashing (for the photosensitive): lightning softer and slower, and nothing blinds (lightning.js)

@@ -1,6 +1,7 @@
 // Trees and buildings that block the camera: a tree between the camera and the hero fades (just that one, swapped out
-// of its batch for a faded copy) and comes back; felling takes a tree out of its batch; a site building fades on its own
-// copy without touching the shared materials.
+// of its batch for a faded copy) and comes back (its trunk holds the camera off since Patch 25, so the camera's collision
+// is turned off for it: what's left to fade is a crown); felling takes a tree out of its batch; a site building no
+// longer fades but holds the camera in front of it (Patch 25: camera.mjs has the rest).
 export default {
   name: 'Vegetation and occlusion',
   async run(t) {
@@ -13,7 +14,7 @@ export default {
     // start above head height and their trunks lean. One with clear ground where the hero will stand, or a rock there
     // would push him out of line.)
     await t.step('a tree between the camera and the hero fades', `const F = await import('/src/world/flora.js'); let tr = null; for (const b of AG.veg.batches.values()) { if (!b.n) continue; for (let k = 0; k < b.n; k++) { const c = b.refs[k * 2], i = b.refs[k * 2 + 1], o = i * 7; if (c.items[o] === F.SP.cypress && c.items[o + 6] > 0.8 && Math.hypot(c.items[o + 2] - P.pos.x, c.items[o + 4] - P.pos.z) < 60 && ![...g.colliders.near(c.items[o + 2], c.items[o + 4] - 3.2, 4)].some((q) => Math.hypot(q.x - c.items[o + 2], q.z - c.items[o + 4] + 3.2) < q.r + 0.8)) { tr = { c, i, x: c.items[o + 2], z: c.items[o + 4] }; break; } } if (tr) break; }
-      if (!tr) return 'no tree'; window._t = tr; P.camBlock = () => null; P.spawn(tr.x, tr.z - 3.2); P.camYaw = 0; P.camPitch = -0.05; P.camDist = 7; return true;`);
+      if (!tr) return 'no tree'; window._t = tr; window._cast = P.camCast; P.camCast = null; P.spawn(tr.x, tr.z - 3.2); P.camYaw = 0; P.camPitch = -0.05; P.camDist = 7; return true;`);
     await t.wait(600);
     // the camera sits off the hero's shoulder: shift the hero so the line from the camera passes through the trunk
     await t.step('…(lined up so the camera looks through the trunk)', `for (let i = 0, last = null; i < 60; i++) { const c = AG.camera.position.clone(); if (last && c.distanceTo(last) < 0.005) break; last = c; await new Promise((r) => setTimeout(r, 50)); }   // (once the camera has caught up with the jump)
@@ -24,13 +25,11 @@ export default {
     await t.wait(1500);
     // (from the other side another tree may stand in the way and fade: only this one has to come back)
     await t.step('…(restored: back in its batch, no faded copy)', `const k = 't:' + window._t.c.cx + ',' + window._t.c.cz + ',' + window._t.i; return (!window._t.c.hidden?.has(window._t.i) && !g.occlusion.faded.has(k)) || 'still hidden';`);
+    await t.eval(`P.camCast = window._cast; return true;`);
     await t.step('felling a tree takes it out of its batch', `const tr = window._t, n = () => [...AG.veg.batches.values()].reduce((a, b) => a + b.n, 0); const before = n(); AG.veg.remove(tr.c.cx, tr.c.cz, tr.i); AG.veg.cull(AG.camera, P.pos); const after = n(); return after === before - 1 || before + ' → ' + after;`);
-    await t.step('a site building between the camera and the hero fades', `const H = AG.game.SITES.house; const grp = g.structures.groups.reduce((a, b) => (Math.hypot(b.position.x - H.x, b.position.z - H.z) < Math.hypot(a.position.x - H.x, a.position.z - H.z) ? b : a)); const box = new AG.THREE.Box3(); for (const m of grp.children) if (m.isMesh && !m.isInstancedMesh) box.expandByObject(m); const c = box.getCenter(new V()), sz = box.getSize(new V());   /* (the building itself, not the trees planted round it) */ window._grp = grp; window._orig = grp.children.filter((m) => m.isMesh).map((m) => m.material); P.spawn(c.x, c.z - sz.z / 2 - 2); P.camYaw = 0; P.camDist = 7; return true;`);
+    await t.step('a site building between the camera and the hero holds the camera in front of it, and nothing fades', `const H = AG.game.SITES.house; const grp = g.structures.groups.reduce((a, b) => (Math.hypot(b.position.x - H.x, b.position.z - H.z) < Math.hypot(a.position.x - H.x, a.position.z - H.z) ? b : a)); const box = new AG.THREE.Box3(); for (const m of grp.children) if (m.isMesh && !m.isInstancedMesh) box.expandByObject(m); const c = box.getCenter(new V()), sz = box.getSize(new V());   /* (the building itself, not the trees planted round it) */ window._grp = grp; window._orig = grp.children.filter((m) => m.isMesh).map((m) => m.material); P.spawn(c.x, c.z - sz.z / 2 - 2); P.camYaw = 0; P.camDist = 7; return true;`);
     await t.wait(1500);
-    await t.step('…(on its own faded copy; shared materials untouched)', `const sk = [...g.occlusion.faded.keys()].filter((k) => k[0] === 's'); const shared = window._orig.flat().every((m) => m.opacity === 1); return (sk.length > 0 && shared) || JSON.stringify({ keys: [...g.occlusion.faded.keys()], shared });`);
-    await t.shot('house-faded');
-    await t.step('…turn the camera away', `P.camYaw = Math.PI; return true;`);
-    await t.wait(1500);
-    await t.step('…(original materials back on every mesh)', `const now = window._grp.children.filter((m) => m.isMesh).map((m) => m.material); return (now.every((m, i) => m === window._orig[i]) && g.occlusion.faded.size === 0) || 'not restored: ' + g.occlusion.faded.size;`);
+    await t.step('…(pulled in short of the full 7 m, its own materials on every mesh, no site faded)', `const now = window._grp.children.filter((m) => m.isMesh).map((m) => m.material); return (P.camD < 6.5 && now.every((m, i) => m === window._orig[i]) && ![...g.occlusion.faded.values()].some((e) => e.kind !== 'tree')) || JSON.stringify({ camD: P.camD, faded: [...g.occlusion.faded.keys()] });`);
+    await t.shot('house-held');
   },
 };

@@ -8,12 +8,14 @@
 //   pale by the light and its creases darker, and its hollows darker than its knuckles (rockEdges, worked out once per
 //   model from how its faces meet); lichen and moss on what faces up, green and thick in the woods, a pale crust bleached
 //   by the sun in the open meadows, sparse up the mountain and none where the sea washes; and dark and glossy when wet
-//   (wetness.js). It fades to the plain colour with distance, where the mipmaps would only grey it.
+//   (wetness.js). It fades to the plain colour with distance, where the mipmaps would only grey it. Its colour is looked up
+//   on a grid of texels when the Pixel texture setting is on (render/pixel.js), its relief and so its light are not.
 // One shader for all of them: each material made stony here shares its program with every other made the same way.
 import * as THREE from 'three';
 import { hash21, tileNoise, seeded } from '../util/math.js';
 import { wettable } from './wetness.js';
 import { ATMO } from '../render/atmosphere.js';
+import { PIXEL_GLSL, PIXEL_U } from '../render/pixel.js';
 
 // ---- One tileable texture, made here at start-up: R the stone's tone (slabs, each its own, and the cracks between
 // them dark), G its relief (the slabs rounded off towards their cracks, and the grain), B where lichen grows (blotches),
@@ -108,8 +110,11 @@ const VERT = `#include <project_vertex>
   }`;
 // (the woods texture, atmosphere.js: how wooded each place is (r), for the moss)
 export const STONE_GLSL = `uniform sampler2D uStoneTex, uWoods; uniform float uWoodsExt;
-  // the texture projected along a face's own normal (w: how much each way, from it)
+  ${PIXEL_GLSL}
+  // the texture projected along a face's own normal (w: how much each way, from it); and the same in texels, k to one
+  // unit of p (render/pixel.js), for the colour
   vec4 stoneTri(vec3 p, vec3 w) { return texture2D(uStoneTex, p.zy) * w.x + texture2D(uStoneTex, p.xz + 0.31) * w.y + texture2D(uStoneTex, p.xy + 0.67) * w.z; }
+  vec4 stoneTriP(vec3 p, vec3 w, float k) { return pixelTex(uStoneTex, p.zy, k) * w.x + pixelTex(uStoneTex, p.xz + 0.31, k) * w.y + pixelTex(uStoneTex, p.xy + 0.67, k) * w.z; }
 `;
 const FRAG_PARS = `varying vec3 vStoneP, vStoneN; varying float vStoneS, vStoneH;
   #ifdef STONE_EDGES
@@ -122,11 +127,14 @@ const FRAG = `#include <color_fragment>
     vec3 fN = normalize(cross(dFdx(vStoneP), dFdy(vStoneP))), bw = pow(abs(fN), vec3(8.0)); bw /= bw.x + bw.y + bw.z;   // (the facet's own face, flat)
     float sd = vStoneS, dist = length(vViewPosition), near = 1.0 - smoothstep(30.0, 90.0, dist);
     vec3 p = vStoneP + vec3(sd * 31.0, sd * 7.0, sd * 17.0);
-    vec4 s = stoneTri(p / 4.2, bw), f = stoneTri(p / 0.9 + 0.5, bw); float broad = texture2D(uStoneTex, vStoneP.xz / 17.0 + sd).a;
+    // (s, f: the slabs and the grain as they are, for the relief; sc, fc: in texels, for the colour)
+    vec4 s = stoneTri(p / 4.2, bw), f = stoneTri(p / 0.9 + 0.5, bw), sc = stoneTriP(p / 4.2, bw, uTexel * 4.2), fc = stoneTriP(p / 0.9 + 0.5, bw, uTexel * 0.9);
+    vec3 ps = pixelSnap(vStoneP, uTexel); float broad = pixelTex(uStoneTex, vStoneP.xz / 17.0 + sd, uTexel * 17.0).a;
     // bedding: thin dark seams a hand or two apart, dipping each rock its own way, wandering with the slabs
     vec3 dip = normalize(vec3(sin(sd * 6.283) * 0.3, 1.0, cos(sd * 6.283) * 0.3));
     float lay = dot(vStoneP, dip) / (0.45 + sd * 0.4) + (s.a - 0.5) * 3.0, bed = abs(fract(lay) - 0.5), seam = (1.0 - smoothstep(0.0, 0.04, bed)) * near;
-    float tone = mix(1.0, (0.7 + s.r * 0.5) * (0.84 + f.r * 0.32) * mix(0.95, 1.04, step(0.5, fract(lay * 0.5))) * (1.0 - 0.2 * seam), near) * (0.84 + broad * 0.32);
+    float layC = dot(ps, dip) / (0.45 + sd * 0.4) + (sc.a - 0.5) * 3.0, seamC = (1.0 - smoothstep(0.0, 0.04, abs(fract(layC) - 0.5))) * near;
+    float tone = mix(1.0, (0.7 + sc.r * 0.5) * (0.84 + fc.r * 0.32) * mix(0.95, 1.04, step(0.5, fract(layC * 0.5))) * (1.0 - 0.2 * seamC), near) * (0.84 + broad * 0.32);
     // each rock its own hue and shade: a little warmer or cooler, lighter or darker; and greyed a touch towards limestone
     float l0 = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
     vec3 c = diffuseColor.rgb * tone * mix(vec3(1.05, 1.0, 0.93), vec3(0.95, 0.99, 1.06), fract(sd * 3.7)) * (0.86 + 0.26 * fract(sd * 7.3));
@@ -144,11 +152,12 @@ const FRAG = `#include <color_fragment>
     // the sun out in the open; thinner high up the mountain and none where the sea washes over
     float wood = smoothstep(0.1, 0.55, texture2D(uWoods, vStoneP.xz / uWoodsExt + 0.5).r), up = vStoneN.y;
     float cover = (0.3 + 0.18 * wood) * smoothstep(1.5, 5.0, vStoneP.y) * (1.0 - 0.75 * smoothstep(220.0, 420.0, vStoneP.y));
-    float m = smoothstep(1.0 - cover, 1.16 - cover, s.b * 0.6 + f.b * 0.25 + broad * 0.15 + (up - 0.5) * 0.4 + (clamp(vStoneH, 0.0, 1.5) - 0.6) * 0.3) * smoothstep(0.0, 0.55, up + (f.b - 0.5) * 0.5);
-    vec3 lich = vec3(l0 * (0.82 + 0.3 * f.g)) * mix(vec3(1.2, 1.17, 0.96), vec3(0.52, 0.86, 0.28), wood);   // (over the cracks: it grows across them)
+    float m = smoothstep(1.0 - cover, 1.16 - cover, sc.b * 0.6 + fc.b * 0.25 + broad * 0.15 + (up - 0.5) * 0.4 + (clamp(vStoneH, 0.0, 1.5) - 0.6) * 0.3) * smoothstep(0.0, 0.55, up + (fc.b - 0.5) * 0.5);
+    vec3 lich = vec3(l0 * (0.82 + 0.3 * fc.g)) * mix(vec3(1.2, 1.17, 0.96), vec3(0.52, 0.86, 0.28), wood);   // (over the cracks: it grows across them)
     c = mix(c, lich, m * mix(0.75, 1.0, wood));
+    float mr = smoothstep(1.0 - cover, 1.16 - cover, s.b * 0.6 + f.b * 0.25 + texture2D(uStoneTex, vStoneP.xz / 17.0 + sd).a * 0.15 + (up - 0.5) * 0.4 + (clamp(vStoneH, 0.0, 1.5) - 0.6) * 0.3) * smoothstep(0.0, 0.55, up + (f.b - 0.5) * 0.5);   // (the lichen from the smooth look, for the relief: from the texels it would step, and the light with it)
     diffuseColor.rgb = c;
-    stoneRelief = (s.g * 0.6 + f.g * 0.5 + seam * 0.4) * near * (1.0 - m * 0.5);
+    stoneRelief = (s.g * 0.6 + f.g * 0.5 + seam * 0.4) * near * (1.0 - mr * 0.5);
   }`;
 // the relief tilts the normal (bump mapping from screen-space derivatives, as the terrain's rock does)
 const BUMP = `#include <normal_fragment_maps>
@@ -157,7 +166,7 @@ const BUMP = `#include <normal_fragment_maps>
     float det = dot(sx, r1) * faceDirection, hx = dFdx(stoneRelief) * 0.09, hy = dFdy(stoneRelief) * 0.09;
     normal = normalize(abs(det) * normal - sign(det) * (hx * r1 + hy * r2));
   }`;
-const U = { uStoneTex: { value: STONE_TEX }, uWoods: ATMO.tWoods, uWoodsExt: ATMO.woodsExt };
+const U = { uStoneTex: { value: STONE_TEX }, uWoods: ATMO.tWoods, uWoodsExt: ATMO.woodsExt, ...PIXEL_U };
 // Make a standard material stony (on top of any patch it has), and wettable unless it already is (wet: false). edges:
 // its models carry rockEdges' corners and ridges. Every material made the same way shares one program.
 export function stony(mat, { edges = false, wet = { dark: 0.55, gloss: 0.7, shine: 0.1 } } = {}) {

@@ -16,9 +16,9 @@
 //   Ambience follows the world (updateAmbience): rain in layers (droplets in a light rain, a downpour in a heavy one, the
 //   drumming on a roof over you and the hush through the walls indoors), the wind by its strength with gusts on the wind's
 //   own gusts, quieter in fog and stronger high on Olympos, the wind in the meadow's grass and in the woods' leaves, waves
-//   near the shore, birdsong by day with a dawn chorus at sunrise, each land's crickets by night, frogs by the marsh, an
-//   owl now and then and a fox far off; each lit fire near you crackles where it burns (fires()), and meat sizzles on a
-//   cooking stand over one. The beds load when first wanted, run as two copies a little apart (a short recording's loop
+//   near the shore, birdsong by day with a dawn chorus at sunrise (none in the rain), each land's crickets by night,
+//   frogs by the marsh, an owl now and then and a fox far off; each lit fire near you crackles where it burns (fires()),
+//   and meat sizzles on a cooking stand over one. The beds load when first wanted, run as two copies a little apart (a short recording's loop
 //   isn't heard), and are let go of once they've long been silent; the synthesised ones likewise.
 //   Music: the team's tracks (music.js); a sparse lyre in an old Greek mode stands in for them without the pack.
 //   A boss fight (setFight, from music.js while a boss's track plays): its music comes up over the storm, the loudest of
@@ -34,6 +34,10 @@ const LEVEL = 2.2;
 // the blows, the whole fight about -15 LUFS (it was -10.6), the music hardly dipping under the bolts falling all round)
 const FIGHT = { music: 1.6, amb: 0.22, sfx: 0.36, duck: 0.15 };
 const REC_MUSIC = 0.9;   // (the recorded music's level under the slider: music.js tracks are mastered louder than the beds)
+// Patch 25, by a reviewer's ear: the hero's footsteps at half their loudness (-6 dB) on every ground and at every gait,
+// the camera's distance still taking its share; the wind's beds (the grass's too) and its gusts 30% under (-3 dB), not
+// the storm wall's roar. Kept apart here so the tests can weigh the mix with and without them.
+export const MIX = { step: 0.5, wind: 0.7 };
 export function setVolume(v) { volume = v; if (out) out.gain.value = v; }
 export function setMusicVolume(v) { musicVol = v; if (musicBus) { musicBus.gain.value = 0.55 * v; recBus.gain.value = REC_MUSIC * v; } }
 export function setSfxVolume(v) { sfxVol = v; if (sfxBus) sfxBus.gain.value = sfxSend.gain.value = 0.9 * v * (1 - (1 - FIGHT.sfx) * fightK); }
@@ -288,9 +292,9 @@ let alertAt = -99;
 const note = (k, v = 1) => AUDIO.log?.push({ k, i: -1, t: now(), vol: +(+v).toFixed(3), bus: 'sfx' });   // (a synthesised sound, noted for the tests)
 const SFX = {
   // a footstep (k: how near the camera is, game.js: a close camera hears them at full, a far one at a quarter; louder
-  // sprinting, softer sneaking: GAIT)
+  // sprinting, softer sneaking: GAIT; all of it under MIX.step)
   step: (surface, k = 1) => {
-    const s = ground(surface), v = 0.32 * k * GAIT.k, wet = s === 'wood' || s === 'stone' ? 0.04 : 0;
+    k *= MIX.step; const s = ground(surface), v = 0.32 * k * GAIT.k, wet = s === 'wood' || s === 'stone' ? 0.04 : 0;
     if (sample(STEPS[s] || (s === 'dirt' ? 'stepDirt' : 'stepGrass'), { vol: v, wet, rate: GAIT.k > 1.1 ? [0.97, 1.1] : [0.94, 1.06] })) return;
     if (s === 'wood') { noise(0.1, { freq: 420, q: 3, vol: 0.13 * k }); tone(140, 0.08, { type: 'triangle', vol: 0.05 * k, wet: 0.2 }); }
     else if (s === 'water' || s === 'mud') { noise(0.28, { type: 'lowpass', freq: 1200, vol: 0.14 * k, slide: -800 }); noise(0.12, { freq: 2500, q: 2, vol: 0.05 * k, delay: 0.05 }); }
@@ -608,6 +612,9 @@ export function fires(list) {
 // soft rush) under the recorded flow where there is one, louder over the riffles. A fall: a deep roar (the rush of
 // brown noise, low, swelling slowly) and its hiss, the recorded flow slowed under them for its churn, heard from far
 // off and filling everything near the pool. The lake: water lapping at the shore (the waves' bed, slowed and dulled).
+// Each runs at its own pace and swells on its own clock, its loops started at their own places, so the falls, stacked
+// within a few hundred metres of one another and heard together from far off, never play one recording in step (two
+// copies of one loop in step comb each other and double the level); each is logged as its own sound.
 const WATERS = new Map(); let babbleBuf = null;
 function makeBabble(seconds) {
   const sr = ctx.sampleRate, n = Math.floor(sr * seconds), b = ctx.createBuffer(2, n, sr);
@@ -627,16 +634,16 @@ export function waters(list) {
   for (const w of list) {
     seen.add(w.id); let s = WATERS.get(w.id);
     if (!s) {
-      s = { g: ctx.createGain(), p: ctx.createStereoPanner(), lp: ctx.createBiquadFilter(), src: [], kind: w.kind }; s.g.gain.value = 0; s.lp.type = 'lowpass'; s.lp.Q.value = 0.5; s.lp.connect(s.g).connect(s.p).connect(ambW); WATERS.set(w.id, s);
-      const loop = (buf, rate, vol, filt) => { const g = ctx.createGain(); g.gain.value = vol; let n = g; if (filt) { const f = ctx.createBiquadFilter(); [f.type, f.frequency.value, f.Q.value] = filt; g.connect(f); n = f; } n.connect(s.lp); s.src.push(loopOf(buf, rate, g)); };
+      s = { g: ctx.createGain(), p: ctx.createStereoPanner(), lp: ctx.createBiquadFilter(), src: [], kind: w.kind, r: rnd(0.94, 1.06), ph: rnd(0, 6.28) }; s.g.gain.value = 0; s.lp.type = 'lowpass'; s.lp.Q.value = 0.5; s.lp.connect(s.g).connect(s.p).connect(ambW); WATERS.set(w.id, s);
+      const loop = (buf, rate, vol, filt) => { const g = ctx.createGain(); g.gain.value = vol; let n = g; if (filt) { const f = ctx.createBiquadFilter(); [f.type, f.frequency.value, f.Q.value] = filt; g.connect(f); n = f; } n.connect(s.lp); s.src.push(loopOf(buf, rate * s.r, g)); };
       const rec = (k, rates, vol, filt) => { if (!META[k]) return; fetchOne(k, 0).then((buf) => { if (buf && !s.gone) for (const r of rates) loop(buf, r, vol, filt); }); };
       if (w.kind === 'stream') { babbleBuf ||= makeBabble(9); loop(babbleBuf, 1, 0.55); loop(babbleBuf, 0.83, 0.35, ['highpass', 500, 0.5]); rec('bedStream', [0.97, 1.03], 0.5); }
       else if (w.kind === 'fall') { loop(brownBuf, 0.9, 1.1, ['lowpass', 420, 0.6]); loop(noiseBuf, 1, 0.22, ['bandpass', 1300, 0.5]); babbleBuf ||= makeBabble(9); loop(babbleBuf, 0.55, 0.5, ['lowpass', 1600, 0.5]); rec('bedStream', [0.52, 0.61], 0.6); }
       else { rec('bedWaves', [0.85], 0.8, ['lowpass', 1300, 0.5]); if (!META.bedWaves) loop(brownBuf, 0.7, 0.5, ['lowpass', 350, 0.5]); }
-      AUDIO.log?.push({ k: 'water:' + w.kind, i: -1, t, water: w.id, bus: 'amb' });
+      AUDIO.log?.push({ k: 'water:' + w.id, i: -1, t, water: w.kind, bus: 'amb' });
     }
     // (a fall carries a long way, swelling slowly as the spray gusts; a stream only some tens of metres)
-    const sp = w.kind === 'fall' ? spatial(w, 18, 420) : w.kind === 'stream' ? spatial(w, 4, 55) : spatial(w, 6, 45), swell = w.kind === 'fall' ? 0.85 + 0.15 * Math.sin(t * 0.6 + w.k * 9) * Math.sin(t * 0.23) : 1;
+    const sp = w.kind === 'fall' ? spatial(w, 18, 420) : w.kind === 'stream' ? spatial(w, 4, 55) : spatial(w, 6, 45), swell = w.kind === 'fall' ? 0.85 + 0.15 * Math.sin(t * 0.6 + s.ph) * Math.sin(t * 0.23 + s.ph * 1.7) : 1;
     ease(s.g.gain, (w.kind === 'fall' ? 0.95 : w.kind === 'stream' ? 0.42 : 0.3) * Math.min(1.3, w.k) * sp.k * swell, 0.3, t); ease(s.p.pan, sp.pan, 0.12, t); ease(s.lp.frequency, Math.min(16000, sp.lp), 0.2, t);
   }
   for (const [id, s] of WATERS) if (!seen.has(id)) { s.gone = true; s.g.gain.setTargetAtTime(0, t, 0.5); WATERS.delete(id); setTimeout(() => { s.src.forEach((x) => x.stop()); s.g.disconnect(); }, 3000); }
@@ -682,21 +689,22 @@ export function updateAmbience(dt, w = {}) {
   // high on Olympos (hi): no meadow under you, the wind thin and strong; in fog the wind falls quieter and the birds hush
   const hi = sstep(200, 330, PLACE.alt), fog = PLACE.fog || 0, still = 1 - 0.5 * fog;
   // wind: a slow random walk of gusts, or the wind's own (wind.js); its recorded beds by its strength, a soft breeze, a
-  // steady wind and a gale, each swelling with the gusts; a gust of its own on each strong gust, from upwind
+  // steady wind and a gale, each swelling with the gusts; a gust of its own on each strong gust, from upwind (all of it
+  // under MIX.wind, the beds as swell does)
   if (w.gust !== undefined) gust += (Math.min(1, wind * 0.6 + w.gust * 0.8) - gust) * Math.min(1, dt * 1.5);
   else { gustT -= dt; if (gustT <= 0) { gustT = rnd(2, 7); gustTo = Math.min(1, Math.max(0, wind + rnd(-0.25, 0.4))); } gust += (gustTo - gust) * Math.min(1, dt * 0.6); }
-  const swell = 0.75 + 0.5 * gust, recWind = bed('bedWindSoft', 0.25 * (1 - sstep(0.35, 0.8, wind)) * swell * open * still * (1 - hi * 0.5), dt);
+  const swell = (0.75 + 0.5 * gust) * MIX.wind, recWind = bed('bedWindSoft', 0.25 * (1 - sstep(0.35, 0.8, wind)) * swell * open * still * (1 - hi * 0.5), dt);
   bed('bedWindMid', (0.38 * sstep(0.1, 0.5, wind) * (1 - 0.6 * sstep(0.6, 1, wind)) * still + 0.15 * hi) * swell * open, dt); bed('bedWindStrong', Math.max(0.5 * sstep(0.45, 0.95, wind), 0.32 * hi) * swell * open, dt);
   const ww = recWind ? 0.25 : 1;   // (the synthesised wind under the recordings: only its low rumble and whistle in a gale)
-  sh('windLow', (0.05 + gust * 0.22) * open * ww * still, 0.6, 220 + gust * 420); sh('windHigh', gust * gust * 0.08 * open * ww * still, 0.6, 600 + gust * 900);
-  sh('whistle', Math.max(Math.max(0, gust - 0.65) * 0.05, hi * 0.012 * (0.5 + gust)) * open * ww, 0.6, 1200 + gust * 900 + Math.sin(t * 0.7) * 150);
+  sh('windLow', (0.05 + gust * 0.22) * open * ww * still * MIX.wind, 0.6, 220 + gust * 420); sh('windHigh', gust * gust * 0.08 * open * ww * still * MIX.wind, 0.6, 600 + gust * 900);
+  sh('whistle', Math.max(Math.max(0, gust - 0.65) * 0.05, hi * 0.012 * (0.5 + gust)) * open * ww * MIX.wind, 0.6, 1200 + gust * 900 + Math.sin(t * 0.7) * 150);
   const g1 = w.gust ?? gust; if (g1 > 0.32 && gustWas <= 0.32 && t - gustAt > 7 && open > 0.5) { gustAt = t; const d = w.windDir, pn = d ? Math.max(-0.8, Math.min(0.8, -(d.x * -L.fz + d.z * L.fx))) : rnd(-0.6, 0.6);
-    play('windGust', { vol: (0.25 + 0.4 * wind) * open * still, pan: pn, wet: 0.2, bus: ambBus, rate: [0.9, 1.05] }); if (forest > 0.3) play('leafRustle', { vol: 0.35 * forest, pan: -pn * 0.5, wet: 0.2, bus: ambBus, delay: 0.4 }); }
+    play('windGust', { vol: (0.25 + 0.4 * wind) * open * still * MIX.wind, pan: pn, wet: 0.2, bus: ambBus, rate: [0.9, 1.05] }); if (forest > 0.3) play('leafRustle', { vol: 0.35 * forest, pan: -pn * 0.5, wet: 0.2, bus: ambBus, delay: 0.4 }); }
   gustWas = g1;
   // the wind in the leaves, wherever trees stand round you, by day and by night: a soft bed that swells with the gusts;
   // and in the open meadow the wind through the grass (none above the meadows, on Olympos's bare head)
   const sway = 0.7 + 0.3 * Math.sin(t * 0.37) * Math.sin(t * 0.23 + 1), recLeaves = bed('bedLeaves', forest * (0.2 + gust * 0.35) * sway * open * (1 - hi), dt);
-  bed('bedGrass', pedias * (1 - forest) * (0.12 + gust * 0.18) * open * (1 - rain * 0.5) * (1 - hi), dt);
+  bed('bedGrass', pedias * (1 - forest) * (0.12 + gust * 0.18) * open * (1 - rain * 0.5) * (1 - hi) * MIX.wind, dt);
   const lw = recLeaves ? 0.35 : 1;
   sh('leaves', forest * (0.035 + gust * 0.09) * sway * open * lw * (1 - hi), 1.2); sh('leavesLo', forest * (0.05 + gust * 0.1) * sway * open * lw * (1 - hi), 1.2, 900 + gust * 500);
   // rain: droplets in a light rain, the rush of a downpour in a heavy one (2 dB under the other beds: a downpour is a bed,
@@ -723,21 +731,23 @@ export function updateAmbience(dt, w = {}) {
   // first hour or so); crickets from dusk on (not at dawn), owls, a fox far off and frogs by night; the forest and the
   // marsh have their own. The crickets sing most in the open and at the woods' edges (deep: how wooded it is just where
   // you stand), swelling as the light goes and dying away at first light; the meadows' and the forest's each their own.
-  // Fog hushes the birds; high on Olympos there are none, nor crickets.
-  const calm = (1 - rain * 0.85) * open, low = 1 - hi, dawn = PLACE.morning ? sstep(0.05, 0.5, dusk) * (1 - night) : 0;
+  // Fog hushes the birds; high on Olympos there are none, nor crickets. In the rain no bird sings (dry: Patch 25, they
+  // went on at a sixth under a downpour): they fall silent as it starts, gone by a drizzle's first minutes, and sing
+  // again as it stops; nor do the owls call.
+  const calm = (1 - rain * 0.85) * open, low = 1 - hi, dry = 1 - sstep(0.02, 0.15, rain), dawn = PLACE.morning ? sstep(0.05, 0.5, dusk) * (1 - night) : 0;
   const crick = Math.min(1, night * 1.2 + (PLACE.morning ? 0 : dusk * 0.6)) * Math.max(0, 1 - rain / 0.3) * (1 - deep * 0.55) * low, light = sstep(0.1, 0.6, 1 - night);
-  const birds = calm * light * 0.42 * (1 - marsh * 0.6) * (1 + 0.4 * dawn) * (1 - 0.6 * fog) * (1 - hi * 0.9);
-  const recBirds = bed('bedBirds', birds, dt, { tc: 2 }); bed('loopBirds', recBirds ? dawn * calm * 0.32 * (1 - 0.6 * fog) * low : birds, dt, { tc: recBirds ? 3 : 0.8 });   // (the dawn chorus, or the old chorus all day without the team's)
+  const birds = calm * dry * light * 0.42 * (1 - marsh * 0.6) * (1 + 0.4 * dawn) * (1 - 0.6 * fog) * (1 - hi * 0.9);
+  const recBirds = bed('bedBirds', birds, dt, { tc: 2 }); bed('loopBirds', recBirds ? dawn * calm * dry * 0.32 * (1 - 0.6 * fog) * low : birds, dt, { tc: recBirds ? 3 : 0.8 });   // (the dawn chorus, or the old chorus all day without the team's)
   const recCrick = bed('bedCricketsP', calm * crick * 0.38 * Math.min(1, pedias * 1.4), dt, { tc: 2 }); bed('bedCricketsY', calm * crick * 0.42 * Math.min(1, yleos * 1.4), dt, { tc: 2 });
   if (!recCrick) L1('loopCrickets', calm * crick * 0.24);
-  birdT -= dt; if (birdT <= 0) { birdT = rnd(1.5, 6) / (1 + forest * 0.6) * (recBirds || META.loopBirds ? 3 : 1); if (light > 0.5 && calm > 0.2 && !recBirds) bird(calm * light * low); }   // (calls of their own over the first pack's chorus too, now and then)
+  birdT -= dt; if (birdT <= 0) { birdT = rnd(1.5, 6) / (1 + forest * 0.6) * (recBirds || META.loopBirds ? 3 : 1); if (light > 0.5 && calm > 0.2 && dry > 0.5 && !recBirds) bird(calm * dry * light * low); }   // (calls of their own over the first pack's chorus too, now and then)
   // a cricket singing near you: a few chirps from one side, then quiet (bouts of them over the old chorus, or on their own)
   crickT -= dt; if (crickT <= 0 && !recCrick) { crickT = META.loopCrickets ? rnd(0.8, 3) : rnd(0.25, 0.7);
     if (crick > 0.2 && calm > 0.2) { const f = rnd(4200, 4900), p = rnd(-0.8, 0.8), n = 2 + Math.floor(Math.random() * 4), v = 0.016 * calm * crick;
       for (let k = 0; k < n; k++) for (let i = 0; i < 3; i++) tone(f, 0.022, { vol: v, attack: 0.004, delay: k * 0.33 + i * 0.045, pan: p, wet: 0.15, bus: ambBus }); } }
   // an owl now and then, off in the trees: the team's hoots, or a long hoot, a pause, then a soft wavering one (the
   // tawny owl's call)
-  owlT -= dt; if (owlT <= 0) { owlT = rnd(25, 60); if (night > 0.5 && rain < 0.4 && low > 0.5) { const p = rnd(-0.7, 0.7);
+  owlT -= dt; if (owlT <= 0) { owlT = rnd(25, 60); if (night > 0.5 && dry > 0.5 && low > 0.5) { const p = rnd(-0.7, 0.7);
     if (!play('owlHoot', { vol: 0.16 * calm * (0.4 + forest * 0.6), pan: p, wet: 0.7, bus: ambBus, lp: 3500, rate: [0.94, 1.02] })) { const f = rnd(360, 400), v = 0.07 * calm, o = { type: 'sine', pan: p, wet: 0.75, bus: ambBus };
       tone(f, 0.6, { ...o, vol: v, slide: -18, attack: 0.07 }); tone(f * 0.94, 0.25, { ...o, vol: v * 0.6, attack: 0.05, delay: 1.5 });
       for (let i = 0; i < 4; i++) tone(f * (0.96 - i * 0.004), 0.16, { ...o, vol: v * 0.8, attack: 0.03, delay: 1.9 + i * 0.17 }); } } }

@@ -83,8 +83,10 @@ export class WorldMap {
     const P = this.g.player.pos; this.t = (this.t || 0) - dt;
     this.mt = (this.mt || 0) - dt; if (this.mt <= 0) { this.mt = 0.125; this.drawMini(); const bn = 'Biome: ' + BIOME_NAMES[biomeAt(P.x, P.z)]; if (bn !== this.lastBiome) { this.lastBiome = bn; this.biomeEl.textContent = bn; } }
     if (this.t <= 0) { this.t = 0.5; this.uncover(P.x, P.z, SEEN_R); for (const s of this.sites()) if (!this.isKnown(s) && Math.hypot(s.x - P.x, s.z - P.z) < (s.kind === 'temple' ? 70 : 45) && (s.kind === 'olive' || s.kind === 'cave' || s.kind === 'house' || s.kind === 'temple')) { this.know(s); this.g.hud.toast(`Found: <b>${LABEL[s.kind]}</b>`); } if (this.open) this.draw(); }
-    // compass: 1 px per 0.25°, cardinal points and known places
-    const yaw = this.g.player.camYaw, W = this.strip.parentElement.clientWidth || 440, deg = (((yaw * 180) / Math.PI + 180) % 360 + 360) % 360, px = 2.4;
+    // compass: 1 px per 0.25°, cardinal points and known places (its width read once a second: read every frame, just
+    // after the strip was written, it made the browser lay the page out again each frame, up to a millisecond)
+    this.wT = (this.wT || 0) - dt; if (this.wT <= 0 || !this.stripW) { this.wT = 1; this.stripW = this.strip.parentElement.clientWidth || 440; }
+    const yaw = this.g.player.camYaw, W = this.stripW, deg = (((yaw * 180) / Math.PI + 180) % 360 + 360) % 360, px = 2.4;
     let html = ''; const put = (bearing, label, cls) => { let d = bearing - deg; d = ((d + 540) % 360) - 180; if (Math.abs(d) > 90) return; html += `<span class="${cls}" style="left:${W / 2 - d * px}px">${label}</span>`; };
     [['N', 180], ['E', 90], ['S', 0], ['W', 270]].forEach(([l, b]) => put(b, l, 'card')); [45, 135, 225, 315].forEach((b) => put(b, '·', 'mid'));
     for (const s of this.sites()) if (this.isKnown(s) && !this.done(s)) { const b = ((Math.atan2(s.x - P.x, s.z - P.z) * 180) / Math.PI + 360) % 360, dist = Math.hypot(s.x - P.x, s.z - P.z); if (dist > 15) put(b, `${icon(ICON[s.kind])}<small>${dist > 999 ? (dist / 1000).toFixed(1) + 'km' : Math.round(dist) + 'm'}</small>`, 'poi'); }

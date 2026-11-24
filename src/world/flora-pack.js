@@ -1,5 +1,5 @@
 // Trees, rocks, shrubs and ruins from the team's packs (tools/assets: low-poly nature and Ancient Empire, their atlas
-// colours baked into the vertices so they share the carved species' one material, wind and impostors). Each takes its
+// colours baked into the vertices so they share the carved species' materials, bark or stone, and impostors). Each takes its
 // carved species' place, fitted to the carved one's size (the same height for a tree, the same bulk for the rest) and
 // standing on its foot, so colliders, woods rules and the mist's reach stay as they were. Loaded before the vegetation
 // starts (main.js); a species without one, or a missing pack, keeps its carved look.

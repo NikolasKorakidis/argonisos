@@ -78,6 +78,15 @@ export default {
     await t.page.reload(); await t.page.waitForFunction(() => window.AG?.player.hero.model && AG.terrain.pending === 0, null, { timeout: 120000 });
     const later = await t.eval(`const r = { inv: JSON.stringify(inv.toJSON()), removed: AG.veg.removed.size, taken: g.pickups.taken.size }; g.save = () => false; localStorage.removeItem('argonisos.world.v1'); return r;`);
     t.check('an older save keeps the pack, while its felled trees and gathered pickups come back', later.inv === old && later.removed === 0 && later.taken === 0, JSON.stringify({ sameInv: later.inv === old, removed: later.removed, taken: later.taken }));
+    // a save from the 8-wide pack (before Patch 25: 8 × 4 slots, no cols) keeps every thing, each in its row and place along
+    // it: the hotbar as it was (worn things still worn), the two new slots at each row's end empty
+    await t.eval(`const { save } = await import('/src/game/save.js'); g.save = () => false; save(g); const d = JSON.parse(localStorage.getItem('argonisos.world.v1')); const o = new Array(32).fill(null);
+      o[0] = { id: 'crudeAxe', n: 1, dur: 33, worn: 'hand' }; o[1] = { id: 'hammer', n: 1, dur: 100 }; o[7] = { id: 'cookedMeat', n: 3 }; o[8] = { id: 'wood', n: 30 }; o[15] = { id: 'stone', n: 12 }; o[16] = { id: 'rope', n: 5 }; o[31] = { id: 'leather', n: 2 };
+      d.inv = { slots: o, seen: d.inv.seen }; localStorage.setItem('argonisos.world.v1', JSON.stringify(d)); return true;`);
+    await t.page.reload(); await t.page.waitForFunction(() => window.AG?.player.hero.model && AG.terrain.pending === 0, null, { timeout: 120000 });
+    const wide = await t.eval(`const r = { loaded: g.loaded, n: inv.slots.length, at: inv.slots.map((s, i) => (s ? i + ':' + s.id + ':' + s.n + (s.dur !== undefined ? '/' + s.dur : '') + (s.worn ? ':' + s.worn : '') : null)).filter(Boolean).join(' '), hot: [...document.querySelectorAll('#hotbar .slot')].length };
+      g.save = () => false; localStorage.removeItem('argonisos.world.v1'); return r;`);
+    t.check('an 8-wide save from before the ten-slot hotbar loads with every thing in its row and place, the hotbar intact', wide.loaded && wide.n === 40 && wide.hot === 10 && wide.at === '0:crudeAxe:1/33:hand 1:hammer:1/100 7:cookedMeat:3 10:wood:30 17:stone:12 20:rope:5 37:leather:2', JSON.stringify(wide));
     // an old save holding what this version no longer knows (an item gone from the game, in the pack, worn, in a chest, a
     // grave, on the ground and eaten; a skill added since; a fight on as it was saved) loads, leaving those out (Patch 23)
     await t.eval(`const { save } = await import('/src/game/save.js'); g.save = () => false; inv.slots.fill(null); inv.slots[5] = { id: 'crudeAxe', n: 1, dur: 50 }; save(g); const d = JSON.parse(localStorage.getItem('argonisos.world.v1'));

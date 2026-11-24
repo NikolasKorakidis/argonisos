@@ -9,6 +9,7 @@ import { PRIORITY } from './pool.js';
 import { ULTRA } from '../render/quality.js';
 import { ATMO } from '../render/atmosphere.js';
 import { STONE_TEX, STONE_GLSL } from './rock.js';
+import { PIXEL_U } from '../render/pixel.js';
 
 // (On Ultra, render/quality.js, a patch splits into finer ones half as far out again, so the land keeps its shape further
 // off: hills and ridges in the distance with their own folds rather than a few broad facets; more of them kept.)
@@ -161,7 +162,9 @@ const FLOOR = `
       // Nov: the forest's weight runs out over the east coast and up Olympos, and drew black roots over the sand and rock)
       float fw = smoothstep(0.12, 0.45, texture2D(uWoods, vRockP.xz / uWoodsExt + 0.5).r) * smoothstep(1.5, 4.0, vRockP.y);
       float fy = vBio.x * (1.0 - vRock) * fw, fv = vBio.y * (1.0 - vRock), fd = 1.0 - smoothstep(25.0, 70.0, length(vViewPosition));
-      vec4 fl = texture2D(uFloorTex, vRockP.xz / 9.0), fs = texture2D(uFloorTex, vRockP.xz / 3.3 + 0.43);
+      // (its colour in texels when the Pixel texture setting is on, render/pixel.js; the moss's relief, and so the light,
+      // from the smooth look)
+      vec4 fl = pixelTex(uFloorTex, vRockP.xz / 9.0, uTexel * 9.0), fs = pixelTex(uFloorTex, vRockP.xz / 3.3 + 0.43, uTexel * 3.3), flr = texture2D(uFloorTex, vRockP.xz / 9.0);
       float fmoss = smoothstep(0.56, 0.74, fl.g), froot = fl.b * (1.0 - fmoss) * fd, fpool = smoothstep(0.52, 0.68, fl.a + (fs.a - 0.5) * 0.15) * fv;
       vec3 fc = diffuseColor.rgb;
       fc *= mix(1.0, 0.62 + mix(fl.r, fs.r, 0.6) * 0.75, fy * fd * (1.0 - fmoss * 0.7));          // needles and twigs, light and dark
@@ -172,12 +175,12 @@ const FLOOR = `
       // pale colour under the moon's silver light read as frost or snow among the dark grass
       fc *= (1.0 - 0.3 * smoothstep(-0.02, 0.05, fc.r - fc.g)) * (1.0 - 0.35 * uNight * (1.0 - vRock));
       diffuseColor.rgb = fc;
-      float floorRelief = fmoss * (0.4 + fl.g * 0.4) * fy * fd;   // (the moss cushions stand up; the roots only darken: thin lines in relief caught the firelight texel by texel)`;
+      float floorRelief = smoothstep(0.56, 0.74, flr.g) * (0.4 + flr.g * 0.4) * fy * fd, fpoolR = smoothstep(0.52, 0.68, flr.a) * fv;   // (the pools' shine from the smooth look too)   // (the moss cushions stand up; the roots only darken: thin lines in relief caught the firelight texel by texel)`;
 export function rockGround(mat) {
   const base = mat.onBeforeCompile;
   mat.onBeforeCompile = (sh, r) => {
     base?.call(mat, sh, r);
-    sh.uniforms.uRockTex = { value: ROCK_TEX }; sh.uniforms.uStoneTex = { value: STONE_TEX }; sh.uniforms.uFloorTex = { value: FLOOR_TEX }; sh.uniforms.uWoods = ATMO.tWoods; sh.uniforms.uWoodsExt = ATMO.woodsExt; sh.uniforms.uNight = ATMO.night;
+    Object.assign(sh.uniforms, PIXEL_U); sh.uniforms.uRockTex = { value: ROCK_TEX }; sh.uniforms.uStoneTex = { value: STONE_TEX }; sh.uniforms.uFloorTex = { value: FLOOR_TEX }; sh.uniforms.uWoods = ATMO.tWoods; sh.uniforms.uWoodsExt = ATMO.woodsExt; sh.uniforms.uNight = ATMO.night;
     sh.vertexShader = 'attribute float rock; attribute vec2 bio; varying float vRock; varying vec2 vBio; varying vec3 vRockP, vRockN;\n' + sh.vertexShader.replace('#include <project_vertex>', `
       vRock = rock; vBio = bio; vRockP = (modelMatrix * vec4(transformed, 1.0)).xyz; vRockN = normalize(mat3(modelMatrix) * objectNormal);
       #include <project_vertex>`);
@@ -185,27 +188,30 @@ export function rockGround(mat) {
       // (sampled everywhere, not only on rock: the relief's screen derivatives need every pixel of the quad)
       vec3 rbw = pow(abs(vRockN), vec3(4.0)); rbw /= rbw.x + rbw.y + rbw.z;
       vec3 rp = vRockP / 7.0;   // (a tile 7 m across: slabs of about 1.7 m)
-      vec4 rk = texture2D(uRockTex, rp.zy) * rbw.x + texture2D(uRockTex, rp.xz) * rbw.y + texture2D(uRockTex, rp.xy + 0.37) * rbw.z;
+      vec4 rk = texture2D(uRockTex, rp.zy) * rbw.x + texture2D(uRockTex, rp.xz) * rbw.y + texture2D(uRockTex, rp.xy + 0.37) * rbw.z;   // (for the relief)
+      vec4 rkc = pixelTex(uRockTex, rp.zy, uTexel * 7.0) * rbw.x + pixelTex(uRockTex, rp.xz, uTexel * 7.0) * rbw.y + pixelTex(uRockTex, rp.xy + 0.37, uTexel * 7.0) * rbw.z;   // (for the colour, in texels)
       float rbroad = texture2D(uRockTex, vRockP.xz / 41.0 + 0.5).a;
       // bedding: thin dark seams in beds that dip a little across the land and wander with the noise, faint, only here and
       // there, and gone with distance (seen from afar, beds a couple of metres apart drew regular stripes over whole faces)
       float rmacro = texture2D(uRockTex, vRockP.xz / 197.0 + 0.13).a, rpatch = texture2D(uRockTex, vRockP.zx / 113.0 + 0.71).a;
       float rlayer = (vRockP.y + dot(vRockP.xz, vec2(0.21, -0.13))) / (1.7 + rmacro * 1.6) + (rbroad - 0.5) * 6.0 + (rmacro - 0.5) * 9.0, rbed = abs(fract(rlayer) - 0.5) * 2.0;
       float rbk = smoothstep(0.42, 0.72, rpatch) * (1.0 - smoothstep(30.0, 110.0, length(vViewPosition)));
-      float rtone = (0.4 + rk.r * 0.85) * mix(1.0, mix(0.9, 1.06, step(0.5, fract(rlayer * 0.5))) * mix(0.75, 1.0, smoothstep(0.0, 0.12, rbed)), rbk) * (0.8 + rbroad * 0.25 + rmacro * 0.15);
+      float rtone = (0.4 + rkc.r * 0.85) * mix(1.0, mix(0.9, 1.06, step(0.5, fract(rlayer * 0.5))) * mix(0.75, 1.0, smoothstep(0.0, 0.12, rbed)), rbk) * (0.8 + rbroad * 0.25 + rmacro * 0.15);
       // far off, where the slabs have mipmapped away to one grey, the broad variation and Olympos's beds stay (the review
       // of 20 Nov, item 15: a featureless cone at middle distance): pale and darker beds some 9 m thick, wandering with the
       // noise, faded out where they would be finer than a pixel or two; nothing finer than the broad channels
       float rfar = smoothstep(45.0, 170.0, length(vViewPosition)), rmtn = smoothstep(110.0, 170.0, vRockP.y);
       float rsl = vRockP.y / 9.0 + (rmacro - 0.5) * 3.0 + (rpatch - 0.5) * 1.5, rsb = sin(rsl * 6.2832) * (1.0 - smoothstep(0.2, 0.5, fwidth(rsl)));
       rtone *= mix(1.0, 0.72 + rbroad * 0.56, rfar * 0.7) * (1.0 + rsb * 0.12 * rmtn);
-      rtone *= 0.84 + stoneTri(vRockP / 0.9 + 0.5, rbw).r * 0.32;   // (the grain of the island's stone, rock.js, so the bare slopes and the boulders on them match)
+      rtone *= 0.84 + stoneTriP(vRockP / 0.9 + 0.5, rbw, uTexel * 0.9).r * 0.32;   // (the grain of the island's stone, rock.js, so the bare slopes and the boulders on them match)
       vec3 rcol = diffuseColor.rgb * rtone;
-      rcol = mix(rcol, rcol * vec3(0.85, 1.0, 0.62), smoothstep(0.72, 0.85, rk.b) * 0.6);   // lichen
+      rcol = mix(rcol, rcol * vec3(0.85, 1.0, 0.62), smoothstep(0.72, 0.85, rkc.b) * 0.6);   // lichen
       diffuseColor.rgb = mix(diffuseColor.rgb, rcol, vRock);
       float rockRelief = (rk.g + smoothstep(0.0, 0.12, rbed) * 0.35 * rbk) * vRock * (1.0 - smoothstep(25.0, 70.0, length(vViewPosition))) + floorRelief;`)
+      // (the ground's painterly strokes, main.js groundDetail at a third of a metre's scale, in texels too)
+      .replace('#include <map_fragment>', '#ifdef USE_MAP\n diffuseColor *= pixelTex(map, vMapUv, uTexel * 3.0);\n#endif')
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-      roughnessFactor = min(roughnessFactor, mix(1.0, 0.35, fpool));   // (standing water in the marsh's hollows shines)`)
+      roughnessFactor = min(roughnessFactor, mix(1.0, 0.35, fpoolR));   // (standing water in the marsh's hollows shines)`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
       {   // the relief tilts the normal (bump mapping from screen-space derivatives)
         vec3 sx = dFdx(-vViewPosition), sy = dFdy(-vViewPosition), r1 = cross(sy, normal), r2 = cross(normal, sx);

@@ -13,6 +13,10 @@ const BATCH = 5;   // (Shift-click, or the ×5 button: that many at once, or as 
 // what each thing is used in (recipes and pieces), for the pack's info and the crafting panel
 const USED = {}; for (const r of [...RECIPES, ...PIECES]) for (const m of Object.keys(r.mats)) (USED[m] ||= new Set()).add(ITEMS[r.id]?.name ?? r.name);
 export const usedIn = (id) => [...(USED[id] || [])];
+// What a crafted thing breaks down into (Shift + right-click in the pack, crafting's undoing): its first recipe, made for gear only.
+// Materials are left out, since several are made from each other (wood from a branch, rope from leather) and breaking
+// them down would make something from nothing
+const BREAKS = new Map(); for (const r of RECIPES) if (ITEMS[r.id].type !== 'material' && !BREAKS.has(r.id)) BREAKS.set(r.id, r);
 
 export class Crafting {
   constructor(g) {
@@ -27,6 +31,7 @@ export class Crafting {
     $('craftList').addEventListener('dblclick', (e) => { const r = e.target.closest('.rrow'); if (r) this.make(r.dataset.id); });
     $('craftDetail').addEventListener('click', (e) => { if (e.target.closest('#craftGo')) this.make(this.sel, e.shiftKey ? BATCH : 1); if (e.target.closest('#craftGo5')) this.make(this.sel, BATCH); if (e.target.closest('#repairAll')) { this.repairAll(); this.draw(); } const rb = e.target.closest('[data-repair]'); if (rb) { this.repair(+rb.dataset.repair); this.draw(); } });
     g.inv.onNew = (id) => { this.discover(); g.onFirstItem?.(id); };
+    g.hud.salvage = (i) => this.salvage(i); g.hud.onBreak = (i) => this.breakDown(i); g.hud.breakable = (id) => BREAKS.has(id);   // (the pack's Shift + right-click: hud.js confirmBreak)
     this.discover(true);
   }
   // Find recipes newly revealed by what you've held
@@ -87,6 +92,21 @@ export class Crafting {
     this.draw();
   }
   open(tab) { if (tab) this.tab = tab; this.discover(true); this.draw(); }
+  // ---- Breaking down: a crafted thing gives back half of each of its materials, rounded down but at least one of each, one
+  // at a time (a batch for what is made several at once: ten arrows). What it gives, or why it can't be broken down
+  salvage(i) {
+    const s = this.g.inv.slots[i], r = s && BREAKS.get(s.id); if (!r) return 'Only crafted gear can be broken down';
+    if (s.worn) return 'Take it off before you break it down';
+    const n = r.n || 1; if (s.n < n) return `Needs ${n} to break down`;
+    return { id: s.id, n, mats: Object.fromEntries(Object.entries(r.mats).map(([m, k]) => [m, Math.max(1, Math.floor(k / 2))])) };
+  }
+  breakDown(i) {
+    const s = this.g.inv.slots[i], b = this.salvage(i); if (typeof b === 'string') { this.g.hud.toast(b); return false; }
+    s.n -= b.n; if (s.n <= 0) this.g.inv.slots[i] = null;
+    const P = this.g.player.pos;   // (what the pack can't hold falls at your feet, as a full pack's loot does)
+    for (const [m, k] of Object.entries(b.mats)) { const left = this.g.inv.add(m, k); if (left) this.g.pickups?.drop(m, left, P.x, P.z, undefined, P.y); this.g.hud.pickup(m, k); }
+    this.g.inv.onChange?.(); this.g.sound?.('craft'); this.draw(); return true;
+  }
   // ---- Repair at the workbench: free (the bench is all it needs), one item at a time, made as good as new
   nearBench() { return this.g.build?.nearStation?.('workbench', this.g.player.pos, 6); }
   needsRepair(slot) { const def = ITEMS[slot?.id]; return !!def?.dur && slot.dur < def.dur; }

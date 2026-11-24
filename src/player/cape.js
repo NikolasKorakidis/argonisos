@@ -5,6 +5,7 @@
 // short rope of points (Verlet) that gravity pulls down and the air holds back, so it streams out behind a run, lifts
 // in a fall and swings in a turn, and that is kept behind the back and the legs (a stride never pokes through it).
 import * as THREE from 'three';
+import { heroMaterial, KIND } from './hero-look.js';
 
 export const CAPE_MODEL = 'all/polygonancientempire/sk-chr-attach-cape-01';
 // where the cape's bones sit, as fractions of its length from the top: the shoulder blades, the small of the back, the knees
@@ -53,7 +54,8 @@ export class Cape {
       si.set([k, Math.max(0, k - 1), Math.min(Y.length - 1, k + 1), 0], i * 4); sw.set([1 - up - dn, up, dn, 0], i * 4);
     }
     geo.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
-    this.mat = new THREE.MeshStandardMaterial({ map, color: 0xb8b0a8, roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
+    // (painted as the hero's clothes are, a coarse wool: hero-look.js)
+    this.mat = heroMaterial({ map, color: 0xb8b0a8, key: 'heroCape', side: THREE.DoubleSide, sort: `hKind = ${KIND.cloth}; diffuseColor.rgb = hMute(diffuseColor.rgb, 0.7);` });
     this.mesh = new THREE.SkinnedMesh(geo, this.mat); this.mesh.castShadow = true; this.mesh.receiveShadow = true; this.mesh.frustumCulled = false;
     this.B = B; this.root = root; this.pts = null; this.group.visible = false;
     this.group.add(this.mesh); this.place(false);

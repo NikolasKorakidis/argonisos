@@ -10,6 +10,7 @@ import { Combat } from './combat.js';
 import { Acts } from './acts.js';
 import { Structures } from '../world/structures.js';
 import { Trial } from './trial.js';
+import { Loot } from './loot.js';
 import { SITES } from '../world/sites.js';
 import { WorldMap } from '../ui/map.js';
 import { Owl } from './owl.js';
@@ -42,6 +43,7 @@ export function installGame(g) {
   g.structures = new Structures(g);
   g.creatures = new Creatures(g);
   g.trial = new Trial(g);
+  g.loot = new Loot(g);   // (the jars, baskets and woodpiles left about the places: E searches them)
   g.map = new WorldMap(g);
   g.owl = new Owl(g);
   g.guide = new Guide(g);
@@ -146,6 +148,7 @@ export function installGame(g) {
     if (p) { const K = KINDS[p.kind], id = p.kind === 'drop' ? p.item : K.item, n = p.kind === 'drop' ? p.n : 1, name = ITEMS[id]?.name ?? String(id); return { kind: 'pickup', p, label: `${K.verb || 'Pick up'} ${K.label || name}${n > 1 ? ` ×${n}` : ''}`, sub: K.label ? `+${K.n[0]} ${name.toLowerCase()}` : '' }; }
     const ow = g.owl.interactable(player.pos) || g.graves.interactable(player.pos); if (ow) return ow;
     const tr = g.trial.interactable(player.pos); if (tr) return tr;
+    const lt = g.loot.interactable(player.pos, f); if (lt) return lt;
     const s = g.build?.interactable?.(player.pos, f); if (s) return s;
     const tb = g.harvest.tomatoBush(); if (tb) return { label: tb.ready ? 'Pick tomatoes' : 'No ripe tomatoes', sub: 'Tomato bush', use: () => g.harvest.pickTomatoes(tb) };
     const t = g.harvest.fruitTree(); if (t) return { kind: 'fruit', t, label: t.ready ? `Pick ${t.fruit[0]}s` : 'Picked clean' };
@@ -159,7 +162,7 @@ export function installGame(g) {
   };
 
   // ---- per frame
-  const _bw = { p: 0, y: 0, v: 0, r: 0 }, _look = new THREE.Vector3(), _a = new THREE.Vector3(), _b = new THREE.Vector3();
+  const _bw = { p: 0, y: 0, v: 0, r: 0 }, _look = new THREE.Vector3(), _a = new THREE.Vector3(), _b = new THREE.Vector3(), torchAt = new THREE.Vector3();
   // walls round you: of eight ways out at head height, six or more meet a wall within 6 m (what you built, or a site's)
   const walled = (P) => { let n = 0; _a.set(P.x, P.y + 1.5, P.z); for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; _b.set(P.x + Math.cos(a) * 6, P.y + 1.5, P.z + Math.sin(a) * 6); if (g.build.rayBlock(_a, _b) !== null || g.structures.rayBlock?.(_a, _b) != null) n++; } return n >= 6; };
   // reaching the top of Olympos
@@ -212,11 +215,11 @@ export function installGame(g) {
     g.trial.update(dt);
     // loot from kills is picked up as you walk over it
     for (const d of [...g.pickups.drops]) if (d.extra?.auto && Math.hypot(d.x - player.pos.x, d.z - player.pos.z) < 1.8 && Math.abs(d.y - player.pos.y) < 2) { g.pickups.take(d); g.give(d.item, d.n); g.sound('pick'); }
-    if (g.torchLight?.parent) askLight(g.torchLight.getWorldPosition(new THREE.Vector3()), 7 + Math.sin(performance.now() * 0.02) * 0.6 + Math.random() * 0.4, 14);
+    if (g.torchLight?.parent) askLight(g.torchLight.getWorldPosition(torchAt), 7 + Math.sin(performance.now() * 0.02) * 0.6 + Math.random() * 0.4, 14, undefined, undefined, false);   // (it moves: never the fire's shadow caster, render/lights.js)
   };
   g.lateUpdate = (dt) => { updateFx(dt, camera); updateLights(); g.occlusion.update(dt); };
   hud.onToggle = (on) => { if (on) g.crafting.open(); };
-  g.loaded = load(g);
+  g.loaded = load(g); g.loot.sync();   // (what the save says was searched, shown emptied)
   // (a save that couldn't be read: load kept a copy of it beside the save and starts the page again on a new trial,
   // saving nothing meanwhile; the title screen and a toast say so, save.js)
   if (g.loaded === 'lost') { g.loaded = false; g.save = () => false; location.reload(); }

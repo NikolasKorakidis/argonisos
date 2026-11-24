@@ -50,6 +50,9 @@ export const ATMO = {
   mzCol: { value: new THREE.Color(0.7, 0.75, 0.8) }, mzColUp: { value: new THREE.Color(0.5, 0.6, 0.8) }, mzSun: { value: new THREE.Color() },
   // the grade (white balance, saturation, a tint in the shadows) and the cloud shadows drifting over the land
   gTint: { value: new THREE.Color(1, 1, 1) }, gSat: { value: 1 }, gShadow: { value: new THREE.Color(0, 0, 0) },
+  // and how much colour the world keeps (the Colour setting, settings.js: half by default, the Greek reviewer, 23 Nov:
+  // "drop the saturation of all colours to 50%, look at Valheim's colours"), and how much of it the sky and what glows keep
+  colour: { value: 0.5 }, colourSky: { value: 0.45 }, gContrast: { value: 0 },
   cloudOff: { value: new THREE.Vector2() }, cloudCover: { value: 0.4 }, cloudK: { value: 0 },
   // the shafts of sun: how strong (by the hour, how near the sun the view looks, cloud), and the quarter-sized pictures
   // they're blurred in (rays: 0 turns them off, on the lower graphics settings; tIn: the one a pass reads, shRad: how far it reaches, in screen heights)
@@ -246,7 +249,7 @@ export class AtmospherePass extends Pass {
     this.material = new THREE.ShaderMaterial({
       uniforms: ATMO, depthTest: false, depthWrite: false, vertexShader: VERT, defines: ULTRA ? { SEA_SSR: '' } : {},
       fragmentShader: `${LIGHT_PARS} uniform sampler2D tDiffuse, tHaze, tShafts; uniform vec3 sunDir, sunCol, mistCol, hazeCol, lowCol; uniform vec2 hTexel, camNF; uniform float lowAmt, lowDen, lowH, lowSky;
-        uniform float fleckK, shaftK, ao, aoK, woodsDark; uniform sampler2D tAO; uniform vec2 aoTexel; uniform vec3 aoTint;
+        uniform float fleckK, shaftK, ao, aoK, woodsDark, colour, colourSky, gContrast, night; uniform sampler2D tAO; uniform vec2 aoTexel; uniform vec3 aoTint;
         uniform vec2 sunUV, cloudOff, texel, mzC; uniform vec3 fogHide; uniform float blurNear, blurFar, blurAmt, focus, aspect, mzR0, mzR1, mzAmt, mzTop, mzSoft, mistAmt, mistBase, mistH, mistDen, hazeAmt, vigOffset, vigDark, gSat, cloudCover, cloudK;
         uniform vec3 gTint, gShadow; uniform sampler2D tStorm; uniform float stormOn, stormScale; uniform vec2 stormRes;
         ${MIST_TONE}
@@ -342,7 +345,7 @@ export class AtmospherePass extends Pass {
           // is covered and nothing far off (a giant tree on a ridge) stands out of the mist above its ceiling
           vec3 rd = normalize(P - camPos); float mpEdge = camPos.y + rd.y * (mzR1 / max(length(rd.xz), 1e-3)), mh = mzR1, mp = mpEdge;
           if (d < 0.99999) { mh = length(P.xz - mzC); mp = mix(P.y, mpEdge, smoothstep(mzR1 * 0.9, mzR1 * 1.1, mh)); }
-          col.rgb = mix(col.rgb, mistTone(rd), mzAmt * smoothstep(mzR0, mzR1, mh) * mistUp(mp));
+          float mistK = mzAmt * smoothstep(mzR0, mzR1, mh) * mistUp(mp); col.rgb = mix(col.rgb, mistTone(rd), mistK);
           // the storm wall, over what lies behind it (with the player's mist on its foot already: stormwall.js)
           if (stormOn > 0.5) { vec4 s = stormAt(vUv, d); col.rgb = col.rgb * (1.0 - s.a) + s.rgb;
             // (an edge against it: the antialiasing has mixed the bright sky behind into the pixel's colour while its depth
@@ -354,8 +357,20 @@ export class AtmospherePass extends Pass {
           // scattered by the air between you and what you see, so the hero and the trunk beside you take little of it, and
           // the open sky (which has the sun's own glow) only a little
           if (shaftK > 0.001) col.rgb += sunCol * texture2D(tShafts, vUv).r * shaftK * (d < 0.99999 ? 1.0 - exp(-dist / 18.0) : 0.3);
-          // the grade: white balance and saturation for the place and the hour, a cool or warm cast in the shadows
-          col.rgb *= gTint; float l = dot(col.rgb, vec3(0.2126, 0.7152, 0.0722)); col.rgb = max(mix(vec3(l), col.rgb, gSat), 0.0);
+          // the grade: white balance and saturation for the place and the hour, a cool or warm cast in the shadows; and the
+          // world's colour drained to the player's setting, as Valheim's is, but before the bloom and not all of it from
+          // what glows (the sun, fire, embers, magic: brighter in some colour than any lit surface comes) nor from the sky
+          // and the distance's air (the player's mist, which is the sky's colour), so the fire stays warm and the day blue
+          // (the white balance after the colour is drained, so the place's and the hour's warmth or coolness stays whole:
+          // the muted world earthy, not grey)
+          // (and by night what the fire lights keeps its warmth: the night is the moon's cool light, any warm colour in it
+          // is a fire's, a torch's or an ember's)
+          float l = dot(col.rgb, vec3(0.2126, 0.7152, 0.0722)), glow = max(smoothstep(0.9, 2.2, max(col.r, max(col.g, col.b))), night * smoothstep(0.004, 0.04, col.r - col.b));
+          col.rgb = max(mix(vec3(l), col.rgb, gSat * mix(colour, 1.0, max(glow, (d < 0.99999 ? mistK / max(mzAmt, 1e-3) : 1.0) * colourSky))), 0.0) * gTint;
+          // (and with the colour gone, more contrast in its place, the more the less colour: the shade and the midtones
+          // deeper, the brightly sunlit about as it was, so the muted world reads by its light and shade as Valheim's does,
+          // not pale and washed out like an old photograph; by day: the night is as dark as the moon makes it)
+          if (d < 0.99999 && l > 1e-4) col.rgb *= pow(clamp(l, 0.12, 0.8) / 0.8, gContrast * (1.0 - colour) * (1.0 - mistK)) * (1.0 - glow) + glow;
           col.rgb += gShadow * (1.0 - smoothstep(0.0, 0.35, l)) * 0.06;
           vec2 vu = (vUv - 0.5) * vigOffset; col.rgb = mix(col.rgb, vec3(1.0 - vigDark), dot(vu, vu));   // the vignette
           gl_FragColor = col;
@@ -420,7 +435,9 @@ const G = { pedias: [1.04, 1.0, 0.93, 1.08, [0.02, 0.0, -0.02]], yleos: [0.94, 1
 const LEAFY = new THREE.Color(0.9, 1.0, 0.82);
 const WET_G = [0.9, 0.94, 0.99, 0.72, [0.25, 0.3, 0.38]];
 const _t = new THREE.Color(), _sh = new THREE.Vector3();
+const CONTRAST = 0.3;   // (the contrast the grade adds as the colour goes: at none, the luminance's exponent this much over one, by day)
 function grade(o) {
+  ATMO.gContrast.value = CONTRAST * (1 - o.night) * (1 - 0.5 * o.overcast);
   const w = { pedias: o.wp * (1 - o.dusk) * (1 - o.night), yleos: o.wy * (1 - o.dusk) * (1 - o.night), dusk: o.dusk * (1 - o.night), night: o.night, giant: o.giant * 1.2 }; let tot = 0;
   _t.setRGB(0, 0, 0); _sh.set(0, 0, 0); let sat = 0;
   for (const k in w) { const g = G[k], a = w[k]; if (a <= 0) continue; tot += a; _t.r += g[0] * a; _t.g += g[1] * a; _t.b += g[2] * a; sat += g[3] * a; _sh.x += g[4][0] * a; _sh.y += g[4][1] * a; _sh.z += g[4][2] * a; }
@@ -431,8 +448,8 @@ function grade(o) {
 // How strong the light in the air is (kept together here, so they can be weighed against each other): the woods' air,
 // per metre at the ground in a full wood, by day and by night; how much sun and moonlight it scatters; how much of the
 // sky's light round it (by night a moonlit blue haze among the trunks, so a wood reads by night as Valheim's do, gone
-// under cloud); and the shafts of sun
-export const AIR = { woodDay: 0.004, woodNight: 0.009, lit: 0.25, litNight: 0.12, amb: 0.15, ambNight: 1.0, shafts: 1.2, ao: 0.8, woodsDark: 0.3 };
+// under cloud, dimmer since the night was darkened, 23 Nov); and the shafts of sun
+export const AIR = { woodDay: 0.004, woodNight: 0.009, lit: 0.25, litNight: 0.1, amb: 0.15, ambNight: 0.65, shafts: 1.2, ao: 0.8, woodsDark: 0.3 };
 const clamp01 = (x) => Math.max(0, Math.min(1, x)), sstep = (a, b, x) => { const k = clamp01((x - a) / (b - a)); return k * k * (3 - 2 * k); };
 export function updateAtmosphere(camera, o) {
   grade(o); ATMO.night.value = o.night;

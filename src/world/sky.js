@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { Sky } from '../../vendor/three/jsm/objects/Sky.js';
 import { FullScreenQuad } from '../../vendor/three/jsm/postprocessing/Pass.js';
-import { scene, camera, renderer, sun, hemi } from '../render/core.js';
+import { scene, camera, renderer, sun, hemi, CONTEXT } from '../render/core.js';
 import { clamp, lerp } from '../util/math.js';
 import { SKY_COL } from '../render/atmosphere.js';
 
@@ -16,8 +16,11 @@ export const DAY_SECONDS = 32 * 60, DAY_FRACTION = 24 / 32;
 // the land, so hills and trees stand dark against it) and the dome's horizon; and the exposure (which tells only where the
 // picture is drawn without the post passes: they leave the tone mapping out). The first cut of Patch 20 left the land
 // black but for a pool round the hero, the sky's light a sixth of what it had been: a clear night now reads at about a
-// tenth of the day's brightness in the meadows and the woods (a mean of 25 to 35 of 255 on screen), cloud shuts it out
-export const MOON = { k: 1.1, col: 0xb0bccf, sky: 5.5, skyCol: 0x40547e, ground: 0x2a3242, air: 0x142240, horizon: 0x2a3a5a, exposure: 0.62 };
+// tenth of the day's brightness in the meadows and the woods (a mean of 25 to 35 of 255 on screen), cloud shuts it out.
+// The Greek reviewer (23 Nov) found that too bright: the moon's and the sky's light now little more than half, so a clear
+// night reads about a third darker on screen (with the woods' night air, atmosphere.js AIR), the land still dark against
+// the lighter air and the fires all the brighter for it
+export const MOON = { k: 0.6, col: 0xb0bccf, sky: 3.0, skyCol: 0x40547e, ground: 0x2a3242, air: 0x142240, horizon: 0x2a3a5a, exposure: 0.62 };
 
 export const skyDome = new THREE.Mesh(new THREE.SphereGeometry(5000, 48, 24), new THREE.ShaderMaterial({
   side: THREE.BackSide, depthWrite: false, fog: false,
@@ -86,6 +89,11 @@ const sky = new Sky(); sky.material.uniforms.turbidity.value = 1.8; sky.material
 sky.material.uniforms.mieCoefficient.value = 0.004; sky.material.uniforms.mieDirectionalG.value = 0.85;
 const pmrem = new THREE.PMREMGenerator(renderer), envScene = new THREE.Scene(), envSky = new Sky(); envSky.material = sky.material; envSky.scale.setScalar(1000); envScene.add(envSky);
 let envRT = null, envRaw = null, envTimer = 0, envE = 9, envOv = 9, envK = 1, envKDone = -1;
+// (three's bake makes a new 768 × 1024 target with a depth buffer of its own each time, and the one before was thrown
+// away: 9 MB made and freed on the card every second or two as the sun moves. The first bake becomes the lasting copy
+// below; every later one goes into one of two kept targets in turn, so the last bake can be read while the next is made)
+const bakeOwn = pmrem._allocateTargets.bind(pmrem), bakes = []; let bakeN = 0;
+pmrem._allocateTargets = () => { const n = bakeN++; return n === 0 ? bakeOwn() : (bakes[n & 1] ??= bakeOwn()); };
 // Each bake is copied into one lasting target, texel for texel, so the scene's environment stays the same texture: a new
 // one each time made every lit material in the world look its shader program up again on the next frame, a hitch every
 // few seconds as the sun moved
@@ -107,9 +115,10 @@ const keepBg = Object.assign(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.M
 function refreshEnvironment() {
   const fresh = pmrem.fromScene(envScene, 0.04);
   if (!envRT) { envRT = fresh; scene.environment = envRT.texture; const prev = renderer.getRenderTarget(); renderer.setRenderTarget(keepRT); renderer.render(keepBg, camera); renderer.setRenderTarget(prev); envRaw = pmrem.fromScene(envScene, 0.04); }
-  else { envRaw?.dispose(); envRaw = fresh; }
+  else envRaw = fresh;   // (the one before is kept for the next bake but one, above)
   scaleEnvironment();
 }
+CONTEXT.restored.push(() => { if (envRT) refreshEnvironment(); });   // (a lost context took the sky's light with it)
 function scaleEnvironment() {
   const prev = renderer.getRenderTarget(); envCopy.material.uniforms.src.value = envRaw.texture; envCopy.material.uniforms.k.value = envKDone = envK; envCopy.material.uniforms.tint.value.setRGB(1, 1, 1).lerp(WOODS_TINT, clamp((1 - envK) / 0.4, 0, 1));
   renderer.setRenderTarget(envRT); envCopy.render(renderer); renderer.setRenderTarget(prev);

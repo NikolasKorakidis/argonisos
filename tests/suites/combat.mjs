@@ -131,6 +131,18 @@ export default {
       S.level = 1; S.xp = 0; return out;`);
     if (typeof hog === 'string') t.check('a hog takes four or five crude-axe blows', false, hog);
     else { t.metric('crude-axe blows to kill a level-0 hog', hog); t.check('a level-0 hog (50-65 health) takes four or five crude-axe blows at skill 1', hog.every((q) => q.hits >= 4 && q.hits <= 5), JSON.stringify(hog)); }
+    // ...and a deer (Patch 25, the Greek reviewer: as many blows as a hog; it had 10-14 health, one blow): a grown level-0
+    // doe at either end of 50-65 and a few at random, four or five blows; a fawn (YOUNG_K: 20-26) two
+    const deer = await t.eval(`${H} clear(); const S = P.stats.skills.axe, out = [];
+      for (const [hp, young] of [[50, false], [65, false], [0, false], [0, false], [0, false], [0, true], [0, true]]) {
+        const c = place('deer', 1.2, 0, { young }); if (hp) c.hp = c.max = hp; const h0 = c.hp; let hits = 0;
+        if (c.level || c.young !== young || (!young && (h0 < 50 || h0 > 65))) return 'not a level-0 deer of 50-65: ' + JSON.stringify({ young: c.young, level: c.level, hp: h0 });
+        while (!c.dead && hits < 20) { S.level = 1; S.xp = 0; c.aware = true; c.pos.set(P.pos.x + Math.sin(P.yaw) * 1.2, c.pos.y, P.pos.z + Math.cos(P.yaw) * 1.2); if (!g.combat.strike(g.ITEMS.crudeAxe)) return 'the axe missed'; hits++; }
+        out.push({ hp: +h0.toFixed(1), young, hits }); g.creatures.remove(c);
+      }
+      S.level = 1; S.xp = 0; return out;`);
+    if (typeof deer === 'string') t.check('a deer takes as many crude-axe blows as a hog', false, deer);
+    else { t.metric('crude-axe blows to kill a level-0 deer (and a fawn)', deer); t.check('a level-0 deer (50-65 health) takes four or five crude-axe blows at skill 1, like a hog; a fawn two', deer.every((q) => (q.young ? q.hits === 2 : q.hits >= 4 && q.hits <= 5)), JSON.stringify(deer)); }
     // (the torch in the hand and out of it; how near a creature comes over a while, and whether its blow landed)
     const TORCH = `const torch = (on) => { const i = inv.slots.findIndex((s) => s?.id === 'torch'); if (on && i < 0) { g.give('torch', 1); return torch(on); } if (i >= 0 && !!inv.slots[i].worn !== on) g.equip(i); return g.torchLit() === on; };
       const watch = async (c, ms, from = 0, stop = false) => { let near = 99, blow = false; const t0 = performance.now(); window._rec = null; await until(() => { if (performance.now() - t0 > from) near = Math.min(near, c.pos.distanceTo(P.pos)); blow ||= window._rec?.c === c; return stop && blow; }, ms); return { near: +near.toFixed(2), blow }; };`;
@@ -170,15 +182,15 @@ export default {
     const waves = await t.eval(`${H} clear(); g.paused = true; const Tr = g.trial, out = {}, storm = Tr.storm; Tr.storm = () => {};
       const fight = () => { for (const c of [...g.creatures.list]) g.creatures.remove(c); const a = new V(P.pos.x + 20, P.pos.y, P.pos.z), c = g.creatures.spawn('minotaur', a.x, a.z, { level: 0, boss: true, aware: true }); c.arena = a; Tr.begin(c, 'minotaur'); return c; };
       const run = (s) => { for (let i = 0, n = Math.round(s / 0.1); i < n; i++) Tr.update(0.1); }, at = (c) => ({ waves: Tr.waves, skeletons: g.creatures.list.filter((k) => k.summoned && k.type === 'skeleton').length, near: +Math.min(99, ...g.creatures.list.filter((k) => k.summoned).map((k) => k.pos.distanceTo(P.pos))).toFixed(1) });
-      let c = fight(); c.hp = 301; run(29.8); out.by30 = at(c); run(0.4); out.at30 = at(c); run(29.6); out.by60 = at(c); run(0.4); out.at60 = at(c);
-      c = fight(); run(10); out.by10 = at(c); c.hp = 300; run(0.1); out.at300 = at(c); run(29.7); out.by300and30 = at(c); run(0.4); out.at300and30 = at(c);
-      c = fight(); run(29.9); out.before = at(c); c.hp = 300; Tr.update(Tr.helperT); out.both = at(c); run(29.8); out.bothAnd30 = at(c); run(0.4); out.bothAnd30b = at(c);
+      let c = fight(); c.hp = 1501; run(29.8); out.by30 = at(c); run(0.4); out.at30 = at(c); run(29.6); out.by60 = at(c); run(0.4); out.at60 = at(c);
+      c = fight(); run(10); out.by10 = at(c); c.hp = 1500; run(0.1); out.at300 = at(c); run(29.7); out.by300and30 = at(c); run(0.4); out.at300and30 = at(c);
+      c = fight(); run(29.9); out.before = at(c); c.hp = 1500; Tr.update(Tr.helperT); out.both = at(c); run(29.8); out.bothAnd30 = at(c); run(0.4); out.bothAnd30b = at(c);
       for (const k of [...g.creatures.list]) g.creatures.remove(k); Tr.boss = null; Tr.storm = storm; Tr.calm(); g.paused = false; return out;`);
     t.metric('the Minotaur\'s waves of dead', waves);
     const W = (k) => waves[k]?.waves;
-    t.check('Minotaur, health above 300: no wave before 30 s, one at 30 s (two skeletons, not beside you), the next 30 s later', W('by30') === 0 && W('at30') === 1 && waves.at30.skeletons === 2 && waves.at30.near > 6 && W('by60') === 1 && W('at60') === 2, JSON.stringify(waves));
-    t.check('Minotaur brought to 300 health at 10 s: a wave at once, the next 30 s after it', W('by10') === 0 && W('at300') === 1 && W('by300and30') === 1 && W('at300and30') === 2, JSON.stringify(waves));
-    t.check('Minotaur at 300 health just as 30 s come up: one wave, not two, and the next 30 s after it', W('before') === 0 && W('both') === 1 && waves.both.skeletons === 2 && W('bothAnd30') === 1 && W('bothAnd30b') === 2, JSON.stringify(waves));
+    t.check('Minotaur, health above 1500 (a third of his 4500): no wave before 30 s, one at 30 s (two skeletons, not beside you), the next 30 s later', W('by30') === 0 && W('at30') === 1 && waves.at30.skeletons === 2 && waves.at30.near > 6 && W('by60') === 1 && W('at60') === 2, JSON.stringify(waves));
+    t.check('Minotaur brought to 1500 health at 10 s: a wave at once, the next 30 s after it', W('by10') === 0 && W('at300') === 1 && W('by300and30') === 1 && W('at300and30') === 2, JSON.stringify(waves));
+    t.check('Minotaur at 1500 health just as 30 s come up: one wave, not two, and the next 30 s after it', W('before') === 0 && W('both') === 1 && waves.both.skeletons === 2 && W('bothAnd30') === 1 && W('bothAnd30b') === 2, JSON.stringify(waves));
 
     // ---- the Minotaur against a small hero (Patch 22). His moves made by hand, the hero standing still unless a step
     // says otherwise (damage still counted through hitPlayer, window._rec, but none taken: P.stats.damage is off)

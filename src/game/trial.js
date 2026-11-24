@@ -4,7 +4,7 @@
 //   Tribute: lay it on the boss's altar to call it: 5 deer hides and 10 olives for the Minotaur, 3 dryad hearts and
 //   10 pomegranates for the Chimera. A fight that ends without the kill (you fled, fell, or left the game mid-fight)
 //   leaves the tribute on the altar (st.paid), and E there calls the beast again for nothing more. Mid-fight, the dead (or the forest) come to the boss's aid in waves 30 seconds
-//   apart; the Minotaur's first comes sooner if he's brought down to 300 health first (helpAt).
+//   apart; the Minotaur's first comes sooner if he's brought down to 1500 health first (helpAt).
 //   Offering: bring the head to the Ancient Temple. Zeus grants its power (F) and the next tier of crafting.
 //   Prayer: once a day at the temple altar, Zeus's Blessing. (And once ever at the old altar on the top of Olympos,
 //   which nothing points the way to: the whole island opens on your map.)
@@ -35,12 +35,16 @@ const landed = (r) => typeof r === 'number' && r > 0;
 // blows a third harder than before, so a fight takes a while and a blow taken really hurts, but the gear of the time
 // (the first weapons and thrower's armour for the Minotaur, lightstone and Cretan armour for the Chimera) still wins it.
 // helpAt: the health at which the first wave of help comes, if that's before its 30 seconds are up (help, update).
+// (Patch 25, the Greek reviewer: "Minotaur: HP ×5, and the camera perspective should not change". His health 900 → 4500,
+// and what's counted in it with it: the first wave at 1500 (a third, as 300 was of 900) and Zeus's bolt, bolt, 35 → 175
+// (as much of him as before); the enrage at half, the spent ×1.5 and the stagger (a share of his health) stay. And his
+// fight keeps the follow camera: bossCam, on the Chimera's entry alone now, is what draws it back (player.js BOSS_CAM).)
 // (Patch 22: he walks you down at a giant's pace, 4.5 m/s, gaining on you running and losing you sprinting, turning his
 // weight slowly round (turn, acc: creatures.js GIANT); moves: he makes his own, MOVE, rather than the common strike)
-TYPES.minotaur = { name: 'The Minotaur', boss: true, moves: true, hp: [900, 900], block: 30, speed: [6 * FT, 6], turn: [0.65, 0.85], acc: [2, 5], sight: 90, dmg: [24, 30, 'slash'], reach: 5, r: 2.4, h: 10.5, size: 3.3, pace: 0.88, mob: [1, 1], heavy: true,
-  weak: ['pierce'], resist: ['slash', 'blunt'], drops: [['sharpBone', 20, 30, 1], ['minotaurHide', 12, 12, 1], ['minotaurHead', 1, 1, 1]], thunder: 'big', helpers: 'skeleton', helpAt: 300 };
+TYPES.minotaur = { name: 'The Minotaur', boss: true, moves: true, hp: [4500, 4500], block: 30, speed: [6 * FT, 6], turn: [0.65, 0.85], acc: [2, 5], sight: 90, dmg: [24, 30, 'slash'], reach: 5, r: 2.4, h: 10.5, size: 3.3, pace: 0.88, mob: [1, 1], heavy: true,
+  weak: ['pierce'], resist: ['slash', 'blunt'], drops: [['sharpBone', 20, 30, 1], ['minotaurHide', 12, 12, 1], ['minotaurHead', 1, 1, 1]], thunder: 'big', helpers: 'skeleton', helpAt: 1500, bolt: 175 };
 TYPES.chimera = { name: 'The Chimera', boss: true, hp: [3300, 3300], block: 40, speed: [8 * FT, 9.6], sight: 100, dmg: [45, 56, 'pierce'], reach: 6.5, r: 4, h: 8.9, size: 3.8, pace: 0.9, body: [-11, 4], mob: [1, 1], heavy: true,
-  weak: ['poison'], resist: ['slash', 'fire'], drops: [['dryadHeart', 20, 30, 1], ['chimeraHide', 1, 1, 1], ['chimeraHead', 1, 1, 1]], thunder: 'big', helpers: 'dryad' };
+  weak: ['poison'], resist: ['slash', 'fire'], drops: [['dryadHeart', 20, 30, 1], ['chimeraHide', 1, 1, 1], ['chimeraHead', 1, 1, 1]], thunder: 'big', helpers: 'dryad', bossCam: true };
 // a boss's coming, in seconds from the tribute (Trial.stage): the pillar of light rises (light), the beast drops into it
 // from high metres up (drop) and lands (land), roars a while before it comes for you (roar), and the camera is yours again (done)
 const ARRIVE = { light: 1.9, drop: 2.55, land: 2.95, high: 45, roar: 1.8, done: 5.6 };
@@ -67,7 +71,7 @@ const MOVE = {
 };
 // The fight's storm (Trial.storm): a bolt every every s; that share of them near you (within spread m), their place
 // glowing warn s first (never while you're stunned and can't get out of the way); a bolt hurts what stands within r m of
-// it (dmg you, boss: the boss; the boss's dead it destroys)
+// it (dmg you, boss: the boss, unless its TYPES entry has a bolt of its own; the boss's dead it destroys)
 const STORM = { every: [[2.6, 4.2], [1.5, 2.6]], near: [0.3, 0.45], spread: 4, warn: 1.3, r: 2.8, dmg: [14, 18, 'force'], boss: 35 };
 // the block of stone in the Minotaur's hand as he winds up a throw
 const ROCK_GEO = new THREE.DodecahedronGeometry(1.3, 0), ROCK_MAT = new THREE.MeshStandardMaterial({ color: 0x8a8378, roughness: 0.95, flatShading: true });
@@ -194,7 +198,7 @@ export class Trial {
   // it lands with a blast (a flash, a shockwave racing out along the ground, rocks and chunks flung out, a moment of slow
   // motion), and the place breaks (structures.js ruin: walls falling, columns toppling, the floor cracked round a crater),
   // knocking you off your feet if you're close; it stands and roars, and the fight is on. The camera turns to watch it
-  // (player.focus) and draws back to take it in (player.bossCam). Run from update(), and from game.js while a menu is open.
+  // (player.focus) and, for the Chimera, draws back to take it in (player.bossCam). Run from update(), and from game.js while a menu is open.
   stage(dt) {
     const A = this.arrival; if (!A) return; const g = this.g, P = g.player, u = A.u, at = A.at, once = (k) => !A.did[k] && (A.did[k] = true), t = (A.t += dt);
     if (t < ARRIVE.land) rumble(0.18 + 0.4 * Math.min(1, t / ARRIVE.land) ** 2);
@@ -220,7 +224,7 @@ export class Trial {
       const d = Math.hypot(P.pos.x - at.x, P.pos.z - at.z), k = Math.max(0, 1 - d / 22);
       if (k > 0 && !P.dead) { const dir = new THREE.Vector3(P.pos.x - at.x, 0, P.pos.z - at.z).normalize(); g.acts?.hurt?.(30); P.hv.addScaledVector(dir, 6 + 10 * k); P.vel.y = 3 + 4 * k; P.onGround = false; if (k > 0.4) P.stats.add('stunned', 0.8); }
     }
-    if (A.landed && t < ARRIVE.land + 0.25) askLight(at.clone().setY(at.y + 4), 60, 70, 0xffe2b0);   // (the flash lighting the ruin)
+    if (A.landed && t < ARRIVE.land + 0.25) askLight(at.clone().setY(at.y + 4), 60, 70, 0xffe2b0, undefined, false);   // (the flash lighting the ruin)
     if (t > ARRIVE.done) { this.arrival = null; P.focus = null; }
   }
   // a fight over without the kill: the tribute stays on the altar (and the beast's dead go back into the ground)
@@ -450,7 +454,7 @@ export class Trial {
         // reaching out 24 m and spreading as it goes, its light on the ground)
         { const f = fwd(), mouth = c.body.point?.('mouth')?.addScaledVector(f, 1.5) || at(T.h * 0.62).addScaledVector(f, T.body?.[1] ?? T.r + 1.2);
           for (let i = 0; i < 5; i++) { const s = Math.random(); burst(mouth.clone().addScaledVector(f, s * 20).add(new THREE.Vector3((Math.random() - 0.5) * s * 8, -s * (mouth.y - c.pos.y) * 0.75, (Math.random() - 0.5) * s * 8)), { color: Math.random() < 0.5 ? 0xff7a20 : 0xffc040, n: 4, speed: 4 + s * 6, size: 0.25 + s * 0.6, grav: -2, life: 0.5, glow: Math.random() < 0.3 }); }
-          askLight(mouth.clone().addScaledVector(f, 8), 40, 30, 0xff8a30);
+          askLight(mouth.clone().addScaledVector(f, 8), 40, 30, 0xff8a30, undefined, false);
           m.tick = (m.tick || 0) - dt;
           if (m.tick <= 0) { m.tick = 0.25; if (d < 26 && Math.abs(angDiff(toP, c.yaw)) < 0.45 && landed(g.combat.hitPlayer(c, [9, 13, 'fire']))) P.stats.add('burning', 3); } }
         return m.t <= 0 ? over(true) : 'breath';
@@ -489,10 +493,10 @@ export class Trial {
       const b = this.bolts[i]; b.t -= dt; if (b.h) b.h.set(Math.min(1, 1 - b.t / b.warn) * (0.65 + 0.35 * Math.sin(b.t * 40)));
       if (b.t > 0) continue; this.bolts.splice(i, 1); b.h?.done(); this.struck = (this.struck || 0) + 1;   // (struck: how many so far, for the tests)
       strike({ at: b.p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 40, 190, (Math.random() - 0.5) * 40)), ground: b.p, light: 1.3, big: b.big });
-      spark(b.p.clone().setY(b.p.y + 0.4), 24); burst(b.p.clone().setY(b.p.y + 0.3), { color: 0x4a4038, n: 18, speed: 6, size: 0.18, up: 6 }); dust(b.p.clone().setY(b.p.y + 0.5), 8, 0x6a6a72, 0.6); cracks(b.p, { r: 2.6, life: 9 }); askLight(b.p.clone().setY(b.p.y + 3), 30, 25, 0xc8d8ff);
+      spark(b.p.clone().setY(b.p.y + 0.4), 24); burst(b.p.clone().setY(b.p.y + 0.3), { color: 0x4a4038, n: 18, speed: 6, size: 0.18, up: 6 }); dust(b.p.clone().setY(b.p.y + 0.5), 8, 0x6a6a72, 0.6); cracks(b.p, { r: 2.6, life: 9 }); askLight(b.p.clone().setY(b.p.y + 3), 30, 25, 0xc8d8ff, undefined, false);
       if (!b.warn) continue;   // (a far bolt, or the enrage's: lightning only)
       if (!P.dead && Math.hypot(P.pos.x - b.p.x, P.pos.z - b.p.z) < STORM.r) g.combat.hitPlayer({ pos: b.p, dmgK: 1, T: {}, body: {} }, STORM.dmg, { from: b.p });   // (the bolt as the blow's source)
-      for (const k of g.creatures.list) if (!k.dead && (k.boss ? g.creatures.gap(k, b.p.x, b.p.z).d < k.T.r + STORM.r : k.pos.distanceTo(b.p) < STORM.r + k.T.r)) { g.creatures.hurt(k, [[k.boss ? STORM.boss : 999, 'force']], b.p); if (k.boss && !this.boltTold) { this.boltTold = true; g.hud.toast('Zeus\'s lightning strikes the beast!'); } }
+      for (const k of g.creatures.list) if (!k.dead && (k.boss ? g.creatures.gap(k, b.p.x, b.p.z).d < k.T.r + STORM.r : k.pos.distanceTo(b.p) < STORM.r + k.T.r)) { g.creatures.hurt(k, [[k.boss ? k.T.bolt ?? STORM.boss : 999, 'force']], b.p); if (k.boss && !this.boltTold) { this.boltTold = true; g.hud.toast('Zeus\'s lightning strikes the beast!'); } }
     }
     // (a thrown rock's shadow, growing as it comes down, gone when it lands)
     for (let i = this.marks.length - 1; i >= 0; i--) { const q = this.marks[i]; if (!g.combat.thorns.includes(q.t)) { q.h.done(); this.marks.splice(i, 1); continue; } q.h.set(0.9, 0.6 + 2.2 * Math.max(0, 1 - q.t.m.position.distanceTo(q.h.m.position) / q.from)); }
@@ -501,8 +505,9 @@ export class Trial {
   calm() { for (const b of this.bolts) b.h?.done(); for (const q of this.marks) q.h.done(); this.bolts = []; this.marks = []; this.stormT = 3; }
   update(dt) {
     const g = this.g, st = this.st; this.stage(dt); this.storm(dt); this.updateBolts(dt);
-    // (the boss camera while a fight is on and you're about its arena, or one is coming: player.js BOSS_CAM)
-    g.player.bossCam = !!this.arrival || (!!this.boss && !this.boss.dead && g.player.pos.distanceTo(this.boss.pos) < 70);
+    // (the boss camera while a fight is on and you're about its arena, or one is coming: player.js BOSS_CAM; for a boss whose
+    // fight has it, bossCam, the Chimera's)
+    g.player.bossCam = (!!this.arrival && !!TYPES[this.arrival.u.boss]?.bossCam) || (!!this.boss && !this.boss.dead && !!this.boss.T.bossCam && g.player.pos.distanceTo(this.boss.pos) < 70);
     if (hit('KeyF') && !g.player.dead && g.altUsed !== 'F') this.usePower();   // (F at a lit fire puts the fire out instead)
     if (st.powerCd > 0) { st.powerCd -= dt; if (Math.floor(st.powerCd) !== this.lastCd) { this.lastCd = Math.floor(st.powerCd); this.drawPower(); } }
     if (g.player.stats.has('poisoned')) g.player.stats.damage(1.5 * dt);

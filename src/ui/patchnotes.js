@@ -4,6 +4,58 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-25', name: 'Patch 25', title: 'Steady', date: '23 November 2026',
+    intro: 'Steadier frames on Ultra, by the fire and on big screens, less graphics memory, and a game that survives the graphics card dropping its picture.',
+    sections: [
+      { t: 'Smoother', icon: 'sprint', items: [
+        '<b>Steadier by the fire.</b> Carrying a torch no longer redraws the fire\'s shadows every frame, a camp of two fires no longer swaps its shadows back and forth as you turn, the shadows are drawn from what stands by the fire alone, and the first fire of a visit no longer stutters as you walk up to it.',
+        '<b>Ultra on big screens.</b> Ultra no longer draws more than a 4K picture\'s worth of pixels when it sharpens the picture above your screen\'s own resolution, and while it does it uses four samples of smoothing instead of eight, which looked the same: far less graphics memory, and less work for spray, mist and smoke.',
+        'Less graphics memory and steadier frames everywhere: the pictures of the distant trees and the sky\'s light no longer keep or remake what they don\'t need, and the compass no longer costs a little every frame.',
+        '<b>If the graphics card drops the picture</b> (its driver resets or it runs out of memory), the game saves, says so, and picks up again when the picture comes back, or offers to reload, instead of freezing.',
+        '<b>The performance overlay (F3)</b> now also shows the graphics card\'s own time, its memory and the game\'s, how often the resolution changed, the fire\'s shadow and the river\'s reflections; <b>F4</b> copies a full report you can paste to us.',
+      ] },
+      { t: 'Sound', icon: 'lyre', items: [
+        '<b>Music all the while you\'re in a land.</b> Each land\'s music now plays the whole time you are in it, on and on with no gaps, instead of once as you arrive and then minutes of silence, and it fades into the next land\'s as you cross over. It is also a little quieter, so it sits behind the world. <b>By night the meadows have the title\'s theme</b>, fading in at dusk and back to their own music at dawn. The boss fights, your home by the fire, the story, the climb up Olympos, the caves and the shore at dawn and dusk keep their own music as before.',
+        '<b>No birdsong in the rain.</b> The birds fall silent as the rain starts and sing again once it stops; the wind and the thunder carry on.',
+        'Your footsteps are half as loud, and the wind a little quieter.',
+      ] },
+      { t: 'The pack', icon: 'gear', items: [
+        '<b>Ten slots on the hotbar.</b> The hotbar now has ten slots, on the keys 1 to 9 and 0, and the pack is ten wide: 40 slots instead of 32. Your saved pack comes across as you left it, everything in its row and its place along it, the hotbar too, with the new slots empty at the end of each row.',
+        '<b>Break down what you made.</b> Shift and right-click a crafted tool, weapon, shield or piece of armour in your pack to break it down for half of each of its materials, rounded down but at least one of each. It asks first, so a slip of the mouse costs nothing; take off what you are wearing before you break it down. Arrows go ten at a time. A plain right-click still uses or equips, as before.',
+        'The pack no longer grows or shifts when a thing has a long description: the description has a box of its own, which scrolls when there is more to read.',
+        'In a window too narrow for both, the compass now sits just below the hotbar instead of under it.',
+      ] },
+      { t: 'Searching', icon: 'chest', items: [
+        '<b>Search what was left behind.</b> The jars, amphorae, baskets, sacks, straw and woodpiles about the abandoned town, the old farmhouse, the little places along the roads and the Giants\' caves can now be searched with E, once each, as in Valheim: look at one and the prompt says what it is, "Search the amphora" or "Take the wood (20)".',
+        'What you find goes by what it is: a woodpile gives 20 wood (the small stack by a shepherd\'s fire 8 to 12), straw gives fiber, jars and amphorae olives, seeds, resin or rope, baskets fruit, acorns or fiber, sacks acorns, seeds or fiber, and the smithy\'s forge a little coal and stone, now and then with an old axe or club left to mend. Some jars hold nothing but dust.',
+        'A searched woodpile is down to its bottom logs, a jar or a basket lies tipped over and a sack slumps empty, and it stays so: your save remembers each one. The farmhouse\'s old chest is as it was.',
+        'The offerings at the roadside shrines, under the old olives, in the temple and on Olympos are the gods\' and stay where they are.',
+      ] },
+      { t: 'Controls', icon: 'goal', items: [
+        '<b>Esc in fullscreen.</b> Esc now always brings up the pause menu in fullscreen. In Chrome and Edge a tap pauses and you hold Esc to leave fullscreen; in browsers where Esc leaves fullscreen at once, leaving it during play now pauses the game, even with the pack or the map open. F11 now goes into the game\'s own fullscreen, the one where Esc still pauses.',
+      ] },
+      { t: 'The camera', icon: 'you', items: [
+        '<b>The camera comes in instead of things vanishing.</b> When a wall, a roof, a rock, a cliff, a tree trunk or a hill comes between the camera and you, the camera now moves in closer in front of it, as in Valheim, instead of the thing turning see-through. It comes in at once and glides back out when the way is clear. Indoors it stays inside the room and under the ceiling.',
+        'Leaves don\'t push the camera: it passes through the crowns of trees as before, and a crown that comes between you and the camera still fades.',
+        'Backed right into a corner, the camera no longer looks out from inside your hero: you are hidden from it until it has room again.',
+        'The camera shakes a little harder (a tenth more) at every blow, slam, roar and thunderclap, never past a sensible limit however many come at once.',
+      ] },
+      { t: 'Fights', icon: 'bull', items: [
+        '<b>The Minotaur is five times as tough</b>: 4500 health instead of 900. His dead come to his aid at 1500 health instead of 300, still a third of him, and Zeus\'s lightning hurts him five times as much. He becomes enraged at half his health as before. The fight takes four or five minutes with the first weapons instead of one. A spear wears out after 100 blows that land, so bring a spare or your bow.',
+        '<b>The camera stays where it is in the Minotaur\'s fight.</b> It no longer draws back and up when he comes: you fight him with the camera you always have. The Chimera\'s fight still draws the camera back to fit the beast in.',
+        '<b>Deer are tougher</b>, as hogs became in Patch 21: four or five blows of the Crude Axe instead of one, a fawn two. A well-aimed arrow from hiding still drops one.',
+      ] },
+      { t: 'The look', icon: 'sun', items: [
+        '<b>A painted hero.</b> Your hero, man or woman, now looks hand-painted instead of shiny: skin shaded in soft bands with a warm edge where the light turns away, and no gloss; the face kept clean, so brows, eyes and mouth read from afar; clothes and the cape in a coarse weave you can make out up close, their folds darker; leather straps darker; and gold and bronze armour with painted highlights and pale bevelled edges in place of the plastic shine. The colours in the character creator are softer and earthier, each still easy to tell apart, and the weave follows the Pixel texture setting like the rest of the world.',
+        '<b>Muted, earthy colour.</b> The world\'s colours are half as strong as before, as in Valheim, while the sun, fire and magic keep their glow and the sky keeps more of its blue. The new <b>Colour</b> slider in the settings sets it anywhere from grey to the old full colour.',
+        '<b>Pixel texture.</b> Rock, bark, planks and the ground now show their detail in small square texels, like the low-resolution textures of Valheim, while the light and shadows on them stay smooth. Choose Off, Mild (the default) or Strong in the settings.',
+        '<b>Darker nights.</b> Moonlit nights are about a third darker. You can still make out the hills and the trees against the sky, and a fire now stands out all the more.',
+        '<b>Only the leaves move in the wind.</b> The wind now stirs only the grass, the flowers and the leaves of trees and bushes. Trunks, branches, columns and ruins stand still, so nothing bends or stretches oddly in a storm. A tree you strike still shakes.',
+        '<b>Bark, planks and petals.</b> Tree trunks have bark with fibres and furrows, each tree its own shade, with moss on the shaded side in the woods. Building pieces show grain along each plank, dark seams, worn edges and a tone of their own, and darken in the rain. The old columns and walls and the hearth\'s stones look like the island\'s rocks, and the meadow flowers have veined petals, deeper in colour at the base.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-24', name: 'Patch 24', title: 'Footwork', date: '21 November 2026',
     intro: 'Surer footing for the hero, rocks that look like stone, a grander Olympos with a smoother path up it, a river falling from it to the sea, and a gentler storm seen from its top.',
     sections: [
