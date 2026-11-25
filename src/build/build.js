@@ -19,6 +19,7 @@ import { icon } from '../ui/icons.js';
 import { Inventory, COLS } from '../game/inventory.js';
 import { askLight } from '../render/lights.js';
 import { wetLike } from '../world/wetness.js';
+import { pixelate, pixelLike } from '../render/pixel.js';
 import { SPECIES, STRIDE, CELL } from '../world/flora.js';
 import { clamp } from '../util/math.js';
 
@@ -109,8 +110,8 @@ export class Build {
     this.pieces = [{ id: 'repair', name: 'Repair', cat: 'Tools', icon: 'repair', mats: {}, desc: 'Hit a damaged piece with the hammer to mend it.' }, ...PIECES];
     this.meshes = []; this.lights = [];
     loadKit(PIECES).then(() => { for (const p of this.placed) this.dress(p); if (this.ghost) { const keep = this.ghost.visible; this.g.scene.remove(this.ghost); this.makeGhost(this.ghostDef); this.ghost.visible = keep; } });   // (the kit's models replace the carved look)
-    this.flameMat = new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
-    this.flameMat2 = new THREE.MeshBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+    this.flameMat = pixelate(new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }), 'flame');   // (in squares of brighter and duller flame, render/pixel.js)
+    this.flameMat2 = pixelate(new THREE.MeshBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }), 'flame');
     this.tint = false; this.chest = null;
     this.buildChestPanel();
     // (a vegetation cell streaming in loses what grows under your buildings before its colliders are made: bareCell)
@@ -471,7 +472,7 @@ export class Build {
     const depth = this.depthRank(p.def, p.rot);
     for (const m of [...p.inner.children]) if (m.userData.piece === p) { p.inner.remove(m); const i = this.meshes.indexOf(m); if (i >= 0) this.meshes.splice(i, 1); }
     p.mats.length = 0; const kit = p.def.build() !== p.def.carved();
-    for (const { geo, mat } of p.def.build()) { const m2 = wetLike(mat.clone(), mat); Object.assign(m2, depth); p.mats.push(m2); const m = new THREE.Mesh(geo, m2); m.castShadow = m.receiveShadow = true; m.userData.piece = p; p.inner.add(m); if (!kit) this.meshes.push(m); }
+    for (const { geo, mat } of p.def.build()) { const m2 = pixelLike(wetLike(mat.clone(), mat), mat); Object.assign(m2, depth); p.mats.push(m2); const m = new THREE.Mesh(geo, m2); m.castShadow = m.receiveShadow = true; m.userData.piece = p; p.inner.add(m); if (!kit) this.meshes.push(m); }
     if (kit) for (const { geo } of p.def.carved()) { const m = new THREE.Mesh(geo, proxyMat); m.visible = false; m.userData.piece = p; p.inner.add(m); this.meshes.push(m); }
   }
   place(id, pos, rot, opts = {}) {

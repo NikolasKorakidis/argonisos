@@ -39,7 +39,7 @@ export function titleScreen(g, ready) {
   el.querySelector('#tCont')?.addEventListener('click', start);
   // a new trial: who wakes on the shore first (the character creator), then the trial begins
   const create = () => { el.classList.add('hidden'); g.creator.show({ first: true, onDone: start, onBack: () => el.classList.remove('hidden') }); };
-  el.querySelector('#tNew').addEventListener('click', () => { if (g.loaded) { if (!confirm('Start a new trial? Your saved world will be lost.')) return; clearSave(); removeEventListener('beforeunload', g.save); g.save = () => false; location.reload(); return; } create(); });
+  el.querySelector('#tNew').addEventListener('click', () => { if (g.loaded) { if (!confirm('Start a new trial? Your saved world will be lost.')) return; clearSave(); removeEventListener('beforeunload', g.save); g.save = () => false; g.leaving = true; location.reload(); return; } create(); });
   el.querySelector('#tNotes').onclick = () => notes.open(() => el.querySelector('#tNotes .new')?.remove());
   el.querySelector('#tFs').onclick = () => toggleFullscreen((m) => g.hud.toast(m));
   void hasSave;
@@ -50,7 +50,7 @@ const agoText = (ms) => { const m = Math.round(ms / 60000); return m < 1 ? 'just
 export function pauseMenu(g) {
   const pm = document.createElement('div'); pm.id = 'pause'; pm.className = 'hidden';
   pm.innerHTML = `<div class="pnl"><h2>Paused</h2><div class="pbody">
-    <div class="pcol"><button class="btn" id="pResume">Resume</button><button class="btn" id="pSave">Save</button><button class="btn ghost" id="pOwl">The Owl's counsel</button><button class="btn ghost" id="pLook">Appearance</button><button class="btn ghost" id="pNotes">Patch notes</button><button class="btn ghost" id="pDev">Dev tools</button><button class="btn ghost" id="pNew">New trial</button></div>
+    <div class="pcol"><button class="btn" id="pResume">Resume</button><button class="btn" id="pSave">Save</button><button class="btn ghost" id="pOwl">The Owl's counsel</button><button class="btn ghost" id="pLook">Appearance</button><button class="btn ghost" id="pNotes">Patch notes</button><button class="btn ghost" id="pDev">Dev tools</button><button class="btn ghost" id="pMain">Return to Main Menu</button><button class="btn ghost" id="pNew">New trial</button></div>
     <p class="psub">Settings</p>
     <div class="set"><span>Fullscreen</span><button class="btn small" id="sFs"></button></div>
     <div class="set"><span>Graphics</span><div class="seg" id="sGfx">${Object.entries(PRESETS).map(([k, q]) => `<button data-v="${k}"${k === 'ultra' ? ` title="${ULTRA_NOTE}"` : ''}>${q.name}</button>`).join('')}</div></div>
@@ -103,7 +103,18 @@ export function pauseMenu(g) {
     if (!on && g.creator.open) { g.creator.close(false); return; } pm.classList.toggle('hidden', !on); if (!on) document.getElementById('devPanel')?.classList.add('hidden'); g.paused = on; input.uiOpen = on; if (on) { unlock(); sync(); g.pausedAt = performance.now(); } else lock(); };
   pm.querySelector('#pResume').onclick = () => g.pause(false);
   pm.querySelector('#pSave').onclick = () => { g.hud.toast(g.save() ? 'Saved' : 'Could not save'); g.pause(false); };
-  pm.querySelector('#pNew').onclick = () => { if (!confirm('Start a new trial? Your saved world will be lost.')) return; clearSave(); g.save = () => false; location.reload(); };
+  pm.querySelector('#pNew').onclick = () => { if (!confirm('Start a new trial? Your saved world will be lost.')) return; clearSave(); g.save = () => false; g.leaving = true; location.reload(); };
+  // Back to the title screen: the game saved as it saves every minute (save.js), then the page started again without
+  // ?play, so the title comes up over the world as on a first visit, its Continue and New Game as ever. (Taking the world
+  // down and building it again in place would mean undoing every system's state: a fresh page is the clean way back.)
+  pm.querySelector('#pMain').onclick = () => {
+    if (!g.save() && !confirm('The game could not be saved. Return to the main menu anyway? What you have done since it last saved will be lost.')) return;
+    g.leaving = true; const u = new URL(location.href); u.searchParams.delete('play'); location.replace(u.href);
+  };
+  // Leaving the page mid-game (Ctrl+W, which a page can't stop outside fullscreen, the tab's ×, a reload) asks first,
+  // "Leave site?": not on the title screen, not when the game itself goes (g.leaving), nor for the tests and the playtest
+  // bot (navigator.webdriver), whose reloads it would hold up. The world saves itself as the page goes either way (game.js)
+  addEventListener('beforeunload', (e) => { if (!g.started || g.leaving || navigator.webdriver) return; e.preventDefault(); e.returnValue = true; });   // (returnValue: for the browsers before preventDefault was enough)
   // the browser keeps the Esc press that frees the mouse to itself, so losing the mouse mid-game pauses too
   input.onUnlock = () => { if (g.started && !g.paused && !input.uiOpen && !g.player.dead) g.pause(true); };
   // Fullscreen asks for Esc for itself (Keyboard Lock, settings.js), so a tap pauses and you hold it to leave. Where the

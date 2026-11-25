@@ -16,8 +16,10 @@ const UPPER = /Spine|Neck|Head|Shoulder|Arm|Hand/, UPV = new THREE.Vector3(0, 1,
 // The bodies to choose from (the character creator, ui/creator.js): Synty's plain man and woman in their underwear, fitted
 // onto the Mixamo rig (tools/assets/fbx-page.mjs refit: same bones, same clips), each this tall; the tint takes the
 // palette's glare off in our light
-// (brows: the man's own are one heavy band that reads as dark glasses: newBrows lays a pair of our own in its place)
-export const BODIES = { man: { file: 'hero', height: 1.95, tint: 0xb4aeb4, name: 'Man', brows: true }, woman: { file: 'heroWoman', height: 1.86, tint: 0xb4aeb4, name: 'Woman' } };
+// (brows: the man's own are one heavy band that reads as dark glasses: newBrows lays a pair of our own in its place; the
+// woman's are a pair already, but as thick as a man's: thinBrows thins them. hair: the style a body starts with when it's
+// chosen in the creator and the hair worn isn't one of its own)
+export const BODIES = { man: { file: 'hero', height: 1.95, tint: 0xb4aeb4, name: 'Man', brows: 'new', hair: 'curls' }, woman: { file: 'heroWoman', height: 1.86, tint: 0xb4aeb4, name: 'Woman', brows: 'thin', hair: 'f1' } };
 
 // ---- The hero's look, chosen in the character creator and kept with the saved game. Hair, beards and wreaths are
 // Synty's (Ancient Empire and Generic: pack/heroLooks, each a part of its own, fitted on the head like the helmets);
@@ -29,7 +31,9 @@ export const HAIR_COLOURS = [['black', 'Black', 0x1c1916], ['darkBrown', 'Dark b
 export const EYES = [['brown', 'Brown', 0x2a1a10], ['dark', 'Dark', 0x100c0a], ['hazel', 'Hazel', 0x3a2c14], ['green', 'Green', 0x263828], ['blue', 'Blue', 0x26344a], ['grey', 'Grey', 0x32373b]];   // (dark: the eye is a flat little panel, a bright one reads as paint)
 export const CLOTHS = [['linen', 'Linen', 0xb0a68e], ['white', 'White', 0xcfc9ba], ['saffron', 'Saffron', 0xb88a3e], ['madder', 'Madder red', 0x8a3c2c], ['purple', 'Tyrian purple', 0x5e2e46], ['indigo', 'Indigo', 0x36425e], ['olive', 'Olive', 0x62643e], ['umber', 'Umber', 0x6a5038]];
 // [id, name, part(s)] (the parts in pack/heroLooks; 'hair' is the Greek warriors' curls, from pack/heroArmour), and whom
-// it suits first ('m' / 'f': the creator lists those first for the body chosen, and Randomise picks among them)
+// it suits first ('m' / 'f': the creator lists those first for the body chosen, and Randomise picks among them). The packs
+// have no more women's hair of its own (the other packs' women wear theirs as part of the body), so the Patch 26 styles
+// are the Generic pack's bun and ponytail over other heads of hair, and the fringe over the hair gathered up
 const G = (n) => 'SM_Gen_Chr_Attach_' + n, AE = (n) => 'SM_Chr_Hair_' + n;
 export const HAIRS = [['none', 'Shaven', null, 'mf'], ['curls', 'Warrior\'s curls', 'hair', 'm'],
   ['m1', 'Cropped', AE('Male_01'), 'm'], ['m2', 'Short', AE('Male_02'), 'm'], ['m4', 'Swept up', AE('Male_04'), 'm'], ['m6', 'Thick crop', AE('Male_06'), 'm'],
@@ -37,6 +41,9 @@ export const HAIRS = [['none', 'Shaven', null, 'mf'], ['curls', 'Warrior\'s curl
   ['g9', 'Slicked back', G('Hair_09'), 'm'], ['g9b', 'Close crop', G('Hair_09_alt'), 'm'], ['g10', 'Brush cut', G('Hair_10'), 'm'], ['g11', 'Neat', G('Hair_11'), 'mf'], ['g6', 'Fringe', G('Hair_06'), 'mf'],
   ['f3', 'Bob', AE('Female_03'), 'f'], ['f1', 'Long waves', AE('Female_01'), 'f'], ['f6', 'Long curls', AE('Female_06'), 'f'], ['f2', 'Gathered up', AE('Female_02'), 'f'], ['f4', 'Bound up', AE('Female_04'), 'f'],
   ['f5', 'Banded', AE('Female_05'), 'f'], ['g5', 'Ribboned', G('Hair_05'), 'f'], ['bun', 'Bun', [G('Hair_09'), G('Bun_01')], 'f'], ['tail', 'Ponytail', [G('Hair_09'), G('Ponytail_01')], 'f'],
+  ['hightail', 'High ponytail', [AE('Female_02'), G('Ponytail_01')], 'f'], ['fgather', 'Fringe, gathered up', [G('Hair_06'), AE('Female_02')], 'f'], ['ftail', 'Fringe and ponytail', [G('Hair_06'), G('Ponytail_01')], 'f'],
+  ['fbun', 'Fringe and bun', [G('Hair_06'), G('Bun_01')], 'f'], ['wavestied', 'Waves, tied up', [AE('Female_01'), G('Ponytail_01')], 'f'], ['curlstied', 'Curls, tied up', [AE('Female_03'), G('Ponytail_01')], 'f'],
+  ['bandbun', 'Banded bun', [AE('Female_05'), G('Bun_01')], 'f'],
   ['g1', 'Long and loose', G('Hair_01'), 'f'], ['g1b', 'Long, parted', G('Hair_01_alt'), 'f'], ['g2', 'Flowing', G('Hair_02'), 'f'], ['g3', 'Long and straight', G('Hair_03'), 'f'],
   ['g4', 'Long and thick', G('Hair_04'), 'f'], ['g7', 'Locks', G('Hair_07'), 'f'], ['g8', 'Wild curls', G('Hair_08'), 'f']];
 export const BEARDS = [['none', 'None', null], ['full', 'Full beard', AE('Beard_01')], ['short', 'Short beard', AE('Beard_03')], ['philosopher', 'Philosopher\'s', AE('Beard_04')],
@@ -170,6 +177,19 @@ function newBrows(head, mat) {
   m.bind(head.skeleton, head.bindMatrix); m.receiveShadow = true; m.frustumCulled = false;
   return m;
 }
+// The woman's brows (the reviewer, 24 Nov: thinner). Hers are a pair, arched and parted, but over a centimetre deep, as
+// heavy as the man's: each is thinned from below, every point of the band drawn up towards the brow's top over it (the
+// highest of the band's points within reach across, cm) to k of its depth there, from the inner end to the outer, which
+// tapers; so the arch keeps its line and the brow comes up clear of the eye
+const BROW_THIN = { reach: 0.8, k: [0.5, 0.3] };
+function thinBrows(head) {
+  const P = head.geometry.attributes.position, UV = head.geometry.attributes.uv, band = [];
+  for (let i = 0; i < P.count; i++) if (isBrow(UV.getX(i), UV.getY(i))) band.push(i);
+  if (!band.length) return;
+  const w = Math.max(...band.map((i) => Math.abs(P.getX(i)))), top = band.map((i) => Math.max(...band.filter((j) => Math.abs(P.getX(j) - P.getX(i)) < BROW_THIN.reach).map((j) => P.getY(j))));
+  band.forEach((i, n) => P.setY(i, top[n] - (top[n] - P.getY(i)) * lerp(BROW_THIN.k[0], BROW_THIN.k[1], Math.abs(P.getX(i)) / w)));
+  P.needsUpdate = true; head.geometry.computeBoundingBox(); head.geometry.computeBoundingSphere();
+}
 // The body's material (painted: hero-look.js), its palette recoloured where it shows skin (by how much the chosen skin
 // differs from the palette's, so lips and stubble keep their shade), hair (the hair cell: Synty's hair and beards, all
 // made on it), the brows (a near black band on the man, too heavy: the hair's colour, a little darker), the eyes and the
@@ -199,6 +219,8 @@ export const STRAP = { along: 15, out: 5 };
 const STANCE = { run: [0.17, 0.23], sprint: [0.2, 0.12] };
 // How far off the bow's line the aim may be and still turn the body to it (radians: in full to the first, none past the second)
 const AIM_REACH = [0.9, 1.6];
+// How far the string hand flies back at the loose (m: hero.releaseKick)
+const RELEASE = 0.16, _rk = [0, 1, 2, 3, 4].map(() => new THREE.Vector3()), _rq = [0, 1, 2].map(() => new THREE.Quaternion());
 // How the hips' turn follows the cycles' (easeHips): eased at k a second, never faster than max (radians a second)
 const HIPS_EASE = { k: 10, max: 8 };
 // The swimming clip is a crawl under the water, the body flat: tipped this far head up (radians), the head kept this far
@@ -389,7 +411,7 @@ export class Hero {
     const restQ = new Map(); for (const f of this.legFit) for (const [b, k, kp] of f) { restQ.set(b, b.quaternion.clone()); fitBone(b, k, kp); }
     obj.updateMatrixWorld(true); for (const sd of ['Left', 'Right']) { const f = bones[`mixamorig${sd}Foot`], t = bones[`mixamorig${sd}ToeBase`]; if (f && t) f.userData.sole = soleOf(f, t); }
     for (const [b, q] of restQ) b.quaternion.copy(q); obj.updateMatrixWorld(true);
-    if (gl && kind.brows) { let head = null; obj.traverse((m) => { if (m.name === 'base_head') head = m; }); const brows = head && newBrows(head, mat); if (brows) head.parent.add(brows); }
+    if (gl && kind.brows) { let head = null; obj.traverse((m) => { if (m.name === 'base_head') head = m; }); if (head && kind.brows === 'thin') thinBrows(head); const brows = head && kind.brows === 'new' && newBrows(head, mat); if (brows) head.parent.add(brows); }
     this.mat = gl ? mat : null;
     if (gl && dress) this.dress(obj, dress.scene, bones);
     if (gl && looks) this.dress(obj, looks.scene, bones, mat);
@@ -745,7 +767,7 @@ export class Hero {
     this.runActions(dt, st); this.poseActions();
     // (the bow's poses give way to an action of the whole body: a roll, a stagger, a death)
     let body = 0; for (const h of this.actions) if (h.o.upper === false && h.C.ready) body = Math.max(body, h.w);
-    if (st.bow && body < 0.999) this.poseBow(st.bow, st.aimPt, st.sprinting, 1 - body);
+    if (st.bow && body < 0.999) this.poseBow(st.bow, st.aimPt, st.sprinting, (1 - body) * (st.bow.st === 'ready' || st.bow.st === 'lower' ? 1 - this.blockK : 1));   // (the bow raised to block: the guard's pose, not the bow held ready)
     // the legs set straight on a body bound standing astride (legFit), the clips' poses kept
     for (const f of this.legFit || []) for (const [b, k, kp] of f) fitBone(b, k, kp);
     this.keepAboveFloor(dt, st);
@@ -888,7 +910,8 @@ export class Hero {
     this.weights = w;
     return { w: Object.fromEntries(Object.entries(w).map(([n, x]) => [n, x / sum])), move: cw / sum, lead, back: lead === 'run' && this.runBack, rate };
   }
-  // Bow states: equip → ready → draw (hold RMB) → aim (full draw) → lower → ready → disarm
+  // Bow states: equip → ready → draw (hold LMB) → aim (full draw, held) → loose (let go: the follow-through) → lower → ready
+  // → disarm; a draw let down (the guard raised, a roll) goes straight to lower. A loose holds the pose it let go from (fromC at fromT)
   poseBow(b, aimPt, sprinting, k = 1) {
     if (b.t < 0) return;
     const C = CLIPS, up = this.upperK, aimPh = (t) => Math.min(t / C.bowAim.dur, 1), pose = (c, t, w) => this.overlay(c, t, w * k, up, true);   // (k: how much of the pose is the bow's)
@@ -900,16 +923,29 @@ export class Hero {
     if (b.st === 'ready') pose(C.bowDraw, 0, readyW);
     else if (b.st === 'draw') pose(C.bowDraw, Math.max(b.ph, b.from || 0), b.fromC ? 1 : lerp(readyW, 1, ss(b.t / BOW_DUR.blend)));
     else if (b.st === 'aim') pose(C.bowAim, aimPh(b.t), 1);
+    else if (b.st === 'loose') pose(C[b.fromC] || C.bowDraw, b.fromT ?? 0, 1);
     else if (b.st === 'lower') pose(C.bowDraw, 0, lerp(1, readyW, ss(b.t / BOW_DUR.lower)));
     const fade = b.st === 'lower' ? 1 - ss(b.t / BOW_DUR.lower) : b.st === 'draw' ? 1 - ss(b.t / BOW_DUR.blend) : 0;
     if (b.fromC && fade > 0) pose(C[b.fromC], b.fromT, fade);
-    const aimW = k * (b.st === 'aim' ? 1 : b.st === 'draw' ? ss((b.ph - 0.6) / 0.3) : b.st === 'lower' && b.fromC ? (1 - ss(b.t / BOW_DUR.unaim)) * (b.fromC === 'bowAim' ? 1 : ss((b.fromT - 0.6) / 0.3)) : 0);
+    const fromW = b.fromC === 'bowAim' ? 1 : ss((b.fromT - 0.6) / 0.3);
+    const aimW = k * (b.st === 'aim' ? 1 : b.st === 'draw' ? ss((b.ph - 0.6) / 0.3) : b.st === 'loose' ? fromW : b.st === 'lower' && b.fromC ? (1 - ss(b.t / BOW_DUR.unaim)) * fromW : 0);
     // (lowered, the aim lets go of the body at once (BOW_DUR.unaim), and meanwhile goes round with the hero as he turns back to
     // where he walks: held where it was in the world, or let go of slowly, it kept the chest there as he turned under it,
     // then let go of it all at once)
     if (b.st === 'lower' && aimPt) { const r = this.root, y = r.rotation.y; if (!b.aimAt) { const dx = aimPt.x - r.position.x, dz = aimPt.z - r.position.z; b.aimAt = { y: this.lastY ?? y, x: dx, z: dz, h: aimPt.y - r.position.y }; }   // (the facing it was aimed from: the frame before, he may have turned since)
       const a = b.aimAt, t = y - a.y, c = Math.cos(t), sn = Math.sin(t); aimPt = _aimV.set(r.position.x + a.x * c + a.z * sn, r.position.y + a.h, r.position.z - a.x * sn + a.z * c); }
     if (aimW > 0.01 && aimPt) this.aimUpperBody(aimPt, aimW);
+    // (let go, the string hand flies back past the cheek and comes to rest: further the fuller the draw was)
+    if (b.st === 'loose') this.releaseKick(k * fromW * (0.4 + 0.6 * (b.f ?? 1)) * (b.t < 0.05 ? b.t / 0.05 : Math.max(0, 1 - (b.t - 0.05) / 0.17)));
+  }
+  // The string hand thrown back along the arrow's line (from the bow hand through it) by up to RELEASE metres, k of it, by
+  // turning the upper arm about the shoulder
+  releaseKick(k) {
+    const Bn = this.bones, A = Bn.mixamorigRightArm, R = Bn.mixamorigRightHand, L = Bn.mixamorigLeftHand; if (!A || !R || !L || k <= 0.001) return;
+    const s = A.getWorldPosition(_rk[0]), h = R.getWorldPosition(_rk[1]), back = _rk[2].copy(h).sub(L.getWorldPosition(_rk[3])).normalize();
+    const cur = _rk[3].copy(h).sub(s), want = _rk[4].copy(cur).addScaledVector(back, RELEASE * k).normalize(); cur.normalize();
+    const d = _rq[0].setFromUnitVectors(cur, want), pq = A.parent.getWorldQuaternion(_rq[1]).invert(), wq = A.getWorldQuaternion(_rq[2]);
+    A.quaternion.copy(pq.multiply(d.multiply(wq)));
   }
 
   // Turn the spine (split over two joints) so the line string hand → bow hand points at the target. Only so far: a

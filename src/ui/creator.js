@@ -15,8 +15,8 @@ const hex = (c) => '#' + c.toString(16).padStart(6, '0');
 const ROWS = [['body', 'Body', 'seg', Object.entries(BODIES).map(([id, b]) => [id, b.name]), 'body'], ['skin', 'Skin', 'swatch', SKINS, 'body'],
   ['hair', 'Hair', 'step', HAIRS, 'face'], ['hairColour', 'Hair colour', 'swatch', HAIR_COLOURS, 'face'], ['beard', 'Beard', 'step', BEARDS, 'face'],
   ['eyes', 'Eyes', 'swatch', EYES, 'face'], ['cloth', 'Clothes', 'swatch', CLOTHS, 'body'], ['wreath', 'Wreath', 'step', WREATHS, 'face']];
-// the hair styles in the order offered: the body's own first
-const hairsFor = (body) => { const s = body === 'woman' ? 'f' : 'm'; return [...HAIRS.filter((h) => h[3].includes(s)), ...HAIRS.filter((h) => !h[3].includes(s))]; };
+// the hair styles in the order offered: the body's own first (a woman's shaven head among the men's)
+const hairsFor = (body) => { const s = body === 'woman' ? 'f' : 'm', own = (h) => h[3].includes(s) && !(s === 'f' && h[0] === 'none'); return [...HAIRS.filter(own), ...HAIRS.filter((h) => !own(h))]; };
 
 export function characterCreator(g) {
   const P = g.player, H = P.hero;
@@ -45,7 +45,9 @@ export function characterCreator(g) {
     }
   };
   const set = (patch) => {
-    look = normLook({ ...look, ...patch });
+    // (another body chosen: the hair worn goes on if it's one of that body's own, else that body's first style)
+    const was = look.body; look = normLook({ ...look, ...patch });
+    if (look.body !== was && !HAIRS.find((h) => h[0] === look.hair)?.[3].includes(look.body === 'woman' ? 'f' : 'm')) look.hair = BODIES[look.body].hair;
     if (look.body === 'woman') look.beard = 'none';
     H.setLook(look); draw();
   };

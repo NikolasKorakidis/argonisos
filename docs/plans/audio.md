@@ -146,7 +146,7 @@ so it's heard with the music off), the food done on a cooking stand (`cooked`: h
 - Home (Inside-Base): 8 s by your own lit fire (within 5 m, sitting or not) or under your own roof, if it hasn't played
   for 4 minutes, over the land's music (not over the story or a place's track); fades as you leave, the land's coming
   back.
-- Bosses: bossMinotaur, bossChimera from the tribute until the boss dies or you flee, looped between their loop points
+- Bosses: bossMinotaur, bossChimera from the tribute until the boss dies or you fall (silent while you're out of the arena's reach, back as you return), looped between their loop points
   (decoded whole when the tribute is laid: about 60 MB while a fight lasts, let go of as it ends); then 10 s of hush
   before the land's music (`MUSIC.rest`, which the tests also use to weigh the world without music:
   `stopMusic(fade, rest)`).
@@ -172,6 +172,9 @@ the recording it goes with):
   dipping 3 dB for a second), the skeletons' rattle (20 dB up), the dryads' thorns (10 dB up).
 - Its death (`kill` with `boss`, `bossDeath`): the long roar slowed to 0.66-0.72 and dying away, a long boom, then 2.4 s
   later the body coming down (`collapse`, a deep boom, stones), the music hushed for it.
+- Its end (`bossEnd`, trial.js `presence`, 2.9 s after the kill): Zeus's bolt into the body, `thunderClap` slowed to
+  0.7 and `slamHit` to 0.45 over the deepest sub boom (4.5 s, 72 → 18 Hz), near thunder rolling on, a rush of noise for
+  the ash blowing away and stones pattering down; the bolt's own thunder (`stormThunder`) with it; the music ducked 4 s.
 - Patch 23: the boss layer some 4 dB under what it was (slams, roars, the blast, the fire, his blows on you); the sub
   booms carry the weight.
 

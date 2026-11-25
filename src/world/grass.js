@@ -16,6 +16,7 @@ import { wettable } from './wetness.js';
 import { ULTRA } from '../render/quality.js';
 import { loadPack, loadTex, bake } from '../assets.js';
 import { seeded } from '../util/math.js';
+import { PIXEL_GLSL, PIXEL_U, pxMapChunk } from '../render/pixel.js';
 
 let s0 = 4242; const rand = () => ((s0 = (s0 * 16807) % 2147483647) - 1) / 2147483646, rr = (a, b) => a + rand() * (b - a);
 export const GRASS = { mesh: null, far: null, flowers: [], clumps: [], settled: false };   // (settled: the clumps are in, or known not to be: main.js waits for it before compiling the shaders)
@@ -50,6 +51,15 @@ const carpetGeo = (shape, at) => { const g = new THREE.InstancedBufferGeometry()
 // A blade or clump's own facing, a little of it (BLADE_N) mixed into the meadow's upward light, turned to the camera's side:
 // lit straight up, as a painted field, no blade was shaded apart from its neighbour; and a two-sided blade seen from its
 // back took the upward light turned down, out of the sun (three turns a back face's normal over: undone in the fragment).
+// A blade in texels, as the trunks are (render/pixel.js): its colour from foot to tip in steps a texel tall, each step
+// its own tone, and the light on it smooth (vPxB: the blade's dice and its height in metres; tone: the step's)
+const BLADE_PX = `varying vec2 vPxB;
+  float bladeGH(out float tone) {
+    tone = 1.0; if (uTexel <= 0.0) return vGH;
+    float n = max(2.0, uTexel * vPxB.y), s = 1.0 - smoothstep(0.3, 0.65, fwidth(vGH) * n), row = floor(vGH * n);
+    tone = 1.0 + 0.4 * (fract(sin(dot(vec2(vPxB.x * 97.7, row), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * s;
+    return mix(vGH, (row + 0.5) / n, s);
+  }`;
 const BLADE_N = 0.3, UNFLIP = { from: '#include <normal_fragment_begin>', to: '#include <normal_fragment_begin>\n  normal *= faceDirection; nonPerturbedNormal = normal;   // (the normal was made to face the camera already)' };
 // Before anything else is worked out for a blade (two looks into the ground textures, its wind, its light), one that isn't
 // drawn here is put out of sight and left: most blades of each carpet aren't, somewhere in its tile (the near one's past
@@ -67,8 +77,8 @@ const COVERED = '{ vec2 tc = (wp - uOrigin) / uSize; fade *= step(0.0, min(tc.x,
     const COUNT = far ? FAR_COUNT : DENSE, T = far ? FAR_TILE : NEAR_TILE, U = { ...grassU, uTile: { value: T } };
     const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 }); mat.defines = { SUN_SHADOW_CHEAP: '' };   // (one bilinear look into the sun's shadow: the blades are most of the pixels on screen)
     mat.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, U);
-      sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr, uClumps; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight, uMeadow; attribute vec2 aOff; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.vertexShader
+      Object.assign(sh.uniforms, U, PIXEL_U);
+      sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr, uClumps; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight, uMeadow; attribute vec2 aOff; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld; varying vec2 vPxB;\n` + sh.vertexShader
         .replace('#include <beginnormal_vertex>', `
           vec3 ip = vec3(aOff.x, 0.0, aOff.y);
           vec2 wp = ip.xz + uTile * floor((uCenter - ip.xz) / uTile + 0.5);
@@ -113,21 +123,21 @@ const COVERED = '{ vec2 tc = (wp - uOrigin) / uSize; fade *= step(0.0, min(tc.x,
           vec3 transformed = p + vec3(wp.x, hm.r - 0.03, wp.y);
           vGH = gh; vVar = hm.b - fk * 2.0; vShade = wood;
           vVar = clamp(vVar + (fract(sin(dot(floor(wp / 2.7), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.3, 0.0, 1.0);   // colour in clumps
-          vGust = wave; vWorld = p + vec3(wp.x, hm.r, wp.y);`);
+          vGust = wave; vWorld = p + vec3(wp.x, hm.r, wp.y); vPxB = vec2(rnd, sc * ${H.toFixed(2)});`);
       // each blade takes the sun's shadow from low on its stem (a quarter of its height up), so the shade of a tree, a rock
       // or the hero lies across the meadow as it would on bare ground, not only on the few blades it happens to cross
       sh.vertexShader = sh.vertexShader.replace('#include <shadowmap_vertex>', `{ vec4 wSaved = worldPosition; worldPosition.y = hm.r + (worldPosition.y - hm.r) * 0.25;
           #include <shadowmap_vertex>
           worldPosition = wSaved; }`);
-      sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.fragmentShader
+      sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; uniform float uTexel; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n${BLADE_PX}\n` + sh.fragmentShader
         .replace(UNFLIP.from, UNFLIP.to)
         .replace('#include <tonemapping_fragment>', `gl_FragColor.rgb *= 1.0 + vGust * 0.2 * vGH;   // the gust's lighter band
           float shine = pow(max(dot(normalize(vWorld - cameraPosition), uSunDir), 0.0), 4.0) * vGH * vGH;   // sun through the blade tips
           gl_FragColor.rgb += diffuseColor.rgb * uSunCol * shine * 0.32 / (1.0 + vTall * 2.0);   // (less glow through tall grass: a lot of blade catches the light)
           #include <tonemapping_fragment>`)
         .replace('#include <color_fragment>', `#include <color_fragment>
-          float v = smoothstep(0.35, 0.7, vVar);
-          diffuseColor.rgb = mix(mix(uBaseA, uBaseB, v), mix(uTipA, uTipB, min(1.0, v * 0.8 + vTall * 0.25)), smoothstep(0.0, 1.0, vGH));   // (tall grass ripens golden at the tips)
+          float v = smoothstep(0.35, 0.7, vVar), bt, bgh = bladeGH(bt);
+          diffuseColor.rgb = mix(mix(uBaseA, uBaseB, v), mix(uTipA, uTipB, min(1.0, v * 0.8 + vTall * 0.25)), smoothstep(0.0, 1.0, bgh)) * bt;   // (tall grass ripens golden at the tips)
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.55, 0.68, 0.6), vShade);   // deep forest and marsh: darker, bluer grass`);
     };
     mat.customProgramCacheKey = () => 'grass' + far;
@@ -215,8 +225,8 @@ const clumpCarpet = (geo, map, tall) => {
   const T = NEAR_TILE, COUNT = Math.round(T * T * CLUMP_D[tall ? 1 : 0]), HM = geo.boundingBox.max.y, U = { ...grassU, uTile: { value: T }, uCount: { value: COUNT } }, f = (v) => v.toFixed(4);
   const mat = new THREE.MeshStandardMaterial({ map, side: THREE.DoubleSide, roughness: 0.9, alphaTest: 0.5 }); mat.defines = { SUN_SHADOW_CHEAP: '' };
   mat.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, U);
-    sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr, uCount; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight, uMeadow; attribute vec2 aOff; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.vertexShader
+    Object.assign(sh.uniforms, U, PIXEL_U, { uPxMap: { value: 1 } });
+    sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr, uCount; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight, uMeadow; attribute vec2 aOff; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld; varying vec2 vPxB;\n` + sh.vertexShader
       .replace('#include <beginnormal_vertex>', `
         vec3 ip = vec3(aOff.x, 0.0, aOff.y);
         vec2 wp = ip.xz + uTile * floor((uCenter - ip.xz) / uTile + 0.5);
@@ -250,7 +260,7 @@ const clumpCarpet = (geo, map, tall) => {
         vec2 away = vp - uCenter; float pd = length(away), push = (1.0 - smoothstep(0.12, 0.75, pd)) * gh * se;   // (parting round your legs, as the blades do)
         p.xz += away / max(pd, 0.001) * push * 0.55; p.y *= 1.0 - push * 0.35;
         vec3 transformed = vec3(wp.x + p.x, hv.r - 0.03 + p.y, wp.y + p.z);
-        vGH = gh; float fk = floor(hm.b * 0.5); vVar = hm.b - fk * 2.0; vShade = fk / 15.0; vTall = tl; vGust = wave; vWorld = transformed;
+        vGH = gh; float fk = floor(hm.b * 0.5); vVar = hm.b - fk * 2.0; vShade = fk / 15.0; vTall = tl; vGust = wave; vWorld = transformed; vPxB = vec2(rnd, sc * ${f(HM)});
         vVar = clamp(vVar + (fract(sin(dot(floor(wp / 2.7), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.3, 0.0, 1.0);`)
       .replace('#include <shadowmap_vertex>', `{ vec4 wSaved = worldPosition; worldPosition.y = hv.r + (worldPosition.y - hv.r) * 0.25;
         #include <shadowmap_vertex>
@@ -258,13 +268,15 @@ const clumpCarpet = (geo, map, tall) => {
     // coloured as the blades are (base to tip, the meadow's tints, darker in the woods), the picture giving only the light
     // and shade of its blades; and its cut-out kept as solid in the distance as near (the picture's smaller copies blur
     // the edges into half-seen, which a cut-out drops: the clumps would thin away with distance)
-    sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n` + sh.fragmentShader
+    // (the picture looked up in texels on the card, and the colour up it in steps as the blades' are: render/pixel.js)
+    sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; uniform float uPxMap; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n${PIXEL_GLSL}\nvec2 pxMapK = vec2(0.0); float pxMapS = 0.0;\n${BLADE_PX}\n` + sh.fragmentShader
       .replace(UNFLIP.from, UNFLIP.to)
+      .replace('#include <map_fragment>', pxMapChunk('vWorld'))
       .replace('#include <alphatest_fragment>', `{ vec2 ts = vec2(textureSize(map, 0)), du = dFdx(vMapUv) * ts, dv = dFdy(vMapUv) * ts; diffuseColor.a *= 1.0 + max(0.0, 0.5 * log2(max(dot(du, du), dot(dv, dv)))) * 0.25; }
         #include <alphatest_fragment>`)
       .replace('#include <color_fragment>', `#include <color_fragment>
-        float lum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)) / 0.14, v = smoothstep(0.35, 0.7, vVar);   // (0.14: the picture's own average)
-        diffuseColor.rgb = mix(mix(uBaseA, uBaseB, v), mix(uTipA, uTipB, min(1.0, v * 0.8 + vTall * 0.25)), smoothstep(0.0, 0.7, vGH)) * mix(1.0, lum, 0.4);   // (seen from above, most of a clump is its upper half)
+        float lum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)) / 0.14, v = smoothstep(0.35, 0.7, vVar), bt, bgh = bladeGH(bt);   // (0.14: the picture's own average)
+        diffuseColor.rgb = mix(mix(uBaseA, uBaseB, v), mix(uTipA, uTipB, min(1.0, v * 0.8 + vTall * 0.25)), smoothstep(0.0, 0.7, bgh)) * mix(1.0, lum, 0.4) * bt;   // (seen from above, most of a clump is its upper half)
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.55, 0.68, 0.6), vShade);`)
       .replace('#include <tonemapping_fragment>', `gl_FragColor.rgb *= 1.0 + vGust * 0.2 * vGH;
         float shine = pow(max(dot(normalize(vWorld - cameraPosition), uSunDir), 0.0), 4.0) * vGH * vGH;

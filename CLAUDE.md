@@ -156,7 +156,14 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   that size. Their coming (`Trial.stage`) breaks their site for good (`structures.ruin`, `trial.st.broken`, restored by
   save.js): the walls that fall are their own collider group (`ruin:<site>`), swapped for low rubble (`rubble:<site>`,
   `low`); a boss ignores low colliders and flora (creatures.js `BIG`), steers round what stands and strides over knee-high
-  stubs (`steer`, `STRIDE`), and is put free if stuck (`unstick`). `tests/suites/creatures.mjs` chases it round the ruin.
+  stubs (`steer`, `STRIDE`), and is put free if stuck (`unstick`, the last resort). In a boss fight it and the other hunters follow
+  `creatures/nav.js`: two 1 m grids round the arena (one for the boss's body, one for a man's), rebuilt when the colliders
+  change (`colliders.v`), and a flow to you worked out a few times a second; the Labyrinth's maze falls to rubble when the
+  Minotaur comes (`STANDS` in structures.js keeps a few lengths), ringed by boulders for cover. `tests/suites/creatures.mjs`
+  chases it round the ruin and the boulders.
+  Running from a fight doesn't end it (`FLEE`: past 105 m it walks back to its arena and heals 5%/s until you return);
+  only falling or leaving the game does. Its aura and its end (Zeus's bolt, the body blown away as ash) are `render/bossfx.js`,
+  run from `Trial.presence`; the owl keeps quiet while `trial.fighting`.
 - **Building pieces need support.** One not held up from the ground collapses on the next recompute; tests that need a
   roof build walls under it.
 - Vertex-coloured site models come out several times brighter under the lighting than their palette suggests: keep
@@ -200,7 +207,7 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   haze (a half-resolution march blended over frames, its thickness from a world texture of how wooded each place is, lit
   through the far shadow map) and the flecks of sun on the forest floor. None of it may depend on where the player stands
   (`tests/suites/light.mjs` walks out of a wood and back and fails on any jump; notes in `docs/plans/light-study.md`) ·
-  `occlusion.js` the camera's collision (`castCamera`: a sphere swept from the head against colliders, built pieces, site roofs and floors, cave rock and the ground pulls the camera in, Valheim's way; trunks stop it, leaves don't, and crowns still fade) · `pixel.js` the Pixel texture setting (`pixelSnap`/`pixelTex`: surface detail snapped to texels, the light never) · `fx.js`, `lights.js` · `quality.js` the preset the game started with (Ultra's reach is built in at load) · `lensdirt.js` the lens dirt and the glow in the fog, folded into the bloom.
+  `occlusion.js` the camera's collision (`castCamera`: a sphere swept from the head against colliders, built pieces, site roofs and floors, cave rock and the ground pulls the camera in, Valheim's way; trunks stop it, leaves don't, and crowns still fade) · `pixel.js` the Pixel texture setting (`pixelSnap`/`pixelTex`: surface detail snapped to texels, the light never; `pixelate(mat, look)` puts any other material in texels, one program for all, the look in its uniforms: a material made later needs it, and a copy `pixelLike`; stone, bark, planks and the hero have their own, `ownTexels`) · `fx.js`, `bossfx.js` (the bosses' aura and the body blowing away: GPU points), `bossblows.js` (what follows each boss blow and the fight's bolts: scorch, glowing cracks, arcs, the goat's runes) on `emit.js` (a GPU particle pool, each particle written once as it's born), `lights.js` · `quality.js` the preset the game started with (Ultra's reach is built in at load) · `lensdirt.js` the lens dirt and the glow in the fog, folded into the bloom.
 - `src/player`: `player.js` controller and camera (`speeds.js` its speeds) · `hero.js` rig and clips: the old FBX clips plus the
   Mixamo library `moves.glb`/`acts.glb` (made by `tools/assets/moves.mjs` from `incoming assets/mixamo/`, retargeted onto
   our rig's rest pose); a base layer blending walk/run/sprint, backwards, strafes and sneak by speed and direction; the

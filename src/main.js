@@ -41,6 +41,8 @@ import { fadeAhead } from './render/occlusion.js';
 import { updateMusic, MUSIC } from './audio/music.js';
 import { AUDIO } from './audio/sound.js';
 import { timeK } from './render/fx.js';
+import { warmPixel } from './render/pixel.js';
+import { warmBossFx } from './render/bossfx.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -149,6 +151,8 @@ const warmUp = () => { if (warmed) return; warmed = 2; const w = veg.warmMeshes(
   // (and each program's link finished and looked at now: the browser links them only when first asked, which three does
   // the first time the program draws, so a program compiled here still stalled the frame that first used it)
   // (and the fire's shadow drawn once with them all, for its own shaders: render/lights.js)
+  warmBossFx(w);   // (and the bosses' aura and the dust their bodies go to: render/bossfx.js)
+  w.add(...warmPixel());   // (and the kinds of material in texels that come later: render/pixel.js)
   const fire = warmFireShadow(w, player.hero.root), unhide = player.hero.warmAll?.();   // (and every part the hero may wear: hero.js)
   try { renderer.compile(scene, camera); if (fire) renderer.render(scene, camera); for (const p of renderer.info.programs) p.getUniforms(); } catch { /* a warm-up only */ } fire?.(); unhide?.(); renderer.setRenderTarget(rt); scene.remove(w); for (const m of w.children) m.dispose?.(); };
 // (and the meadow's grass clumps in, so their shaders are compiled with the rest: grass.js)

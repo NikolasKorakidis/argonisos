@@ -10,6 +10,7 @@ import { sound } from '../audio/sound.js';
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
 const fmtT = (s) => (s >= 60 ? `${Math.ceil(s / 60)}m` : `${Math.ceil(s)}s`);
+const RETICLE = [46, 12];
 const BAD = new Set(['wet', 'cold', 'freezing', 'stunned']), GREAT = new Set(['zeusBuff', 'zeusBlessing']);
 
 export class HUD {
@@ -82,6 +83,14 @@ export class HUD {
     if (k === null || k === undefined) { if (this.last.act) { e.classList.add('hidden'); this.last.act = null; } return; }
     const key = label + '|' + ic; if (key !== this.last.act) { this.last.act = key; e.classList.remove('hidden'); e.querySelector('i').innerHTML = icon(ic); e.querySelector('span').textContent = label; }
     e.style.setProperty('--k', (Math.min(1, Math.max(0, k)) * 100).toFixed(1) + '%');
+  }
+  // The bow's draw, Valheim's way (combat.js updateBow): a ring round the crosshair closing in as the string comes back,
+  // from RETICLE[0] across to RETICLE[1] (px) at a full draw, where it brightens (only a full draw gives the bow its whole
+  // damage); no bar. k: 0..1, or null to let it fade where it was
+  reticle(k) {
+    const e = $('cross'), on = k !== null && k !== undefined; if (on !== this.last.retOn) { this.last.retOn = on; e.classList.toggle('drawing', on); } if (!on) return;
+    const f = Math.min(1, Math.max(0, k)), full = f >= 1; if (full !== this.last.retFull) { this.last.retFull = full; e.classList.toggle('full', full); }
+    e.style.setProperty('--d', (RETICLE[0] + (RETICLE[1] - RETICLE[0]) * (1 - (1 - f) ** 2)).toFixed(1) + 'px');   // (closing in quickly at first, settling into the full draw)
   }
   // A number that pops off a creature when you hit it
   damageNumber(world, n) {
@@ -216,6 +225,7 @@ export class HUD {
     const d = ITEMS[s.id], bits = [];
     if (d.food) bits.push(d.food.health >= 0 ? `+${d.food.health} health, +${d.food.stamina} stamina, ${d.food.regen} hp/s for ${fmtT(d.food.duration)}` : `Inedible like this (${d.food.health} health)`);
     if (d.dmg) bits.push('Damage ' + d.dmg.map(([n, k]) => `${n} ${k}`).join(' + '));
+    if (d.draw) bits.push(`Full draw ${d.draw} s`);   // (a bow's: quicker with the Bowman skill, combat.js drawTime)
     if (d.block) bits.push(`Block ${d.block}`); if (d.armor) bits.push(`Armour ${d.armor}`);
     if (d.speed) bits.push(`${d.speed > 0 ? '+' : ''}${Math.round(d.speed * 100)}% speed`); if (d.resist) bits.push(`Resists ${d.resist.join(', ')}`); if (d.regen) bits.push(`+${Math.round(d.regen * 100)}% health regeneration`);
     if (d.dur) bits.push(`Durability ${Math.ceil(s.dur)} / ${d.dur}`);

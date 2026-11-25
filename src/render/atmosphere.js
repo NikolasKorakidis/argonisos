@@ -50,9 +50,10 @@ export const ATMO = {
   mzCol: { value: new THREE.Color(0.7, 0.75, 0.8) }, mzColUp: { value: new THREE.Color(0.5, 0.6, 0.8) }, mzSun: { value: new THREE.Color() },
   // the grade (white balance, saturation, a tint in the shadows) and the cloud shadows drifting over the land
   gTint: { value: new THREE.Color(1, 1, 1) }, gSat: { value: 1 }, gShadow: { value: new THREE.Color(0, 0, 0) },
-  // and how much colour the world keeps (the Colour setting, settings.js: half by default, the Greek reviewer, 23 Nov:
-  // "drop the saturation of all colours to 50%, look at Valheim's colours"), and how much of it the sky and what glows keep
-  colour: { value: 0.5 }, colourSky: { value: 0.45 }, gContrast: { value: 0 },
+  // and how much colour the world keeps (the Colour setting, settings.js: all of it by default again, 24 Nov, after a day
+  // at half, the Greek reviewer's 23 Nov "drop the saturation of all colours to 50%"), and how much of it the sky and
+  // what glows keep when it is drained
+  colour: { value: 1 }, colourSky: { value: 0.45 }, gContrast: { value: 0 },
   cloudOff: { value: new THREE.Vector2() }, cloudCover: { value: 0.4 }, cloudK: { value: 0 },
   // the shafts of sun: how strong (by the hour, how near the sun the view looks, cloud), and the quarter-sized pictures
   // they're blurred in (rays: 0 turns them off, on the lower graphics settings; tIn: the one a pass reads, shRad: how far it reaches, in screen heights)
@@ -361,12 +362,14 @@ export class AtmospherePass extends Pass {
           // world's colour drained to the player's setting, as Valheim's is, but before the bloom and not all of it from
           // what glows (the sun, fire, embers, magic: brighter in some colour than any lit surface comes) nor from the sky
           // and the distance's air (the player's mist, which is the sky's colour), so the fire stays warm and the day blue
-          // (the white balance after the colour is drained, so the place's and the hour's warmth or coolness stays whole:
-          // the muted world earthy, not grey)
+          // (the grey it drains towards takes the white balance once the colour is half gone or more, so the place's and
+          // the hour's warmth or coolness stays whole: the muted world earthy, not grey; with all the colour kept the grade
+          // is as it was before the setting came, the balance laid on first and the grey neutral)
           // (and by night what the fire lights keeps its warmth: the night is the moon's cool light, any warm colour in it
           // is a fire's, a torch's or an ember's)
-          float l = dot(col.rgb, vec3(0.2126, 0.7152, 0.0722)), glow = max(smoothstep(0.9, 2.2, max(col.r, max(col.g, col.b))), night * smoothstep(0.004, 0.04, col.r - col.b));
-          col.rgb = max(mix(vec3(l), col.rgb, gSat * mix(colour, 1.0, max(glow, (d < 0.99999 ? mistK / max(mzAmt, 1e-3) : 1.0) * colourSky))), 0.0) * gTint;
+          float l0 = dot(col.rgb, vec3(0.2126, 0.7152, 0.0722)), glow = max(smoothstep(0.9, 2.2, max(col.r, max(col.g, col.b))), night * smoothstep(0.004, 0.04, col.r - col.b));
+          col.rgb *= gTint; float l = dot(col.rgb, vec3(0.2126, 0.7152, 0.0722));
+          col.rgb = max(mix(mix(vec3(l), l0 * gTint, min(1.0, 2.0 - 2.0 * colour)), col.rgb, gSat * mix(colour, 1.0, max(glow, (d < 0.99999 ? mistK / max(mzAmt, 1e-3) : 1.0) * colourSky))), 0.0);
           // (and with the colour gone, more contrast in its place, the more the less colour: the shade and the midtones
           // deeper, the brightly sunlit about as it was, so the muted world reads by its light and shade as Valheim's does,
           // not pale and washed out like an old photograph; by day: the night is as dark as the moon makes it)

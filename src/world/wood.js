@@ -20,7 +20,7 @@ import * as THREE from 'three';
 import { hash21, tileNoise } from '../util/math.js';
 import { patchWet } from './wetness.js';
 import { ATMO } from '../render/atmosphere.js';
-import { PIXEL_GLSL, PIXEL_U } from '../render/pixel.js';
+import { PIXEL_GLSL, PIXEL_U, ownTexels } from '../render/pixel.js';
 
 // ---- The bark's texture, tileable: R fine fibres, G the ridges between furrows (1 on a ridge, 0 down a furrow: the
 // creases of a noise, so they branch and join as bark's do), B where moss grows (blotches), A a broad variation
@@ -181,7 +181,7 @@ const U = { uBarkTex: { value: BARK_TEX }, uBarkMean: { value: BARK_TEX.userData
 
 // A copy of a patched material keeps its patches (a plain copy loses them; build.js copies each placed piece's)
 export function keep(mat) {
-  mat.clone = function () { const c = new this.constructor().copy(this); c.onBeforeCompile = this.onBeforeCompile; c.customProgramCacheKey = this.customProgramCacheKey; c.clone = this.clone; return c; };
+  mat.clone = function () { const c = new this.constructor().copy(this); c.onBeforeCompile = this.onBeforeCompile; c.customProgramCacheKey = this.customProgramCacheKey; c.clone = this.clone; return ownTexels(c); };
   return mat;
 }
 // The wet look as part of a material's own patch (wetness.js patchWet: not registered as wettable, so a copy made with
@@ -198,7 +198,7 @@ function patch(mat, kind, wet) {
     sh.vertexShader = def + VERT_PARS + sh.vertexShader.replace('#include <project_vertex>', VERT);
     sh.fragmentShader = def + FRAG_PARS + sh.fragmentShader.replace('#include <color_fragment>', kind === 'wood' ? WOOD : BARK).replace('#include <normal_fragment_maps>', BUMP(kind === 'wood' ? '0.05' : '0.07'));
   };
-  mat.customProgramCacheKey = () => key;
+  mat.customProgramCacheKey = () => key; ownTexels(mat);
   return wet ? wetKept(mat, wet) : keep(mat);
 }
 // Bark on a vertex-coloured material (the trees' trunks: no wind, trees.js); worked wood on a building piece's (its

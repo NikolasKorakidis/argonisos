@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { loadPack, bake } from '../assets.js';
 import { wettable } from '../world/wetness.js';
 import { woody, woodFrame } from '../world/wood.js';
+import { pixelate } from '../render/pixel.js';
 import { clamp } from '../util/math.js';
 
 // (a wall's logs end rounded, short of the corner: drawn half the wall's thickness longer at each end, so they reach the
@@ -97,7 +98,7 @@ const THATCH = (K) => /^k(Roof|Trim)/.test(K.file);
 export function loadKit(pieces) {
   const mats = new Map(); let vcMat = null;   // (one material per atlas and kind, made wettable like the carved planks)
   // (the kit's paint is pale in our light: taken down a little)
-  const matFor = (src, wood) => { const key = (src.map?.uuid ?? src.uuid) + wood; if (!mats.has(key)) { const m = new THREE.MeshStandardMaterial({ map: src.map, color: 0xa8a8a8, roughness: 0.9 }); mats.set(key, wood ? woody(m) : wettable(m, { dark: 0.62, gloss: 0.32 })); } return mats.get(key); };
+  const matFor = (src, wood) => { const key = (src.map?.uuid ?? src.uuid) + wood; if (!mats.has(key)) { const m = new THREE.MeshStandardMaterial({ map: src.map, color: 0xa8a8a8, roughness: 0.9 }); mats.set(key, wood ? woody(m) : pixelate(wettable(m, { dark: 0.62, gloss: 0.32 }), 'wood')); } return mats.get(key); };   // (the thatch in texels, streaked: render/pixel.js)
   const look = (K) => loadPack(K.file).then((gl) => {
     if (K.vc) { const geo = fit(bake(gl.scene, true), K), c = geo.attributes.color; for (let k = 0; k < c.array.length; k++) c.array[k] *= 0.82; return { geo, mat: (vcMat ||= woody(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { dark: 0.66, gloss: 0.3 })), wood: true }; }   // (a palette pale in our light, as the logs in harvest.js)
     let src = null; gl.scene.traverse((m) => { if (m.isMesh && !src) src = m.material; }); const wood = !THATCH(K); return { geo: fit(bake(gl.scene), K), mat: matFor(src, wood), wood };

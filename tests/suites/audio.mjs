@@ -108,7 +108,9 @@ export default {
       return (call === 1 && early === 'bossMinotaur' && roar === 1 && during === 'bossMinotaur' && after !== 'bossMinotaur' && died === 1) || JSON.stringify({ call, early, roar, during, after, died });`);
     const boss = await t.eval('return window._bossMix;');
     t.metric('mix: the Minotaur fight (LUFS, loudest moment, peak dBFS)', Object.entries(boss).filter(([b]) => b !== 'lyre').map(([b, x]) => `${b} ${x.lufs} (${x.top}, ${x.peak})`).join(' · '));
-    t.check('the boss fight: the music loud and clear (over the ambience and its storm, not far under the blows), the whole about -15 LUFS (-14 at most), never clipping', boss.music.lufs > boss.amb.lufs + 3 && boss.music.lufs > boss.sfx.lufs - 3 && boss.out.lufs < -14 && boss.out.lufs > -21 && boss.out.peak < -0.5, JSON.stringify(boss));
+    // (the bosses' tracks a fifth louder since 25 Nov and the fight's storm heavier, both the user's wish: the whole some
+    // 2 dB louder by design, -12.5 at most, and still never clipping)
+    t.check('the boss fight: the music loud and clear (over the ambience and its storm, not far under the blows), the whole about -13 LUFS (-12.5 at most), never clipping', boss.music.lufs > boss.amb.lufs + 3 && boss.music.lufs > boss.sfx.lufs - 3 && boss.out.lufs < -12.5 && boss.out.lufs > -21 && boss.out.peak < -0.5, JSON.stringify(boss));
     await visit(t, 'forest');
     // (silent: nothing playing, or the music bus under -60 LUFS; the longest such spell, in seconds)
     const hush = `let run = 0, worst = 0; const look = () => { const q = !cur() || A.meters().music.lufs < -60; run = q ? run + 0.1 : 0; worst = Math.max(worst, run); };`;

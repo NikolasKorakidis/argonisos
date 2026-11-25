@@ -17,7 +17,9 @@ import { heightAt, biomeWeights } from '../world/gen.js';
 import { groundAt } from '../world/groundcut.js';
 const QUAD = new Set(['deer', 'fox', 'rabbit', 'hog', 'chimera']);   // bodies that tilt with the ground
 import { makeBody, preloadBodies } from './models.js';
+import { Nav } from './nav.js';
 import { burst, dust, addShake } from '../render/fx.js';
+import { stepFx, clawFx } from '../render/bossblows.js';
 import { camera } from '../render/core.js';
 import { stormWallDepth } from '../world/stormwall.js';
 import { waterAt } from '../world/river.js';
@@ -75,7 +77,7 @@ const STRIDE = (k) => BIG(k) && !(k.h !== undefined && k.h < 3.6);
 const alive = (c) => c && !c.dead && !c.gone;
 
 export class Creatures {
-  constructor(g) { this.g = g; this.list = []; this.t = 0; this.plates = new Map(); preloadBodies(); this.box = document.createElement('div'); this.box.id = 'plates'; document.getElementById('hud').appendChild(this.box); }
+  constructor(g) { this.g = g; this.list = []; this.t = 0; this.plates = new Map(); preloadBodies(); this.nav = new Nav(g.colliders, BIG, (c) => g.trial?.clearLine(c, c.pos.distanceTo(g.player.pos))); this.unsticks = 0; this.box = document.createElement('div'); this.box.id = 'plates'; document.getElementById('hud').appendChild(this.box); }
   spawn(type, x, z, o = {}) {
     const T = TYPES[type], level = o.level ?? (Math.random() < 0.12 ? (Math.random() < 0.25 ? 2 : 1) : 0), k = 1 + 0.25 * level;
     const body = makeBody(type, level, x, z, o.young, T.size, T.pace), y = Math.max(heightAt(x, z), -0.3), young = !!body.young, yk = young ? YOUNG_K : 1;
@@ -168,12 +170,13 @@ export class Creatures {
     c.dead = true; c.state = 'dead'; c.deadT = 0; c.hp = 0; this.g.sound?.('kill', { at: c.pos.clone(), type: c.type, boss: !!c.boss }); c.crumble = c.type === 'skeleton';
     this.g.onKill?.(c);
   }
-  // when a body has lain long enough: a small thunderclap, and it's gone, leaving its drops
+  // when a body has lain long enough: a small thunderclap, and it's gone, leaving its drops (a boss's has had Zeus's
+  // bolt already, and its ashes are blowing away: trial.js presence)
   vanish(c) {
     const at = c.pos.clone().setY(c.pos.y + 0.5);
-    dust(at, c.T.thunder === 'big' ? 30 : 14, 0xe8e8ff, c.T.thunder === 'big' ? 0.8 : 0.4); burst(at, { color: 0xbfd0ff, n: 16, speed: 4, size: 0.05, grav: -2 });
-    if (c.pos.distanceTo(this.g.player.pos) < 25) { addShake(c.T.thunder === 'big' ? 0.5 : 0.15); this.g.flashSky?.(c.T.thunder === 'big' ? 0.5 : 0.18); }
-    this.g.sound?.('thunder', c.T.thunder === 'big' ? 1.2 : 0.6, { at });
+    if (!c.ashen) { dust(at, c.T.thunder === 'big' ? 30 : 14, 0xe8e8ff, c.T.thunder === 'big' ? 0.8 : 0.4); burst(at, { color: 0xbfd0ff, n: 16, speed: 4, size: 0.05, grav: -2 });
+      if (c.pos.distanceTo(this.g.player.pos) < 25) { addShake(c.T.thunder === 'big' ? 0.5 : 0.15); this.g.flashSky?.(c.T.thunder === 'big' ? 0.5 : 0.18); }
+      this.g.sound?.('thunder', c.T.thunder === 'big' ? 1.2 : 0.6, { at }); }
     // (what it leaves; the young less of each, but never none)
     if (!c.summoned) for (const [id, a, b, ch] of c.T.drops) if (Math.random() < ch) { const n0 = ri(a, b) * (1 + 0.25 * c.level), n = c.young ? Math.max(1, Math.round(n0 * c.dropK)) : Math.round(n0); if (n > 0) this.g.pickups.drop(id, n, c.pos.x + rr(-0.6, 0.6), c.pos.z + rr(-0.6, 0.6), { auto: true }, c.pos.y); }
     this.remove(c);
@@ -184,11 +187,14 @@ export class Creatures {
     const g = this.g, P = g.player, pp = P.pos;
     this.t -= dt; if (this.t <= 0) { this.t = 3; if (!g.S.peaceful) this.trySpawn(); }
     this.engage(pp);
+    // (in a boss's arena, the ways round what stands: nav.js)
+    const B = g.trial?.boss; this.nav.update(dt, B && !B.dead && !g.trial.away ? B.arena : null, this.list, pp);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const c = this.list[i], T = c.T;
       if (c.dead && c.crumble) {   // a skeleton falls apart where it stands: its bones clatter down and it's gone (crumble)
         c.deadT += dt; if (!c.fell && c.deadT > 0.1) { c.fell = true; this.crumble(c); } if (c.deadT > 1.3) { if (c.summoned) this.remove(c); else this.vanish(c); } continue; }
-      if (c.dead) { c.deadT += dt; c.body.animate('dead', 0, dt); c.flash = Math.max(0, c.flash - dt * 3); c.body.flash(c.flash); if (c.deadT > (T.heavy ? 3 : 2)) this.vanish(c); continue; }
+      // (a boss lies until Zeus's bolt has turned it to ash, trial.js presence: glow, ashen; or a while, should nothing come)
+      if (c.dead) { c.deadT += dt; c.body.animate('dead', 0, dt); c.flash = Math.max(0, c.flash - dt * 3); c.body.flash(c.flash, c.glow || 0); if (c.boss ? c.ashen || c.deadT > 15 : c.deadT > (T.heavy ? 3 : 2)) this.vanish(c); continue; }
       const d = c.pos.distanceTo(pp);
       if (d > 140 && !c.boss) { this.remove(c); continue; }
       c.t -= dt; c.atkCd -= dt; c.rangedCd -= dt; c.hitT -= dt; if (c.poise) c.poise = Math.max(0, c.poise - dt * c.max * 0.03); c.flash = Math.max(0, c.flash - dt * 4); c.body.flash(c.flash, c.glow);
@@ -227,14 +233,18 @@ export class Creatures {
         if (c.retreat) { if (c.t <= 0) { c.state = 'chase'; c.retreat = false; } }   // (only backing off from your torch: then back at you)
         else if (c.t <= 0 && d > 25) { c.state = 'idle'; c.t = rr(2, 5); c.aware = false; }
       } else if (c.state === 'chase' || c.state === 'attack') {
-        const wp = g.structures?.navTarget?.(c.pos, pp) || pp;   // in the Labyrinth: round by the gaps in the rings (until it's broken)
+        // in a boss's arena, its way round what stands (nav.js); in the Labyrinth before it's broken, round by the gaps in
+        // its rings; else straight at you, a boss steering round what's in its way
+        const way = this.nav.toward(c, pp), wp = way || g.structures?.navTarget?.(c.pos, pp) || pp;
         face = Math.atan2(wp.x - c.pos.x, wp.z - c.pos.z); want = T.speed[1] * (T.heavy ? 0.75 : 0.85) * (c.pace ?? 1);
-        if (c.boss) face = this.steer(c, face, d, dt);   // (round what still stands between it and you)
-        const wait = c.summoned && !c.engaged ? this.circle(c, pp, dt) : null; if (wait) { face = wait.face; want = wait.want; }   // (not its turn: round you at a distance)
+        if (c.boss) { if (way) c.stride = false; else face = this.steer(c, face, d, dt); }   // (round what still stands between it and you)
+        const wait = c.summoned && !c.engaged && (!way || c.navDirect) ? this.circle(c, pp, dt) : null; if (wait) { face = wait.face; want = wait.want; }   // (not its turn: round you at a distance, once it has found its way to you)
         // won't come into the firelight (backing out of it, and striking nothing on the way)
         let shy = false; if (fire) { const away = Math.atan2(c.pos.x - fire.pos.x, c.pos.z - fire.pos.z); if (c.pos.distanceTo(fire.pos) < 6.5) { face = away; want = T.speed[0] * 1.5; shy = true; } else if (d < 9) want = 0; }
-        const stopAt = T.reach + T.r * 0.5; if (!shy && !wait && d < stopAt + (c.boss ? 0 : c.speed * 0.25)) want = 0;   // (easing off in time, not running on into you)
-        if (d < stopAt && !shy) { want = 0; if (c.atkCd <= 0 && !c.move && !(T.moves && c.boss) && !wait && !(c.rise > 0)) this.strike(c); }   // (a boss with moves of its own makes them: trial.js)
+        // (easing off in time, not running on into you; but not while something stands between, a boulder you're hiding
+        // behind: it comes on round it, nav.js)
+        const stopAt = T.reach + T.r * 0.5, hid = way && !c.navDirect && d > T.r + 1; if (!shy && !wait && !hid && d < stopAt + (c.boss ? 0 : c.speed * 0.25)) want = 0;
+        if (d < stopAt && !shy && !hid) { want = 0; if (c.atkCd <= 0 && !c.move && !(T.moves && c.boss) && !wait && !(c.rise > 0)) this.strike(c); }   // (a boss with moves of its own makes them: trial.js)
         if (T.ranged && c.state === 'chase' && d > 5 && d < T.ranged.range && c.rangedCd <= 0 && !c.move) { c.rangedCd = T.ranged.every + rr(-1, 1); this.strike(c, 'throw'); }
         if (d > 60 || (c.t < -30 && d > 30)) { c.state = 'idle'; c.t = rr(2, 4); c.aware = false; }
       } else if (c.state === 'alert' || c.state === 'throw') {
@@ -262,6 +272,7 @@ export class Creatures {
             const fall = c.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), c.boss ? T.reach * 0.8 : 3);
             if (c.blowAt.hit) g.combat.hitPlayer(c, T.dmg); else if (T.heavy) { dust(fall, c.boss ? 12 : 18, undefined, c.boss ? 0.6 : 0.35); addShake(c.boss ? 0.7 * this.near(c) : 0.3); }
             if (T.heavy) g.sound?.('slam', { at: fall, big: c.boss });   // (a giant's or the Minotaur's blow comes down like a slam, hit or miss)
+            if (c.boss) clawFx(c, fall.clone().setY(c.pos.y + 0.2));   // (a boss's common blow, the Chimera's claws: their tears through the air, bossblows.js)
             this.hitBuildings(c); } }
         if (c.atkE >= c.atkT) c.state = 'chase';
       }
@@ -321,6 +332,8 @@ export class Creatures {
   // the ring's radius breathing in and out a little), facing you once there; returns the heading and speed for it
   circle(c, pp, dt) {
     c.slot += c.spin * dt * 0.22; const R = HOLD[0] + (HOLD[1] - HOLD[0]) * (0.5 + 0.5 * Math.sin(c.slot * 1.7)), dx = pp.x + Math.sin(c.slot) * R - c.pos.x, dz = pp.z + Math.cos(c.slot) * R - c.pos.z, l = Math.hypot(dx, dz);
+    // (a place in a rock or a wall, you standing by it: it moves on round to one it fits, facing you as it goes)
+    if (!this.nav.fits(c, c.pos.x + dx, c.pos.z + dz)) { c.slot += c.spin * dt * 1.5; return { face: Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z), want: 0 }; }
     const d = Math.hypot(c.pos.x - pp.x, c.pos.z - pp.z); if (d < HOLD[0] - 1) return { face: Math.atan2(c.pos.x - pp.x, c.pos.z - pp.z), want: c.T.speed[1] * 0.5 * (c.pace ?? 1) };   // (too close: backing off first)
     return l > 0.8 ? { face: Math.atan2(dx, dz), want: Math.min(c.T.speed[1] * 0.8 * (c.pace ?? 1), l * 1.2) } : { face: Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z), want: 0 };
   }
@@ -364,9 +377,9 @@ export class Creatures {
     if (c.jam < 0.5) return;
     const f = new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), wall = this.g.colliders.pick(c.pos.x, c.pos.z, f.x, f.z, c.T.r + 1.5, (k) => k.ref?.piece);
     if (wall && c.atkCd <= 0) { this.strike(c); c.jam = 0; return; }
-    const pp = this.g.player.pos, toP = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z); let best = toP, bs = -1e9;
+    const pp = c.nav?.ok ? c.nav : this.g.player.pos, toP = Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z); let best = toP, bs = -1e9;   // (leaning the way its path goes, if it has one)
     for (let i = 0; i < 16; i++) { const a = toP + (i / 16) * Math.PI * 2, sc = this.clearTo(c, a, 10) + 3 * Math.cos(angDiff(a, toP)); if (sc > bs) { bs = sc; best = a; } }
-    if (!(c.free?.t > 0)) c.free = { dir: best, t: 1.1 };
+    if (!(c.free?.t > 0)) { c.free = { dir: best, t: 1.1 }; this.unsticks++; }   // (counted: with the ways in an arena it should hardly ever come to this, tests/suites/creatures.mjs)
     if (c.jam > 1.5) { c.shove = { x: Math.sin(best) * 2, z: Math.cos(best) * 2, t: 0.5, d: 0.5 }; c.jam = 0.5; }
   }
   // you don't stand inside a giant: it shoulders you aside
@@ -379,15 +392,22 @@ export class Creatures {
   stomp(c, p) {
     const near = Math.max(0, 1 - c.pos.distanceTo(this.g.player.pos) / 50), k = c.T.size / 3.3;
     this.g.sound?.('giantStep', { at: p, k }); if (near > 0) addShake(0.42 * near * near * k);
-    dust(p.setY(Math.max(p.y, c.pos.y) + 0.1), 2, 0x7a6c5c, 0.35 * k);
+    dust(p.setY(Math.max(p.y, c.pos.y) + 0.1), 2, 0x7a6c5c, 0.35 * k); stepFx(p, k);   // (a puff of dust round the foot and grit thrown up: bossblows.js)
   }
   // what a creature stands on: the ground, or a floor or a site's steps within reach
   groundAt(x, z, y) { const g = this.g; return Math.max(groundAt(x, z), g.build?.floorAt(x, z, y) ?? -1e9, g.structures?.floorAt(x, z, y) ?? -1e9); }
   // A wall (one you built, or a site's) between it and you, standing taller than your waist and its own: a blow struck
   // at you through it goes into the wall instead (hitBuildings), so inside your house you're safe from what's outside
+  // (the line between must pass through one, or within a hand of it; through it alone if either of you stands right
+  // against it: a skeleton pressed against the boulder you're hiding by can still reach round it to you)
   walled(c, pp, d) {
-    const dx = (pp.x - c.pos.x) / Math.max(d, 0.01), dz = (pp.z - c.pos.z) / Math.max(d, 0.01), top = Math.max(c.pos.y, pp.y) + 0.8, low = Math.min(c.pos.y, pp.y) + 1.5;
-    return !!this.g.colliders.pick(c.pos.x, c.pos.z, dx, dz, Math.max(0.1, d - 0.25), (k) => !k.low && (k.ref?.piece || k.ref?.site) && (k.h === undefined || ((k.y ?? 0) + k.h > top && (k.y ?? 0) < low)));
+    const top = Math.max(c.pos.y, pp.y) + 0.8, low = Math.min(c.pos.y, pp.y) + 1.5, ax = c.pos.x, az = c.pos.z, ux = pp.x - ax, uz = pp.z - az, L2 = Math.max(1e-6, ux * ux + uz * uz);
+    for (const k of this.g.colliders.near((ax + pp.x) / 2, (az + pp.z) / 2, d / 2 + 1)) {
+      if (k.low || !(k.ref?.piece || k.ref?.site) || !(k.h === undefined || ((k.y ?? 0) + k.h > top && (k.y ?? 0) < low))) continue;
+      let R = k.r + 0.35; if (Math.hypot(ax - k.x, az - k.z) < R + 0.15 || Math.hypot(pp.x - k.x, pp.z - k.z) < R + 0.15) R = k.r;
+      const t = Math.max(0, Math.min(1, ((k.x - ax) * ux + (k.z - az) * uz) / L2)); if (Math.hypot(ax + ux * t - k.x, az + uz * t - k.z) < R) return true;
+    }
+    return false;
   }
   hitBuildings(c) {
     const B = this.g.build; if (!B) return; const f = new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw));

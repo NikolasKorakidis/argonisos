@@ -9,6 +9,7 @@ import { patchWet } from './wetness.js';
 import { FLORA, floraGeo, TREE_TALL } from './flora-pack.js';
 import { ROCK_MAT, rockEdges, stony } from './rock.js';
 import { barky } from './wood.js';
+import { pixelate } from '../render/pixel.js';
 import { SPECIES } from './flora.js';
 
 let seed = 1337;
@@ -421,7 +422,7 @@ function propGeo(species, v) {
 // darkened a little towards green (the pale leaf textures come out washed in our light)
 const PACK_CARDS = new Map();
 function packCardMat(map) {
-  if (!PACK_CARDS.has(map)) { const m = new THREE.MeshStandardMaterial({ map, color: 0xa3ad92, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85, alphaToCoverage: true }); m.onBeforeCompile = leafMat.onBeforeCompile; PACK_CARDS.set(map, m); }
+  if (!PACK_CARDS.has(map)) { const m = new THREE.MeshStandardMaterial({ map, color: 0xa3ad92, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85, alphaToCoverage: true }); m.onBeforeCompile = leafMat.onBeforeCompile; m.customProgramCacheKey = leafMat.customProgramCacheKey; PACK_CARDS.set(map, m); }
   return PACK_CARDS.get(map);
 }
 // (still in the wind: the bushes' stems, the ground cover and what else is vertex-coloured; they darken in the rain, with
@@ -429,6 +430,7 @@ function packCardMat(map) {
 const propMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
 propMat.onBeforeCompile = (sh) => { patchWet(sh, { dark: 0.66, gloss: 0.75, shine: 0.1 }); };
 propMat.customProgramCacheKey = () => 'prop';
+pixelate(propMat, 'plant');   // (in texels, as the trunks are: render/pixel.js)
 // the trees' bark (wood.js) and the ruins' stone (rock.js), each one program
 const BARK_MAT = barky(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { dark: 0.62, gloss: 0.72, shine: 0.1 });
 const RUIN_MAT = stony(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { wet: { dark: 0.6, gloss: 0.7, shine: 0.1 } });
@@ -463,6 +465,9 @@ leafMat.onBeforeCompile = (sh) => {
     vec3 wl = normalize(transpose(mat3(instanceMatrix)) * vec3(uWindDir.x, 0.0, uWindDir.y));   // (pressed a little downwind)
     transformed.xz += wl.xz * stir * uWindStr * (0.8 + 0.4 * sin(uWind * 0.9 + ipp.x * 0.07 + ipp.z * 0.05));`);
 };
+// (the leaves' pictures looked up in texels, each texel of a crown its own green; on the card, so the wind doesn't
+// shift them: render/pixel.js. The pack's cards share it, key and all)
+pixelate(leafMat, 'leaf');
 
 const isLow = () => PROP_LO;
 export { isLow, windUniformEarly as windUniform, propGeo, propMat, leafMat, mergeParts, mergeGeometries, TREE_BUILDERS, PROPS, rockMat, trunkMat, flat, mesh, rr, rand, hash, fbm };

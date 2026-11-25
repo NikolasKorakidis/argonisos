@@ -2,8 +2,9 @@
 // music each on its own), mouse sensitivity, and the hero's look last chosen
 // in the character creator (the next new game starts from it). Kept in browser storage.
 // Fullscreen captures the Escape key where the browser allows it (Keyboard Lock), so a tap still opens the pause menu
-// and you hold Esc for two seconds to leave fullscreen. Where it doesn't (Safari, Firefox), Esc leaves fullscreen and
-// the game puts it back on your next click.
+// and you hold Esc for two seconds to leave fullscreen; and the game's keys the browser would take with Ctrl held (Ctrl+W
+// closing the tab mid-sneak: input.js BROWSER_KEYS). Where it doesn't (Safari, Firefox), Esc leaves fullscreen and the
+// game puts it back on your next click.
 import * as THREE from 'three';
 import { renderer, bloom, sun, sunFar, SHADOW, shadowSoftness, camera, GFX, ADAPT, setScale, setSamples } from '../render/core.js';
 import { SETTINGS_KEY, BOOT_GFX, ULTRA } from '../render/quality.js';
@@ -12,14 +13,16 @@ import { PIXEL, PIXEL_U } from '../render/pixel.js';
 import { setFireShadow } from '../render/lights.js';
 import { GRASS, clumpShare } from '../world/grass.js';
 import { setVolume, setMusicVolume, setSfxVolume, setAmbienceVolume } from '../audio/sound.js';
-import { input } from '../input.js';
+import { input, BROWSER_KEYS } from '../input.js';
 import { LIGHTNING } from '../world/lightning.js';
 import { SHAKE } from '../render/fx.js';
 import { showPerf } from './perf.js';
 
 const KEY = SETTINGS_KEY;
-export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, sfx: 1, ambience: 1, music: 0.5, sens: 1, fullscreen: false, look: null, calmFlash: false, shake: 'on', perf: false, focusBlur: true, colour: 0.5, pixel: 'mild' };
-try { Object.assign(SETTINGS, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* defaults */ }
+export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, sfx: 1, ambience: 1, music: 0.5, sens: 1, fullscreen: false, look: null, calmFlash: false, shake: 'on', perf: false, focusBlur: true, colour: 1, pixel: 'mild' };
+// (a colour of exactly a half kept from before 24 Nov, when that was the default, is the old default and not a choice:
+// every setting is stored whenever any one changes. colourSet marks a colour the player chose with the slider)
+try { const saved = JSON.parse(localStorage.getItem(KEY) || '{}'); if (saved.colour === 0.5 && !saved.colourSet) delete saved.colour; Object.assign(SETTINGS, saved); } catch { /* defaults */ }
 SETTINGS.graphics = BOOT_GFX;   // (?gfx=… in the address picks one for this visit: quality.js)
 const store = () => { try { localStorage.setItem(KEY, JSON.stringify(SETTINGS)); } catch { /* private mode */ } };
 
@@ -66,14 +69,15 @@ export function setMusic(v) { SETTINGS.music = v; store(); setMusicVolume(v); }
 export function setSfx(v) { SETTINGS.sfx = v; store(); setSfxVolume(v); }
 export function setAmbience(v) { SETTINGS.ambience = v; store(); setAmbienceVolume(v); }
 export function setSens(s) { SETTINGS.sens = s; store(); input.sens = s; }
-// How much colour the world keeps, 0 (grey) to 1 (as painted): half by default (the Greek reviewer, 23 Nov: Valheim's
-// muted earth). Laid on in the atmosphere pass's grade, before the bloom, so the sun, fire and magic keep theirs; on Low,
-// which has no such pass, by the page over the picture alone (the HUD keeps its colours either way)
+// How much colour the world keeps, 0 (grey) to 1 (as painted): all of it by default (it was half for a day, the Greek
+// reviewer's 23 Nov Valheim's muted earth, to be weighed again once the texels are on everything). Laid on in the
+// atmosphere pass's grade, before the bloom, so the sun, fire and magic keep theirs; on Low, which has no such pass, by
+// the page over the picture alone (the HUD keeps its colours either way)
 function applyColour() {
-  const c = Math.min(1, Math.max(0, SETTINGS.colour ?? 0.5)); ATMO.colour.value = c;
+  const c = Math.min(1, Math.max(0, SETTINGS.colour ?? 1)); ATMO.colour.value = c;
   renderer.domElement.style.filter = GFX.post || c >= 0.999 ? '' : `saturate(${c.toFixed(2)})`;
 }
-export function setColour(v) { SETTINGS.colour = v; store(); applyColour(); }
+export function setColour(v) { SETTINGS.colour = v; SETTINGS.colourSet = true; store(); applyColour(); }
 // Pixel texture: the surfaces' own detail in texels, as Valheim's low-resolution textures (render/pixel.js), off, mild
 // (sixteen to the metre) or strong (eight); the light on them, the shadows and the bloom stay smooth either way
 export const PIXELS = [['off', 'Off'], ['mild', 'Mild'], ['strong', 'Strong']];
@@ -96,7 +100,7 @@ export function rememberLook(look) { SETTINGS.look = { ...look }; delete SETTING
 // ---- fullscreen
 let wantFs = false;
 export const isFullscreen = () => !!document.fullscreenElement;
-async function enterFs() { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); try { await navigator.keyboard?.lock?.(['Escape']); } catch { /* not supported */ } }
+async function enterFs() { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); try { await navigator.keyboard?.lock?.(['Escape', ...BROWSER_KEYS]); } catch { /* not supported */ } }
 function leaveFs() { wantFs = false; navigator.keyboard?.unlock?.(); if (document.fullscreenElement) document.exitFullscreen(); }
 export async function toggleFullscreen(toast) {
   try { if (!document.fullscreenElement) { await enterFs(); wantFs = true; } else leaveFs(); SETTINGS.fullscreen = wantFs; store(); }

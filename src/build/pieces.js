@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { wettable } from '../world/wetness.js';
 import { stony } from '../world/rock.js';
 import { wetKept } from '../world/wood.js';
+import { pixelate } from '../render/pixel.js';
 
 // ---- materials: painted planks, rough beams, golden thatch
 function canvasTex(w, h, draw, repeat = [1, 1]) {
@@ -52,6 +53,8 @@ export const MAT = {
 };
 // how each material takes the rain: how much darker, how glossy when soaked (wetness.js)
 for (const [k, o] of Object.entries({ plank: [0.62, 0.32], beam: [0.62, 0.32], thatch: [0.72, 0.55], dark: [0.66, 0.32], fur: [0.75, 0.6], cloth: [0.72, 0.6], iron: [0.85, 0.25] })) if (MAT[k]) wettable(MAT[k], { dark: o[0], gloss: o[1] });
+// and in texels as the trunks are (render/pixel.js; the stones have their own, rock.js), each its look
+for (const [k, look] of Object.entries({ plank: 'wood', beam: 'wood', thatch: 'wood', dark: 'wood', fur: 'fur', cloth: 'grain', iron: 'metal', ember: 'flame' })) pixelate(MAT[k], look);
 
 // ---- geometry helpers. A box with UVs in metres (so textures tile at a constant size)
 function box(w, h, d, x = 0, y = 0, z = 0, uvScale = 1 / 3) {

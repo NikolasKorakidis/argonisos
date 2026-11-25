@@ -40,7 +40,7 @@ export default {
     // wading: in the shallows the hero walks, slower, splashing
     await t.step('in the shallows the hero wades: on his feet, slower than on dry land', `${RV} let b = -1; for (let i = 320; i < R.n - 60; i++) { const d0 = R.W[i] - AG.heightAt(R.X[i], R.Z[i]); if (R.FALL[i] < 0 && d0 > 0.55 && d0 < 1.1) { b = i; break; } } if (b < 0) return 'no shallows found';
       ${into('b').replace(RV, '')} key('keydown', 'KeyW'); await new Promise((r) => setTimeout(r, 900)); const wade = P.wading, sp = P.speed, sw = P.swimming; key('keyup', 'KeyW');
-      return (!sw && wade > 0.15 && sp > 0.5 && sp < 4.2) || JSON.stringify({ wade, sp, sw });`);
+      return (!sw && wade > 0.15 && sp > 0.5 && sp < 4.14) || JSON.stringify({ wade, sp, sw });`);
     // nothing stands in the water: the trees, rocks and plants of every cell along the course (the river's own reeds and
     // lilies apart), and the things lying about
     await t.step('no tree, rock or pickup stands in the water', `${RV} const FL = await import('/src/world/flora.js'), PK = await import('/src/world/pickup-layout.js'), cells = new Set(); for (let i = 0; i < R.n; i += 6) cells.add(Math.floor(R.X[i] / 64) + ',' + Math.floor(R.Z[i] / 64));
@@ -49,7 +49,9 @@ export default {
         for (let o = 0; o < it.length; o += FL.STRIDE) { const sp = FL.SPECIES[it[o]]; if (!(it[o + 6] > 0) || !(sp.res === 'tree' || sp.res === 'rock')) continue; n++; const x = it[o + 2], z = it[o + 4], q = RM.riverAt(x, z); if (q && q.out < -0.3) bad.push([sp.name, x | 0, z | 0, +q.out.toFixed(1)]); }
         for (const p of PK.layoutPickups(cx, cz)) { n++; const q = RM.riverAt(p.x, p.z); if (q && q.out < 0) bad.push([p.kind, p.x | 0, p.z | 0]); } }
       return (bad.length === 0 && n > 100) || JSON.stringify({ n, bad: bad.slice(0, 6) });`);
-    await t.step('…nor does the grass grow under it', `${RV} const GR = await import('/src/world/grass.js'), U = GR.grassU, i = Math.round((D.i0 + D.i1) / 2); AG.teleport(R.X[i], R.Z[i]); await new Promise((r) => setTimeout(r, 5000));
+    await t.step('…nor does the grass grow under it', `${RV} const GR = await import('/src/world/grass.js'), U = GR.grassU, i = Math.round((D.i0 + D.i1) / 2); AG.teleport(R.X[i], R.Z[i]);
+      // (the grass's map is made again round you by a worker, a moment after you arrive: waited for, however busy the machine)
+      await until(() => { const o = U.uOrigin.value; return R.X[i] - o.x > 30 && o.x + GR.TEX_SIZE - R.X[i] > 30 && R.Z[i] - o.y > 30 && o.y + GR.TEX_SIZE - R.Z[i] > 30; }, 30000); await frames(2);
       const tx = U.uHeight.value, o = U.uOrigin.value, N = tx.image.width, k = (x, z) => (Math.floor((z - o.y) / GR.TEX_SIZE * N) * N + Math.floor((x - o.x) / GR.TEX_SIZE * N)) * 4;
       let grown = 0, n = 0; for (let j = i - 20; j <= i + 20; j += 4) { const q = k(R.X[j], R.Z[j]); if (q < 0 || q >= tx.image.data.length) continue; n++; if (tx.image.data[q + 1] > 0) grown++; }
       return (n > 5 && grown === 0) || JSON.stringify({ n, grown, o: [o.x, o.y], N, at: [R.X[i], R.Z[i]], len: tx.image.data.length });`);

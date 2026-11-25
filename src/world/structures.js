@@ -17,6 +17,7 @@ import { propGeo, propMat, leafMat } from './trees.js';
 import { GMAT, amphora, pithos, bowl, jug, tripod, acroterion, antefixes, cartWheel, firewood, leaves, mist, dice } from './greek.js';
 import { wettable } from './wetness.js';
 import { stony } from './rock.js';
+import { pixelate, pixelateAuto, pxPlain, pixelSprite } from '../render/pixel.js';
 import { siteProp, sitePropAt, piece, pieceAt, hasPiece, chestParts } from './site-pack.js';
 import { buildTown, buildSpot } from './town.js';
 import { RIVER } from './river.js';
@@ -125,6 +126,9 @@ export const SMAT = {
 };
 for (const [k, o] of Object.entries({ marble: [0.72, 0.28], paving: [0.7, 0.3], stone: [0.66, 0.28], moss: [0.7, 0.45], tile: [0.68, 0.3], frieze: [0.72, 0.3], dark: [0.68, 0.3], rock: [0.66, 0.26], wood: [0.62, 0.32], plaster: [0.72, 0.35], flags: [0.66, 0.26], bone: [0.75, 0.35] })) wettable(SMAT[k], { dark: o[0], gloss: o[1] });   // (wetness.js)
 for (const k of ['rock', 'dark']) stony(SMAT[k], { wet: false });   // (the boulders and cairns in the island's stone, as the streamed rocks are: rock.js)
+// the rest in texels as the trunks are (render/pixel.js), each its look (and whatever else a site is made of, mergeByMat)
+for (const [k, look] of Object.entries({ marble: 'stone', ivory: 'grain', stone: 'stone', moss: 'stone', tile: 'grain', frieze: 'grain', bronze: 'metal', wood: 'wood', plaster: 'grain', flame: 'flame', flags: 'stone', bone: 'grain',
+  paving: 'stone', drip: 'stone', grit: 'stone', caveWood: 'wood', meat: 'hide', hide: 'hide', hide2: 'hide', hide3: 'hide', straw: 'wood', root: 'wood' })) pixelate(SMAT[k], look);
 // the water of Olympos's spring (mtnSpot): clear, dark and glossy over the basin's stone
 const SPRING = new THREE.MeshStandardMaterial({ color: 0x2c4a52, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.82, envMapIntensity: 0.9 });
 const _nav = new THREE.Vector3(), _tip = new THREE.Vector3();
@@ -132,7 +136,7 @@ const _nav = new THREE.Vector3(), _tip = new THREE.Vector3();
 const BONES = ['all/pnb-swamp-marshland/sm-prop-bone-pile-01', 'all/pnb-swamp-marshland/sm-prop-bone-ribcage-01', 'all/pnb-swamp-marshland/sm-prop-bone-pile-02', 'all/pnb-swamp-marshland/sm-prop-bone-skull-01'];
 // the pieces a Giant's cave takes from the packs (site-pack.js loads them): his fire, the bones of big beasts, skulls
 const CAVE_PK = { fire: 'all/polygonnature/sm-prop-campfire-01', bones: 'all/pnb-arid-desert/sm-prop-bones-01', bones2: 'all/pnb-arid-desert/sm-prop-bones-04', skull: 'all/polygonnature/sm-prop-skull-01', skull2: 'all/polygongeneric/sm-gen-prop-skull-01' };
-const MOSSY = new Map(), mossy = (m) => { if (!MOSSY.has(m)) MOSSY.set(m, wettable(new THREE.MeshStandardMaterial({ map: m.map, color: 0x7d8a6a, roughness: 0.95 }), { dark: 0.7, gloss: 0.4 })); return MOSSY.get(m); };
+const MOSSY = new Map(), mossy = (m) => { if (!MOSSY.has(m)) MOSSY.set(m, pixelate(wettable(new THREE.MeshStandardMaterial({ map: m.map, color: 0x7d8a6a, roughness: 0.95 }), { dark: 0.7, gloss: 0.4 }), 'stone')); return MOSSY.get(m); };
 // the Ancient Empire kit's grid, its storey, and how far one of its tiled roof panels rises over a bay (the old houses)
 const BAY = 2.5, STOREY = 3, PITCH = 0.75;
 // how far off each kind of site is drawn: the landmarks you find your way by far out under the mist, the minor sites
@@ -199,7 +203,8 @@ function boulder(P, x, y, z, s, mat = SMAT.rock, sx = 1, sy = 1, sz = 1) {
 // emptied in place)
 function mergeByMat(P, stores = []) {
   const mine = new Map(); for (const st of stores) for (const g of st.geos) mine.set(g, st);
-  const by = new Map(); for (const [g, m] of P) { const gg = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(gg.attributes)) if (!['position', 'normal', 'uv'].includes(k)) gg.deleteAttribute(k); if (!gg.attributes.uv) gg.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(gg.attributes.position.count * 2), 2)); (by.get(m) || by.set(m, []).get(m)).push(gg); if (mine.has(g)) mine.set(gg, mine.get(g)); }
+  const by = new Map(); for (const [g, m] of P) { pixelateAuto(m);   // (in texels, render/pixel.js: the props made on the spot get the plain look)
+    const gg = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(gg.attributes)) if (!['position', 'normal', 'uv'].includes(k)) gg.deleteAttribute(k); if (!gg.attributes.uv) gg.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(gg.attributes.position.count * 2), 2)); (by.get(m) || by.set(m, []).get(m)).push(gg); if (mine.has(g)) mine.set(gg, mine.get(g)); }
   const out = []; for (const [m, gs] of by) { let total = 0; for (const g of gs) total += g.attributes.position.count; const pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uv = new Float32Array(total * 2), runs = []; let o = 0;
     for (const g of gs) { pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3); uv.set(g.attributes.uv.array, o * 2); const st = mine.get(g); if (st) { const q = { o, n: g.attributes.position.count }; (st.ranges ||= []).push(q); runs.push(q); } o += g.attributes.position.count; }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.computeBoundingSphere();
@@ -216,8 +221,8 @@ function mergeByMat(P, stores = []) {
 // shapes are only on the card: nothing aims at or walks on it (the near meshes stay for that, hidden), so its copies in
 // memory are let go once sent.
 const FAR_SITE = ULTRA ? 450 : 350, PX_R = 0.4, PX_K = 1 / 600, FAR_MIN = 8;   // (PX_K: a merged part whose radius is under this share of its distance is about two pixels across at 720p, four at 1440p)
-const plainMat = (m) => m.onBeforeCompile === THREE.Material.prototype.onBeforeCompile;
-const matKey = (m) => (plainMat(m) ? [m.type, m.map?.uuid, m.normalMap?.uuid, m.color?.getHex(), m.emissive?.getHex(), m.emissiveIntensity, m.roughness, m.metalness, m.vertexColors, m.side, m.alphaTest, m.flatShading, m.fog].join('|') : m.uuid);
+const plainMat = (m) => m.onBeforeCompile === THREE.Material.prototype.onBeforeCompile || pxPlain(m);
+const matKey = (m) => (plainMat(m) ? [pxPlain(m), m.type, m.map?.uuid, m.normalMap?.uuid, m.color?.getHex(), m.emissive?.getHex(), m.emissiveIntensity, m.roughness, m.metalness, m.vertexColors, m.side, m.alphaTest, m.flatShading, m.fog].join('|') : m.uuid);
 function farVersion(grp) {
   grp.updateMatrixWorld(true);   // (before its inverse is taken: a site made in the same frame hasn't been placed yet)
   const by = new Map(), from = [], todo = [], inv = new THREE.Matrix4().copy(grp.matrixWorld).invert(), seen = (o) => { for (let p = o; p && p !== grp; p = p.parent) if (!p.visible) return false; return true; };
@@ -307,21 +312,22 @@ const _rm = new THREE.Matrix4(), _rq = new THREE.Quaternion(), _re = new THREE.E
 // a fall's pose: at its foot, turned yaw, tipped tilt towards local +z, dropped y metres, rolled roll about its length
 const poseOf = (f, tilt, y = 0, roll = 0) => _rm.compose(_rv.set(f.pivot.x, f.pivot.y + y, f.pivot.z), _rq.setFromEuler(_re.set(tilt, f.yaw, roll, 'YXZ')), ONE);
 // The floor of a broken site (r: its radius, in site-local metres; at: where the boss came down, [x, z]): a crater there,
-// scorched black at the heart and ringed with dark earth, cracks running out from it across the flagstones to the walls,
+// charred dark brown at the heart and ringed with dark earth, cracks running out from it across the flagstones to the walls,
 // branching as they go. glow: the Chimera's, its fissures lit from below (the core of each crack in the emissive map).
 // One cut-out sheet laid over the floor (alphaTest: no sorting, it takes shadows).
 function crackSheet(r, at, seed, glow) {
   const N = 1024, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d'), e = glow ? document.createElement('canvas') : null; let sd = seed;
   const rnd2 = () => ((sd = (sd * 16807) % 2147483647) - 1) / 2147483646, px = (x) => (x / r + 1) * N / 2, M = N / (2 * r), eg = e && (e.width = e.height = N, e.getContext('2d'));
   const cx = px(at[0]), cz = px(at[1]);
-  // the crater: a black heart in a ragged blotch of scorched earth
-  for (const [rad, col] of [[5.6, 'rgba(46,36,28,1)'], [4.2, 'rgba(30,24,19,1)'], [2.6, 'rgba(14,11,9,1)']]) { g.fillStyle = col; g.beginPath(); for (let i = 0; i <= 28; i++) { const a = (i / 28) * Math.PI * 2, q = rad * M * (0.78 + 0.35 * rnd2()); g.lineTo(cx + Math.cos(a) * q, cz + Math.sin(a) * q); } g.fill(); }
+  // the crater: a charred heart in a ragged blotch of scorched earth (dark brown, not black: the user, 25 Nov, a black
+  // one read as a hole in the arena)
+  for (const [rad, col] of [[4.6, 'rgba(70,54,40,1)'], [3.4, 'rgba(56,41,30,1)'], [2.0, 'rgba(44,31,22,1)']]) { g.fillStyle = col; g.beginPath(); for (let i = 0; i <= 28; i++) { const a = (i / 28) * Math.PI * 2, q = rad * M * (0.78 + 0.35 * rnd2()); g.lineTo(cx + Math.cos(a) * q, cz + Math.sin(a) * q); } g.fill(); }
   if (eg) { const gr = eg.createRadialGradient(cx, cz, 0, cx, cz, 3.2 * M); gr.addColorStop(0, 'rgba(255,150,60,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); eg.fillStyle = gr; eg.fillRect(0, 0, N, N); }
   // the cracks: jagged, narrowing as they run out, a branch now and then
   const crack = (x, y, a, len, w) => {
     const pts = [[x, y]]; for (let s = 0; s < len; s += 0.7) { a += (rnd2() - 0.5) * 0.7; x += Math.cos(a) * 0.7 * M; y += Math.sin(a) * 0.7 * M; pts.push([x, y]); if (Math.hypot(x - N / 2, y - N / 2) > N / 2 - 6) break;
       if (rnd2() < 0.07 && w > 1.5) crack(x, y, a + (rnd2() < 0.5 ? -1 : 1) * (0.5 + rnd2() * 0.6), len * 0.45, w * 0.6); }
-    for (const [ctx2, col, k] of [[g, 'rgba(20,16,13,1)', 1], ...(eg ? [[eg, 'rgba(255,120,40,1)', 0.45]] : [])]) {
+    for (const [ctx2, col, k] of [[g, 'rgba(32,24,18,1)', 1], ...(eg ? [[eg, 'rgba(255,120,40,1)', 0.45]] : [])]) {
       ctx2.strokeStyle = col; ctx2.lineCap = ctx2.lineJoin = 'round'; for (let i = 1; i < pts.length; i++) { ctx2.lineWidth = Math.max(1.2, w * k * (1 - i / pts.length * 0.75)); ctx2.beginPath(); ctx2.moveTo(...pts[i - 1]); ctx2.lineTo(...pts[i]); ctx2.stroke(); } }
   };
   for (let i = 0; i < 16; i++) crack(cx, cz, (i / 16) * Math.PI * 2 + rnd2() * 0.3, r * (0.45 + rnd2() * 0.65), 7 + rnd2() * 6);
@@ -923,11 +929,15 @@ export class Structures {
     let ls = 1234; const lr = (a, b) => a + (((ls = (ls * 16807) % 2147483647) - 1) / 2147483646) * (b - a), dr = dice(9090);
     // the gaps are remembered, so the Minotaur and the dead can find their way through the rings (navTarget)
     const gaps = { 22: [], 15: [], 9: [] };
-    // What the Minotaur's coming breaks (ruinOf, ruin): three breaches in the outer ring (the gate stands), most of the
-    // middle ring, nearly all the inner one; half the standing columns topple along the corridor. Each length of wall that
-    // falls tips outward over its foot in two pieces, and leaves a heap of rubble there and blocks thrown out across the
-    // floor. (Its own dice, ruinDice: the decoration's and the other sites' come out as they always have.)
-    const RU = this.ruinOf('labyrinth', ctx), FALLS = (R, i) => (R === 22 ? [4, 5, 6, 10, 11, 15, 16, 17].includes(i) : ruinDice(R * 7 + i) < (R === 15 ? 0.75 : 0.9));
+    // What the Minotaur's coming breaks (ruinOf, ruin): the maze, nearly all of it (the user, 25 Nov: half fallen, it
+    // pinned him and his dead in its corridors and the fight was a farce; Valheim's arenas are open ground with a few
+    // great stones to put between you and the beast). The gate stands, and of the walls only STANDS: four lengths of the
+    // outer ring alone a quarter of the way round from each other and two of the middle one, each among the tallest of
+    // its ring, cover to hide behind and to lead him round; the inner ring goes entirely, and half the columns topple
+    // along the corridor. Each length of wall that falls tips outward over its foot in two pieces, and leaves a heap of
+    // rubble there and blocks thrown out across the floor. (Its own dice, ruinDice: the decoration's and the other sites'
+    // come out as they always have. A save with the Labyrinth broken loads into this: save.js breaks it as it is built now.)
+    const RU = this.ruinOf('labyrinth', ctx), STANDS = { 22: [4, 9, 13, 17], 15: [0, 8], 9: [] }, FALLS = (R, i) => !STANDS[R].includes(i);
     const into = (list, fn) => { const keep = this.solids; this.solids = list; fn(); this.solids = keep; }, lump = (x, z, r, h = 0.9) => { const p = this.w(ctx, x, z); RU.rubble.push({ x: p.x, z: p.z, r, y: p.y, h }); };
     for (const [R, gap, ruin] of [[22, 0.3, 0.45], [15, 2.1, 0.35], [9, 4.2, 0.25]]) {
       const n = Math.ceil(R * 0.9), hs = [], q = (a) => (Q[R + ':' + Math.floor(a / (Math.PI / 2)) % 4] ||= []), segs = [];
@@ -955,7 +965,7 @@ export class Structures {
         for (let b = 0; b < 6; b++) { const d = (k) => ruinDice(R * 17 + i * 7 + b * 3 + k), t = d(0), o = 0.7 + d(1) * (b < 5 ? 2.6 : 5.5), x = x0 + (x1 - x0) * t + nx * o, z = z0 + (z1 - z0) * t + nz * o, s = 0.7 + d(2) * 0.6, tip = (d(3) - 0.5) * 1.2, rot = d(4) * 6.3;
           const bits = pack ? piece('plWall', 0, -0.3 * s, 0, 0, [0.22 * s, 0.24 * s, 0.6 * s]) : [[uvBox(1.1 * s, 0.8 * s, 0.6 * s).translate(0, 0.1 * s, 0), SMAT.stone]];
           RU.debris.push(...bits.map(([g, m]) => [g.rotateZ(tip).rotateX(tip * 0.6).rotateY(rot).translate(x, 0.05 + d(5) * 0.25 * (b < 5 ? 1 : 0), z), m]));
-          if (b % 2 === 0) lump(x, z, 0.75 * s); } });
+          if (b === 0) lump(x, z, 0.75 * s); } });   // (one block of each heap stops you, where three did: with nearly every wall down, the floor stays open to run on)
     }
     for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2 + 0.3, x = Math.cos(a) * 18.5, z = Math.sin(a) * 18.5, topple = [0, 3, 5, 6, 9].includes(i);
       // (one that topples falls along the corridor, its foot rolling over its edge, and lies across it)
@@ -1006,6 +1016,14 @@ export class Structures {
     }
     for (const list of Object.values(Q)) for (const m of mergeByMat(list)) ctx.grp.add(m);
     this.crater(RU, [0, -7], 23.4, 9091);
+    // Cover for the fight: seven great boulders in a ring round the arena, 26 to 36 m out on the open ground past its wall,
+    // spaced round it (none in the way to the gate), each a body or two across and twice your height or more, to put
+    // between you and him: he must walk round them (creatures/nav.js), and all his moves but the roar need a clear line
+    // to you (trial.js). (Dice of their own, ruinDice's from 7000: nothing else on the island moves.)
+    const door = (gaps[22][0][0] + gaps[22][0][1]) / 2, cover = [];
+    for (let i = 0; i < 7; i++) { const d = (k) => ruinDice(7000 + i * 7 + k), a = door + ((i + 0.5) / 7) * Math.PI * 2 + (d(0) - 0.5) * 0.35, R = 26 + d(1) * 10;
+      cover.push([[0, 2, 3][i % 3], Math.cos(a) * R, Math.sin(a) * R, 2.3 + d(2) * 0.5, d(3) * 6.283]); }
+    this.boulders(ctx, cover);
     this.finishRuin(RU);
     this.lab = { c: this.w(ctx, 0, 0), gaps };
     this.labyrinthCtx = ctx; this.finish(ctx, { r: 23.5 });
@@ -1396,6 +1414,19 @@ export class Structures {
     }
     ctx.grp.add(new THREE.Group().add(g));
   }
+  // Great boulders at a site, the world's own (the vegetation's boulder, in its stone: rock.js), each [variant, x, z, size,
+  // turn]: s times the boulder's size and a tenth taller, sunk to the lowest ground under it, and solid as high as it
+  // stands (the camera goes over one lower than it, occlusion.js). One instanced mesh for each variant.
+  boulders(ctx, list) {
+    const by = new Map(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3();
+    for (const [v, x, z, s, rot] of list) {
+      let y = Infinity; for (const [ox, oz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) { const w = this.w(ctx, x + ox * s * 0.8, z + oz * s * 0.8); y = Math.min(y, heightAt(w.x, w.z) - ctx.s.y); }
+      const P = propGeo('boulder', v); P.geo.boundingBox || P.geo.computeBoundingBox();
+      (by.get(v) || by.set(v, []).get(v)).push(new THREE.Matrix4().compose(p.set(x, y, z), q.setFromEuler(e.set(0, rot, 0)), sc.set(s, s * 1.1, s)));
+      this.solid(ctx, x, z, 0.95 * s, P.geo.boundingBox.max.y * s * 1.1, y);
+    }
+    for (const [v, ms] of by) { const P = propGeo('boulder', v), m = new THREE.InstancedMesh(P.geo, P.mat || propMat, ms.length); ms.forEach((mm, i) => m.setMatrixAt(i, mm)); m.castShadow = m.receiveShadow = true; m.computeBoundingSphere(); ctx.grp.add(m); }
+  }
   // a tree or bush from the vegetation set, standing at a site (drawn at any distance, unlike the streamed ones)
   plant(ctx, name, v, x, y, z, sc = 1) {
     const pg = propGeo(name, v), g = new THREE.Group(), I = new THREE.Matrix4();
@@ -1439,12 +1470,12 @@ function offeringFire(grp, x, y, z, seed, tint = 0xd6d1c8) {
     tex: (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');   // (a few soft blobs together: a puff, not a ball)
       for (const [bx, by, br] of [[32, 34, 26], [22, 28, 16], [42, 26, 15], [30, 20, 14]]) { const gr = g.createRadialGradient(bx, by, 0, bx, by, br); gr.addColorStop(0, 'rgba(255,255,255,.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); }
       return new THREE.CanvasTexture(c); })(),
-    core: new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }),
+    core: pixelate(new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }), 'flame'),
   };
   const core = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.26, 7, 1, true).translate(0, 0.13, 0), SMOKE.core); core.position.set(x, y, z); grp.add(core);
   const N = 18, RISE = 9, H = 6, drift = seed * 2.4;   // (a puff takes RISE seconds to climb H metres)
   for (let k = 0; k < N; k++) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: SMOKE.tex, color: tint, transparent: true, opacity: 0, depthWrite: false, rotation: k * 2.3 }));
+    const sp = new THREE.Sprite(pixelSprite(new THREE.SpriteMaterial({ map: SMOKE.tex, color: tint, transparent: true, opacity: 0, depthWrite: false, rotation: k * 2.3 })));   // (in texels: render/pixel.js)
     sp.frustumCulled = false; sp.renderOrder = 3; grp.add(sp);
     sp.onBeforeRender = () => {
       const t = performance.now() / 1000, u = (t / RISE + k / N) % 1, lean = u * u * 1.1;
