@@ -19,6 +19,7 @@ const QUAD = new Set(['deer', 'fox', 'rabbit', 'hog', 'chimera']);   // bodies t
 import { makeBody, preloadBodies } from './models.js';
 import { burst, dust, addShake } from '../render/fx.js';
 import { camera } from '../render/core.js';
+import { stepFx, clawFx } from '../render/bossblows.js';
 import { stormWallDepth } from '../world/stormwall.js';
 import { waterAt } from '../world/river.js';
 import { icon } from '../ui/icons.js';
@@ -271,6 +272,7 @@ export class Creatures {
       if (c.rise > 0) { c.rise -= dt; const k = 1 - Math.max(0, c.rise) / RISE; c.ctl = c.rise > 0 ? { want: 0, face: Math.atan2(pp.x - c.pos.x, pp.z - c.pos.z), air: -T.h * 1.05 * (1 - k) ** 1.6 } : null; special = c.rise > 0 ? 'rise' : null;
         if (Math.random() < dt * 10 * (1 - k * 0.6)) { const a = Math.random() * 6.283, p = c.pos.clone(); p.x += Math.cos(a) * 0.4; p.z += Math.sin(a) * 0.4; p.y = this.groundAt(p.x, p.z, p.y) + 0.1; burst(p, { color: 0x5e4c3a, n: 3, speed: 2, size: 0.09, up: 3.5 }); if (Math.random() < 0.4) dust(p, 2, 0x7a6a56, 0.3); } }
       // a boss move in progress steers: its own speed and heading (snapped for a leap), how fast it may turn and gather or
+            if (c.boss) clawFx(c, fall.clone().setY(c.pos.y + 0.2));   // (a boss's common blow, the Chimera's claws: their tears through the air, bossblows.js)
       // shed speed, or a leap through the air
       const ctl = c.ctl; if (ctl) { want = ctl.want; if (ctl.face !== undefined) face = ctl.face; if (ctl.snap) c.yaw = face; if (ctl.want === 0 && !c.boss) c.speed *= 0.8; }
       // (a boss that found itself stuck walks off the way that's open for a moment: unstick)
@@ -381,7 +383,7 @@ export class Creatures {
   stomp(c, p) {
     const near = Math.max(0, 1 - c.pos.distanceTo(this.g.player.pos) / 50), k = c.T.size / 3.3;
     this.g.sound?.('giantStep', { at: p, k }); if (near > 0) addShake(0.42 * near * near * k);
-    dust(p.setY(Math.max(p.y, c.pos.y) + 0.1), 2, 0x7a6c5c, 0.35 * k);
+    dust(p.setY(Math.max(p.y, c.pos.y) + 0.1), 2, 0x7a6c5c, 0.35 * k); stepFx(p, k);   // (a puff of dust round the foot and grit thrown up: bossblows.js)
   }
   // what a creature stands on: the ground, or a floor or a site's steps within reach
   groundAt(x, z, y) { const g = this.g; return Math.max(groundAt(x, z), g.build?.floorAt(x, z, y) ?? -1e9, g.structures?.floorAt(x, z, y) ?? -1e9); }

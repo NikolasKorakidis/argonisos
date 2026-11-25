@@ -45,6 +45,7 @@ const same = (a, b) => !!a && !!b && (AUDIO.music[a]?.same || a) === (AUDIO.musi
 const current = () => MUSIC.playing.find((p) => !p.out) || null;
 
 // (vol: its level, the lands' own under the rest; land: the land it's the music of, for the director)
+const BOSS_VOL = 1.2;   // (the bosses' tracks a fifth louder than the others: the user, 25 Nov)
 function start(key, { loop = false, fade = FADE, vol = LAND.includes(key) ? LAND_VOL : 1, land } = {}) {
   const o = AUDIO.musicOut(), meta = AUDIO.music[key]; if (!o || !meta || meta.play === false) return false;
   for (const p of MUSIC.playing) stop(p, fade);
@@ -107,7 +108,7 @@ export function updateMusic(dt, g) {
   // a boss fight
   const boss = g.trial?.boss, kind = boss && !boss.dead && !g.trial.away ? g.trial.bossKind : g.trial?.calling, bk = kind ? (kind === 'chimera' ? 'bossChimera' : 'bossMinotaur') : null;
   setFight(bk ? 1 : 0);
-  if (bk) { if (cur?.key !== bk) start(bk, { loop: true, fade: 2 }); return; }
+  if (bk) { if (cur?.key !== bk) start(bk, { loop: true, fade: 2, vol: BOSS_VOL }); return; }   // (a fifth louder than the rest: the user, 25 Nov)
   if (cur?.key.startsWith('boss')) { stop(cur, 4); MUSIC.quiet = rnd(...QUIET); MUSIC.rest = 10; return; }   // (a few seconds' hush for the beast fallen)
   // the story: a new trial begins; the owl's first talk
   if (!D.begun) { D.begun = true; if (!g.loaded) { start('story'); return; } MUSIC.quiet = 90; }

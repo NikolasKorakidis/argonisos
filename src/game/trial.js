@@ -16,9 +16,10 @@ import { ITEMS } from './items.js';
 import { icon } from '../ui/icons.js';
 import { dust, burst, addShake, punch, rumble, pillar, blast, slowMo, spark, ring, mark, cracks } from '../render/fx.js';
 import { bossAura, dissolve, dissolving, updateBossFx } from '../render/bossfx.js';
+import * as FX from '../render/bossblows.js';
 import { askLight } from '../render/lights.js';
 import { setWeather, gatherStorm, breakStorm } from '../world/weather.js';
-import { strike } from '../world/lightning.js';
+import { strike, skyStrike, LIGHTNING } from '../world/lightning.js';
 import { daze } from '../audio/sound.js';
 import { hit } from '../input.js';
 import { clamp, rr } from '../util/math.js';
@@ -107,7 +108,7 @@ function skyBeam(scene, at) {
 export class Trial {
   constructor(g) {
     this.g = g; const st = (g.S.trial ||= { scraps: [], carvings: [], revealed: {}, down: {}, offered: {}, prayDay: -1, looted: [], power: null, powerCd: 0, guards: {}, olympos: false });
-    this.st = st; this.boss = null; this.helperT = 0; this.bolts = []; this.marks = [];
+    this.st = st; this.boss = null; this.helperT = 0; this.bolts = []; this.marks = []; this.lit = [];
     const bar = document.createElement('div'); bar.id = 'bossBar'; bar.className = 'hidden'; bar.innerHTML = '<div class="bn"></div><div class="bb"><i></i></div>'; document.getElementById('hud').appendChild(bar); this.bar = bar;
     const pw = document.createElement('div'); pw.id = 'power'; pw.className = 'hidden'; document.getElementById('hud').appendChild(pw); this.pw = pw;
     g.onKill = (c) => this.onKill(c);
@@ -246,16 +247,19 @@ export class Trial {
   // the fight over without the kill (you fell): the beast gone, its help and its bolts with it, the sky clearing, the
   // tribute left on the altar
   end() { const c = this.boss; this.healBar(false); this.unspend(c); this.calm(); this.g.creatures.remove(c); this.boss = null; this.away = false; this.bar.classList.add('hidden'); setWeather(null); this.unpaid(); bossAura(null); }
-  // A fight on, as the owl and the music hear it (owl.js keeps quiet through it): a beast on its way or fighting, unless
-  // you're out of its reach (away), and its end until its ashes have blown away (presence)
-  get fighting() { return !!this.calling || !!this.arrival || (!!this.boss && !this.boss.dead && !this.away) || !!this.dying; }
+  // A fight on, as the owl hears it (owl.js keeps quiet through it): a beast on its way or fighting, even while you're out
+  // of its reach (the user, 25 Nov: she waits until it's dead), and its end until its ashes have blown away (presence)
+  get fighting() { return !!this.calling || !!this.arrival || (!!this.boss && !this.boss.dead) || !!this.dying; }
   // a wave of help: two of the boss's helpers rising at the arena's edge, not right beside you, and the next in 30 seconds
   help(c) {
-    const g = this.g, P = g.player.pos; this.helperT = 30; this.waves++;
+    const g = this.g, P = g.player.pos, risen = []; this.helperT = 30; this.waves++;
     for (let i = 0; i < 2; i++) {
       let x = 0, z = 0; for (let k = 0; k < 8; k++) { const a = Math.random() * 6.28; x = c.arena.x + Math.cos(a) * 14; z = c.arena.z + Math.sin(a) * 14; if (Math.hypot(x - P.x, z - P.z) > 6) break; }
-      const h = g.creatures.spawn(c.T.helpers, x, z, { summoned: true, aware: true }); h.state = 'chase'; dust(h.pos.clone().setY(h.pos.y + 0.5), 14, 0x8a7a68, 0.5);
+      const h = g.creatures.spawn(c.T.helpers, x, z, { summoned: true, aware: true }); h.state = 'chase'; dust(h.pos.clone().setY(h.pos.y + 0.5), 14, 0x8a7a68, 0.5); risen.push(h.pos.clone());
+      if (c.T.helpers === 'skeleton') FX.riseFx(h.pos.clone());   // (grave-light as the dead claw their way up)
     }
+    // (the Chimera's goat head casts its spell: signs flaring on the ground round it, its light streaming off to the forest's own)
+    if (c.T.helpers === 'dryad') { const back = c.body.point?.('spine3')?.add(new THREE.Vector3(0, 2.5, 0)) || c.pos.clone().setY(c.pos.y + c.T.h); FX.goatSpellFx(back, c.pos.clone(), risen); g.sound?.('goatSpell', { at: back }); }
     g.hud.toast(c.T.helpers === 'skeleton' ? 'The dead of the Labyrinth rise to fight for their master' : 'Dryads answer the Chimera\'s call');
   }
   onKill(c) {
@@ -381,6 +385,7 @@ export class Trial {
         const R = m.bellow ? MOVE.roar.shove : MOVE.roar.r; c.ctl = { want: 0, face: m.e < m.hit - 0.4 ? toP : undefined };
         if (!m.warned) { m.warned = true; if (!m.bellow) ring(at(0.1), { reach: R, grow: false, time: m.hit, k: 0.35, color: 0xff9a50 }); }   // (the reach of it shown on the ground as he draws breath)
         if (!m.done && m.e >= m.hit) { m.done = true; g.sound?.('roar', { boss: true, long: m.enrage, at: c.pos }); addShake(m.enrage ? 1 : 0.75); dust(at(1), 18, 0x8a7a64, 0.9); g.flashSky?.(m.enrage ? 0.4 : 0);
+          FX.roarFx(c.body.point?.(BOSS_HEAD[c.type]) || at(T.h * 0.85), fwd(), m.enrage);   // (his breath steaming out, embers blown off him)
           ring(at(0.1), { reach: R, time: MOVE.roar.ring, k: 1 }); ring(at(0.1), { reach: R * 0.8, time: MOVE.roar.ring * 1.3, k: 0.5 }); }
         if (m.done && m.e - m.hit < MOVE.roar.ring) { const u = (m.e - m.hit) / MOVE.roar.ring, r = R * (1 - (1 - u) ** 2);   // (the dust the wave throws up as it races out)
           for (let i = 0; i < 7; i++) { const a = Math.random() * 6.283; dust(new THREE.Vector3(c.pos.x + Math.cos(a) * r, c.pos.y + 0.4, c.pos.z + Math.sin(a) * r), 1, 0x9a8a74, 0.7 + 0.5 * (1 - u)); } }
@@ -401,7 +406,7 @@ export class Trial {
         if (!m.mark) m.mark = mark(aim(), { r: 1, color: 0xff5a28 }); if (!m.hit0) { if (!lock) m.mark.m.position.copy(aim()).setY(c.pos.y + 0.12); m.mark.set(Math.min(1, m.e / m.hit) * 0.8, C.core * Math.min(1, 0.4 + m.e / m.hit)); }
         if (!m.hit0 && m.e >= m.hit) { m.hit0 = true; m.mark.done(); const ax = c.body.point?.('axe'), p = ax && ax.distanceTo(c.pos) < C.ahead * 1.6 ? ax.setY(c.pos.y + 0.2) : aim();
           ring(p, { reach: C.r, time: 0.45 }); cracks(p, { r: C.core * 2.2 }); for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; dust(p.clone().add(new THREE.Vector3(Math.cos(a) * 6, 0, Math.sin(a) * 6)), 2, 0x7a6c5c, 0.8); }
-          burst(p.clone().setY(p.y + 0.5), { color: 0x7d7062, n: 34, speed: 9, size: 0.3, life: 1.8, grav: 16, up: 8 }); spark(p.clone().setY(p.y + 0.4), 12); const k0 = near(p, 40);
+          burst(p.clone().setY(p.y + 0.5), { color: 0x7d7062, n: 34, speed: 9, size: 0.3, life: 1.8, grav: 16, up: 8 }); spark(p.clone().setY(p.y + 0.4), 12); const k0 = near(p, 40); FX.slamFx(p);
           addShake(0.5 + 0.5 * k0); punch(Math.max(0.35, k0), { x: P.pos.x - p.x, z: P.pos.z - p.z }); g.sound?.('slam', { at: p, big: true });
           // (the wave's force falls off from where the blade bit: all of it within core, a quarter at its edge; jump it and it passes under you)
           const dd = Math.hypot(P.pos.x - p.x, P.pos.z - p.z); if (dd < C.r && P.onGround !== false) { const k = dd < C.core ? 1 : 1 - 0.75 * (dd - C.core) / (C.r - C.core); g.combat.hitPlayer(c, [C.dmg[0] * k, C.dmg[1] * k, C.dmg[2]], { from: p }); } }
@@ -411,6 +416,7 @@ export class Trial {
       }
       case 'sweep': {   // the labrys drawn back and swung flat across in front of him at a man's height: roll back out of it, or duck (sneak) and it passes over you
         const C = MOVE.sweep; c.ctl = { want: 0, face: m.e < m.hit - 0.5 ? toP : undefined, turn: 0.7 };
+        if (!m.arc && m.e >= m.hit - 0.12) { m.arc = true; FX.sweepFx(c, C.reach, C.arc); g.sound?.('bossSwing', { at: at(2).addScaledVector(fwd(), 5) }); }   // (the labrys's arc through the air, drawn as it swings)
         if (!m.hit0 && m.e >= m.hit) { m.hit0 = true; const inArc = d < C.reach + T.r * 0.3 && Math.abs(angDiff(toP, c.yaw)) < C.arc;
           dust(at(0.3).addScaledVector(fwd(), C.reach * 0.6), 8, 0x8a7a64, 0.6); g.sound?.('slam', { at: at(2).addScaledVector(fwd(), 5) });
           if (inArc && !P.dead) { if (P.sneaking) { if (!this.duckTold) { this.duckTold = true; g.hud.toast('You duck under the labrys'); } } else g.combat.hitPlayer(c, T.dmg); } }
@@ -419,7 +425,7 @@ export class Trial {
       case 'throw': {  // tears up a block of the ruin and hurls it, from his free hand as the swing comes forward; its shadow shows where it will come down
         c.ctl = { want: 0, face: m.e < m.hit ? toP : undefined };
         if (!m.rock) { m.rock = new THREE.Mesh(ROCK_GEO, ROCK_MAT); m.rock.castShadow = true; m.rock.userData.nearShadow = true; g.scene.add(m.rock); }
-        if (!m.hit0) { const h = c.body.point?.('LeftHand'); if (h) m.rock.position.copy(h); m.rock.scale.setScalar(Math.min(1, m.e / (m.hit * 0.6))); }
+        if (!m.hit0) { const h = c.body.point?.('LeftHand'); if (h) m.rock.position.copy(h); m.rock.scale.setScalar(Math.min(1, m.e / (m.hit * 0.6))); if (Math.random() < dt * 25) FX.rockCrumbs(m.rock.position); }   // (earth falling off it)
         if (!m.hit0 && m.e >= m.hit) { m.hit0 = true; g.scene.remove(m.rock); const t = g.combat.throwAt(c, [24, 34, 'blunt'], { rock: true, size: MOVE.throw.size, from: c.body.point?.('LeftHand') }); g.sound?.('boulder', { at: c.pos });
           const to = P.pos.clone(); to.y = this.g.creatures.groundAt(to.x, to.z, to.y); this.marks.push({ h: mark(to, { r: 0.6, shadow: true, life: 8 }), t, from: t.m.position.distanceTo(to) }); }
         return m.e >= m.dur ? over(true) : 'throw';
@@ -435,13 +441,13 @@ export class Trial {
         if (m.ph === 1) {   // the charge: gathering speed over a few strides to its top, turning less and less as it goes (and not at all once you're past his shoulder)
           m.run += dt; const top = C.top[en]; m.v = Math.min(top, m.v + C.acc * dt);
           const lim = C.turn[0] + (C.turn[1] - C.turn[0]) * (m.v / top), off = angDiff(toP, m.dir); if (Math.abs(off) < 1.3) m.dir += clamp(off, -lim * dt, lim * dt);
-          c.ctl = { want: m.v, face: m.dir, turn: 4, acc: 99, dec: 99 };
+          c.ctl = { want: m.v, face: m.dir, turn: 4, acc: 99, dec: 99 }; FX.chargeFx(c, m.v, dt);
           const dx = P.pos.x - c.pos.x, dz = P.pos.z - c.pos.z, ahead = dx * Math.sin(m.dir) + dz * Math.cos(m.dir), side = Math.abs(dx * Math.cos(m.dir) - dz * Math.sin(m.dir));
           if (!m.gored && !P.dead && m.v > 4 && ahead > -1 && ahead < T.r + C.horns && side < T.r * 0.5 + C.wide) { const r = g.combat.hitPlayer(c, C.dmg); if (r !== 'dodged') m.gored = true; }   // (the ram's gore: docs/plans/balance.md)
           const wall = g.colliders.pick(c.pos.x, c.pos.z, Math.sin(m.dir), Math.cos(m.dir), T.r + 1.2, SOLID);
           if (m.run > 0.25 && (wall || c.stuck > 0.2)) {   // straight into a wall: a crash you feel, stones flying, and he reels, dazed
             const p = at(3).addScaledVector(fwd(), T.r + 0.5), k0 = near(c.pos);
-            m.ph = 2; m.t = 1.1; addShake(0.6 + 0.4 * k0); punch(0.9 * k0 + 0.2, { x: P.pos.x - p.x, z: P.pos.z - p.z }); g.sound?.('slam', { at: p, big: true }); g.sound?.('collapse', { at: p, k: 1.2 }); dust(p, 20, 0x7a6c5c, 1.1); burst(p, { color: 0x8f8678, n: 36, speed: 9, size: 0.35, grav: 14, up: 6 }); spark(p, 10);
+            m.ph = 2; m.t = 1.1; FX.crashFx(p, at(0.1).addScaledVector(fwd(), T.r)); addShake(0.6 + 0.4 * k0); punch(0.9 * k0 + 0.2, { x: P.pos.x - p.x, z: P.pos.z - p.z }); g.sound?.('slam', { at: p, big: true }); g.sound?.('collapse', { at: p, k: 1.2 }); dust(p, 20, 0x7a6c5c, 1.1); burst(p, { color: 0x8f8678, n: 36, speed: 9, size: 0.35, grav: 14, up: 6 }); spark(p, 10);
             return 'dazed';
           }
           // (past you, or run out: he digs his hooves in and skids)
@@ -450,7 +456,7 @@ export class Trial {
         if (m.ph === 2) { c.ctl = { want: 0, dec: 30 }; if (m.t > 0) return 'dazed'; c.move = { k: 'tired', ph: 0, wall: true, ...this.timed(c, 'tired', MOVE.tired.wall[en]) }; return this.runMove(c, c.move, 0, d, toP); }   // (then spent, open to your blows)
         m.e3 += dt;
         if (m.ph === 3) {   // skidding to a stop, ploughing up the ground, then turning round
-          c.ctl = { want: 0, face: m.dir, dec: C.skid, turn: 0.2 }; if (Math.random() < dt * 14 * Math.min(1, c.speed / 4)) { const p = at(0.2).addScaledVector(fwd(), T.r * 0.3); p.x += (Math.random() - 0.5) * T.r; dust(p, 3, 0x8a7a64, 0.8); burst(p, { color: 0x6e604e, n: 3, speed: 2, size: 0.15, up: 2.5 }); }
+          c.ctl = { want: 0, face: m.dir, dec: C.skid, turn: 0.2 }; if (c.speed > 1) FX.chargeFx(c, c.speed, dt); if (Math.random() < dt * 14 * Math.min(1, c.speed / 4)) { const p = at(0.2).addScaledVector(fwd(), T.r * 0.3); p.x += (Math.random() - 0.5) * T.r; dust(p, 3, 0x8a7a64, 0.8); burst(p, { color: 0x6e604e, n: 3, speed: 2, size: 0.15, up: 2.5 }); }
           if (c.speed < 0.6) { c.ctl.face = toP; c.ctl.turn = 1.1; if (Math.abs(angDiff(toP, c.yaw)) < 0.5 || m.e3 > 4.5) { m.ph = 4; m.t = C.pant; m.breath = 0; } } return c.speed > 1.5 ? 'run' : 'chase';
         }
         c.ctl = { want: 0, face: toP, turn: 0.4 }; if (m.e3 > (m.breath || 0)) { m.breath = m.e3 + 1.5; g.sound?.('pant', { at: c.body.point?.('Head') || at(8), k: 0.8 }); }   // (panting a moment before he comes on)
@@ -469,7 +475,9 @@ export class Trial {
         if (!m.hit0 && m.e >= m.hit) { m.hit0 = true;
           // (the venom only if the sting went in: not rolled clear of, not taken on the guard)
           if (m.k === 'sting' && d < 14) { if (landed(g.combat.hitPlayer(c, [52, 72, 'pierce']))) P.stats.add('poisoned', 6); } else if (m.k === 'claw' && d < T.reach + 1.5 && Math.abs(angDiff(toP, c.yaw)) < 1) g.combat.hitPlayer(c, [22, 32, 'slash']);
-          const paw = c.body.point?.(m.k === 'sting' ? 'tail11' : 'Leg_R_F5'); if (paw) { dust(paw.setY(c.pos.y + 0.2), 6, 0x7a6c5c, 0.8); g.sound?.('slam', { at: paw, big: true }); } }
+          const paw = c.body.point?.(m.k === 'sting' ? 'tail11' : 'Leg_R_F5'); if (paw) { if (m.k === 'sting') FX.stingFx(paw.clone(), d < 14 ? P.pos.clone().setY(P.pos.y + 1) : paw.clone().addScaledVector(fwd(), -6)); else FX.clawFx(c, paw.clone().setY(c.pos.y + 0.2));
+            dust(paw.setY(c.pos.y + 0.2), 6, 0x7a6c5c, 0.8); g.sound?.('slam', { at: paw, big: true }); } }
+        if (!m.swung && m.e >= m.hit - 0.3) { m.swung = true; g.sound?.(m.k === 'sting' ? 'sting' : 'bossSwing', { at: c.body.point?.(m.k === 'sting' ? 'tail11' : 'Leg_R_F5') || c.pos }); }
         return m.e >= m.dur ? over(false) : m.k;
       case 'breath':   // fire from the lion's mouth, swept slowly after you, once its head is down (the clip held there)
         if (m.ph === 0) { c.ctl = { want: 0, face: toP }; if (m.t <= 0) { m.ph = 1; m.t = 1.5; g.sound?.('breath', { at: c.body.point?.('mouth') || c.pos }); } return 'breath'; }
@@ -477,16 +485,19 @@ export class Trial {
         // (the fire a cone from the lion's jaws, as long and as wide as the beast is big: a stream of flame and embers
         // reaching out 24 m and spreading as it goes, its light on the ground)
         { const f = fwd(), mouth = c.body.point?.('mouth')?.addScaledVector(f, 1.5) || at(T.h * 0.62).addScaledVector(f, T.body?.[1] ?? T.r + 1.2);
-          for (let i = 0; i < 5; i++) { const s = Math.random(); burst(mouth.clone().addScaledVector(f, s * 20).add(new THREE.Vector3((Math.random() - 0.5) * s * 8, -s * (mouth.y - c.pos.y) * 0.75, (Math.random() - 0.5) * s * 8)), { color: Math.random() < 0.5 ? 0xff7a20 : 0xffc040, n: 4, speed: 4 + s * 6, size: 0.25 + s * 0.6, grav: -2, life: 0.5, glow: Math.random() < 0.3 }); }
+          // (the flame itself on the GPU, bossblows.js: a white-hot core, rolling flame, black smoke, embers; where it meets
+          // the ground it flares and leaves the ground scorched)
+          const gp = mouth.clone().addScaledVector(f, rr(12, 22)); gp.y = g.creatures.groundAt(gp.x, gp.z, c.pos.y + 2); FX.breathFx(mouth, f, dt, gp);
+          m.burn = (m.burn || 0) - dt; if (m.burn <= 0) { m.burn = 0.3; FX.scorch(gp, { r: rr(1.8, 2.8), life: 12, glow: 4 }); }
           askLight(mouth.clone().addScaledVector(f, 8), 40, 30, 0xff8a30, undefined, false);
           m.tick = (m.tick || 0) - dt;
           if (m.tick <= 0) { m.tick = 0.25; if (d < 26 && Math.abs(angDiff(toP, c.yaw)) < 0.45 && landed(g.combat.hitPlayer(c, [9, 13, 'fire']))) P.stats.add('burning', 3); } }
         return m.t <= 0 ? over(true) : 'breath';
       case 'pounce':   // crouched to spring, its landing glowing on the ground under you, then the leap
-        if (m.ph === 0) { c.ctl = { want: 0, face: toP }; m.to = P.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(toP), 0, Math.cos(toP)), -5); m.mark ||= mark(m.to, { r: T.r + 4.5, color: 0xff6a30 }); m.mark.m.position.set(m.to.x, this.g.creatures.groundAt(m.to.x, m.to.z, m.to.y) + 0.12, m.to.z); m.mark.set(Math.min(1, m.e / m.hit) * 0.7);
-          if (m.t <= 0) { m.ph = 1; m.t = 1; m.from = c.pos.clone(); g.sound?.('roar', { boss: true, at: c.pos }); } return 'crouch'; }
+        if (m.ph === 0) { FX.crouchFx(c); c.ctl = { want: 0, face: toP }; m.to = P.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(toP), 0, Math.cos(toP)), -5); m.mark ||= mark(m.to, { r: T.r + 4.5, color: 0xff6a30 }); m.mark.m.position.set(m.to.x, this.g.creatures.groundAt(m.to.x, m.to.z, m.to.y) + 0.12, m.to.z); m.mark.set(Math.min(1, m.e / m.hit) * 0.7);
+          if (m.t <= 0) { m.ph = 1; m.t = 1; m.from = c.pos.clone(); g.sound?.('roar', { boss: true, at: c.pos }); FX.leapFx(at(0.1)); } return 'crouch'; }
         if (m.ph === 1) { const k = 1 - Math.max(0, m.t) / 1; c.ctl = { want: 0, face: Math.atan2(m.to.x - m.from.x, m.to.z - m.from.z), snap: true, at: m.from.clone().lerp(m.to, k), air: Math.sin(k * Math.PI) * 6 };
-          if (m.t <= 0) { const k0 = near(c.pos); m.ph = 2; m.t = 0.5; m.mark.done(); ring(at(0.1), { reach: T.r + 8, time: 0.4 }); addShake(0.6 + 0.4 * k0); punch(0.9 * k0, { x: P.pos.x - c.pos.x, z: P.pos.z - c.pos.z }); g.sound?.('slam', { at: c.pos, big: true }); dust(at(0.2), 20, 0x7a6c5c, 1.1);
+          if (m.t <= 0) { const k0 = near(c.pos); m.ph = 2; m.t = 0.5; m.mark.done(); ring(at(0.1), { reach: T.r + 8, time: 0.4 }); FX.landFx(at(0.1), T.r + 8); addShake(0.6 + 0.4 * k0); punch(0.9 * k0, { x: P.pos.x - c.pos.x, z: P.pos.z - c.pos.z }); g.sound?.('slam', { at: c.pos, big: true }); dust(at(0.2), 20, 0x7a6c5c, 1.1);
             if (P.pos.distanceTo(c.pos) < T.r + 4.5) g.combat.hitPlayer(c, [40, 50, 'slash']); } return 'leap'; }
         c.ctl = { want: 0 }; return m.t <= 0 ? over(true) : 'leap';
     }
@@ -502,7 +513,7 @@ export class Trial {
     if (c.gone && !E.did.bolt) { this.dying = null; return; }   // (its body taken away first: a test clearing the arena)
     if (!E.did.bolt && E.t > END.lie) { E.did.bolt = true;
       const head = c.body.point?.(BOSS_HEAD[c.type]) || c.pos.clone().setY(c.pos.y + c.T.h * 0.3); E.at = head; E.ground = c.pos.clone();
-      strike({ at: head.clone().add(new THREE.Vector3(rr(-12, 12), 190, rr(-12, 12))), ground: head, light: 2, big: 2 });   // (not counted in struck: that's the fight's storm)
+      strike({ at: head.clone().add(new THREE.Vector3(rr(-12, 12), 190, rr(-12, 12))), ground: head, light: 1.6, big: 2 });   // (not counted in struck: that's the fight's storm)
       g.sound?.('bossEnd', { at: head }); g.flashSky(1); addShake(1); punch(1, { x: P.pos.x - c.pos.x, z: P.pos.z - c.pos.z }); slowMo(0.35, 0.5);
       ring(E.ground, { reach: c.type === 'chimera' ? 40 : 32, time: 1.1, k: 1 }); spark(head, 40); cracks(E.ground, { r: c.type === 'chimera' ? 12 : 8, life: 14 });
       E.bits = dissolve(c.body.obj, head, { n: c.type === 'chimera' ? 18000 : 14000, glowFor: END.glow });
@@ -525,6 +536,8 @@ export class Trial {
   storm(dt) {
     const c = this.boss, P = this.g.player; if (!c?.arena || c.dead || this.arrival) return;
     this.stormT = (this.stormT ?? 2) - dt;
+    // (and the sky over it alive with lightning between the bolts: flashes in the clouds and strikes far off, their thunder rolling round)
+    this.skyT = (this.skyT ?? 1) - dt; if (this.skyT <= 0) { this.skyT = rr(...(c.enraged ? [0.8, 2] : [1.4, 3.2])); skyStrike(0, Math.random() < 0.5); }
     if (this.stormT <= 0) {
       const en = c.enraged ? 1 : 0; this.stormT = rr(...STORM.every[en]);
       if (Math.random() < STORM.near[en] && !P.dead && !this.away && !P.stats.has('stunned')) { const a = Math.random() * 6.283, r = Math.random() * STORM.spread; this.bolt(P.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r))); }
@@ -538,14 +551,20 @@ export class Trial {
     for (let i = this.bolts.length - 1; i >= 0; i--) {
       const b = this.bolts[i]; b.t -= dt; if (b.h) b.h.set(Math.min(1, 1 - b.t / b.warn) * (0.65 + 0.35 * Math.sin(b.t * 40)));
       if (b.t > 0) continue; this.bolts.splice(i, 1); b.h?.done(); this.struck = (this.struck || 0) + 1;   // (struck: how many so far, for the tests)
-      strike({ at: b.p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 40, 190, (Math.random() - 0.5) * 40)), ground: b.p, light: 1.3, big: b.big });
-      spark(b.p.clone().setY(b.p.y + 0.4), 24); burst(b.p.clone().setY(b.p.y + 0.3), { color: 0x4a4038, n: 18, speed: 6, size: 0.18, up: 6 }); dust(b.p.clone().setY(b.p.y + 0.5), 8, 0x6a6a72, 0.6); cracks(b.p, { r: 2.6, life: 9 }); askLight(b.p.clone().setY(b.p.y + 3), 30, 25, 0xc8d8ff, undefined, false);
+      // (heavier than a storm's own (the user, 25 Nov): a brighter strike and a bigger crack, the ground blasted and left
+      // scorched with embers in it, smoke and embers rising off it a while, and a jolt if it's near you)
+      strike({ at: b.p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 40, 190, (Math.random() - 0.5) * 40)), ground: b.p, light: 1.8, big: b.big * 1.4 });
+      spark(b.p.clone().setY(b.p.y + 0.4), 24); burst(b.p.clone().setY(b.p.y + 0.3), { color: 0x4a4038, n: 18, speed: 6, size: 0.18, up: 6 }); dust(b.p.clone().setY(b.p.y + 0.5), 8, 0x6a6a72, 0.6); cracks(b.p, { r: 2.6, life: 9 });
+      FX.boltFx(b.p, b.big / 1.3); b.lit = 0.35; this.lit.push(b); g.sound?.('boltHit', { at: b.p });
+      { const dn = Math.hypot(P.pos.x - b.p.x, P.pos.z - b.p.z); if (dn < 30) { const k = 1 - dn / 30; punch(0.25 + 0.6 * k, { x: P.pos.x - b.p.x, z: P.pos.z - b.p.z }); addShake(0.5 * k); } }
       if (!b.warn) continue;   // (a far bolt, or the enrage's: lightning only)
       if (!P.dead && Math.hypot(P.pos.x - b.p.x, P.pos.z - b.p.z) < STORM.r) g.combat.hitPlayer({ pos: b.p, dmgK: 1, T: {}, body: {} }, STORM.dmg, { from: b.p });   // (the bolt as the blow's source)
       for (const k of g.creatures.list) if (!k.dead && (k.boss ? g.creatures.gap(k, b.p.x, b.p.z).d < k.T.r + STORM.r : k.pos.distanceTo(b.p) < STORM.r + k.T.r)) { g.creatures.hurt(k, [[k.boss ? k.T.bolt ?? STORM.boss : 999, 'force']], b.p); if (k.boss && !this.boltTold) { this.boltTold = true; g.hud.toast('Zeus\'s lightning strikes the beast!'); } }
     }
-    // (a thrown rock's shadow, growing as it comes down, gone when it lands)
-    for (let i = this.marks.length - 1; i >= 0; i--) { const q = this.marks[i]; if (!g.combat.thorns.includes(q.t)) { q.h.done(); this.marks.splice(i, 1); continue; } q.h.set(0.9, 0.6 + 2.2 * Math.max(0, 1 - q.t.m.position.distanceTo(q.h.m.position) / q.from)); }
+    // (the bolts' light on the ruin for a moment after they fall)
+    for (let i = this.lit.length - 1; i >= 0; i--) { const b = this.lit[i]; b.lit -= dt; if (b.lit <= 0) { this.lit.splice(i, 1); continue; } askLight(b.p.clone().setY(b.p.y + 3), 90 * b.lit / 0.35 * (LIGHTNING.soft ? 0.4 : 1), 40, 0xc8d8ff, undefined, false); }
+    // (a thrown rock's shadow, growing as it comes down, gone when it lands; its trail of grit, and the burst where it lands)
+    for (let i = this.marks.length - 1; i >= 0; i--) { const q = this.marks[i]; if (!g.combat.thorns.includes(q.t)) { FX.rockLandFx(q.h.m.position.clone()); q.h.done(); this.marks.splice(i, 1); continue; } FX.rockTrail(q.t.m.position); q.h.set(0.9, 0.6 + 2.2 * Math.max(0, 1 - q.t.m.position.distanceTo(q.h.m.position) / q.from)); }
   }
   // the fight over: no more bolts or marks waiting
   calm() { for (const b of this.bolts) b.h?.done(); for (const q of this.marks) q.h.done(); this.bolts = []; this.marks = []; this.stormT = 3; }

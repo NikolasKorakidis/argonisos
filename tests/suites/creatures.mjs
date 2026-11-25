@@ -3,6 +3,28 @@
 // fights at its broken shrine; a broken site stays broken through a save and a reload; animals tilt with the slope they
 // stand on.
 const SETUP = `localStorage.removeItem('argonisos.world.v1'); g.save = () => false; AG.S.peaceful = true; AG.setWeather('clear'); g.weatherRain = () => 0; g.owl.st.done.push('intro', 'night', 'house', 'temple'); g.owl.st.queue = []; g.owl.st.met = true; return true;`;
+// Each boss move forced in turn (k, its wind-up t, ready: when its effect is showing, extra: the move's own fields,
+// wait: frames after that for the picture): its effect's particles born (emit.js), and a picture of it, the game held
+// still. For each, the hero is set R metres in front of the beast and the free camera (main.js fly) put off to its side,
+// D metres out and up, looking at the ground between them, so the blow and what follows it are in view.
+const STAGE = (D) => `const c = g.trial.boss; if (!c) return 'no boss'; const f = new V(Math.sin(c.yaw), 0, Math.cos(c.yaw)), sd = new V(f.z, 0, -f.x), R = c.T.r + 16;
+  const px = c.pos.x + f.x * R, pz = c.pos.z + f.z * R; clearInterval(window._pin); P.spawn(px, pz); window._pin = setInterval(() => { P.pos.x = px; P.pos.z = pz; P.hv.set(0, 0, 0); P.stats.health = 99; }, 50);
+  const Q = c.pos.clone().addScaledVector(f, R * 0.4).setY(c.pos.y + c.T.h * 0.3); window._Q = Q; ${VIEW(D)}`;
+// the free camera D metres off to the side of the boss and up, looking down at it (for its death)
+const FLY = (D) => `{ const c = g.trial.boss, f = new V(Math.sin(c.yaw), 0, Math.cos(c.yaw)), sd = new V(f.z, 0, -f.x), Q = c.pos.clone().setY(c.pos.y + c.T.h * 0.3); ${VIEW(D)} }`;
+// (the camera put D metres from Q (and sd, f: the boss's side and heading), at the first of a few bearings round it, off its
+// side first, from which the land doesn't stand between it and Q (the Chimera's shrine is among hills))
+const VIEW = (D) => `let F = null, best = -1e9; for (const a of [0, 0.6, -0.6, 1.2, -1.2, 2, -2, 3.14]) { const dir = sd.clone().multiplyScalar(Math.cos(a)).addScaledVector(f, Math.sin(a) - 0.3).normalize(), Fc = Q.clone().addScaledVector(dir, ${D}).setY(Q.y + ${D} * 0.38);
+    Fc.y = Math.max(Fc.y, AG.heightAt(Fc.x, Fc.z) + 6); let clear = 1e9; for (let i = 1; i < 12; i++) { const p = Fc.clone().lerp(Q, i / 12); clear = Math.min(clear, p.y - AG.heightAt(p.x, p.z)); } if (clear > best + 0.5) { best = clear; F = Fc; } if (clear > 3) break; }
+  g.setFly(true); AG.fly.pos.copy(F); AG.fly.yaw = Math.atan2(F.x - Q.x, F.z - Q.z); AG.fly.pitch = -Math.atan2(F.y - Q.y, Math.hypot(F.x - Q.x, F.z - Q.z));`;
+async function fxTour(t, moves, D) {
+  for (const [k, w, ready, extra = '', n = 4] of moves) {
+    await t.step(`effect ${k}: particles born as the blow lands`, `const c0 = g.trial.boss; if (!c0) return 'no boss'; await until(() => !c0.move || c0.move.k === 'tired', 6000); ${STAGE(D)} const { EMIT } = await import('/src/render/emit.js'); await frames(3);
+      c.move = null; c.fatigue = 0; c.rest = 0; c.hitT = 0; c.intro = 0; const b0 = EMIT.born; c.move = { k: '${k}', ph: 0, ${extra} ...g.trial.timed(c, '${k}', ${w}) };
+      const ok = await until(() => { const m = c.move; return ${ready}; }, 8000); await frames(${n}); g.paused = true; await frames(2); return (ok && EMIT.born > b0) || JSON.stringify({ ok, born: EMIT.born - b0, move: c.move?.k, ph: c.move?.ph });`);
+    await t.shot(`fx-${k}`, { hud: false }); await t.eval('g.paused = false; return true;');
+  }
+}
 export default {
   name: 'Creatures and bosses',
   slow: true,
@@ -57,7 +79,7 @@ export default {
     // Running from the fight no longer ends it (the reviewer, 24 Nov): out of the arena's reach (105 m from its middle)
     // the fight waits, he walks back to it and heals 5% of his health a second (counted in the game's own time), no help
     // rises and his track goes quiet; back within it, he comes for you again
-    await t.step('leaving the arena: the fight goes on, he goes back to it and heals 5% a second, no help rises, his music goes quiet', `const c = g.trial.boss; if (!c) return 'no boss'; const a = c.arena, up = g.trial.update, storm = g.trial.storm; let T = 0;
+    await t.step('leaving the arena: the fight goes on, he goes back to it and heals 5% a second, no help rises, his music goes quiet, the owl still holds her tongue', `const c = g.trial.boss; if (!c) return 'no boss'; const a = c.arena, up = g.trial.update, storm = g.trial.storm; let T = 0;
       g.trial.update = function (dt) { T += dt; return up.call(this, dt); }; g.trial.storm = () => {};   // (no bolt to strike him while it's measured)
       c.hp = c.max * 0.6; const x = a.x + 125, z = a.z; P.spawn(x, z); const pin = setInterval(() => { P.pos.x = x; P.pos.z = z; P.hv.set(0, 0, 0); P.stats.health = 99; }, 50);
       const went = await until(() => g.trial.away, 4000), h0 = c.hp, T0 = T, w0 = g.trial.waves, d0 = Math.hypot(c.pos.x - a.x, c.pos.z - a.z); await sleep(3500);
@@ -65,7 +87,7 @@ export default {
         bar: g.trial.bar.querySelector('.bn').textContent, shown: !g.trial.bar.classList.contains('hidden'), track: AG.MUSIC.playing.find((p) => !p.out)?.key || null, fighting: g.trial.fighting };
       g.trial.update = up; await until(() => Math.hypot(c.pos.x - a.x, c.pos.z - a.z) < 12, 15000); r.home = +Math.hypot(c.pos.x - a.x, c.pos.z - a.z).toFixed(1); r.full = c.hp === c.max;   // (and he walks back towards his arena's middle, or stays if he's there: the altar and what walls still stand may hold him off it)
       clearInterval(pin); g.trial.storm = storm; window._away = r;
-      return (r.went && r.boss && r.fight === 'minotaur' && Math.abs(r.rate - 0.05) < 0.004 && r.secs > 1 && !r.waves && r.home <= Math.min(r.d0, 20) + 1 && /regaining/.test(r.bar) && r.shown && r.track !== 'bossMinotaur' && !r.fighting) || JSON.stringify(r);`);
+      return (r.went && r.boss && r.fight === 'minotaur' && Math.abs(r.rate - 0.05) < 0.004 && r.secs > 1 && !r.waves && r.home <= Math.min(r.d0, 20) + 1 && /regaining/.test(r.bar) && r.shown && r.track !== 'bossMinotaur' && r.fighting) || JSON.stringify(r);`);
     await t.step('…and coming back in, the fight simply goes on: he comes for you again', `const c = g.trial.boss; if (!c) return 'no boss'; const a = c.arena; P.spawn(a.x + 16, a.z);
       const back = await until(() => !g.trial.away && c.state === 'chase', 8000); return (back && g.trial.boss === c && g.trial.bar.querySelector('.bn').textContent === c.T.name && g.trial.fighting) || JSON.stringify({ back, away: g.trial.away, state: c.state, bar: g.trial.bar.querySelector('.bn').textContent });`);
     // his aura: dark dust round his hooves, embers rising round him (render/bossfx.js), seen from 18 m off
@@ -78,15 +100,19 @@ export default {
     // leaves drops where he lay
     await t.step('the Minotaur falls: a jolt; then Zeus\'s bolt, a boom and thunder, a hard shake, and his body blows away in embers', `const c = g.trial.boss; if (!c) return 'no boss'; AG.AUDIO.calls = []; const { shake } = await import('/src/render/fx.js'), { LIGHTNING } = await import('/src/world/lightning.js'), { BOSSFX } = await import('/src/render/bossfx.js');
       const n0 = shake.n, s0 = LIGHTNING.strikes, d0 = BOSSFX.dissolves; let most = 0; const iv = setInterval(() => { most = Math.max(most, shake.k); }, 30);
-      window._cam = P.camDist; P.camDist = 13; P.camPitch = -0.42; P.camYaw = Math.atan2(P.pos.x - c.pos.x, P.pos.z - c.pos.z);   // (looking down over the walls at where he'll lie)
+      ${FLY(36)}   // (the free camera off to his side, looking down over the walls at where he'll lie)
       g.creatures.hurt(c, [[99999, 'force']], P); const jolt = shake.n - n0; const went = await until(() => BOSSFX.dissolves > d0, 9000); await frames(20); window._end = { c, jolt, n0, s0, d0, iv, most: () => most }; return !!went || 'no dissolve';`);
-    await t.shot('minotaur-death');
+    await t.shot('minotaur-death', { hud: false });
+    // (the dissolve goes on some eight seconds: the user, 25 Nov)
+    // (each picture taken at its moment in the game's time, the game held still for it: a picture takes a while to grab)
+    for (const k of [2, 4, 7]) { await t.eval(`const { BOSSFX } = await import('/src/render/bossfx.js'); await until(() => BOSSFX.t >= ${k}, 15000); g.paused = true; await frames(2); return true;`); await t.shot(`minotaur-death-${k}s`, { hud: false }); await t.eval('g.paused = false; return true;'); }
+    await t.step('…the body still blowing away seven seconds on (the owl still waiting), its ashes gone by twelve', `const { dissolving } = await import('/src/render/bossfx.js'); const on = dissolving(), owl = g.owl.state !== 'escort'; const gone = await until(() => !dissolving(), 8000); return (on && owl && gone) || JSON.stringify({ on, owl, gone });`);
     await t.step('…(the bolt struck, the sounds played, the shake was hard, the body went into thousands of bits and is gone)', `const E = window._end, { shake } = await import('/src/render/fx.js'), { LIGHTNING } = await import('/src/world/lightning.js'), { BOSSFX } = await import('/src/render/bossfx.js');
-      await until(() => E.c.gone, 3000); clearInterval(E.iv); P.camDist = window._cam; const calls = (AG.AUDIO.calls || []).map((q) => q.k);
-      const r = { jolt: E.jolt, punches: shake.n - E.n0, most: +E.most().toFixed(2), strikes: LIGHTNING.strikes - E.s0, bits: BOSSFX.bits, gone: E.c.gone, kill: calls.includes('kill'), end: calls.includes('bossEnd'), owlHeld: g.owl.state !== 'escort' };
-      return (r.jolt >= 1 && r.punches >= 2 && r.most > 0.6 && r.strikes >= 1 && r.bits > 1000 && r.gone && r.kill && r.end && r.owlHeld) || JSON.stringify(r);`);
+      await until(() => E.c.gone, 3000); clearInterval(E.iv); g.setFly(false); const calls = (AG.AUDIO.calls || []).map((q) => q.k);
+      const r = { jolt: E.jolt, punches: shake.n - E.n0, most: +E.most().toFixed(2), strikes: LIGHTNING.strikes - E.s0, bits: BOSSFX.bits, gone: E.c.gone, kill: calls.includes('kill'), end: calls.includes('bossEnd') };
+      return (r.jolt >= 1 && r.punches >= 2 && r.most > 0.6 && r.strikes >= 1 && r.bits > 1000 && r.gone && r.kill && r.end) || JSON.stringify(r);`);
     await t.eval(`clearInterval(window._pin); return true;`);
-    await t.step('…and once his ashes have blown away the owl comes with what she held, the altar\'s counsel dropped (it no longer applies)', `const { dissolving } = await import('/src/render/bossfx.js'); await until(() => !dissolving() && !g.trial.fighting, 12000);
+    await t.step('…and once his ashes have blown away the owl comes with what she held, the altar\'s counsel dropped (it no longer applies)', `const { dissolving } = await import('/src/render/bossfx.js'); await until(() => !dissolving() && !g.trial.fighting, 16000);
       const came = await until(() => g.owl.state === 'escort', 6000), q = [...g.owl.st.queue]; g.owl.st.queue = []; return (came && !q.includes('labyrinthAltar')) || JSON.stringify({ came, q, fighting: g.trial.fighting });`);
     await t.step('…(his head lies on the ground; the Labyrinth stays in ruins)', `return (g.pickups.drops.some((d) => d.item === 'minotaurHead') || g.trial.st.down.minotaur) && g.structures.ruins.labyrinth.broken || 'no head, ' + JSON.stringify(g.trial.st.down);`);
     await t.step('…and the storm breaks: no more bolts, the sky clearing', `const s0 = g.trial.struck || 0; await new Promise((r) => setTimeout(r, 6000)); const n = (g.trial.struck || 0) - s0;
@@ -99,10 +125,15 @@ export default {
     await t.step('…and its fight still draws the camera back to take it in (the Chimera keeps the boss camera)', `return (P.bossCam && P.bossK > 0.3) || JSON.stringify({ bossCam: P.bossCam, bossK: P.bossK });`);
     await t.step('its aura is on it (smoke, fiery flecks, sparks at its jaws)', aim('g.trial.boss', 34));
     await t.shot('chimera');
-    await t.step('the Chimera falls, and Zeus\'s bolt turns it to embers and ash on the wind', `const c = g.trial.boss; if (!c) return 'no chimera'; AG.AUDIO.calls = []; const { BOSSFX } = await import('/src/render/bossfx.js'); const d0 = BOSSFX.dissolves;
+    await fxTour(t, [['claw', 0.7, 'm?.hit0'], ['sting', 0.8, 'm?.hit0'], ['breath', 0.8, 'm?.ph === 1 && m.t < 0.9'], ['pounce', 0.75, 'm?.ph === 2']], 42);
+    await t.step('effect goat-spell: the goat head calls the forest, its signs on the ground and its light streaming to where they rise', `const c = g.trial.boss; if (!c) return 'no chimera'; const { EMIT } = await import('/src/render/emit.js'); const b0 = EMIT.born; AG.AUDIO.calls = []; g.trial.help(c); await frames(25); g.paused = true; await frames(2);
+      return (EMIT.born - b0 > 100 && (AG.AUDIO.calls || []).some((q) => q.k === 'goatSpell')) || JSON.stringify({ born: EMIT.born - b0 });`);
+    await t.shot('fx-goat-spell', { hud: false }); await t.eval('g.paused = false; g.setFly(false); return true;');
+    await t.step('the Chimera falls, and Zeus\'s bolt turns it to embers and ash on the wind', `const c = g.trial.boss; if (!c) return 'no chimera'; AG.AUDIO.calls = []; ${FLY(48)} const { BOSSFX } = await import('/src/render/bossfx.js'); const d0 = BOSSFX.dissolves;
       g.creatures.hurt(c, [[99999, 'force']], P); const went = await until(() => BOSSFX.dissolves > d0, 9000); await frames(20); return (went && (AG.AUDIO.calls || []).some((q) => q.k === 'bossEnd')) || 'no dissolve';`);
-    await t.shot('chimera-death');
-    await t.step('…(its body gone, its head dropped, the trial on to its next step)', `const { dissolving } = await import('/src/render/bossfx.js'); await until(() => !dissolving(), 12000); clearInterval(window._pin);
+    await t.shot('chimera-death', { hud: false });
+    for (const k of [2, 4, 7]) { await t.eval(`const { BOSSFX } = await import('/src/render/bossfx.js'); await until(() => BOSSFX.t >= ${k}, 15000); g.paused = true; await frames(2); return true;`); await t.shot(`chimera-death-${k}s`, { hud: false }); await t.eval('g.paused = false; return true;'); }
+    await t.step('…(its body gone, its head dropped, the trial on to its next step)', `const { dissolving } = await import('/src/render/bossfx.js'); await until(() => !dissolving(), 16000); clearInterval(window._pin); g.setFly(false);
       return (g.trial.st.down.chimera && !g.trial.boss && !g.creatures.list.some((k) => k.type === 'chimera') && (g.pickups.drops.some((d) => d.item === 'chimeraHead') || inv.count('chimeraHead') > 0)) || JSON.stringify({ down: g.trial.st.down, drops: g.pickups.drops.map((d) => d.item) });`);
     // creatures come and go all game long: whatever a body put on the GPU must go with it (a leak shows as ~9 geometries
     // per creature, over 200 a round; a few may still come from the land streaming in nearby)
@@ -120,5 +151,13 @@ export default {
     await t.step('…and after a reload they are still in ruins (walls gone, rubble in, fallen pieces lying), and calling the Minotaur again breaks nothing twice', `const ok = ['labyrinth', 'chimera'].map((k) => { const R = g.structures.ruins[k]; return R.broken && R.fallenG.visible && R.debrisG.visible && !R.falls.length && !g.colliders.groups.has('ruin:' + k) && g.colliders.groups.has('rubble:' + k); });
       ${SETUP.replace('return true;', '')} const again = g.structures.ruin('labyrinth', { live: true });
       return (ok.every(Boolean) && g.trial.st.broken.labyrinth && again === false) || JSON.stringify({ ok, again, st: g.trial.st.broken });`);
+    // every move has its effect, timed to the blow (the user, 25 Nov: "every attack gets a special effect that follows
+    // it"): each forced in turn, the effect's particles born as the blow lands, and a picture of it
+    await fxTour(t, [['roar', 1.3, 'm?.done'], ['slam', 0.95, 'm?.hit0'], ['sweep', 1, 'm?.arc && m.e >= m.hit'], ['throw', 0.65, 'm?.hit0', '', 14], ['charge', 1.3, 'm?.ph === 1 && m.run > 0.7', 'dir: c.yaw,']], 30);
+    await t.step('Zeus\'s bolt: the ground blasted and scorched, embers and smoke, a jolt near you', `const { EMIT } = await import('/src/render/emit.js'), { shake } = await import('/src/render/fx.js'); const b0 = EMIT.born, n0 = shake.n, A = AG.AUDIO; A.calls = [];
+      g.trial.bolt(window._Q.clone().lerp(P.pos, 0.5), { warn: 0 }); const ok = await until(() => !g.trial.bolts.length, 3000); await frames(3); g.paused = true; await frames(2);
+      return (ok && EMIT.born - b0 > 100 && shake.n > n0 && (A.calls || []).some((q) => q.k === 'boltHit')) || JSON.stringify({ ok, born: EMIT.born - b0, punches: shake.n - n0 });`);
+    await t.shot('fx-bolt', { hud: false }); await t.eval('g.paused = false; await new Promise((r) => setTimeout(r, 1800)); g.paused = true; await frames(2); return true;'); await t.shot('fx-bolt-after', { hud: false });
+    await t.eval('g.paused = false; g.setFly(false); return true;');
   },
 };
