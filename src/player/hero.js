@@ -16,8 +16,10 @@ const UPPER = /Spine|Neck|Head|Shoulder|Arm|Hand/, UPV = new THREE.Vector3(0, 1,
 // The bodies to choose from (the character creator, ui/creator.js): Synty's plain man and woman in their underwear, fitted
 // onto the Mixamo rig (tools/assets/fbx-page.mjs refit: same bones, same clips), each this tall; the tint takes the
 // palette's glare off in our light
-// (brows: the man's own are one heavy band that reads as dark glasses: newBrows lays a pair of our own in its place)
-export const BODIES = { man: { file: 'hero', height: 1.95, tint: 0xb4aeb4, name: 'Man', brows: true }, woman: { file: 'heroWoman', height: 1.86, tint: 0xb4aeb4, name: 'Woman' } };
+// (brows: the man's own are one heavy band that reads as dark glasses: newBrows lays a pair of our own in its place; the
+// woman's are a pair already, but as thick as a man's: thinBrows thins them. hair: the style a body starts with when it's
+// chosen in the creator and the hair worn isn't one of its own)
+export const BODIES = { man: { file: 'hero', height: 1.95, tint: 0xb4aeb4, name: 'Man', brows: 'new', hair: 'curls' }, woman: { file: 'heroWoman', height: 1.86, tint: 0xb4aeb4, name: 'Woman', brows: 'thin', hair: 'f1' } };
 
 // ---- The hero's look, chosen in the character creator and kept with the saved game. Hair, beards and wreaths are
 // Synty's (Ancient Empire and Generic: pack/heroLooks, each a part of its own, fitted on the head like the helmets);
@@ -29,7 +31,9 @@ export const HAIR_COLOURS = [['black', 'Black', 0x1c1916], ['darkBrown', 'Dark b
 export const EYES = [['brown', 'Brown', 0x2a1a10], ['dark', 'Dark', 0x100c0a], ['hazel', 'Hazel', 0x3a2c14], ['green', 'Green', 0x263828], ['blue', 'Blue', 0x26344a], ['grey', 'Grey', 0x32373b]];   // (dark: the eye is a flat little panel, a bright one reads as paint)
 export const CLOTHS = [['linen', 'Linen', 0xb0a68e], ['white', 'White', 0xcfc9ba], ['saffron', 'Saffron', 0xb88a3e], ['madder', 'Madder red', 0x8a3c2c], ['purple', 'Tyrian purple', 0x5e2e46], ['indigo', 'Indigo', 0x36425e], ['olive', 'Olive', 0x62643e], ['umber', 'Umber', 0x6a5038]];
 // [id, name, part(s)] (the parts in pack/heroLooks; 'hair' is the Greek warriors' curls, from pack/heroArmour), and whom
-// it suits first ('m' / 'f': the creator lists those first for the body chosen, and Randomise picks among them)
+// it suits first ('m' / 'f': the creator lists those first for the body chosen, and Randomise picks among them). The packs
+// have no more women's hair of its own (the other packs' women wear theirs as part of the body), so the Patch 26 styles
+// are the Generic pack's bun and ponytail over other heads of hair, and the fringe over the hair gathered up
 const G = (n) => 'SM_Gen_Chr_Attach_' + n, AE = (n) => 'SM_Chr_Hair_' + n;
 export const HAIRS = [['none', 'Shaven', null, 'mf'], ['curls', 'Warrior\'s curls', 'hair', 'm'],
   ['m1', 'Cropped', AE('Male_01'), 'm'], ['m2', 'Short', AE('Male_02'), 'm'], ['m4', 'Swept up', AE('Male_04'), 'm'], ['m6', 'Thick crop', AE('Male_06'), 'm'],
@@ -37,6 +41,9 @@ export const HAIRS = [['none', 'Shaven', null, 'mf'], ['curls', 'Warrior\'s curl
   ['g9', 'Slicked back', G('Hair_09'), 'm'], ['g9b', 'Close crop', G('Hair_09_alt'), 'm'], ['g10', 'Brush cut', G('Hair_10'), 'm'], ['g11', 'Neat', G('Hair_11'), 'mf'], ['g6', 'Fringe', G('Hair_06'), 'mf'],
   ['f3', 'Bob', AE('Female_03'), 'f'], ['f1', 'Long waves', AE('Female_01'), 'f'], ['f6', 'Long curls', AE('Female_06'), 'f'], ['f2', 'Gathered up', AE('Female_02'), 'f'], ['f4', 'Bound up', AE('Female_04'), 'f'],
   ['f5', 'Banded', AE('Female_05'), 'f'], ['g5', 'Ribboned', G('Hair_05'), 'f'], ['bun', 'Bun', [G('Hair_09'), G('Bun_01')], 'f'], ['tail', 'Ponytail', [G('Hair_09'), G('Ponytail_01')], 'f'],
+  ['hightail', 'High ponytail', [AE('Female_02'), G('Ponytail_01')], 'f'], ['fgather', 'Fringe, gathered up', [G('Hair_06'), AE('Female_02')], 'f'], ['ftail', 'Fringe and ponytail', [G('Hair_06'), G('Ponytail_01')], 'f'],
+  ['fbun', 'Fringe and bun', [G('Hair_06'), G('Bun_01')], 'f'], ['wavestied', 'Waves, tied up', [AE('Female_01'), G('Ponytail_01')], 'f'], ['curlstied', 'Curls, tied up', [AE('Female_03'), G('Ponytail_01')], 'f'],
+  ['bandbun', 'Banded bun', [AE('Female_05'), G('Bun_01')], 'f'],
   ['g1', 'Long and loose', G('Hair_01'), 'f'], ['g1b', 'Long, parted', G('Hair_01_alt'), 'f'], ['g2', 'Flowing', G('Hair_02'), 'f'], ['g3', 'Long and straight', G('Hair_03'), 'f'],
   ['g4', 'Long and thick', G('Hair_04'), 'f'], ['g7', 'Locks', G('Hair_07'), 'f'], ['g8', 'Wild curls', G('Hair_08'), 'f']];
 export const BEARDS = [['none', 'None', null], ['full', 'Full beard', AE('Beard_01')], ['short', 'Short beard', AE('Beard_03')], ['philosopher', 'Philosopher\'s', AE('Beard_04')],
@@ -169,6 +176,19 @@ function newBrows(head, mat) {
   const m = new THREE.SkinnedMesh(geo, mat); m.name = 'brows'; m.position.copy(head.position); m.quaternion.copy(head.quaternion); m.scale.copy(head.scale);
   m.bind(head.skeleton, head.bindMatrix); m.receiveShadow = true; m.frustumCulled = false;
   return m;
+}
+// The woman's brows (the reviewer, 24 Nov: thinner). Hers are a pair, arched and parted, but over a centimetre deep, as
+// heavy as the man's: each is thinned from below, every point of the band drawn up towards the brow's top over it (the
+// highest of the band's points within reach across, cm) to k of its depth there, from the inner end to the outer, which
+// tapers; so the arch keeps its line and the brow comes up clear of the eye
+const BROW_THIN = { reach: 0.8, k: [0.5, 0.3] };
+function thinBrows(head) {
+  const P = head.geometry.attributes.position, UV = head.geometry.attributes.uv, band = [];
+  for (let i = 0; i < P.count; i++) if (isBrow(UV.getX(i), UV.getY(i))) band.push(i);
+  if (!band.length) return;
+  const w = Math.max(...band.map((i) => Math.abs(P.getX(i)))), top = band.map((i) => Math.max(...band.filter((j) => Math.abs(P.getX(j) - P.getX(i)) < BROW_THIN.reach).map((j) => P.getY(j))));
+  band.forEach((i, n) => P.setY(i, top[n] - (top[n] - P.getY(i)) * lerp(BROW_THIN.k[0], BROW_THIN.k[1], Math.abs(P.getX(i)) / w)));
+  P.needsUpdate = true; head.geometry.computeBoundingBox(); head.geometry.computeBoundingSphere();
 }
 // The body's material (painted: hero-look.js), its palette recoloured where it shows skin (by how much the chosen skin
 // differs from the palette's, so lips and stubble keep their shade), hair (the hair cell: Synty's hair and beards, all
@@ -391,7 +411,7 @@ export class Hero {
     const restQ = new Map(); for (const f of this.legFit) for (const [b, k, kp] of f) { restQ.set(b, b.quaternion.clone()); fitBone(b, k, kp); }
     obj.updateMatrixWorld(true); for (const sd of ['Left', 'Right']) { const f = bones[`mixamorig${sd}Foot`], t = bones[`mixamorig${sd}ToeBase`]; if (f && t) f.userData.sole = soleOf(f, t); }
     for (const [b, q] of restQ) b.quaternion.copy(q); obj.updateMatrixWorld(true);
-    if (gl && kind.brows) { let head = null; obj.traverse((m) => { if (m.name === 'base_head') head = m; }); const brows = head && newBrows(head, mat); if (brows) head.parent.add(brows); }
+    if (gl && kind.brows) { let head = null; obj.traverse((m) => { if (m.name === 'base_head') head = m; }); if (head && kind.brows === 'thin') thinBrows(head); const brows = head && kind.brows === 'new' && newBrows(head, mat); if (brows) head.parent.add(brows); }
     this.mat = gl ? mat : null;
     if (gl && dress) this.dress(obj, dress.scene, bones);
     if (gl && looks) this.dress(obj, looks.scene, bones, mat);

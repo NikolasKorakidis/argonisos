@@ -2,8 +2,9 @@
 // music each on its own), mouse sensitivity, and the hero's look last chosen
 // in the character creator (the next new game starts from it). Kept in browser storage.
 // Fullscreen captures the Escape key where the browser allows it (Keyboard Lock), so a tap still opens the pause menu
-// and you hold Esc for two seconds to leave fullscreen. Where it doesn't (Safari, Firefox), Esc leaves fullscreen and
-// the game puts it back on your next click.
+// and you hold Esc for two seconds to leave fullscreen; and the game's keys the browser would take with Ctrl held (Ctrl+W
+// closing the tab mid-sneak: input.js BROWSER_KEYS). Where it doesn't (Safari, Firefox), Esc leaves fullscreen and the
+// game puts it back on your next click.
 import * as THREE from 'three';
 import { renderer, bloom, sun, sunFar, SHADOW, shadowSoftness, camera, GFX, ADAPT, setScale, setSamples } from '../render/core.js';
 import { SETTINGS_KEY, BOOT_GFX, ULTRA } from '../render/quality.js';
@@ -12,7 +13,7 @@ import { PIXEL, PIXEL_U } from '../render/pixel.js';
 import { setFireShadow } from '../render/lights.js';
 import { GRASS, clumpShare } from '../world/grass.js';
 import { setVolume, setMusicVolume, setSfxVolume, setAmbienceVolume } from '../audio/sound.js';
-import { input } from '../input.js';
+import { input, BROWSER_KEYS } from '../input.js';
 import { LIGHTNING } from '../world/lightning.js';
 import { SHAKE } from '../render/fx.js';
 import { showPerf } from './perf.js';
@@ -99,7 +100,7 @@ export function rememberLook(look) { SETTINGS.look = { ...look }; delete SETTING
 // ---- fullscreen
 let wantFs = false;
 export const isFullscreen = () => !!document.fullscreenElement;
-async function enterFs() { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); try { await navigator.keyboard?.lock?.(['Escape']); } catch { /* not supported */ } }
+async function enterFs() { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); try { await navigator.keyboard?.lock?.(['Escape', ...BROWSER_KEYS]); } catch { /* not supported */ } }
 function leaveFs() { wantFs = false; navigator.keyboard?.unlock?.(); if (document.fullscreenElement) document.exitFullscreen(); }
 export async function toggleFullscreen(toast) {
   try { if (!document.fullscreenElement) { await enterFs(); wantFs = true; } else leaveFs(); SETTINGS.fullscreen = wantFs; store(); }
