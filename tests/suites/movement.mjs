@@ -50,7 +50,7 @@ export default {
     await t.until('AG.terrain.pending === 0 && P.onGround', 4000); await t.page.keyboard.down('KeyW'); await t.wait(1500);
     const at = `const S = P.stats, sl = P.slope || 0, k = sl > 0 ? 1 - 0.35 * Math.min(sl, 0.8) : 1 + 0.12 * Math.min(-sl, 0.6), gear = S.speedK * (1 + P.speedMod) * (P.overweight ? 0.6 : 1) * k;`;
     const run = await t.eval(`${at} return { speed: P.speed, want: 4.6 * 0.9 * gear, slope: sl };`);
-    await t.page.keyboard.down('ShiftLeft'); await t.eval('P.stats.stamina = P.stats.maxStamina; return true;'); await t.until('P.sprinting', 2000); await t.wait(1200);
+    await t.page.keyboard.down('ShiftLeft'); await t.eval('P.stats.stamina = P.stats.maxStamina; return true;'); await t.until('P.sprinting && P.speed > 6', 8000); await t.eval('await frames(10); return true;');   // (up to speed, however slow the frames)
     const sprint = await t.eval(`${at} return { speed: P.speed, want: 7.6 * 0.9 * S.skillK('sprinting') * gear, slope: sl, sprinting: P.sprinting };`);
     await t.page.keyboard.up('ShiftLeft'); await t.page.keyboard.up('KeyW');
     t.check('…measured: the hero runs at 4.14 m/s, a fifth faster than before (within 6%)', Math.abs(run.speed / run.want - 1) < 0.06, JSON.stringify(run));
