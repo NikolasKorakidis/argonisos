@@ -10,6 +10,7 @@ import { sound } from '../audio/sound.js';
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
 const fmtT = (s) => (s >= 60 ? `${Math.ceil(s / 60)}m` : `${Math.ceil(s)}s`);
+const RETICLE = [46, 12];
 const BAD = new Set(['wet', 'cold', 'freezing', 'stunned']), GREAT = new Set(['zeusBuff', 'zeusBlessing']);
 
 export class HUD {
@@ -21,7 +22,7 @@ export class HUD {
       <div id="status"><div id="clock"></div><div id="conds"></div></div>
       <div id="toasts"></div><div id="pickups"></div><div id="skillPops"></div>
       <div id="region"><div class="rname"></div><div class="rsub"></div></div>
-      <div id="cross"></div><div id="draw" class="off"><i></i></div>
+      <div id="cross"></div>
       <div id="prompt" class="hidden"></div>
       <div id="act" class="hidden"><i></i><span></span></div>
       <div id="stam" class="full"><div class="vbar"><i class="ghost"></i><i class="val"></i></div><u></u></div>
@@ -83,12 +84,13 @@ export class HUD {
     const key = label + '|' + ic; if (key !== this.last.act) { this.last.act = key; e.classList.remove('hidden'); e.querySelector('i').innerHTML = icon(ic); e.querySelector('span').textContent = label; }
     e.style.setProperty('--k', (Math.min(1, Math.max(0, k)) * 100).toFixed(1) + '%');
   }
-  // The bow's draw (combat.js updateBow): a short bar under the crosshair filling as the string comes back, lit up once
-  // it's full (only a full draw gives the bow its whole damage). k: 0..1, or null to let it fade
-  drawBar(k) {
-    const e = $('draw'), on = k !== null && k !== undefined; if (on !== this.last.drawOn) { this.last.drawOn = on; e.classList.toggle('off', !on); } if (!on) return;
-    const full = k >= 1; if (full !== this.last.drawFull) { this.last.drawFull = full; e.classList.toggle('full', full); }
-    e.style.setProperty('--k', (Math.min(1, Math.max(0, k)) * 100).toFixed(1) + '%');
+  // The bow's draw, Valheim's way (combat.js updateBow): a ring round the crosshair closing in as the string comes back,
+  // from RETICLE[0] across to RETICLE[1] (px) at a full draw, where it brightens (only a full draw gives the bow its whole
+  // damage); no bar. k: 0..1, or null to let it fade where it was
+  reticle(k) {
+    const e = $('cross'), on = k !== null && k !== undefined; if (on !== this.last.retOn) { this.last.retOn = on; e.classList.toggle('drawing', on); } if (!on) return;
+    const f = Math.min(1, Math.max(0, k)), full = f >= 1; if (full !== this.last.retFull) { this.last.retFull = full; e.classList.toggle('full', full); }
+    e.style.setProperty('--d', (RETICLE[0] + (RETICLE[1] - RETICLE[0]) * (1 - (1 - f) ** 2)).toFixed(1) + 'px');   // (closing in quickly at first, settling into the full draw)
   }
   // A number that pops off a creature when you hit it
   damageNumber(world, n) {

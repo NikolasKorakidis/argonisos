@@ -1,5 +1,5 @@
 // Fighting. Melee hits whatever is in the arc in front of you (reach depends on the weapon); hitting an unaware creature
-// is a sneak attack and multiplies the damage. RMB with a weapon or shield blocks: the block value soaks damage for
+// is a sneak attack and multiplies the damage. RMB with a weapon, a shield or the bow blocks: the block value soaks damage for
 // stamina, and a block raised just before the hit is a parry that staggers the attacker (not a boss, and a giant only if
 // the guard held most of the blow). Space with RMB held rolls, whatever is in your hands (player.js). The bow: hold LMB to draw (the
 // camera coming in over the shoulder), let go to loose; the fuller the draw, the faster and harder the arrow (BOW). Armour softens
@@ -24,7 +24,7 @@ const ARROW_V = [24, 70], ARROW_FLAT = [0.05, 0.6];
 // and slower and sooner dropping (ARROW_V, ARROW_FLAT). A full draw takes the bow's own seconds (items.js draw: the crude
 // bow 1.5, the Cretan 1.25), up to a third (skill) less with the Bowman skill at 100. Drawn and held, the bow costs stamina
 // (stam a second, less with the skill) and stamina doesn't come back meanwhile; run out and the draw is let down, the
-// arrow kept, as RMB lets it down. The first raise of the arms (raise s at most, or that share of a quicker draw) brings
+// arrow kept, as raising the guard with RMB lets it down (Valheim's bow blocks). The first raise of the arms (raise s at most, or that share of a quicker draw) brings
 // the bow up and nocks; the rest pulls the string (the clip's pull, PULL on, stretched over it). After the loose the
 // arms follow through a moment (loose s) before they lower, or draw again at once if LMB is pressed again
 const BOW = { minK: 0.25, skill: 1 / 3, stam: 4, raise: 0.5, share: 0.4, loose: 0.22 }, PULL = 0.62;
@@ -138,9 +138,9 @@ export class Combat {
     for (const s of g.inv.slots) if (s?.worn && ITEMS[s.id].armor && s.dur !== undefined) s.dur = Math.max(0, s.dur - 0.5);
     return final;
   }
-  blockValue() { const l = this.g.inv.slots.find((s) => s?.worn === 'left' && ITEMS[s.id].type === 'shield'); if (l) return ITEMS[l.id].block; const r = this.g.held(); return r?.block ?? 0; }
+  blockValue() { const l = this.g.inv.slots.find((s) => s?.worn === 'left' && ITEMS[s.id].type === 'shield'); if (l) return ITEMS[l.id].block; const r = this.g.bow?.() || this.g.held(); return r?.block ?? 0; }
   // (what can't parry, a tower shield or a tool, has no parry bonus: 0, and the guard only soaks)
-  parryBonus() { const l = this.g.inv.slots.find((s) => s?.worn === 'left' && ITEMS[s.id].type === 'shield'); return (l ? ITEMS[l.id].parry : this.g.held()?.parry) ?? 0; }
+  parryBonus() { const l = this.g.inv.slots.find((s) => s?.worn === 'left' && ITEMS[s.id].type === 'shield'); return (l ? ITEMS[l.id].parry : (this.g.bow?.() || this.g.held())?.parry) ?? 0; }
   // Zeus's Blessing: +10% to the blows you strike, melee and arrows, and to your guard (stats.js CONDITIONS)
   blessK() { return this.g.player.stats.has('zeusBlessing') ? 1.1 : 1; }
   // ---- thrown things (THORN): from o.from (the thrower's hand) at where you stand as it leaves the hand, so moving dodges it
@@ -172,17 +172,17 @@ export class Combat {
   drawPhase(f, F) { const r = Math.min(BOW.share, BOW.raise / F); return f < r ? (PULL * f) / r : PULL + ((1 - PULL) * (f - r)) / (1 - r); }
   // the pose the arms are in now, for the next state to blend from (hero.js poseBow)
   bowFrom(b) { return b.st === 'aim' ? { fromC: 'bowAim', fromT: Math.min(b.t / CLIPS.bowAim.dur, 1) } : b.st === 'draw' ? { fromC: 'bowDraw', fromT: Math.max(b.ph, b.from || 0) } : { fromC: b.fromC, fromT: b.fromT }; }
-  // the draw let down without loosing (RMB, too tired, no longer free to): the arrow stays in the quiver
+  // the draw let down without loosing (the guard raised, too tired, no longer free to): the arrow stays in the quiver
   letDown(why) { this.setBow('lower', this.bowFrom(this.bow)); if (why) this.say(why); }
   say(msg) { if (this.said === msg) return; this.g.hud.toast(msg); this.said = msg; clearTimeout(this.saidT); this.saidT = setTimeout(() => (this.said = null), 5000); }
   updateBow(dt) {
     const g = this.g, P = g.player, S = P.stats, bow = g.bow();
-    if (!bow) { if (P.bow) P.bow = null; this.nock.visible = false; this.spent = false; g.hud.drawBar?.(null); return; }
+    if (!bow) { if (P.bow) P.bow = null; this.nock.visible = false; this.spent = false; g.hud.reticle?.(null); return; }
     if (!P.bow) this.setBow('ready');
     let b = P.bow; b.t += dt;
-    // (free to draw: not in a menu, a roll or the water. RMB lets the draw down, and LMB must be let go and pressed again to
-    // draw, as after running out of arrows or breath; but RMB and Space roll: the roll lets the draw down and, LMB still
-    // held, it's drawn again after, once RMB is let go)
+    // (free to draw: not in a menu, a roll or the water. The guard raised (RMB: the bow blocks, as in Valheim) lets the draw
+    // down, and LMB must be let go and pressed again to draw, as after running out of arrows or breath; but RMB and Space
+    // roll: the roll lets the draw down and, LMB still held, it's drawn again after, once RMB is let go)
     const free = !input.uiOpen && !P.dead && !P.swimming && !P.dodge && !P.seat, rmb = input.clicks.includes(2);
     if (!input.lmb || P.dodge) this.spent = false;
     const want = input.lmb && !this.spent && free && !input.rmb;
@@ -200,10 +200,8 @@ export class Combat {
       else this.setBow('draw', { ...this.bowFrom(b), from: b.st === 'loose' ? 0.24 : 0, f: 0, F: this.drawTime(bow), bow });
     } else if (b.st === 'loose' && b.t >= BOW.loose) this.setBow('lower', { fromC: b.fromC, fromT: b.fromT, shot: true });
     else if (b.st === 'lower' && b.t >= BOW_DUR.lower) this.setBow('ready');
-    // (a player of the old bow, RMB to draw: told once what it does now)
-    if (rmb && !this.hinted && (P.bow.st === 'ready' || P.bow.st === 'lower') && !P.bow.shot) { this.hinted = true; g.hud.toast('Hold <b>LMB</b> to draw the bow and let go to loose. <b>RMB</b> lets the draw down.'); }
     b = P.bow;
-    g.hud.drawBar?.(b.st === 'draw' || b.st === 'aim' ? b.f : b.st === 'loose' ? b.f : null);
+    g.hud.reticle?.(b.st === 'draw' || b.st === 'aim' ? b.f : null);   // (the crosshair's ring closing in as the string comes back)
     if (P.aiming) P.aimPt = this.aimPoint(P.aimPt || new THREE.Vector3());
     // the arrow on the string
     const on = (b.st === 'draw' && Math.max(b.ph, b.from || 0) > 0.45) || b.st === 'aim', H = P.hero;
@@ -234,10 +232,11 @@ export class Combat {
   }
   update(dt) {
     const g = this.g, P = g.player;
-    // blocking with RMB (not with the bow or the hammer out, nor while stunned: a broken guard stays open)
-    const canBlock = !g.bow() && !g.equippedTool('build') && !P.seat && (g.held() || g.inv.slots.some((s) => s?.worn === 'left'));
+    // blocking with RMB (the bow too, as in Valheim, poorly: its own block value; not with the hammer out, nor while
+    // stunned: a broken guard stays open)
+    const canBlock = !g.equippedTool('build') && !P.seat && (g.held() || g.inv.slots.some((s) => s?.worn === 'left'));
     const was = P.blocking; P.blocking = canBlock && input.rmb && !input.uiOpen && !P.dead && P.swing <= 0 && !P.swimming && !P.stats.has('stunned');
-    // RMB held with anything at all (a weapon, a shield, the bow drawn, bare hands; not the hammer, whose RMB is its
+    // RMB held with anything at all (a weapon, a shield, the bow, bare hands; not the hammer, whose RMB is its
     // menu): Space then rolls (player.js), as in Valheim
     P.guardUp = input.rmb && !input.uiOpen && !P.dead && !P.swimming && !P.seat && !g.equippedTool('build');
     if (P.blocking && !was) P.stats.learn('blocking');   // (the first guard raised finds the skill, before any blow meets it)

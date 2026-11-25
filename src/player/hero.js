@@ -767,7 +767,7 @@ export class Hero {
     this.runActions(dt, st); this.poseActions();
     // (the bow's poses give way to an action of the whole body: a roll, a stagger, a death)
     let body = 0; for (const h of this.actions) if (h.o.upper === false && h.C.ready) body = Math.max(body, h.w);
-    if (st.bow && body < 0.999) this.poseBow(st.bow, st.aimPt, st.sprinting, 1 - body);
+    if (st.bow && body < 0.999) this.poseBow(st.bow, st.aimPt, st.sprinting, (1 - body) * (st.bow.st === 'ready' || st.bow.st === 'lower' ? 1 - this.blockK : 1));   // (the bow raised to block: the guard's pose, not the bow held ready)
     // the legs set straight on a body bound standing astride (legFit), the clips' poses kept
     for (const f of this.legFit || []) for (const [b, k, kp] of f) fitBone(b, k, kp);
     this.keepAboveFloor(dt, st);
@@ -911,7 +911,7 @@ export class Hero {
     return { w: Object.fromEntries(Object.entries(w).map(([n, x]) => [n, x / sum])), move: cw / sum, lead, back: lead === 'run' && this.runBack, rate };
   }
   // Bow states: equip → ready → draw (hold LMB) → aim (full draw, held) → loose (let go: the follow-through) → lower → ready
-  // → disarm; a draw let down (RMB) goes straight to lower. A loose holds the pose it let go from (fromC at fromT)
+  // → disarm; a draw let down (the guard raised, a roll) goes straight to lower. A loose holds the pose it let go from (fromC at fromT)
   poseBow(b, aimPt, sprinting, k = 1) {
     if (b.t < 0) return;
     const C = CLIPS, up = this.upperK, aimPh = (t) => Math.min(t / C.bowAim.dur, 1), pose = (c, t, w) => this.overlay(c, t, w * k, up, true);   // (k: how much of the pose is the bow's)
