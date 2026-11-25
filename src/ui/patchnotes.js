@@ -4,6 +4,42 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-26', name: 'Patch 26', title: 'Drawn', date: '25 November 2026',
+    intro: 'The bow drawn and held, bosses that wait for you to come back and die like gods\' enemies, the island back in full colour and painted in texels from leaf to hoof, and a quicker hero.',
+    sections: [
+      { t: 'The bow', icon: 'bow', items: [
+        '<b>Draw, then loose.</b> Hold the left mouse button to draw the bow and let go to shoot. The longer you draw, the harder and faster the arrow flies and the further it goes; only a full draw does the bow\'s full damage.',
+        'A full draw takes 1.5 seconds with the crude bow and 1.25 with the Cretan bow, and up to a third less as your Bowman skill grows. A ring round the crosshair closes in as the string comes back, tightest at a full draw.',
+        '<b>The bow blocks.</b> Hold the right mouse button with the bow to raise your guard: it soaks less than a shield, and raised just as a blow lands it parries and staggers the beast. Pressing it while drawing lowers the bow, keeps the arrow and guards.',
+        'Holding a draw costs stamina; run out and you lower the bow, keeping the arrow. Right-click and Space still roll, and if you\'re still holding the left button you draw again after the roll.',
+      ] },
+      { t: 'Bosses', icon: 'bull', items: [
+        '<b>Running doesn\'t end the fight.</b> Go far enough from its arena and the beast goes back to it and gathers its strength while you\'re away, its health bar saying so and its music falling quiet. Come back and the fight carries on where it left off. Only falling in battle ends a fight early, and your tribute stays on the altar so you can call it again.',
+        '<b>The Labyrinth falls.</b> When the Minotaur comes, the maze comes down almost entirely: only the gate, a few lone lengths of wall and some columns stay standing, and the arena is open ground. Seven great boulders ring it: hide behind them, and he has to come round to reach you, and can\'t charge, slam, sweep or throw at you through them.',
+        '<b>They hunt you.</b> The Minotaur and his dead now find their way round walls and boulders to you instead of walking into them and getting stuck, and a skeleton pressed against a rock beside you can hit you round it.',
+        '<b>Every boss attack hits with spectacle.</b> The Minotaur\'s roar steams and throws off embers, his axe slam splits the ground glowing hot and flings stone, his sweep leaves a bright arc through the air, his charge throws up dust and clods, and the boulders he hurls trail grit and burst where they land. The Chimera rakes the air with glowing claws, whips venom from its serpent tail and pours real fire that scorches the ground; its pounce lands with a blast of dust and glowing cracks, and when its goat head calls the forest, runes flare round it and violet light streams to where the dryads rise. The Labyrinth\'s dead rise in a pale grave-light.',
+        '<b>The Minotaur and the Chimera look the part.</b> Dark dust swirls round the Minotaur\'s hooves and embers rise round him, and he snorts smoke and sparks; smoke trails off the Chimera\'s back, flames stream from its mane and sparks spit from its jaws.',
+        '<b>Zeus\'s storm is far fiercer:</b> brighter, heavier bolts that blast the ground and leave it scorched and smouldering, lightning flickering through the clouds between strikes, and a jolt when one lands near you.',
+        '<b>A boss\'s death is a moment.</b> The killing blow shakes the screen; then Zeus strikes the fallen beast with a bolt, there\'s a great boom and thunder, and its body bursts into glowing embers that swirl up and drift away on the wind in smoke, their light slowly fading, leaving its trophies where it lay.',
+        'The bosses\' music is a fifth louder.',
+        'The Chimera\'s fight is seen from much closer, behind you like the usual camera, tilting up towards the beast instead of pulling far back.',
+        'The Owl keeps quiet for the whole of a boss fight, even while you\'re away from the arena, and drops advice that no longer applies once the beast is gone.',
+      ] },
+      { t: 'The look', icon: 'sun', items: [
+        '<b>Full colour again.</b> The island is back in its full colours. The Colour setting still lets you mute it, and if you\'ve set it yourself your choice is kept.',
+        '<b>Painted in texels, everywhere.</b> The Pixel texture setting now reaches almost everything: leaves, bushes, grass, rocks, buildings and ruins, the things lying about, animals and monsters, the Owl, the tools in your hand, fires and smoke, all in the chunky hand-painted texels the tree trunks had. Off draws the smooth look; Strong makes the texels bigger.',
+      ] },
+      { t: 'You', icon: 'you', items: [
+        '<b>A fifth quicker.</b> You walk, run, sprint, sneak and swim a fifth faster, with or without armour or a heavy load.',
+        'The woman\'s eyebrows are finer, and she has seven new ways to wear her hair: a high ponytail, a fringe gathered up, a fringe and ponytail, a fringe and bun, waves tied up, curls tied up and a banded bun. Switching between the man and the woman in the creator now gives each a hairstyle of their own.',
+      ] },
+      { t: 'Menus and keys', icon: 'goal', items: [
+        '<b>Return to Main Menu</b> in the pause menu saves your game and takes you back to the title screen.',
+        '<b>Ctrl+W no longer closes the game by accident.</b> In fullscreen the game keeps the key; in a window the browser asks before leaving a game in progress. While you play, Ctrl with S, D and the like no longer set off the browser either (Ctrl is sneak).',
+      ] },
+    ],
+  },
+  {
     id: 'patch-25', name: 'Patch 25', title: 'Steady', date: '23 November 2026',
     intro: 'Steadier frames on Ultra, by the fire and on big screens, less graphics memory, and a game that survives the graphics card dropping its picture.',
     sections: [

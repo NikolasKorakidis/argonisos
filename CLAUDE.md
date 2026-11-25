@@ -156,7 +156,11 @@ occlusion) → HUD → `veg.cull` (packs the visible near trees into their batch
   that size. Their coming (`Trial.stage`) breaks their site for good (`structures.ruin`, `trial.st.broken`, restored by
   save.js): the walls that fall are their own collider group (`ruin:<site>`), swapped for low rubble (`rubble:<site>`,
   `low`); a boss ignores low colliders and flora (creatures.js `BIG`), steers round what stands and strides over knee-high
-  stubs (`steer`, `STRIDE`), and is put free if stuck (`unstick`). `tests/suites/creatures.mjs` chases it round the ruin.
+  stubs (`steer`, `STRIDE`), and is put free if stuck (`unstick`, the last resort). In a boss fight it and the other hunters follow
+  `creatures/nav.js`: two 1 m grids round the arena (one for the boss's body, one for a man's), rebuilt when the colliders
+  change (`colliders.v`), and a flow to you worked out a few times a second; the Labyrinth's maze falls to rubble when the
+  Minotaur comes (`STANDS` in structures.js keeps a few lengths), ringed by boulders for cover. `tests/suites/creatures.mjs`
+  chases it round the ruin and the boulders.
   Running from a fight doesn't end it (`FLEE`: past 105 m it walks back to its arena and heals 5%/s until you return);
   only falling or leaving the game does. Its aura and its end (Zeus's bolt, the body blown away as ash) are `render/bossfx.js`,
   run from `Trial.presence`; the owl keeps quiet while `trial.fighting`.
