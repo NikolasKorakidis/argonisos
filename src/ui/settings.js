@@ -18,8 +18,10 @@ import { SHAKE } from '../render/fx.js';
 import { showPerf } from './perf.js';
 
 const KEY = SETTINGS_KEY;
-export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, sfx: 1, ambience: 1, music: 0.5, sens: 1, fullscreen: false, look: null, calmFlash: false, shake: 'on', perf: false, focusBlur: true, colour: 0.5, pixel: 'mild' };
-try { Object.assign(SETTINGS, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* defaults */ }
+export const SETTINGS = { graphics: 'high', res: 1, volume: 0.8, sfx: 1, ambience: 1, music: 0.5, sens: 1, fullscreen: false, look: null, calmFlash: false, shake: 'on', perf: false, focusBlur: true, colour: 1, pixel: 'mild' };
+// (a colour of exactly a half kept from before 24 Nov, when that was the default, is the old default and not a choice:
+// every setting is stored whenever any one changes. colourSet marks a colour the player chose with the slider)
+try { const saved = JSON.parse(localStorage.getItem(KEY) || '{}'); if (saved.colour === 0.5 && !saved.colourSet) delete saved.colour; Object.assign(SETTINGS, saved); } catch { /* defaults */ }
 SETTINGS.graphics = BOOT_GFX;   // (?gfx=… in the address picks one for this visit: quality.js)
 const store = () => { try { localStorage.setItem(KEY, JSON.stringify(SETTINGS)); } catch { /* private mode */ } };
 
@@ -66,14 +68,15 @@ export function setMusic(v) { SETTINGS.music = v; store(); setMusicVolume(v); }
 export function setSfx(v) { SETTINGS.sfx = v; store(); setSfxVolume(v); }
 export function setAmbience(v) { SETTINGS.ambience = v; store(); setAmbienceVolume(v); }
 export function setSens(s) { SETTINGS.sens = s; store(); input.sens = s; }
-// How much colour the world keeps, 0 (grey) to 1 (as painted): half by default (the Greek reviewer, 23 Nov: Valheim's
-// muted earth). Laid on in the atmosphere pass's grade, before the bloom, so the sun, fire and magic keep theirs; on Low,
-// which has no such pass, by the page over the picture alone (the HUD keeps its colours either way)
+// How much colour the world keeps, 0 (grey) to 1 (as painted): all of it by default (it was half for a day, the Greek
+// reviewer's 23 Nov Valheim's muted earth, to be weighed again once the texels are on everything). Laid on in the
+// atmosphere pass's grade, before the bloom, so the sun, fire and magic keep theirs; on Low, which has no such pass, by
+// the page over the picture alone (the HUD keeps its colours either way)
 function applyColour() {
-  const c = Math.min(1, Math.max(0, SETTINGS.colour ?? 0.5)); ATMO.colour.value = c;
+  const c = Math.min(1, Math.max(0, SETTINGS.colour ?? 1)); ATMO.colour.value = c;
   renderer.domElement.style.filter = GFX.post || c >= 0.999 ? '' : `saturate(${c.toFixed(2)})`;
 }
-export function setColour(v) { SETTINGS.colour = v; store(); applyColour(); }
+export function setColour(v) { SETTINGS.colour = v; SETTINGS.colourSet = true; store(); applyColour(); }
 // Pixel texture: the surfaces' own detail in texels, as Valheim's low-resolution textures (render/pixel.js), off, mild
 // (sixteen to the metre) or strong (eight); the light on them, the shadows and the bloom stay smooth either way
 export const PIXELS = [['off', 'Off'], ['mild', 'Mild'], ['strong', 'Strong']];
