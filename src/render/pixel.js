@@ -33,9 +33,10 @@ export const nearestUp = (t) => { if (t) { t.magFilter = THREE.NearestFilter; t.
 // ---- Texels on everything else (the Greek reviewer, 24 Nov: "if it goes on everything, characters, objects, VFX, foliage,
 // ground, it will tie the game together", the trunks the sample of how it should look). Most of the game's models are
 // the packs' low-poly ones, one flat colour a face from a palette in their vertices or a small atlas, so a flat colour
-// snapped to texels would show nothing: each texel is given a tone of its own instead, a little lighter or darker and
-// warmer or cooler than the face's colour (averaging out to it), over soft blotches a few texels across, as a painted
-// low-resolution texture has. pixelate(material, look) lays it on any standard or basic material (on top of any patch
+// snapped to texels would show nothing: each texel is given a tone of its own instead, lighter or darker and warmer or
+// cooler than the face's colour (averaging out to it), over patches a few texels across with darker texels along their
+// edges, as a painted low-resolution texture has (as strong as the bark's furrows: under the tone curve a tenth either
+// way barely shows). pixelate(material, look) lays it on any standard or basic material (on top of any patch
 // it has), one program for every material so made (the look is in its uniforms, not its code):
 //   the texels lie on the face of the model's box the face turns to most (worked out per face from the screen
 //     derivatives, so a facet is one patch of squares), in metres, in the model's own frame: they stick to what moves (a
@@ -43,20 +44,21 @@ export const nearestUp = (t) => { if (t) { t.magFilter = THREE.NearestFilter; t.
 //     wind) and each instance of a model has its own pattern;
 //   a texture of the material's own (a painted canvas, a leaf card, a tiling marble) is looked up in texels too, at the
 //     texture's size on the model (metres per unit of its uv, from the derivatives of both, as a power of two so a face's
-//     triangles agree), its cut-out left smooth; the tones then follow its texels, one grid. A palette atlas, its faces'
-//     uvs gathered on a swatch, has nothing to snap and keeps the tones in the model's frame;
+//     triangles agree; each way only where our texel is the bigger), a leaf's outline with it; the tones then follow its
+//     texels, one grid. A palette atlas, its faces' uvs gathered on a swatch, has nothing to snap and keeps the tones in
+//     the model's frame;
 //   the light stays smooth (nothing here touches the normal), and it all fades out where a texel would come under a
 //     couple of pixels, and goes with the Pixel texture setting: Off draws the material as it was.
 // (look: j how far each texel's tone strays from its neighbours'; b how far the patches' do (three tones, a patch blot
 // texels across, longer up the face where it streaks); edge how much darker the texels along a patch's edge are, a
 // line a texel wide like a crack or a painted stroke's edge; hue how far a texel leans warm or cool; streak texels run
-// together up the face in streaks that long; map 0 leaves the material's own texture smooth)
+// together up the face in streaks that long; map 0 leaves the material's own texture smooth, 2 snaps a cut-out's outline too)
 export const PX_LOOK = {
   grain: { j: 0.34, b: 0.4, blot: 4, edge: 0.3, hue: 0.1 },                  // (painted things: pots, plaster, cloth, sacks, the packs' props)
   stone: { j: 0.28, b: 0.4, blot: 5, edge: 0.42, hue: 0.06 },                // (worked stone and the sites' marble: slabs and cracks)
   wood: { j: 0.4, b: 0.3, blot: 3, edge: 0.3, hue: 0.08, streak: 6 },        // (the grain running up a post or along a plank)
   metal: { j: 0.14, b: 0.22, blot: 5, edge: 0.2, hue: 0.04 },
-  leaf: { j: 0.4, b: 0.26, blot: 2, edge: 0.3, hue: 0.2 },                    // (each texel of a crown its own green, some yellower, some bluer)
+  leaf: { j: 0.4, b: 0.26, blot: 2, edge: 0.3, hue: 0.2, map: 2 },          // (each texel of a crown its own green, some yellower, some bluer)
   plant: { j: 0.45, b: 0.34, blot: 2, edge: 0.3, hue: 0.2 },                 // (the shrubs, ground cover and pickups)
   fur: { j: 0.5, b: 0.2, blot: 3, edge: 0.16, hue: 0.08, streak: 3 },        // (the animals' coats: short streaks of hair)
   hide: { j: 0.34, b: 0.4, blot: 4, edge: 0.4, hue: 0.08 },                  // (the giants and the bosses: a cracked, leathery hide)
@@ -115,9 +117,12 @@ export const pxMapChunk = (p) => `#ifdef USE_MAP
       vec2 t = 1.0 / max(kk, vec2(1e-6)), c0 = (floor(vMapUv * kk) + 0.5) * t, sn = vec2(kk.x > 0.0 ? c0.x : vMapUv.x, kk.y > 0.0 ? c0.y : vMapUv.y);
       #ifdef USE_ALPHATEST
         // (a cut-out's picture, leaves or grass, is taken at its texel's middle as it is, not averaged over the texel,
-        // which would mix in the see-through parts' dark colour; and its outline with it, so a leaf's edge steps texel by
-        // texel as a low-resolution texture's does, the steps fixed on the card)
-        sampledDiffuseColor = mix(sampledDiffuseColor, textureGrad(map, sn, ux, uy), s);
+        // which would mix in the see-through parts' dark colour; with the look's map 2 its outline too, so a leaf's edge
+        // steps texel by texel as a low-resolution texture's does, the steps fixed on the card; with 1 the outline stays
+        // smooth, for blades thinner than a texel, which would break up, and a middle in a see-through part keeps the
+        // fragment's own colour)
+        vec4 c = textureGrad(map, sn, ux, uy);
+        if (uPxMap > 1.5) sampledDiffuseColor = mix(sampledDiffuseColor, c, s); else if (c.a >= 0.5) sampledDiffuseColor.rgb = mix(sampledDiffuseColor.rgb, c.rgb, s);
       #else
         vec2 w = vec2(kk.x > 0.0 ? t.x * 0.5 : max(abs(ux.x), abs(uy.x)), kk.y > 0.0 ? t.y * 0.5 : max(abs(ux.y), abs(uy.y)));
         sampledDiffuseColor.rgb = textureGrad(map, mix(vMapUv, sn, s), mix(ux, vec2(w.x, 0.0), s), mix(uy, vec2(0.0, w.y), s)).rgb;
@@ -144,9 +149,11 @@ export function pixelate(mat, look = 'grain', over = {}) {
   PX.set(mat, [look, over, base === THREE.Material.prototype.onBeforeCompile]); return mat;
 }
 // The look for a material that isn't given one: what glows (flames, embers, sparks, eyes) flickers in squares, metal
-// barely, the rest as painted things; null for what has no surface to show (lines, points, sprites, the depth's)
+// barely, the rest as painted things; null for what has no surface to show (lines, points, sprites, the depth's) or
+// none of its own (water, glossy and dark, and what is see-through: a decal, a glyph)
 export function autoLook(m) {
   if (!(m.isMeshStandardMaterial || m.isMeshBasicMaterial || m.isMeshLambertMaterial)) return null;
+  if ((m.transparent && m.blending !== THREE.AdditiveBlending) || (m.isMeshStandardMaterial && m.roughness < 0.2)) return null;
   if (m.isMeshBasicMaterial || m.blending === THREE.AdditiveBlending || (m.emissive && m.emissiveIntensity > 0.5 && m.emissive.getHex() !== 0)) return 'flame';
   return m.metalness >= 0.3 ? 'metal' : 'grain';
 }
