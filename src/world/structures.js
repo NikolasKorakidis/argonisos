@@ -928,11 +928,15 @@ export class Structures {
     let ls = 1234; const lr = (a, b) => a + (((ls = (ls * 16807) % 2147483647) - 1) / 2147483646) * (b - a), dr = dice(9090);
     // the gaps are remembered, so the Minotaur and the dead can find their way through the rings (navTarget)
     const gaps = { 22: [], 15: [], 9: [] };
-    // What the Minotaur's coming breaks (ruinOf, ruin): three breaches in the outer ring (the gate stands), most of the
-    // middle ring, nearly all the inner one; half the standing columns topple along the corridor. Each length of wall that
-    // falls tips outward over its foot in two pieces, and leaves a heap of rubble there and blocks thrown out across the
-    // floor. (Its own dice, ruinDice: the decoration's and the other sites' come out as they always have.)
-    const RU = this.ruinOf('labyrinth', ctx), FALLS = (R, i) => (R === 22 ? [4, 5, 6, 10, 11, 15, 16, 17].includes(i) : ruinDice(R * 7 + i) < (R === 15 ? 0.75 : 0.9));
+    // What the Minotaur's coming breaks (ruinOf, ruin): the maze, nearly all of it (the user, 25 Nov: half fallen, it
+    // pinned him and his dead in its corridors and the fight was a farce; Valheim's arenas are open ground with a few
+    // great stones to put between you and the beast). The gate stands, and of the walls only STANDS: four lengths of the
+    // outer ring alone a quarter of the way round from each other and two of the middle one, each among the tallest of
+    // its ring, cover to hide behind and to lead him round; the inner ring goes entirely, and half the columns topple
+    // along the corridor. Each length of wall that falls tips outward over its foot in two pieces, and leaves a heap of
+    // rubble there and blocks thrown out across the floor. (Its own dice, ruinDice: the decoration's and the other sites'
+    // come out as they always have. A save with the Labyrinth broken loads into this: save.js breaks it as it is built now.)
+    const RU = this.ruinOf('labyrinth', ctx), STANDS = { 22: [4, 9, 13, 17], 15: [0, 8], 9: [] }, FALLS = (R, i) => !STANDS[R].includes(i);
     const into = (list, fn) => { const keep = this.solids; this.solids = list; fn(); this.solids = keep; }, lump = (x, z, r, h = 0.9) => { const p = this.w(ctx, x, z); RU.rubble.push({ x: p.x, z: p.z, r, y: p.y, h }); };
     for (const [R, gap, ruin] of [[22, 0.3, 0.45], [15, 2.1, 0.35], [9, 4.2, 0.25]]) {
       const n = Math.ceil(R * 0.9), hs = [], q = (a) => (Q[R + ':' + Math.floor(a / (Math.PI / 2)) % 4] ||= []), segs = [];
@@ -960,7 +964,7 @@ export class Structures {
         for (let b = 0; b < 6; b++) { const d = (k) => ruinDice(R * 17 + i * 7 + b * 3 + k), t = d(0), o = 0.7 + d(1) * (b < 5 ? 2.6 : 5.5), x = x0 + (x1 - x0) * t + nx * o, z = z0 + (z1 - z0) * t + nz * o, s = 0.7 + d(2) * 0.6, tip = (d(3) - 0.5) * 1.2, rot = d(4) * 6.3;
           const bits = pack ? piece('plWall', 0, -0.3 * s, 0, 0, [0.22 * s, 0.24 * s, 0.6 * s]) : [[uvBox(1.1 * s, 0.8 * s, 0.6 * s).translate(0, 0.1 * s, 0), SMAT.stone]];
           RU.debris.push(...bits.map(([g, m]) => [g.rotateZ(tip).rotateX(tip * 0.6).rotateY(rot).translate(x, 0.05 + d(5) * 0.25 * (b < 5 ? 1 : 0), z), m]));
-          if (b % 2 === 0) lump(x, z, 0.75 * s); } });
+          if (b === 0) lump(x, z, 0.75 * s); } });   // (one block of each heap stops you, where three did: with nearly every wall down, the floor stays open to run on)
     }
     for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2 + 0.3, x = Math.cos(a) * 18.5, z = Math.sin(a) * 18.5, topple = [0, 3, 5, 6, 9].includes(i);
       // (one that topples falls along the corridor, its foot rolling over its edge, and lies across it)
@@ -1011,6 +1015,14 @@ export class Structures {
     }
     for (const list of Object.values(Q)) for (const m of mergeByMat(list)) ctx.grp.add(m);
     this.crater(RU, [0, -7], 23.4, 9091);
+    // Cover for the fight: seven great boulders in a ring round the arena, 26 to 36 m out on the open ground past its wall,
+    // spaced round it (none in the way to the gate), each a body or two across and twice your height or more, to put
+    // between you and him: he must walk round them (creatures/nav.js), and all his moves but the roar need a clear line
+    // to you (trial.js). (Dice of their own, ruinDice's from 7000: nothing else on the island moves.)
+    const door = (gaps[22][0][0] + gaps[22][0][1]) / 2, cover = [];
+    for (let i = 0; i < 7; i++) { const d = (k) => ruinDice(7000 + i * 7 + k), a = door + ((i + 0.5) / 7) * Math.PI * 2 + (d(0) - 0.5) * 0.35, R = 26 + d(1) * 10;
+      cover.push([[0, 2, 3][i % 3], Math.cos(a) * R, Math.sin(a) * R, 2.3 + d(2) * 0.5, d(3) * 6.283]); }
+    this.boulders(ctx, cover);
     this.finishRuin(RU);
     this.lab = { c: this.w(ctx, 0, 0), gaps };
     this.labyrinthCtx = ctx; this.finish(ctx, { r: 23.5 });
@@ -1400,6 +1412,19 @@ export class Structures {
       m.castShadow = m.receiveShadow = true; m.computeBoundingSphere(); g.add(m);
     }
     ctx.grp.add(new THREE.Group().add(g));
+  }
+  // Great boulders at a site, the world's own (the vegetation's boulder, in its stone: rock.js), each [variant, x, z, size,
+  // turn]: s times the boulder's size and a tenth taller, sunk to the lowest ground under it, and solid as high as it
+  // stands (the camera goes over one lower than it, occlusion.js). One instanced mesh for each variant.
+  boulders(ctx, list) {
+    const by = new Map(), q = new THREE.Quaternion(), e = new THREE.Euler(), p = new THREE.Vector3(), sc = new THREE.Vector3();
+    for (const [v, x, z, s, rot] of list) {
+      let y = Infinity; for (const [ox, oz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) { const w = this.w(ctx, x + ox * s * 0.8, z + oz * s * 0.8); y = Math.min(y, heightAt(w.x, w.z) - ctx.s.y); }
+      const P = propGeo('boulder', v); P.geo.boundingBox || P.geo.computeBoundingBox();
+      (by.get(v) || by.set(v, []).get(v)).push(new THREE.Matrix4().compose(p.set(x, y, z), q.setFromEuler(e.set(0, rot, 0)), sc.set(s, s * 1.1, s)));
+      this.solid(ctx, x, z, 0.95 * s, P.geo.boundingBox.max.y * s * 1.1, y);
+    }
+    for (const [v, ms] of by) { const P = propGeo('boulder', v), m = new THREE.InstancedMesh(P.geo, P.mat || propMat, ms.length); ms.forEach((mm, i) => m.setMatrixAt(i, mm)); m.castShadow = m.receiveShadow = true; m.computeBoundingSphere(); ctx.grp.add(m); }
   }
   // a tree or bush from the vegetation set, standing at a site (drawn at any distance, unlike the streamed ones)
   plant(ctx, name, v, x, y, z, sc = 1) {

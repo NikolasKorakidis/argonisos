@@ -2,18 +2,18 @@
 // groups by key, so a vegetation cell or a building can come and go in one call.
 const G = 8;
 export class Colliders {
-  constructor() { this.grid = new Map(); this.groups = new Map(); }
+  constructor() { this.grid = new Map(); this.groups = new Map(); this.v = 0; }   // (v: counts the changes, for what keeps a map of them: creatures/nav.js)
   addGroup(key, list) {        // list: [{ x, z, r, h?, y?, ref? }] (h: height above y, the base; default tall)
     this.removeGroup(key);
     for (const c of list) { const k = Math.floor(c.x / G) + ',' + Math.floor(c.z / G); (this.grid.get(k) || this.grid.set(k, []).get(k)).push(c); c.key = key; }
-    this.groups.set(key, list);
+    this.groups.set(key, list); this.v++;
   }
   removeGroup(key) {
     const list = this.groups.get(key); if (!list) return;
     for (const c of list) { const k = Math.floor(c.x / G) + ',' + Math.floor(c.z / G), a = this.grid.get(k); if (!a) continue; const i = a.indexOf(c); if (i >= 0) a.splice(i, 1); if (!a.length) this.grid.delete(k); }
-    this.groups.delete(key);
+    this.groups.delete(key); this.v++;
   }
-  removeOne(c) { const k = Math.floor(c.x / G) + ',' + Math.floor(c.z / G), a = this.grid.get(k); if (a) { const i = a.indexOf(c); if (i >= 0) a.splice(i, 1); } const g = this.groups.get(c.key); if (g) { const i = g.indexOf(c); if (i >= 0) g.splice(i, 1); } }
+  removeOne(c) { const k = Math.floor(c.x / G) + ',' + Math.floor(c.z / G), a = this.grid.get(k); if (a) { const i = a.indexOf(c); if (i >= 0) a.splice(i, 1); } const g = this.groups.get(c.key); if (g) { const i = g.indexOf(c); if (i >= 0) g.splice(i, 1); } this.v++; }
   *near(x, z, r) {
     const x0 = Math.floor((x - r - 4) / G), x1 = Math.floor((x + r + 4) / G), z0 = Math.floor((z - r - 4) / G), z1 = Math.floor((z + r + 4) / G);
     for (let j = z0; j <= z1; j++) for (let i = x0; i <= x1; i++) { const a = this.grid.get(i + ',' + j); if (a) yield* a; }

@@ -6,10 +6,10 @@
 // covers what stands there. Sites built from the packs differ without them, so the fingerprint is recorded with them.
 // When the sites are meant to change: run `node tests/run.mjs sites --update` and paste the new fingerprint below.
 // (recorded on 21 November 2026 after commit a64dce0, the stone material in, with Olympos's new summit, cairns and places
-// on the way up (Patch 24) and the other agents' work of that round in progress: record it again once the round is in,
-// before moving any site code)
+// on the way up (Patch 24); again on 25 November for the Labyrinth's new fall, nearly all of its maze, and the seven
+// boulders round its arena: solids, colliders and groups changed, the rest as before)
 const FINGERPRINT = {
-  solids: 'a81fa4ba', tops: 'f26a546f', uses: '67a640ce', colliders: 'b07fa0ad', plants: 'a0d2be97', groups: 'f9fc005d',
+  solids: 'e8fe23f6', tops: 'f26a546f', uses: '67a640ce', colliders: '90756111', plants: 'a0d2be97', groups: '89f5e293',
 };
 
 // (FNV-1a over numbers rounded to a fixed precision, as in world.mjs, so the last float bit doesn't count; the mesh

@@ -525,19 +525,6 @@ const SFX = {
     play('growl', { vol: 0.55, at, near: 15, far: 160, rate: [0.5, 0.58], wet: 0.3, dur: 0.9, gap: 0.3 }); play('slamHit', { vol: 0.3, at, near: 15, far: 120, rate: [1.4, 1.55], lp: 3000, delay: 0.45, wet: 0.2, gap: 0.3, dur: 0.4 }); },
   // the charge under way: a rumble that grows with his speed for dur seconds (his hooves are his footfalls: giantStep)
   charge: ({ at, dur = 2 } = {}) => { const s = place(at, 20, 220); if (s.k < 0.01) return; note('charge', s.k); noise(dur, { type: 'lowpass', freq: 160, q: 0.8, vol: 0.55 * s.k, attack: dur * 0.7, slide: 60, brown: true, wet: 0.3, pan: s.pan * 0.4 }); sub(dur, { f0: 34, f1: 48, k: 0.5, at, near: 20, far: 220, attack: dur * 0.7, rumble: 0.4 }); },
-  // (the bosses' blows that had no sound of their own, trial.js: Patch 26)
-  // a giant's weapon or claws swept through the air (at): a slowed whoosh over a low rush of air
-  bossSwing: ({ at, k = 1 } = {}) => { const s = place(at, 12, 140); if (s.k < 0.02) return; note('bossSwing', s.k); play('whoosh', { vol: 0.75 * k, at, near: 12, far: 140, wet: 0.2, rate: [0.42, 0.5], gap: 0.1 });
-    noise(0.7, { type: 'lowpass', freq: 600, vol: 0.32 * s.k * k, attack: 0.25, slide: -350, brown: true, wet: 0.2, pan: s.pan * 0.6 }); },
-  // the serpent's sting (at): a dry hiss rising and the whip of the tail
-  sting: ({ at } = {}) => { const s = place(at, 10, 100); if (s.k < 0.02) return; note('sting', s.k); noise(0.55, { type: 'highpass', freq: 3500, q: 0.7, vol: 0.2 * s.k, attack: 0.4, slide: 1500, wet: 0.2, pan: s.pan });
-    play('whoosh', { vol: 0.6, at, near: 10, far: 100, wet: 0.1, rate: [0.8, 0.9], delay: 0.35, gap: 0.05 }); },
-  // the goat head's spell (at): a low drone swelling under a shimmer of high tones, glassy and unearthly
-  goatSpell: ({ at } = {}) => { const s = place(at, 20, 200); if (s.k < 0.02) return; note('goatSpell', s.k); tone(73.4, 2.6, { type: 'sawtooth', vol: 0.09 * s.k, attack: 1.2, slide: -12, wet: 0.7, pan: s.pan * 0.5 });
-    [880, 1174.7, 1318.5, 1760].forEach((f, i) => tone(f, 1.8, { type: 'sine', vol: 0.035 * s.k, attack: 0.5, delay: 0.15 * i, slide: f * 0.03, wet: 0.85, pan: s.pan * 0.5 + (i % 2 ? 0.3 : -0.3) })); },
-  // a bolt striking the ground near you (at): the crackle and sizzle of the burnt ground after the crack
-  boltHit: ({ at } = {}) => { const s = place(at, 8, 90); if (s.k < 0.02) return; note('boltHit', s.k); for (let i = 0; i < 24; i++) noise(rnd(0.004, 0.02), { freq: rnd(1500, 7000), q: 1.5, vol: rnd(0.1, 0.3) * s.k, attack: 0.001, delay: 0.05 + Math.random() ** 2 * 1.6, wet: 0.15, pan: s.pan });
-    noise(2.2, { freq: 4200, q: 0.5, vol: 0.07 * s.k, attack: 0.05, slide: -2400, wet: 0.2, pan: s.pan }); },
   // a lightning bolt gathering where it will fall (the ground glowing): a fizz and crackle rising for a second (at)
   zap: ({ at, dur = 1 } = {}) => { const s = place(at, 6, 80); if (s.k < 0.02) return; note('zap', s.k); noise(dur, { type: 'highpass', freq: 2500, q: 0.6, vol: 0.18 * s.k, attack: dur * 0.9, slide: 2500, wet: 0.2, pan: s.pan });
     for (let i = 0; i < 18; i++) { const d = dur * Math.sqrt(Math.random()); noise(rnd(0.004, 0.015), { freq: rnd(2500, 8000), q: 2, vol: rnd(0.12, 0.3) * s.k * (0.3 + d / dur), attack: 0.001, delay: d, wet: 0.1, pan: s.pan }); } },
