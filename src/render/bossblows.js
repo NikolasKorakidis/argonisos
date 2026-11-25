@@ -31,7 +31,14 @@ const runeTex = canvasTex(256, (x, n) => { x.strokeStyle = '#fff'; x.fillStyle =
 const flat = (o) => new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, fog: false, polygonOffset: true, polygonOffsetFactor: -3, toneMapped: false, ...o });
 const pool = (n, geo, mat) => Array.from({ length: n }, () => { const m = new THREE.Mesh(geo, mat.clone()); m.visible = false; m.frustumCulled = false; m.renderOrder = 5; scene.add(m); return m; });
 const plane = new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2);
-const SCORCH = pool(10, plane, flat({ map: scorchTex, color: 0x0d0907 })), EMBER = pool(10, plane, flat({ map: scorchTex, alphaMap: crackTex, blending: THREE.AdditiveBlending, color: 0xff5a14 }));
+// (a scorch darkens the ground to at most a dark brown char, never more: drawn with the min blend, each pixel the darker of
+// the ground and the char's level, so marks laid over one another are no darker than one; uA fades it, the level rising
+// out of reach as it goes)
+const charMat = new THREE.ShaderMaterial({ uniforms: { uMap: { value: scorchTex }, uA: { value: 0 }, uChar: { value: new THREE.Color(0.075, 0.05, 0.034) } }, transparent: true, depthWrite: false, toneMapped: false, fog: false,
+  blending: THREE.CustomBlending, blendEquation: THREE.MinEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor, polygonOffset: true, polygonOffsetFactor: -3,
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: 'uniform sampler2D uMap; uniform float uA; uniform vec3 uChar; varying vec2 vUv; void main() { vec4 t = texture2D(uMap, vUv); float a = t.a * uA; if (a < 0.02) discard; gl_FragColor = vec4(uChar * (0.6 + 0.4 * t.r) / a, 1.0); }' });
+const SCORCH = pool(14, plane, charMat), EMBER = pool(10, plane, flat({ map: scorchTex, alphaMap: crackTex, blending: THREE.AdditiveBlending, color: 0xff5a14 }));
 const GLOW = pool(6, plane, flat({ alphaMap: crackTex, blending: THREE.AdditiveBlending, color: 0xff6a20 })), RUNES = pool(2, plane, flat({ alphaMap: runeTex, blending: THREE.AdditiveBlending, color: 0x9a6cff }));
 // an arc: a band round an axis, uv.x along the sweep and uv.y across it, drawn out (uReveal) and faded (uFade)
 const arcGeo = (() => { const g = new THREE.BufferGeometry(), S = 40, pos = [], uv = [], idx = [];
@@ -50,10 +57,11 @@ const ARCS = Array.from({ length: 6 }, () => { const m = new THREE.Mesh(arcGeo, 
 const live = [];   // { m, t, life, f(m, t) }
 const take = (list) => { const m = list.find((x) => !x.visible) || list.reduce((a, b) => ((a.userData.t0 ?? 0) < (b.userData.t0 ?? 0) ? a : b)); for (let i = live.length - 1; i >= 0; i--) if (live[i].m === m) live.splice(i, 1); m.visible = true; m.userData.t0 = performance.now(); return m; };
 const onGround = (m, p, r, lift = 0.1) => { m.position.set(p.x, p.y + lift, p.z); m.scale.set(r, 1, r); m.rotation.set(0, Math.random() * 6.283, 0); };
-// a burnt patch r metres across its half, with embers glowing in it that die down over glow seconds; it fades after life
-export function scorch(p, { r = 3, life = 14, glow = 5 } = {}) {
+// a burnt patch r metres across its half, a dark brown char with embers glowing in it that die down over glow seconds;
+// it fades out by life (15 to 25 s)
+export function scorch(p, { r = 1.8, life = rr(15, 25), glow = 5 } = {}) {
   const s = take(SCORCH), e = take(EMBER); onGround(s, p, r, 0.09); onGround(e, p, r * 0.85, 0.11); const k = soft();
-  live.push({ m: s, t: 0, life, f: (m, t) => { m.material.opacity = 0.8 * Math.min(1, t * 8) * Math.min(1, (life - t) / 3); } });
+  live.push({ m: s, t: 0, life, f: (m, t) => { m.material.uniforms.uA.value = Math.min(1, t * 8) * Math.min(1, (life - t) / (life * 0.45)); } });   // (fading over the last half of its life)
   live.push({ m: e, t: 0, life: glow, f: (m, t) => { m.material.opacity = k * 1.6 * Math.min(1, t * 10) * (1 - t / glow) ** 1.5 * (0.8 + 0.2 * Math.sin(t * 13 + p.x)); } });
 }
 // cracks glowing hot where a great blow bit, r metres out, cooling over life seconds
@@ -164,5 +172,5 @@ export function goatSpellFx(back, ground, to = []) {
 // embers glowing in it, smoke rising off it and embers drifting up a while after (big: how great a bolt)
 export function boltFx(p, big = 1) {
   debris(p, Math.round(26 * big), { speed: 9, up: 9, size: 0.3, col: 0x3a3430 }); sparks(p.clone().setY(p.y + 0.4), Math.round(60 * big), { speed: 12, up: 8, col: 0xe0ecff, k: 5, life: 0.5 }); sparks(p.clone().setY(p.y + 0.4), 30, { speed: 7, up: 6 });
-  dustRing(p, 16, 3 * big, { size: 1.6, col: 0x6a6a72 }); scorch(p, { r: 2.6 * big, life: 16, glow: 6 }); smoke(p, 14, { r: 1.2, life: 5, size: 1.4, delay: 3 }); embers(p, Math.round(30 * big), { r: 1.6 * big, life: 3, delay: 4 });
+  dustRing(p, 16, 3 * big, { size: 1.6, col: 0x6a6a72 }); scorch(p, { r: 1.7 * big, glow: 6 }); smoke(p, 14, { r: 1.2, life: 5, size: 1.4, delay: 3 }); embers(p, Math.round(30 * big), { r: 1.6 * big, life: 3, delay: 4 });
 }

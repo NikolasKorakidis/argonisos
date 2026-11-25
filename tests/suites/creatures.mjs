@@ -158,10 +158,10 @@ export default {
       ${FLY(36)}   // (the free camera off to his side, looking down over the walls at where he'll lie)
       g.creatures.hurt(c, [[99999, 'force']], P); const jolt = shake.n - n0; const went = await until(() => BOSSFX.dissolves > d0, 9000); await frames(20); window._end = { c, jolt, n0, s0, d0, iv, most: () => most }; return !!went || 'no dissolve';`);
     await t.shot('minotaur-death', { hud: false });
-    // (the dissolve goes on some eight seconds: the user, 25 Nov)
+    // (the dissolve goes on some eight seconds, glowing through six and fading out to nine: the user, 25 Nov)
     // (each picture taken at its moment in the game's time, the game held still for it: a picture takes a while to grab)
-    for (const k of [2, 4, 7]) { await t.eval(`const { BOSSFX } = await import('/src/render/bossfx.js'); await until(() => BOSSFX.t >= ${k}, 15000); g.paused = true; await frames(2); return true;`); await t.shot(`minotaur-death-${k}s`, { hud: false }); await t.eval('g.paused = false; return true;'); }
-    await t.step('…the body still blowing away seven seconds on (the owl still waiting), its ashes gone by twelve', `const { dissolving } = await import('/src/render/bossfx.js'); const on = dissolving(), owl = g.owl.state !== 'escort'; const gone = await until(() => !dissolving(), 8000); return (on && owl && gone) || JSON.stringify({ on, owl, gone });`);
+    for (const k of [2, 4, 6, 8]) { await t.eval(`const { BOSSFX } = await import('/src/render/bossfx.js'); await until(() => BOSSFX.t >= ${k}, 15000); g.paused = true; await frames(2); return true;`); await t.shot(`minotaur-death-${k}s`, { hud: false }); await t.eval('g.paused = false; return true;'); }
+    await t.step('…the body still blowing away eight seconds on (the owl still waiting), its ashes gone by about eleven', `const { dissolving } = await import('/src/render/bossfx.js'); const on = dissolving(), owl = g.owl.state !== 'escort'; const gone = await until(() => !dissolving(), 6000); return (on && owl && gone) || JSON.stringify({ on, owl, gone });`);
     await t.step('…(the bolt struck, the sounds played, the shake was hard, the body went into thousands of bits and is gone)', `const E = window._end, { shake } = await import('/src/render/fx.js'), { LIGHTNING } = await import('/src/world/lightning.js'), { BOSSFX } = await import('/src/render/bossfx.js');
       await until(() => E.c.gone, 3000); clearInterval(E.iv); g.setFly(false); const calls = (AG.AUDIO.calls || []).map((q) => q.k);
       const r = { jolt: E.jolt, punches: shake.n - E.n0, most: +E.most().toFixed(2), strikes: LIGHTNING.strikes - E.s0, bits: BOSSFX.bits, gone: E.c.gone, kill: calls.includes('kill'), end: calls.includes('bossEnd') };
@@ -187,7 +187,7 @@ export default {
     await t.step('the Chimera falls, and Zeus\'s bolt turns it to embers and ash on the wind', `const c = g.trial.boss; if (!c) return 'no chimera'; AG.AUDIO.calls = []; ${FLY(48)} const { BOSSFX } = await import('/src/render/bossfx.js'); const d0 = BOSSFX.dissolves;
       g.creatures.hurt(c, [[99999, 'force']], P); const went = await until(() => BOSSFX.dissolves > d0, 9000); await frames(20); return (went && (AG.AUDIO.calls || []).some((q) => q.k === 'bossEnd')) || 'no dissolve';`);
     await t.shot('chimera-death', { hud: false });
-    for (const k of [2, 4, 7]) { await t.eval(`const { BOSSFX } = await import('/src/render/bossfx.js'); await until(() => BOSSFX.t >= ${k}, 15000); g.paused = true; await frames(2); return true;`); await t.shot(`chimera-death-${k}s`, { hud: false }); await t.eval('g.paused = false; return true;'); }
+    for (const k of [2, 4, 6, 8]) { await t.eval(`const { BOSSFX } = await import('/src/render/bossfx.js'); await until(() => BOSSFX.t >= ${k}, 15000); g.paused = true; await frames(2); return true;`); await t.shot(`chimera-death-${k}s`, { hud: false }); await t.eval('g.paused = false; return true;'); }
     await t.step('…(its body gone, its head dropped, the trial on to its next step)', `const { dissolving } = await import('/src/render/bossfx.js'); await until(() => !dissolving(), 16000); clearInterval(window._pin); g.setFly(false);
       return (g.trial.st.down.chimera && !g.trial.boss && !g.creatures.list.some((k) => k.type === 'chimera') && (g.pickups.drops.some((d) => d.item === 'chimeraHead') || inv.count('chimeraHead') > 0)) || JSON.stringify({ down: g.trial.st.down, drops: g.pickups.drops.map((d) => d.item) });`);
     // creatures come and go all game long: whatever a body put on the GPU must go with it (a leak shows as ~9 geometries

@@ -312,21 +312,22 @@ const _rm = new THREE.Matrix4(), _rq = new THREE.Quaternion(), _re = new THREE.E
 // a fall's pose: at its foot, turned yaw, tipped tilt towards local +z, dropped y metres, rolled roll about its length
 const poseOf = (f, tilt, y = 0, roll = 0) => _rm.compose(_rv.set(f.pivot.x, f.pivot.y + y, f.pivot.z), _rq.setFromEuler(_re.set(tilt, f.yaw, roll, 'YXZ')), ONE);
 // The floor of a broken site (r: its radius, in site-local metres; at: where the boss came down, [x, z]): a crater there,
-// scorched black at the heart and ringed with dark earth, cracks running out from it across the flagstones to the walls,
+// charred dark brown at the heart and ringed with dark earth, cracks running out from it across the flagstones to the walls,
 // branching as they go. glow: the Chimera's, its fissures lit from below (the core of each crack in the emissive map).
 // One cut-out sheet laid over the floor (alphaTest: no sorting, it takes shadows).
 function crackSheet(r, at, seed, glow) {
   const N = 1024, c = document.createElement('canvas'); c.width = c.height = N; const g = c.getContext('2d'), e = glow ? document.createElement('canvas') : null; let sd = seed;
   const rnd2 = () => ((sd = (sd * 16807) % 2147483647) - 1) / 2147483646, px = (x) => (x / r + 1) * N / 2, M = N / (2 * r), eg = e && (e.width = e.height = N, e.getContext('2d'));
   const cx = px(at[0]), cz = px(at[1]);
-  // the crater: a black heart in a ragged blotch of scorched earth
-  for (const [rad, col] of [[5.6, 'rgba(46,36,28,1)'], [4.2, 'rgba(30,24,19,1)'], [2.6, 'rgba(14,11,9,1)']]) { g.fillStyle = col; g.beginPath(); for (let i = 0; i <= 28; i++) { const a = (i / 28) * Math.PI * 2, q = rad * M * (0.78 + 0.35 * rnd2()); g.lineTo(cx + Math.cos(a) * q, cz + Math.sin(a) * q); } g.fill(); }
+  // the crater: a charred heart in a ragged blotch of scorched earth (dark brown, not black: the user, 25 Nov, a black
+  // one read as a hole in the arena)
+  for (const [rad, col] of [[4.6, 'rgba(70,54,40,1)'], [3.4, 'rgba(56,41,30,1)'], [2.0, 'rgba(44,31,22,1)']]) { g.fillStyle = col; g.beginPath(); for (let i = 0; i <= 28; i++) { const a = (i / 28) * Math.PI * 2, q = rad * M * (0.78 + 0.35 * rnd2()); g.lineTo(cx + Math.cos(a) * q, cz + Math.sin(a) * q); } g.fill(); }
   if (eg) { const gr = eg.createRadialGradient(cx, cz, 0, cx, cz, 3.2 * M); gr.addColorStop(0, 'rgba(255,150,60,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); eg.fillStyle = gr; eg.fillRect(0, 0, N, N); }
   // the cracks: jagged, narrowing as they run out, a branch now and then
   const crack = (x, y, a, len, w) => {
     const pts = [[x, y]]; for (let s = 0; s < len; s += 0.7) { a += (rnd2() - 0.5) * 0.7; x += Math.cos(a) * 0.7 * M; y += Math.sin(a) * 0.7 * M; pts.push([x, y]); if (Math.hypot(x - N / 2, y - N / 2) > N / 2 - 6) break;
       if (rnd2() < 0.07 && w > 1.5) crack(x, y, a + (rnd2() < 0.5 ? -1 : 1) * (0.5 + rnd2() * 0.6), len * 0.45, w * 0.6); }
-    for (const [ctx2, col, k] of [[g, 'rgba(20,16,13,1)', 1], ...(eg ? [[eg, 'rgba(255,120,40,1)', 0.45]] : [])]) {
+    for (const [ctx2, col, k] of [[g, 'rgba(32,24,18,1)', 1], ...(eg ? [[eg, 'rgba(255,120,40,1)', 0.45]] : [])]) {
       ctx2.strokeStyle = col; ctx2.lineCap = ctx2.lineJoin = 'round'; for (let i = 1; i < pts.length; i++) { ctx2.lineWidth = Math.max(1.2, w * k * (1 - i / pts.length * 0.75)); ctx2.beginPath(); ctx2.moveTo(...pts[i - 1]); ctx2.lineTo(...pts[i]); ctx2.stroke(); } }
   };
   for (let i = 0; i < 16; i++) crack(cx, cz, (i / 16) * Math.PI * 2 + rnd2() * 0.3, r * (0.45 + rnd2() * 0.65), 7 + rnd2() * 6);

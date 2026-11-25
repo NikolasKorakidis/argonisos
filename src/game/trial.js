@@ -488,7 +488,7 @@ export class Trial {
           // (the flame itself on the GPU, bossblows.js: a white-hot core, rolling flame, black smoke, embers; where it meets
           // the ground it flares and leaves the ground scorched)
           const gp = mouth.clone().addScaledVector(f, rr(12, 22)); gp.y = g.creatures.groundAt(gp.x, gp.z, c.pos.y + 2); FX.breathFx(mouth, f, dt, gp);
-          m.burn = (m.burn || 0) - dt; if (m.burn <= 0) { m.burn = 0.3; FX.scorch(gp, { r: rr(1.8, 2.8), life: 12, glow: 4 }); }
+          m.burn = (m.burn || 0) - dt; if (m.burn <= 0) { m.burn = 0.3; FX.scorch(gp, { r: rr(1.2, 1.8), glow: 4 }); }
           askLight(mouth.clone().addScaledVector(f, 8), 40, 30, 0xff8a30, undefined, false);
           m.tick = (m.tick || 0) - dt;
           if (m.tick <= 0) { m.tick = 0.25; if (d < 26 && Math.abs(angDiff(toP, c.yaw)) < 0.45 && landed(g.combat.hitPlayer(c, [9, 13, 'fire']))) P.stats.add('burning', 3); } }

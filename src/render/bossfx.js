@@ -6,7 +6,8 @@
 //   What has risen trails behind as the beast goes (uVel), so a charge leaves a wake.
 // - dissolve: its body breaking into particles and blowing away. Every bit is sampled from the pose the body lies in, in
 //   its own colours (its texture read at each bit); the body glows up from where Zeus's bolt struck (from), then is torn
-//   off in a wave running out from there, each bit swirling up and away on the wind (wind.js) for some eight seconds,
+//   off in a wave running out from there, each bit swirling up and away on the wind (wind.js), glowing for some six
+//   seconds and fading out between six and nine,
 //   cooling from ember to ash, smoke and embers streaming off it, its glow lighting the ground (the user, 25 Nov).
 // Both blend premultiplied, so the dark smoke and ash darken what lies behind them while the embers add light, in one
 // draw; the embers are bright enough for the bloom to catch. Made at load and kept in the scene unseen, so their shaders
@@ -17,6 +18,7 @@ import { WIND } from '../world/wind.js';
 import { spawn, rr, updateEmit, emitWarm } from './emit.js';
 import { updateBlows, blowsWarm } from './bossblows.js';
 import { askLight } from './lights.js';
+import { smooth } from '../util/math.js';
 
 export const BOSSFX = { aura: null, dissolves: 0, bits: 0, t: 0 };   // (for the tests: who the aura is on, how many bodies went and into how many bits, how long the last has been going)
 const BLEND = { transparent: true, depthWrite: false, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, blendEquation: THREE.AddEquation };
@@ -127,7 +129,7 @@ const disMat = new THREE.ShaderMaterial({ uniforms: DIS_U, ...BLEND,
     attribute vec3 aCol; attribute vec4 aSeed; varying vec4 vC; varying float vSoft, vCover;
     void main() {
       vC = vec4(0.0); vSoft = 0.0; vCover = 0.0; gl_PointSize = 0.0; gl_Position = vec4(0.0, 0.0, -2.0, 1.0);
-      float t = uT - aSeed.w, L = 4.2 + 2.8 * aSeed.x;   // (aSeed.w: when this bit is torn off; L: how long it flies)
+      float t = uT - aSeed.w, L = 5.6 + 2.6 * aSeed.x;   // (aSeed.w: when this bit is torn off; L: how long it flies)
       if (t > L) return;
       vec3 p = position, ember = vec3(1.0, 0.42, 0.1), ash = vec3(0.1, 0.09, 0.085); float heat, alpha = 1.0, size = uSize * (0.75 + 0.5 * aSeed.y);
       if (t < 0.0) {   // still on the body, glowing up as the wave nears
@@ -136,11 +138,14 @@ const disMat = new THREE.ShaderMaterial({ uniforms: DIS_U, ...BLEND,
       } else {   // torn off: swirling slowly round the body's middle as it rises from the heat, drifting out, the wind
         // taking it more and more, tumbling in the eddies; most cool from ember to ash as they go, the odd one glowing on
         vec3 rel = p - uCenter; float ang = (0.3 + 0.45 * aSeed.z) * t * (1.0 + 0.12 * t), rad = length(rel.xz) * (1.0 + 0.1 * t) + 0.22 * t * t * aSeed.y, a0 = atan(rel.z, rel.x) + ang;
-        p = uCenter + vec3(cos(a0) * rad, rel.y + (0.5 + 1.1 * aSeed.z) * t + 0.1 * t * t, sin(a0) * rad) + uWind * (0.16 * t * t) * (0.6 + 0.8 * aSeed.x)
-          + vec3(sin(t * 1.3 + aSeed.x * 31.0), 0.5 * cos(t * 1.1 + aSeed.y * 17.0), sin(t * 1.2 + aSeed.z * 23.0)) * 0.6 * t;
-        float u = t / L; heat = exp(-t * (aSeed.x < 0.3 ? 0.18 : 0.3 + 0.45 * aSeed.z)) * (0.75 + 0.25 * sin(uT * (9.0 + 8.0 * aSeed.y) + aSeed.x * 50.0));
-        // (cooled, a bit is thin grey ash, half seen, so the cloud reads as embers drifting in smoke, not a brown mass)
-        vC.rgb = mix(ash, mix(vec3(0.6, 0.08, 0.02), ember * 3.4, heat), smoothstep(0.05, 0.6, heat)); alpha = (1.0 - smoothstep(0.55, 1.0, u)) * (0.35 + 0.65 * smoothstep(0.0, 0.4, heat)); size *= 1.0 - 0.5 * u;
+        // (slow enough that the cloud is still by the body's place, drifting, after six seconds)
+        p = uCenter + vec3(cos(a0) * rad, rel.y + (0.35 + 0.8 * aSeed.z) * t + 0.05 * t * t, sin(a0) * rad) + uWind * (0.1 * t * t) * (0.6 + 0.8 * aSeed.x)
+          + vec3(sin(t * 1.3 + aSeed.x * 31.0), 0.5 * cos(t * 1.1 + aSeed.y * 17.0), sin(t * 1.2 + aSeed.z * 23.0)) * 0.5 * t;
+        // (over half stay hot, glowing and lighting the scene, through six seconds or so; the rest cool to ash sooner)
+        float u = t / L; heat = exp(-t * (aSeed.y < 0.55 ? 0.075 : 0.3 + 0.4 * aSeed.z)) * (0.75 + 0.25 * sin(uT * (9.0 + 8.0 * aSeed.y) + aSeed.x * 50.0));
+        // (cooled, a bit is thin grey ash, half seen, so the cloud reads as embers drifting in smoke, not a brown mass; the
+        // whole fading out over the last third of each bit's flight, some six to nine seconds after the bolt)
+        vC.rgb = mix(ash, mix(vec3(0.6, 0.08, 0.02), ember * 3.2, heat), smoothstep(0.05, 0.6, heat)); alpha = (1.0 - smoothstep(0.62, 1.0, u)) * (0.35 + 0.65 * smoothstep(0.0, 0.4, heat)); size *= 1.0 - 0.4 * u;
       }
       vec4 mv = viewMatrix * vec4(p, 1.0); float d = -mv.z; if (d < 0.2) return;
       vC.a = alpha * fog(d) * smoothstep(2.0, 8.0, d); vSoft = 0.0; vCover = 1.0 - 0.75 * heat;   // (hot, it adds light; cooled, it covers; gone right by the lens, where a bit would fill the view)
@@ -160,7 +165,7 @@ function pixels(tex) {
 // The body (a creature's, models.js) breaks up: n bits over its surface as it lies now, each torn off from secs after the
 // start, those nearest from (where the bolt struck) first; it is best hidden once uGlow has come up (glowFor seconds:
 // trial.js hides it then). Returns how many bits.
-export function dissolve(obj, from, { n = 14000, glowFor = 0.35, spread = 2.6 } = {}) {
+export function dissolve(obj, from, { n = 14000, glowFor = 0.35, spread = 1.8 } = {}) {
   obj.updateMatrixWorld(true);
   const tris = [], parts = [];   // (each triangle: its part, its three corners, its area so far)
   let total = 0;
@@ -198,17 +203,17 @@ export function dissolve(obj, from, { n = 14000, glowFor = 0.35, spread = 2.6 } 
   DIS_U.uSize.value = Math.sqrt(total / n) * 1.7; DIS_U.uCenter.value.copy(ctr); DIS_U.uT.value = 0; DIS_U.uGlow.value = 0;
   DIS_U.uLit.value = Math.min(1, Math.max(0.08, sun.intensity / 2.6 * 0.5 + hemi.intensity * 0.3));
   DIS_U.uWind.value.set(WIND.dir.x, 0, WIND.dir.y).multiplyScalar(Math.max(2.5, WIND.speed * 0.9));
-  D.on = true; D.t = 0; D.glowFor = glowFor; D.end = glowFor + spread + 0.3 + 7; D.at = ctr.clone(); D.r = Math.sqrt(total) * 0.3; BOSSFX.dissolves++; BOSSFX.bits = n;
+  D.on = true; D.t = 0; D.glowFor = glowFor; D.end = glowFor + spread + 0.3 + 8.2; D.at = ctr.clone(); D.r = Math.sqrt(total) * 0.3; BOSSFX.dissolves++; BOSSFX.bits = n;
   // (and with the bits, as each part goes: grey smoke off it, warmed a little by the embers at first, drifting away,
   // and embers streaming up out of it)
   for (let i = 0; i < 900; i++) { const j = Math.floor(Math.random() * n), p = _v.fromArray(pos, j * 3), t0 = seed[j * 4 + 3];
-    if (i < 520) spawn(p, new THREE.Vector3(rr(-0.4, 0.4), rr(0.5, 1.4), rr(-0.4, 0.4)), { life: rr(4.5, 7), size: rr(1.4, 2.6), col: 0x463a32, k: 1, cover: 0.6, grav: -0.2, drag: 0.4, grow: 2.4, soft: 1, heat: 0.25, wind: 0.45, turb: 0.5, fade: 0.25, delay: t0 + rr(0, 0.6) });
-    else spawn(p, new THREE.Vector3(rr(-0.8, 0.8), rr(1, 3), rr(-0.8, 0.8)), { life: rr(3.5, 6.5), size: rr(0.06, 0.13), col: 0xff9a40, k: 3.2, cover: 0, grav: -0.4, drag: 0.5, heat: 0.7, turb: 1.4, wind: 0.5, flick: 0.6, delay: t0 + rr(0, 1) }); }
+    if (i < 520) spawn(p, new THREE.Vector3(rr(-0.4, 0.4), rr(0.5, 1.4), rr(-0.4, 0.4)), { life: rr(6, 8.5), size: rr(1.4, 2.6), col: 0x6a615a, k: 1, cover: 0.4, grav: -0.2, drag: 0.4, grow: 2.4, soft: 1, heat: 0.25, wind: 0.45, turb: 0.5, fade: 0.25, delay: t0 + rr(0, 0.6) });
+    else spawn(p, new THREE.Vector3(rr(-0.8, 0.8), rr(1, 3), rr(-0.8, 0.8)), { life: rr(5, 8), size: rr(0.06, 0.13), col: 0xff9a40, k: 3.2, cover: 0, grav: -0.4, drag: 0.5, heat: 0.7, turb: 1.4, wind: 0.5, flick: 0.6, delay: t0 + rr(0, 1) }); }
   return n;
 }
 function updateDissolve(dt) {
   if (!D.on) return; D.t += dt; BOSSFX.t = D.t; DIS_U.uT.value = D.t; DIS_U.uGlow.value = Math.min(1, D.t / D.glowFor);
-  const left = 1 - D.t / D.end; askLight(D.at, 45 * left ** 1.5 * (0.85 + 0.15 * Math.sin(D.t * 11)), 18 + D.r * 4, 0xff8a40, undefined, false);   // (the embers' glow on the ground and the ruin round it)
+  const left = 1 - smooth(0.5, 1, D.t / D.end); askLight(D.at, 50 * left * (0.85 + 0.15 * Math.sin(D.t * 11)), 18 + D.r * 4, 0xff8a40, undefined, false);   // (the embers' glow on the ground and the ruin round it)
   if (D.t > D.end) { D.on = false; dis.visible = false; dis.geometry.dispose(); dis.geometry = new THREE.BufferGeometry(); }
 }
 export const dissolving = () => D.on;
