@@ -19,6 +19,7 @@ const QUAD = new Set(['deer', 'fox', 'rabbit', 'hog', 'chimera']);   // bodies t
 import { makeBody, preloadBodies } from './models.js';
 import { Nav } from './nav.js';
 import { burst, dust, addShake } from '../render/fx.js';
+import { stepFx, clawFx } from '../render/bossblows.js';
 import { camera } from '../render/core.js';
 import { stormWallDepth } from '../world/stormwall.js';
 import { waterAt } from '../world/river.js';
@@ -271,6 +272,7 @@ export class Creatures {
             const fall = c.pos.clone().addScaledVector(new THREE.Vector3(Math.sin(c.yaw), 0, Math.cos(c.yaw)), c.boss ? T.reach * 0.8 : 3);
             if (c.blowAt.hit) g.combat.hitPlayer(c, T.dmg); else if (T.heavy) { dust(fall, c.boss ? 12 : 18, undefined, c.boss ? 0.6 : 0.35); addShake(c.boss ? 0.7 * this.near(c) : 0.3); }
             if (T.heavy) g.sound?.('slam', { at: fall, big: c.boss });   // (a giant's or the Minotaur's blow comes down like a slam, hit or miss)
+            if (c.boss) clawFx(c, fall.clone().setY(c.pos.y + 0.2));   // (a boss's common blow, the Chimera's claws: their tears through the air, bossblows.js)
             this.hitBuildings(c); } }
         if (c.atkE >= c.atkT) c.state = 'chase';
       }
@@ -390,7 +392,7 @@ export class Creatures {
   stomp(c, p) {
     const near = Math.max(0, 1 - c.pos.distanceTo(this.g.player.pos) / 50), k = c.T.size / 3.3;
     this.g.sound?.('giantStep', { at: p, k }); if (near > 0) addShake(0.42 * near * near * k);
-    dust(p.setY(Math.max(p.y, c.pos.y) + 0.1), 2, 0x7a6c5c, 0.35 * k);
+    dust(p.setY(Math.max(p.y, c.pos.y) + 0.1), 2, 0x7a6c5c, 0.35 * k); stepFx(p, k);   // (a puff of dust round the foot and grit thrown up: bossblows.js)
   }
   // what a creature stands on: the ground, or a floor or a site's steps within reach
   groundAt(x, z, y) { const g = this.g; return Math.max(groundAt(x, z), g.build?.floorAt(x, z, y) ?? -1e9, g.structures?.floorAt(x, z, y) ?? -1e9); }
