@@ -45,8 +45,8 @@ export default {
     await t.wait(600);
     await t.step('18 …(in front of the wall, the wall still solid)', `const w = window._wall, c = AG.camera.position; return (c.z < w.pos.z - 0.1 && P.camD < 3.4 && w.mats.every((m) => m.opacity === 1)) || JSON.stringify({ camZ: c.z - w.pos.z, camD: P.camD, op: w.mats.map((m) => m.opacity) });`);
     await t.step('18 …and back out when the view is clear', `P.camYaw = Math.PI; return true;`);
-    await t.wait(1500);
-    await t.step('18 …(the full distance again)', `return P.camD > 6.5 || 'camera at ' + P.camD.toFixed(2) + ' m';`);
+    // (it eases back out over a second or so of frames: waited for, however slow the frames come)
+    await t.step('18 …(the full distance again)', `await until(() => P.camD > 6.5, 6000); return P.camD > 6.5 || 'camera at ' + P.camD.toFixed(2) + ' m';`);
     await t.shot('hud');
 
     // ---- Patch 23, fights and survival: each fix of the gameplay review with its own check
