@@ -56,10 +56,10 @@ export default {
       const ahead = (d) => new V(P.pos.x + Math.sin(P.yaw) * d, P.pos.y, P.pos.z + Math.cos(P.yaw) * d);
       const fake = (o) => ({ pos: ahead(1.5), yaw: P.yaw + Math.PI, dmgK: 1, hitT: 0, atkCd: 0, body: {}, ...o });`;
     await t.eval(`for (const c of [...g.creatures.list]) g.creatures.remove(c); B.remove(window._wall, false); P.spawn(P.pos.x + 40, P.pos.z); return true;`);
-    await t.step('23 the roll works without a guard: with bare hands and with the bow drawn (RMB held, Space), for its stamina', `${F} const out = {};
-      for (const kit of [[], ['crudeBow']]) { wear(...kit); if (kit.length) g.give('crudeArrow', 10); P.dodge = null; P.stats.stamina = 50; input.rmb = true; await frames(kit.length ? 40 : 3); const drawn = P.aiming;
+    await t.step('23 the roll works without a guard: with bare hands and with the bow drawn (LMB held; RMB, Space), for its stamina', `${F} const out = {};
+      for (const kit of [[], ['crudeBow']]) { wear(...kit); P.dodge = null; if (kit.length) { g.give('crudeArrow', 10); input.lmb = true; await frames(40); } const drawn = P.aiming; P.stats.stamina = 50; input.rmb = true; input.clicks.push(2); await frames(3);
         input.pressed.add('Space'); await frames(4); const k = kit[0] || 'hands'; out[k] = { rolled: !!P.dodge, cost: +(50 - P.stats.stamina).toFixed(1), drawn, lowered: !P.aiming };
-        await until(() => !P.dodge, 3000); input.rmb = false; await frames(3); }
+        await until(() => !P.dodge, 3000); input.rmb = false; input.lmb = false; await frames(3); }
       wear(); return (out.hands.rolled && out.hands.cost > 10 && out.crudeBow.rolled && out.crudeBow.drawn && out.crudeBow.lowered) || JSON.stringify(out);`);
     await t.step('23 a parry staggers a hog, never a boss, and a giant only when the guard holds most of its blow; a tower shield soaks but cannot parry', `${F} const { TYPES } = await import('/src/creatures/creatures.js'); wear('crudeAxe', 'crudeShield'); P.stats.god = true; const out = {};
       const parry = (c, dmg) => { P.blocking = true; g.combat.blockT = 0; P.stats.stamina = 50; g.combat.hitPlayer(c, dmg); return c.hitT > 0; };

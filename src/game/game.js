@@ -196,12 +196,12 @@ export function installGame(g) {
     if (!g.build.active && !(g.equippedTool('build') && g.build.aimPiece)) hud.prompt(t ? 'E' : null, t?.label, t?.sub, t?.alt);
     if (hit('KeyE')) g.interact();
     if (t?.alt && hit(`Key${t.alt.key}`)) { t.alt.use(); g.altUsed = t.alt.key; }   // e.g. F: put out the fire (and not the boss power)
-    // attack / use with LMB (the hammer and the bow have their own handlers)
+    // attack / use with LMB (the hammer and the bow have their own handlers: the bow's is held to draw, combat.js updateBow)
     for (const b of input.clicks) {
       if (b !== 0) continue;
       const d = g.held();
       if (d?.tool === 'build' && g.build?.active) continue;
-      if (g.bow()) { g.combat?.bowClick?.(); continue; }
+      if (g.bow()) continue;
       player.strike(strikeKind(d), swingCost(d));
     }
     if (input.lmb && !input.clicks.length && player.swing <= 0 && !g.bow() && !(g.held()?.tool === 'build' && g.build?.active)) player.strike(strikeKind(g.held()), swingCost(g.held()));   // hold to keep swinging

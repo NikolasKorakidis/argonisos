@@ -508,6 +508,8 @@ export class Trial {
     // (the boss camera while a fight is on and you're about its arena, or one is coming: player.js BOSS_CAM; for a boss whose
     // fight has it, bossCam, the Chimera's)
     g.player.bossCam = (!!this.arrival && !!TYPES[this.arrival.u.boss]?.bossCam) || (!!this.boss && !this.boss.dead && !!this.boss.T.bossCam && g.player.pos.distanceTo(this.boss.pos) < 70);
+    // (and where its chest is, coming down out of the sky too, for the camera to lean up towards: player.js BOSS_CAM)
+    const bc = g.player.bossCam && (this.boss && !this.boss.dead ? this.boss : this.arrival?.c); g.player.bossAt = bc ? (this.bossAt ||= new THREE.Vector3()).copy(bc.pos).setY(bc.pos.y + (bc.fall || 0) + bc.T.h * 0.6) : null;
     if (hit('KeyF') && !g.player.dead && g.altUsed !== 'F') this.usePower();   // (F at a lit fire puts the fire out instead)
     if (st.powerCd > 0) { st.powerCd -= dt; if (Math.floor(st.powerCd) !== this.lastCd) { this.lastCd = Math.floor(st.powerCd); this.drawPower(); } }
     if (g.player.stats.has('poisoned')) g.player.stats.damage(1.5 * dt);

@@ -292,8 +292,8 @@ export default {
           if (i >= from) { s.off = Math.max(s.off, Math.abs(ang(y, aimYaw()))); if (y0 !== null) { s.turn = Math.max(s.turn, Math.abs(ang(y, y0)) / dt); s.chest = Math.max(s.chest, Math.abs(ang(c, c0)) / dt); } } y0 = y; c0 = c; }
         return { off: deg(s.off), turn: deg(s.turn), chest: deg(s.chest) }; };`;
     const aim = await t.eval(`${AIMT} AG.S.peaceful = true; P.stats.god = true; kit('crudeBow'); g.give('crudeArrow', 20); await frames(20); const steady = {}, moving = {}, guard = {};
-      for (const d of DIRS) { await home(); input.rmb = true; await until(() => P.bow?.st === 'aim', 3000); keys(d, true); steady[d.join('')] = await watch(60, 20); keys(d, false); input.rmb = false; await frames(20); }
-      for (const d of DIRS) { await home(); keys(d, true); await frames(25); input.rmb = true; const a = await watch(80); input.rmb = false; const b = await watch(50); keys(d, false); moving[d.join('')] = Math.max(a.chest, b.chest); await frames(20); }
+      for (const d of DIRS) { await home(); input.lmb = true; await until(() => P.bow?.st === 'aim', 3000); keys(d, true); steady[d.join('')] = await watch(60, 20); keys(d, false); input.lmb = false; await frames(20); }
+      for (const d of DIRS) { await home(); keys(d, true); await frames(25); input.lmb = true; const a = await watch(80); input.lmb = false; const b = await watch(50); keys(d, false); moving[d.join('')] = Math.max(a.chest, b.chest); await frames(20); }
       kit('crudeAxe', 'crudeShield'); await frames(20);
       for (const d of DIRS) { await home(); keys(d, true); await frames(25); input.rmb = true; const a = await watch(50), s = await watch(30); input.rmb = false; const b = await watch(50); keys(d, false); guard[d.join('')] = { off: s.off, chest: Math.max(a.chest, b.chest) }; await frames(20); }
       kit(); P.stats.god = false; return { steady, moving, guard };`);
@@ -301,5 +301,39 @@ export default {
     t.check('the bow drawn, walking in each of the 8 directions: the hero faces his aim (within 3°, turning under 30°/s), his chest still (under 150°/s)', Object.values(aim.steady).every((r) => r.off <= 3 && r.turn < 30 && r.chest < 150), JSON.stringify(aim.steady));
     t.check('…drawing and letting go on the move: the chest never wheels round against the facing (under 1000°/s; it spun at 2800)', Object.values(aim.moving).every((c) => c < 1000), JSON.stringify(aim.moving));
     t.check('the guard up on the move: facing the aim, and raising and dropping it never wheels the chest round (under 1300°/s; 2500 before)', Object.values(aim.guard).every((r) => r.off <= 3 && r.chest < 1300), JSON.stringify(aim.guard));
+
+    // ---- The bow drawn, not fired on a click (Patch 26, the reviewer's): LMB held draws it, let go looses. Only a full
+    // draw (the crude bow's 1.5 s at Bowman 1, a third less at 100) gives the bow's whole damage and the arrow's full speed;
+    // a short draw less of both, a bare tap least. RMB lets the draw down, the arrow kept, and the held LMB doesn't draw
+    // again until pressed again; a weapon swap lets it down too; holding it costs stamina, and with none left it's let down;
+    // with no arrows nothing is drawn. The draw bar under the crosshair fills with it and lights up when full
+    const BOWT = `${AIMT} const { ITEMS } = await import('/src/game/items.js'); const arrow = () => g.combat.arrows.at(-1), n = () => inv.count('crudeArrow'), bar = document.getElementById('draw');
+      const full = (ITEMS.crudeBow.dmg[0][0] + ITEMS.crudeArrow.dmg[0][0]) * P.stats.damageK('bow') * g.combat.blessK();
+      const loose = async (f) => { input.lmb = true; await until(() => P.bow?.st === 'aim' || (P.bow?.st === 'draw' && P.bow.f >= f), 4000); const drawn = P.bow.f, before = n(); input.lmb = false; await frames(2); const a = arrow();
+        return { drawn: +drawn.toFixed(2), shot: n() === before - 1, dmg: +(a.dmg[0][1] === 'pierce' ? a.dmg[0][0] * a.k : NaN).toFixed(1), v: +a.v.length().toFixed(1), flat: +a.flat.toFixed(2) }; };`;
+    const draw = await t.eval(`${BOWT} AG.S.peaceful = true; P.stats.god = true; kit('crudeBow'); g.give('crudeArrow', 30); await home(); await frames(20); const o = { full: +full.toFixed(1) };
+      const sk = P.stats.skills.bow, lv = sk.level; sk.level = 1; o.F = +g.combat.drawTime(ITEMS.crudeBow).toFixed(2); sk.level = 100; o.F100 = +g.combat.drawTime(ITEMS.crudeBow).toFixed(2); sk.level = 1; o.Fcretan = +g.combat.drawTime(ITEMS.cretanBow).toFixed(2); sk.level = lv;
+      input.lmb = true; const t0 = performance.now(); await until(() => (P.bow?.f ?? 0) >= 0.5, 3000); o.halfBar = bar && !bar.classList.contains('off') && !bar.classList.contains('full') && parseFloat(bar.style.getPropertyValue('--k')) > 40;
+      await until(() => P.bow?.st === 'aim', 4000); o.secs = +((performance.now() - t0) / 1000).toFixed(2); await frames(3); o.fullBar = !!bar?.classList.contains('full'); input.lmb = false; await frames(2); return o;`);
+    t.metric('the bow\'s draw (s to full: crude at Bowman 1 and 100, Cretan; the bar half way and full)', draw);
+    t.check('a full draw takes the crude bow\'s 1.5 s (a third less at Bowman 100, the Cretan bow 1.25 s), and the draw bar fills and lights up', draw.F === 1.5 && Math.abs(draw.F100 - 1) < 0.01 && draw.Fcretan === 1.25 && draw.secs >= 1.4 && draw.secs < 2.5 && draw.halfBar && draw.fullBar, JSON.stringify(draw));
+    await t.eval(`const { input } = await import('/src/input.js'); await frames(30); input.lmb = true; await until(() => P.bow?.st === 'draw' && P.bow.f >= 0.55, 3000); return true;`); await t.shot('bow-draw-half');
+    await t.eval(`await until(() => P.bow?.st === 'aim', 3000); await frames(10); return true;`); await t.shot('bow-draw-full');
+    await t.eval(`const { input } = await import('/src/input.js'); input.lmb = false; await frames(30); return true;`);
+    const shots = await t.eval(`${BOWT} const o = { full: +full.toFixed(1) }; o.max = await loose(1); await frames(30); o.half = await loose(0.4); await frames(30); o.tap = await loose(0); await frames(30); return o;`);
+    t.metric('arrows loosed (draw, damage, m/s, s flying flat): full, part, a tap', shots);
+    t.check('a full draw looses an arrow with the bow\'s whole damage, at full speed', shots.max.shot && shots.max.drawn === 1 && Math.abs(shots.max.dmg - shots.full) < 0.2 && shots.max.v > 66, JSON.stringify(shots));
+    t.check('…a part draw (40%) less damage (under 60% of it), slower and dropping sooner', shots.half.shot && shots.half.dmg < shots.full * 0.6 && shots.half.dmg > shots.full * 0.4 && shots.half.v < shots.max.v * 0.75 && shots.half.flat < shots.max.flat, JSON.stringify(shots));
+    t.check('…and let go at once, a weak arrow (under a third of it)', shots.tap.shot && shots.tap.dmg < shots.full * 0.33 && shots.tap.v < shots.half.v, JSON.stringify(shots));
+    await t.step('RMB lets the draw down, the arrow kept; LMB still held doesn\'t draw again until pressed again', `${BOWT} await frames(30); const n0 = n(); input.lmb = true; await until(() => (P.bow?.f ?? 0) >= 0.5, 3000); input.clicks.push(2); await frames(3);
+      const down = P.bow.st === 'lower' && n() === n0 && !P.aiming; await frames(40); const stays = !P.aiming && n() === n0; input.lmb = false; await frames(3); input.lmb = true; const again = await until(() => P.bow?.st === 'draw', 500);
+      input.clicks.push(2); await frames(3); input.lmb = false; await frames(10); return (down && stays && again && n() === n0) || JSON.stringify({ down, stays, again, st: P.bow?.st, n: n(), n0 });`);
+    await t.step('a weapon swap lets the draw down, the arrow kept', `${BOWT} await frames(20); const n0 = n(); input.lmb = true; await until(() => (P.bow?.f ?? 0) >= 0.5, 3000); kit('crudeAxe'); await frames(5); const ok = !P.bow && !P.aiming && n() === n0 && g.combat.nock.visible === false && bar.classList.contains('off');
+      input.lmb = false; kit('crudeBow'); await frames(20); return ok || JSON.stringify({ bow: P.bow?.st, n: n(), n0 });`);
+    await t.step('drawing costs stamina, and with none left the draw is let down, the arrow kept', `${BOWT} P.stats.god = false; await home(); await frames(10); const s0 = P.stats.stamina; input.lmb = true; await until(() => P.bow?.st === 'aim', 3000); await frames(20); const used = s0 - P.stats.stamina;
+      P.stats.stamina = 1; const n0 = n(), out = await until(() => P.bow?.st === 'lower', 2000); input.lmb = false; await frames(5); P.stats.god = true; P.stats.stamina = P.stats.maxStamina;
+      return (used > 4 && used < 12 && out && n() === n0) || JSON.stringify({ used, out, st: P.bow?.st, n: n(), n0 });`);
+    await t.step('with no arrows nothing is drawn', `${BOWT} await frames(20); inv.take('crudeArrow', n()); input.lmb = true; await frames(20); const ok = P.bow?.st === 'ready' && !P.aiming && bar.classList.contains('off'); input.lmb = false; await frames(3); g.give('crudeArrow', 10); kit(); P.stats.god = false;
+      return ok || JSON.stringify({ st: P.bow?.st });`);
   },
 };

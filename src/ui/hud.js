@@ -21,7 +21,7 @@ export class HUD {
       <div id="status"><div id="clock"></div><div id="conds"></div></div>
       <div id="toasts"></div><div id="pickups"></div><div id="skillPops"></div>
       <div id="region"><div class="rname"></div><div class="rsub"></div></div>
-      <div id="cross"></div>
+      <div id="cross"></div><div id="draw" class="off"><i></i></div>
       <div id="prompt" class="hidden"></div>
       <div id="act" class="hidden"><i></i><span></span></div>
       <div id="stam" class="full"><div class="vbar"><i class="ghost"></i><i class="val"></i></div><u></u></div>
@@ -81,6 +81,13 @@ export class HUD {
     const e = $('act');
     if (k === null || k === undefined) { if (this.last.act) { e.classList.add('hidden'); this.last.act = null; } return; }
     const key = label + '|' + ic; if (key !== this.last.act) { this.last.act = key; e.classList.remove('hidden'); e.querySelector('i').innerHTML = icon(ic); e.querySelector('span').textContent = label; }
+    e.style.setProperty('--k', (Math.min(1, Math.max(0, k)) * 100).toFixed(1) + '%');
+  }
+  // The bow's draw (combat.js updateBow): a short bar under the crosshair filling as the string comes back, lit up once
+  // it's full (only a full draw gives the bow its whole damage). k: 0..1, or null to let it fade
+  drawBar(k) {
+    const e = $('draw'), on = k !== null && k !== undefined; if (on !== this.last.drawOn) { this.last.drawOn = on; e.classList.toggle('off', !on); } if (!on) return;
+    const full = k >= 1; if (full !== this.last.drawFull) { this.last.drawFull = full; e.classList.toggle('full', full); }
     e.style.setProperty('--k', (Math.min(1, Math.max(0, k)) * 100).toFixed(1) + '%');
   }
   // A number that pops off a creature when you hit it
@@ -216,6 +223,7 @@ export class HUD {
     const d = ITEMS[s.id], bits = [];
     if (d.food) bits.push(d.food.health >= 0 ? `+${d.food.health} health, +${d.food.stamina} stamina, ${d.food.regen} hp/s for ${fmtT(d.food.duration)}` : `Inedible like this (${d.food.health} health)`);
     if (d.dmg) bits.push('Damage ' + d.dmg.map(([n, k]) => `${n} ${k}`).join(' + '));
+    if (d.draw) bits.push(`Full draw ${d.draw} s`);   // (a bow's: quicker with the Bowman skill, combat.js drawTime)
     if (d.block) bits.push(`Block ${d.block}`); if (d.armor) bits.push(`Armour ${d.armor}`);
     if (d.speed) bits.push(`${d.speed > 0 ? '+' : ''}${Math.round(d.speed * 100)}% speed`); if (d.resist) bits.push(`Resists ${d.resist.join(', ')}`); if (d.regen) bits.push(`+${Math.round(d.regen * 100)}% health regeneration`);
     if (d.dur) bits.push(`Durability ${Math.ceil(s.dur)} / ${d.dur}`);

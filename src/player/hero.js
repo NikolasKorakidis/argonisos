@@ -199,6 +199,8 @@ export const STRAP = { along: 15, out: 5 };
 const STANCE = { run: [0.17, 0.23], sprint: [0.2, 0.12] };
 // How far off the bow's line the aim may be and still turn the body to it (radians: in full to the first, none past the second)
 const AIM_REACH = [0.9, 1.6];
+// How far the string hand flies back at the loose (m: hero.releaseKick)
+const RELEASE = 0.16, _rk = [0, 1, 2, 3, 4].map(() => new THREE.Vector3()), _rq = [0, 1, 2].map(() => new THREE.Quaternion());
 // How the hips' turn follows the cycles' (easeHips): eased at k a second, never faster than max (radians a second)
 const HIPS_EASE = { k: 10, max: 8 };
 // The swimming clip is a crawl under the water, the body flat: tipped this far head up (radians), the head kept this far
@@ -888,7 +890,8 @@ export class Hero {
     this.weights = w;
     return { w: Object.fromEntries(Object.entries(w).map(([n, x]) => [n, x / sum])), move: cw / sum, lead, back: lead === 'run' && this.runBack, rate };
   }
-  // Bow states: equip → ready → draw (hold RMB) → aim (full draw) → lower → ready → disarm
+  // Bow states: equip → ready → draw (hold LMB) → aim (full draw, held) → loose (let go: the follow-through) → lower → ready
+  // → disarm; a draw let down (RMB) goes straight to lower. A loose holds the pose it let go from (fromC at fromT)
   poseBow(b, aimPt, sprinting, k = 1) {
     if (b.t < 0) return;
     const C = CLIPS, up = this.upperK, aimPh = (t) => Math.min(t / C.bowAim.dur, 1), pose = (c, t, w) => this.overlay(c, t, w * k, up, true);   // (k: how much of the pose is the bow's)
@@ -900,16 +903,29 @@ export class Hero {
     if (b.st === 'ready') pose(C.bowDraw, 0, readyW);
     else if (b.st === 'draw') pose(C.bowDraw, Math.max(b.ph, b.from || 0), b.fromC ? 1 : lerp(readyW, 1, ss(b.t / BOW_DUR.blend)));
     else if (b.st === 'aim') pose(C.bowAim, aimPh(b.t), 1);
+    else if (b.st === 'loose') pose(C[b.fromC] || C.bowDraw, b.fromT ?? 0, 1);
     else if (b.st === 'lower') pose(C.bowDraw, 0, lerp(1, readyW, ss(b.t / BOW_DUR.lower)));
     const fade = b.st === 'lower' ? 1 - ss(b.t / BOW_DUR.lower) : b.st === 'draw' ? 1 - ss(b.t / BOW_DUR.blend) : 0;
     if (b.fromC && fade > 0) pose(C[b.fromC], b.fromT, fade);
-    const aimW = k * (b.st === 'aim' ? 1 : b.st === 'draw' ? ss((b.ph - 0.6) / 0.3) : b.st === 'lower' && b.fromC ? (1 - ss(b.t / BOW_DUR.unaim)) * (b.fromC === 'bowAim' ? 1 : ss((b.fromT - 0.6) / 0.3)) : 0);
+    const fromW = b.fromC === 'bowAim' ? 1 : ss((b.fromT - 0.6) / 0.3);
+    const aimW = k * (b.st === 'aim' ? 1 : b.st === 'draw' ? ss((b.ph - 0.6) / 0.3) : b.st === 'loose' ? fromW : b.st === 'lower' && b.fromC ? (1 - ss(b.t / BOW_DUR.unaim)) * fromW : 0);
     // (lowered, the aim lets go of the body at once (BOW_DUR.unaim), and meanwhile goes round with the hero as he turns back to
     // where he walks: held where it was in the world, or let go of slowly, it kept the chest there as he turned under it,
     // then let go of it all at once)
     if (b.st === 'lower' && aimPt) { const r = this.root, y = r.rotation.y; if (!b.aimAt) { const dx = aimPt.x - r.position.x, dz = aimPt.z - r.position.z; b.aimAt = { y: this.lastY ?? y, x: dx, z: dz, h: aimPt.y - r.position.y }; }   // (the facing it was aimed from: the frame before, he may have turned since)
       const a = b.aimAt, t = y - a.y, c = Math.cos(t), sn = Math.sin(t); aimPt = _aimV.set(r.position.x + a.x * c + a.z * sn, r.position.y + a.h, r.position.z - a.x * sn + a.z * c); }
     if (aimW > 0.01 && aimPt) this.aimUpperBody(aimPt, aimW);
+    // (let go, the string hand flies back past the cheek and comes to rest: further the fuller the draw was)
+    if (b.st === 'loose') this.releaseKick(k * fromW * (0.4 + 0.6 * (b.f ?? 1)) * (b.t < 0.05 ? b.t / 0.05 : Math.max(0, 1 - (b.t - 0.05) / 0.17)));
+  }
+  // The string hand thrown back along the arrow's line (from the bow hand through it) by up to RELEASE metres, k of it, by
+  // turning the upper arm about the shoulder
+  releaseKick(k) {
+    const Bn = this.bones, A = Bn.mixamorigRightArm, R = Bn.mixamorigRightHand, L = Bn.mixamorigLeftHand; if (!A || !R || !L || k <= 0.001) return;
+    const s = A.getWorldPosition(_rk[0]), h = R.getWorldPosition(_rk[1]), back = _rk[2].copy(h).sub(L.getWorldPosition(_rk[3])).normalize();
+    const cur = _rk[3].copy(h).sub(s), want = _rk[4].copy(cur).addScaledVector(back, RELEASE * k).normalize(); cur.normalize();
+    const d = _rq[0].setFromUnitVectors(cur, want), pq = A.parent.getWorldQuaternion(_rq[1]).invert(), wq = A.getWorldQuaternion(_rq[2]);
+    A.quaternion.copy(pq.multiply(d.multiply(wq)));
   }
 
   // Turn the spine (split over two joints) so the line string hand → bow hand points at the target. Only so far: a

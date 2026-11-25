@@ -193,7 +193,8 @@ export class HeroSubject {
       sneaking: W.sneaking, guard: W.guard, blocking: W.blocking && !W.dodge, swing: W.swing, swingKind: W.swingKind, strike: W.strikeMove, equip: W.equip, bow: W.bow, aimPt: W.aimPt,
       ground: this.groundFn ||= (x, z, y) => stage.groundAt(x, z, y), rootY: pos.y });
   }
-  // the bow's states, as combat.js updateBow, with arrows that never run out
+  // the bow's states, as combat.js updateBow had them before Patch 26 (RMB draws, a click looses: here the left button's drag
+  // turns the camera, so it can't be held to draw as in the game), with arrows that never run out
   bowStep(dt, rmb) {
     const W = this.w; if (!isBow(this.gear.left)) { W.bow = null; return; }
     W.bow ||= { st: 'ready', t: 0, ph: 0 }; const b = W.bow; b.t += dt; const set = (st, x) => (W.bow = { st, t: 0, ph: 0, ...x });

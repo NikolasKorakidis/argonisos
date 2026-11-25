@@ -12,11 +12,11 @@ import { Hero, strikeOf, DODGE_MOVE } from './hero.js';
 import { RUN, SPRINT, SWIM, SNEAK, AIM, BLOCK_K, GRAV, JUMP_V } from './speeds.js';
 import { SETTINGS } from '../ui/settings.js';
 import { Stats } from './stats.js';
-import { clamp, lerp } from '../util/math.js';
+import { clamp, lerp, smooth } from '../util/math.js';
 import { GAIT } from '../audio/sound.js';
 
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
-const _lv = new THREE.Vector3();
+const _lv = new THREE.Vector3(), _cd = new THREE.Vector3(), _cb = new THREE.Vector3();
 const SWIM_DEPTH = 1.35, RADIUS = 0.38;
 // The water's surface over (x, z): the river's or the lake's where they are (river.js), else the sea's (0). You swim where
 // it stands more than SWIM_DEPTH over the ground, and wade where it stands over your ankles: slower the deeper (WADE: the
@@ -37,10 +37,15 @@ const TURN_MAX = 12;
 // ground it may come (m), the pitch it may reach either way (radians) and the wheel's range (m)
 const LOOK = { r: 30, speed: 3, low: 0.15, pitch: 1.5, near: 0.8, far: 14 };
 // The boss camera (Patch 21): in a fight with the Chimera (bossCam, from trial.js; the Minotaur's keeps the follow camera
-// since Patch 25, TYPES bossCam) the follow camera eases back and up so the beast fits in the view: at least dist metres
-// back, the point it looks at lift metres higher, the view a few degrees wider (fov); and while a boss arrives (focus:
-// where it comes down) it turns to look that way
-const BOSS_CAM = { dist: 13, lift: 2.6, fov: 8, in: 0.9, out: 0.5 };
+// since Patch 25, TYPES bossCam) the follow camera eases back a little and up so the beast fits in the view: at least
+// dist metres back, the point it looks at lift metres higher, the view a few degrees wider (fov); and while a boss arrives
+// (focus: where it comes down) it turns to look that way. (Patch 26, the reviewer: 13 m back still felt far off, the hero
+// small in the picture: now a modest step back, the third-person camera still, and instead of backing off to take in
+// the 23 m beast the view leans up towards it (bossAt, its chest, from trial.js), half the way from where it looks, up to
+// lean radians, when it's ahead and its bulk would rise out of the top of the picture)
+const BOSS_CAM = { dist: 7, lift: 0.8, fov: 5, lean: 0.2, in: 0.9, out: 0.5 };
+// After a loose the aim camera stays in a moment (s), so loosing arrow after arrow doesn't pump it in and out
+const AIM_HOLD = 0.4;
 // The camera held off what's solid (Patch 25, like Valheim: occlusion.js castCamera): the sphere swept (r, m; the seated free
 // camera's smaller, low, so it may come down close over the grass and the floors), how far over the ground the line to it
 // keeps (m), how quickly it eases back out once the way clears (1/s; in, it comes at once), and how close to the hero's
@@ -58,7 +63,7 @@ export class Player {
     this.pos = this.root.position; this.vel = new THREE.Vector3(); this.hv = new THREE.Vector3();
     this.yaw = 0; this.camYaw = 0; this.camPitch = -0.25; this.camDist = 5.5; this.camT = new THREE.Vector3(); this.camInit = false;
     this.lookK = 0; this.lookOff = new THREE.Vector3(); this.lookV = new THREE.Vector3(); this.home = null;   // (the free camera: updateCamera)
-    this.bossCam = false; this.bossK = 0; this.focus = null;   // (the boss camera: BOSS_CAM)
+    this.bossCam = false; this.bossK = 0; this.focus = null; this.bossAt = null;   // (the boss camera: BOSS_CAM)
     this.onGround = true; this.swimming = false; this.sprinting = false; this.sneaking = false; this.jumped = false; this.jumpBuf = 0;
     this.speed = 0; this.winded = false; this.swing = 0; this.swingKind = 'punch'; this.swingHit = false; this.equip = null; this.bow = null;
     this.strikeMove = null; this.combo = 0; this.comboT = 0; this.dodge = null; this.dodgeCd = 0; this.guardUp = false;
@@ -263,7 +268,7 @@ export class Player {
   }
   // what you'd stand on at (x, z): the ground (pressed down under floors), or a floor, step or stair within reach of y
   groundHere(x, z, y = this.pos.y) { return Math.max(groundAt(x, z), waterAt(x, z) - SWIM_DEPTH, this.floorAt ? this.floorAt({ x, z, y }) : -1e9); }
-  get aiming() { return !!this.bow && (this.bow.st === 'draw' || this.bow.st === 'aim'); }
+  get aiming() { return !!this.bow && (this.bow.st === 'draw' || this.bow.st === 'aim' || this.bow.st === 'loose'); }
   // Dead: the hero falls (one of the deaths, hero.die, held on the ground; or, before those clips are in, the body tipped
   // over) and lies there until revived
   updateDead(dt) {
@@ -320,7 +325,7 @@ export class Player {
     // (a jump of the hero (spawn, teleport) takes the camera along at once, not sweeping over from where it was)
     const jump = !this.camInit || this.camT.distanceTo(raw) > 8; if (jump) { this.camT.copy(raw); this.camInit = true; }
     this.camT.x += (raw.x - this.camT.x) * Math.min(1, dt * 16); this.camT.z += (raw.z - this.camT.z) * Math.min(1, dt * 16); this.camT.y += (raw.y - this.camT.y) * Math.min(1, dt * 8);
-    this.aimK = lerp(this.aimK || 0, this.aiming ? 1 : 0, Math.min(1, dt * 8));
+    const bw = this.bow; this.aimK = lerp(this.aimK || 0, this.aiming || (bw?.st === 'lower' && bw.shot && bw.t < AIM_HOLD) ? 1 : 0, Math.min(1, dt * 8));
     const want0 = this.bossCam && !L ? 1 : 0; this.bossK = lerp(this.bossK, want0, e(want0 > this.bossK ? BOSS_CAM.in : BOSS_CAM.out)); const bk = this.bossK * (1 - this.aimK);
     const k = this.aimK, dist = lerp(lerp(this.camDist, Math.max(this.camDist, BOSS_CAM.dist), bk), 2.3, k), pitch = this.camPitch;
     const right = new THREE.Vector3(Math.cos(this.camYaw), 0, -Math.sin(this.camYaw));
@@ -351,6 +356,9 @@ export class Player {
     this.camFree = free; camera.position.copy(target).addScaledVector(dir.normalize(), this.camD);
     const wf = waterAt(camera.position.x, camera.position.z); if (wf > 0.05 && camera.position.y < wf + 0.2 && target.y > wf) camera.position.y = wf + 0.2;   // (pulled in over the water, still over it)
     camera.lookAt(dir.negate().add(target)); this.hideNear();   // (at a point beyond the one looked at, the same way: pulled right in to it, the view still faces the hero's way)
+    // (the boss camera's lean: up towards the beast ahead, by half of how far above the middle of the picture its chest is)
+    if (bk > 0.01 && this.bossAt) { const look = camera.getWorldDirection(_cd), to = _cb.copy(this.bossAt).sub(camera.position), hd = Math.hypot(to.x, to.z) || 1, ahead = (look.x * to.x + look.z * to.z) / ((Math.hypot(look.x, look.z) || 1) * hd);
+      const tilt = clamp((Math.atan2(to.y, hd) - Math.asin(clamp(look.y, -1, 1))) * 0.5, 0, BOSS_CAM.lean) * smooth(0.3, 0.8, ahead) * bk; if (tilt > 1e-4) camera.rotateX(tilt); }
   }
   // How far the camera may go from a towards b before it meets something solid (occlusion.js castCamera, installed as
   // camCast; o its options), or null with no world to cast against (the creator, a test that turns it off)
