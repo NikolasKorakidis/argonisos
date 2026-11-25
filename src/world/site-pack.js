@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from '../../vendor/three/jsm/utils/BufferGeometryUtils.js';
 import { loadPack, bake } from '../assets.js';
 import { wettable } from './wetness.js';
+import { pixelate } from '../render/pixel.js';
 
 const LIST = { amphora: 'sAmphora', pithos: 'sPithos', bowl: 'sBowl', jug: 'sJug', tripod: 'sTripod', firewood: 'sFirewood', column: 'sColumn',
   // the statues (structures.js): the robed elder who is Zeus in the temple, the hoplite and the soldier guarding the sacred
@@ -14,8 +15,8 @@ const LIST = { amphora: 'sAmphora', pithos: 'sPithos', bowl: 'sBowl', jug: 'sJug
   broken1: 'sBroken1', broken2: 'sBroken2', broken3: 'sBroken3', broken4: 'sBroken4', broken5: 'sBroken5', broken6: 'sBroken6', broken7: 'sBroken7', broken8: 'sBroken8' };
 const SITE = {};   // name → { geo (standing on the ground, centred), mat }
 export function loadSiteProps() {
-  const mats = new Map();   // (one material per atlas, wet in the rain like the carved stone; the packs' palettes are pale in our light)
-  const matFor = (map) => { if (!mats.has(map)) mats.set(map, wettable(new THREE.MeshStandardMaterial({ map, color: 0xb4b4b4, roughness: 0.8 }), { dark: 0.68, gloss: 0.3 })); return mats.get(map); };
+  const mats = new Map();   // (one material per atlas, wet in the rain like the carved stone, in texels: render/pixel.js; the packs' palettes are pale in our light)
+  const matFor = (map) => { if (!mats.has(map)) mats.set(map, pixelate(wettable(new THREE.MeshStandardMaterial({ map, color: 0xb4b4b4, roughness: 0.8 }), { dark: 0.68, gloss: 0.3 }), 'stone')); return mats.get(map); };
   return Promise.all(Object.entries(LIST).map(([k, f]) => loadPack(f).then((gl) => {
     let map = null; gl.scene.traverse((m) => { if (m.isMesh && !map) map = m.material.map; });
     const geo = bake(gl.scene); geo.computeBoundingBox(); const b = geo.boundingBox; geo.translate(-(b.min.x + b.max.x) / 2, -b.min.y, -(b.min.z + b.max.z) / 2);
@@ -56,8 +57,8 @@ export const PIECE_NAMES = ['twHouseA', 'twHouseB', 'twHouseC', 'twHouseD', 'twH
   // the Giants' caves: the giant's fire, the bones of the big beasts he ate and the skulls of the men
   'all/polygonnature/sm-prop-campfire-01', 'all/pnb-arid-desert/sm-prop-bones-01', 'all/pnb-arid-desert/sm-prop-bones-04', 'all/polygonnature/sm-prop-skull-01', 'all/polygongeneric/sm-gen-prop-skull-01'];
 export function loadPieces() {
-  const mats = new Map();   // (one material per texture or colour, wet in the rain; pale palettes taken down as above)
-  const matFor = (src) => { const key = src.map ? src.map.uuid : src.color.getHexString(); if (!mats.has(key)) mats.set(key, wettable(new THREE.MeshStandardMaterial({ map: src.map, color: src.map ? 0xb4b4b4 : src.color.clone().multiplyScalar(0.8), roughness: 0.85 }), { dark: 0.68, gloss: 0.3 })); return mats.get(key); };
+  const mats = new Map();   // (one material per texture or colour, wet in the rain, in texels; pale palettes taken down as above)
+  const matFor = (src) => { const key = src.map ? src.map.uuid : src.color.getHexString(); if (!mats.has(key)) mats.set(key, pixelate(wettable(new THREE.MeshStandardMaterial({ map: src.map, color: src.map ? 0xb4b4b4 : src.color.clone().multiplyScalar(0.8), roughness: 0.85 }), { dark: 0.68, gloss: 0.3 }))); return mats.get(key); };
   return Promise.all(PIECE_NAMES.map((k) => loadPack(k).then((gl) => {
     gl.scene.updateMatrixWorld(true); const by = new Map();
     gl.scene.traverse((m) => { if (!m.isMesh) return; const g = m.geometry.clone().applyMatrix4(m.matrixWorld); for (const a of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(a)) g.deleteAttribute(a); if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); const mt = matFor(m.material); (by.get(mt) || by.set(mt, []).get(mt)).push(g.index ? g.toNonIndexed() : g); });

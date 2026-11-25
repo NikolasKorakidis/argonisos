@@ -10,6 +10,7 @@ import { clone as cloneSkinned } from '../../vendor/three/jsm/utils/SkeletonUtil
 import { loadGLB, loadFBX, loadPack, normalizeHandle } from '../assets.js';
 import { CLIPS, GRIP, loadMoves } from '../player/hero.js';
 import { clamp, hash21 } from '../util/math.js';
+import { pixelate } from '../render/pixel.js';
 
 const flat = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85, flatShading: true, ...o });
 // When a creature goes, free what its body put on the GPU: the geometry built for it, its own materials and its
@@ -106,7 +107,7 @@ class PackBody {
       if (this.gone) return; const m = cloneSkinned(T.root); m.scale.multiplyScalar(scale);
       // (which one goes by where it was born: the spawner has put the body there by the time its model is in)
       if (T.looks.length) wear(m, T.looks[Math.floor(hash21(Math.round(this.obj.position.x * 10), Math.round(this.obj.position.z * 10)) * T.looks.length)]);
-      m.traverse((o) => { if (o.isMesh) { o.material = [].concat(o.material).map((mt) => { const c = mt.clone(); c.userData.shared = false; this.mats.push(c); return c; }); if (o.material.length === 1) o.material = o.material[0]; } });
+      m.traverse((o) => { if (o.isMesh) { o.material = [].concat(o.material).map((mt) => { const c = pixelate(mt.clone(), 'fur'); c.userData.shared = false; this.mats.push(c); return c; }); if (o.material.length === 1) o.material = o.material[0]; } });   // (the coat in texels, on the body as it rests: render/pixel.js)
       this.obj.add(m); this.mixer = new THREE.AnimationMixer(m);
       for (const [k, clip] of Object.entries(T.clips)) this.acts[k] = this.mixer.clipAction(clip);
       for (const k of ['Death', 'Attack', 'Idle_HitReact1']) if (this.acts[k]) { this.acts[k].setLoop(THREE.LoopOnce); this.acts[k].clampWhenFinished = true; }
@@ -175,7 +176,7 @@ class RigBody {
     rigTemplate(kind).then((T) => {
       if (this.gone) return;
       const m = cloneSkinned(T.obj); m.scale.multiplyScalar(D.scale);
-      const bones = {}; m.traverse((o) => { if (o.isBone) bones[o.name] = o; if (o.isMesh) { o.material = T.packed ? o.material.clone() : D.mat; this.mats.push(o.material); } });
+      const bones = {}; m.traverse((o) => { if (o.isBone) bones[o.name] = o; if (o.isMesh) { o.material = pixelate(T.packed ? o.material.clone() : D.mat, 'hide'); this.mats.push(o.material); } });
       if (T.packed) for (const mt of this.mats) mt.color.setScalar(D.tint ?? 0.78);   // (the pack's palette is pale in our light)
       this.obj.add(m); this.bones = bones; this.mixer = new THREE.AnimationMixer(m);
       const head = bones.mixamorigHead;
@@ -262,7 +263,7 @@ class KitBody {
     this.kind = kind; this.K = KIT[kind]; this.s = scale; this.pace = pace; this.obj = new THREE.Group(); this.mixer = null; this.acts = {}; this.mats = []; this.cur = null; this.once = null; this.onceT = 0;
     kitTemplate(kind).then((T) => {
       if (this.gone) return; const m = cloneSkinned(T.root); m.scale.multiplyScalar(scale);
-      this.bones = {}; m.traverse((o) => { if (o.isBone) this.bones[o.name] = o; if (o.isMesh) { o.material = o.material.clone(); o.material.userData.shared = false; this.mats.push(o.material); } });
+      this.bones = {}; m.traverse((o) => { if (o.isBone) this.bones[o.name] = o; if (o.isMesh) { o.material = pixelate(o.material.clone(), 'hide'); o.material.userData.shared = false; this.mats.push(o.material); } });
       this.obj.add(m); this.mixer = new THREE.AnimationMixer(m);
       for (const [k, c] of Object.entries(T.clips)) this.acts[k] = this.mixer.clipAction(c);
       for (const k of [this.K.clips.dead, ...Object.values(this.K.clips).filter(Array.isArray).flatMap((l) => l.map((x) => x[0]))]) { this.acts[k].setLoop(THREE.LoopOnce); this.acts[k].clampWhenFinished = true; }

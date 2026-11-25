@@ -4,8 +4,9 @@
 import * as THREE from 'three';
 import { scene } from './core.js';
 import { loadPack, bake } from '../assets.js';
+import { pixelate } from './pixel.js';
 
-const N = 600, mat = new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true });
+const N = 600, mat = pixelate(new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), 'grain');   // (the chips and the dust in texels, render/pixel.js)
 const make = (mt = mat) => { const m = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mt, N); m.count = 0; m.frustumCulled = false; m.castShadow = false; m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3); scene.add(m); return m; };
 const chips = make(), puffs = make(), glints = make(new THREE.MeshBasicMaterial({ toneMapped: false })), MESHES = [chips, puffs, glints];
 // (a model's shape, a unit across, in place of the cube)

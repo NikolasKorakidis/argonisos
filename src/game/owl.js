@@ -6,6 +6,7 @@ import { heightAt, biomeWeights } from '../world/gen.js';
 import { SITES } from '../world/sites.js';
 import { icon } from '../ui/icons.js';
 import { loadGLB } from '../assets.js';
+import { pixelate } from '../render/pixel.js';
 import { input, lock, unlock } from '../input.js';
 
 const K = (k) => `<span class="kbd">${k}</span>`;
@@ -62,7 +63,7 @@ function owlModel() {
   // across the wings, flapping, gliding and hovering with her own clips
   loadGLB('pack/owl').then((gl) => {
     const body = gl.scene; body.updateMatrixWorld(true); const size = new THREE.Box3().setFromObject(body).getSize(new THREE.Vector3()); body.scale.multiplyScalar(0.9 / Math.max(size.x, size.z));
-    body.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.frustumCulled = false; m.material.color.multiplyScalar(0.7); m.material.roughness = 0.95; } });   // (her white plumage glows in our light otherwise)
+    body.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.frustumCulled = false; m.material.color.multiplyScalar(0.7); m.material.roughness = 0.95; pixelate(m.material, 'fur'); } });   // (her white plumage glows in our light otherwise; her feathers in texels, render/pixel.js)
     for (const c of [...g.children]) if (c !== mark) g.remove(c);
     g.add(body); body.position.y = 0.3; o.wings.length = 0; o.head = new THREE.Object3D();
     o.mixer = new THREE.AnimationMixer(body); for (const c of gl.animations) o.acts[c.name] = o.mixer.clipAction(c);

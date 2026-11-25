@@ -5,6 +5,7 @@
 // with the carved ones below standing in while they load or if a pack file is missing.
 import * as THREE from 'three';
 import { loadFBX, loadPack, loadTex, fixMaterials, normalizeHandle } from '../assets.js';
+import { pixelateAuto } from '../render/pixel.js';
 
 const wood = new THREE.MeshStandardMaterial({ color: 0x8a6440, roughness: 0.85 }), darkWood = new THREE.MeshStandardMaterial({ color: 0x5e4128, roughness: 0.9 });
 const stone = new THREE.MeshStandardMaterial({ color: 0x8f887e, roughness: 0.9, flatShading: true }), light = new THREE.MeshStandardMaterial({ color: 0xe6e0cc, roughness: 0.55, flatShading: true });
@@ -92,8 +93,11 @@ function headAlong(h, flat) {
   if (-lo > hi * 1.15) a += Math.PI; if (flat) a += Math.PI / 2;   // (a near even head, a mallet's or a pick's, keeps the way it came)
   const g = grp(h); h.rotation.y = a; return g;
 }
-// A fresh model for an item (a promise: the imported ones stream in)
-export async function heldModel(id) {
+// A fresh model for an item (a promise: the imported ones stream in), in texels as the world is (render/pixel.js: in the
+// tool's own frame, so they stay on it as it swings)
+const texels = (o) => { o?.traverse((m) => { if (m.isMesh) for (const mt of [].concat(m.material)) pixelateAuto(mt); }); return o; };
+export async function heldModel(id) { return texels(await heldModel0(id)); }
+async function heldModel0(id) {
   const k = LOOK[id]; if (!k) return null;
   if (PACKED[k]) { const m = await PACKED[k](); if (m) { const c = m.clone(); c.userData.light = c.getObjectByName('torchLight'); return c; } }   // (a clone loses the light's handle)
   if (k === 'axe' || k === 'axeLight') { const m = (await axeModel()).clone(); if (k === 'axeLight') m.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color = new THREE.Color(0xf4efe0); } }); return m; }

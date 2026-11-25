@@ -4,6 +4,7 @@
 // [geometry, material] onto a site's part list, in site-local coordinates, like the rest of the kit.
 import * as THREE from 'three';
 import { wettable } from './wetness.js';
+import { pixelate } from '../render/pixel.js';
 import { siteProp } from './site-pack.js';
 import { seeded as dice } from '../util/math.js';
 
@@ -99,6 +100,9 @@ export const GMAT = {
 // outdoor materials take the rain (wetness.js); the inside ones (paint, coffer, floor), the metals' sheen, glowing and
 // water materials are left alone
 for (const [k, o] of Object.entries({ ashlar: [0.68, 0.3], whitewash: [0.75, 0.35], tymp: [0.72, 0.35], pot: [0.7, 0.3], clay: [0.66, 0.3], wood: [0.62, 0.32], oldWood: [0.62, 0.32], wool: [0.7, 0.6], linen: [0.72, 0.6], ash: [0.7, 0.5], leaf: [0.8, 0.45], ivy: [0.8, 0.45], basalt: [0.75, 0.2], darkFlags: [0.66, 0.26] })) wettable(GMAT[k], { dark: o[0], gloss: o[1] });
+// all of them in texels as the trunks are (render/pixel.js), each its look; the glowing eyes and the water as they are
+for (const [k, look] of Object.entries({ ashlar: 'stone', whitewash: 'grain', paint: 'grain', floor: 'stone', coffer: 'stone', tymp: 'grain', pot: 'grain', clay: 'grain', gold: 'metal', bronze: 'metal', oldBronze: 'metal',
+  wood: 'wood', oldWood: 'wood', wool: 'grain', linen: 'grain', ash: 'grain', ember: 'flame', leaf: 'leaf', ivy: 'leaf', basalt: 'stone', darkFlags: 'stone', caveRock: 'stone' })) pixelate(GMAT[k], look);
 
 // ---- shapes
 const lathe = (pts, seg = 16) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg);

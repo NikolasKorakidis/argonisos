@@ -17,6 +17,7 @@ import { clearGrass } from '../world/grass.js';
 import { clamp, smooth } from '../util/math.js';
 import { loadPack, bake } from '../assets.js';
 import { wettable } from '../world/wetness.js';
+import { pixelate } from '../render/pixel.js';
 
 // Tree toughness and what it gives, by species
 const BIG = new Set(['oak', 'plane', 'holm']), SMALL = new Set(['pomegranate', 'fig', 'cypress']);
@@ -63,7 +64,7 @@ const along = (ox, oz, r, dx, dz) => { const t = ox * dx + oz * dz; if (t < -r) 
 // trunks: the others are fallen trees with their root plates, or pale swamp logs, which squashed to a log's girth came
 // out as flat wedges and grey tangles.)
 const LOGS = ['pLog2', 'pLog3'], LOOKS = [];
-const logMat = wettable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { dark: 0.66, gloss: 0.3 });
+const logMat = pixelate(wettable(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { dark: 0.66, gloss: 0.3 }), 'wood');   // (in texels: render/pixel.js)
 LOGS.forEach((f, i) => loadPack(f).then((gl) => {
   const g = bake(gl.scene, true); g.computeBoundingBox(); let s = g.boundingBox.getSize(new THREE.Vector3()); if (s.z > s.x) g.rotateY(Math.PI / 2);
   g.computeBoundingBox(); const c = g.boundingBox.getCenter(new THREE.Vector3()); g.translate(-c.x, -c.y, -c.z); g.computeBoundingBox(); s = g.boundingBox.getSize(new THREE.Vector3());
@@ -362,7 +363,7 @@ export class Harvest {
     if (L) m = new THREE.Mesh(L.g.clone().scale(len / L.s.x, (2 * rad) / L.s.y, (2 * rad) / L.s.z), logMat);
     else {
       m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad * 1.08, len, 10).rotateZ(Math.PI / 2), trunkMat);
-      const ends = new THREE.MeshStandardMaterial({ color: 0xd9b07a, roughness: 0.9 });
+      const ends = pixelate(new THREE.MeshStandardMaterial({ color: 0xd9b07a, roughness: 0.9 }), 'wood');
       for (const sx of [-1, 1]) { const e = new THREE.Mesh(new THREE.CircleGeometry(rad * 0.98, 10), ends); e.position.x = (sx * len) / 2 + sx * 0.005; e.rotation.y = (sx * Math.PI) / 2; m.add(e); }
     }
     m.castShadow = m.receiveShadow = true; l.mesh.add(m); l.carved = !L;

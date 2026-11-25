@@ -17,6 +17,7 @@ import { propGeo, propMat, leafMat } from './trees.js';
 import { GMAT, amphora, pithos, bowl, jug, tripod, acroterion, antefixes, cartWheel, firewood, leaves, mist, dice } from './greek.js';
 import { wettable } from './wetness.js';
 import { stony } from './rock.js';
+import { pixelate, pixelateAuto, pxPlain, pixelSprite } from '../render/pixel.js';
 import { siteProp, sitePropAt, piece, pieceAt, hasPiece, chestParts } from './site-pack.js';
 import { buildTown, buildSpot } from './town.js';
 import { RIVER } from './river.js';
@@ -125,6 +126,9 @@ export const SMAT = {
 };
 for (const [k, o] of Object.entries({ marble: [0.72, 0.28], paving: [0.7, 0.3], stone: [0.66, 0.28], moss: [0.7, 0.45], tile: [0.68, 0.3], frieze: [0.72, 0.3], dark: [0.68, 0.3], rock: [0.66, 0.26], wood: [0.62, 0.32], plaster: [0.72, 0.35], flags: [0.66, 0.26], bone: [0.75, 0.35] })) wettable(SMAT[k], { dark: o[0], gloss: o[1] });   // (wetness.js)
 for (const k of ['rock', 'dark']) stony(SMAT[k], { wet: false });   // (the boulders and cairns in the island's stone, as the streamed rocks are: rock.js)
+// the rest in texels as the trunks are (render/pixel.js), each its look (and whatever else a site is made of, mergeByMat)
+for (const [k, look] of Object.entries({ marble: 'stone', ivory: 'grain', stone: 'stone', moss: 'stone', tile: 'grain', frieze: 'grain', bronze: 'metal', wood: 'wood', plaster: 'grain', flame: 'flame', flags: 'stone', bone: 'grain',
+  paving: 'stone', drip: 'stone', grit: 'stone', caveWood: 'wood', meat: 'hide', hide: 'hide', hide2: 'hide', hide3: 'hide', straw: 'wood', root: 'wood' })) pixelate(SMAT[k], look);
 // the water of Olympos's spring (mtnSpot): clear, dark and glossy over the basin's stone
 const SPRING = new THREE.MeshStandardMaterial({ color: 0x2c4a52, roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.82, envMapIntensity: 0.9 });
 const _nav = new THREE.Vector3(), _tip = new THREE.Vector3();
@@ -132,7 +136,7 @@ const _nav = new THREE.Vector3(), _tip = new THREE.Vector3();
 const BONES = ['all/pnb-swamp-marshland/sm-prop-bone-pile-01', 'all/pnb-swamp-marshland/sm-prop-bone-ribcage-01', 'all/pnb-swamp-marshland/sm-prop-bone-pile-02', 'all/pnb-swamp-marshland/sm-prop-bone-skull-01'];
 // the pieces a Giant's cave takes from the packs (site-pack.js loads them): his fire, the bones of big beasts, skulls
 const CAVE_PK = { fire: 'all/polygonnature/sm-prop-campfire-01', bones: 'all/pnb-arid-desert/sm-prop-bones-01', bones2: 'all/pnb-arid-desert/sm-prop-bones-04', skull: 'all/polygonnature/sm-prop-skull-01', skull2: 'all/polygongeneric/sm-gen-prop-skull-01' };
-const MOSSY = new Map(), mossy = (m) => { if (!MOSSY.has(m)) MOSSY.set(m, wettable(new THREE.MeshStandardMaterial({ map: m.map, color: 0x7d8a6a, roughness: 0.95 }), { dark: 0.7, gloss: 0.4 })); return MOSSY.get(m); };
+const MOSSY = new Map(), mossy = (m) => { if (!MOSSY.has(m)) MOSSY.set(m, pixelate(wettable(new THREE.MeshStandardMaterial({ map: m.map, color: 0x7d8a6a, roughness: 0.95 }), { dark: 0.7, gloss: 0.4 }), 'stone')); return MOSSY.get(m); };
 // the Ancient Empire kit's grid, its storey, and how far one of its tiled roof panels rises over a bay (the old houses)
 const BAY = 2.5, STOREY = 3, PITCH = 0.75;
 // how far off each kind of site is drawn: the landmarks you find your way by far out under the mist, the minor sites
@@ -199,7 +203,8 @@ function boulder(P, x, y, z, s, mat = SMAT.rock, sx = 1, sy = 1, sz = 1) {
 // emptied in place)
 function mergeByMat(P, stores = []) {
   const mine = new Map(); for (const st of stores) for (const g of st.geos) mine.set(g, st);
-  const by = new Map(); for (const [g, m] of P) { const gg = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(gg.attributes)) if (!['position', 'normal', 'uv'].includes(k)) gg.deleteAttribute(k); if (!gg.attributes.uv) gg.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(gg.attributes.position.count * 2), 2)); (by.get(m) || by.set(m, []).get(m)).push(gg); if (mine.has(g)) mine.set(gg, mine.get(g)); }
+  const by = new Map(); for (const [g, m] of P) { pixelateAuto(m);   // (in texels, render/pixel.js: the props made on the spot get the plain look)
+    const gg = g.index ? g.toNonIndexed() : g; for (const k of Object.keys(gg.attributes)) if (!['position', 'normal', 'uv'].includes(k)) gg.deleteAttribute(k); if (!gg.attributes.uv) gg.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(gg.attributes.position.count * 2), 2)); (by.get(m) || by.set(m, []).get(m)).push(gg); if (mine.has(g)) mine.set(gg, mine.get(g)); }
   const out = []; for (const [m, gs] of by) { let total = 0; for (const g of gs) total += g.attributes.position.count; const pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uv = new Float32Array(total * 2), runs = []; let o = 0;
     for (const g of gs) { pos.set(g.attributes.position.array, o * 3); nor.set(g.attributes.normal.array, o * 3); uv.set(g.attributes.uv.array, o * 2); const st = mine.get(g); if (st) { const q = { o, n: g.attributes.position.count }; (st.ranges ||= []).push(q); runs.push(q); } o += g.attributes.position.count; }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.computeBoundingSphere();
@@ -216,8 +221,8 @@ function mergeByMat(P, stores = []) {
 // shapes are only on the card: nothing aims at or walks on it (the near meshes stay for that, hidden), so its copies in
 // memory are let go once sent.
 const FAR_SITE = ULTRA ? 450 : 350, PX_R = 0.4, PX_K = 1 / 600, FAR_MIN = 8;   // (PX_K: a merged part whose radius is under this share of its distance is about two pixels across at 720p, four at 1440p)
-const plainMat = (m) => m.onBeforeCompile === THREE.Material.prototype.onBeforeCompile;
-const matKey = (m) => (plainMat(m) ? [m.type, m.map?.uuid, m.normalMap?.uuid, m.color?.getHex(), m.emissive?.getHex(), m.emissiveIntensity, m.roughness, m.metalness, m.vertexColors, m.side, m.alphaTest, m.flatShading, m.fog].join('|') : m.uuid);
+const plainMat = (m) => m.onBeforeCompile === THREE.Material.prototype.onBeforeCompile || pxPlain(m);
+const matKey = (m) => (plainMat(m) ? [pxPlain(m), m.type, m.map?.uuid, m.normalMap?.uuid, m.color?.getHex(), m.emissive?.getHex(), m.emissiveIntensity, m.roughness, m.metalness, m.vertexColors, m.side, m.alphaTest, m.flatShading, m.fog].join('|') : m.uuid);
 function farVersion(grp) {
   grp.updateMatrixWorld(true);   // (before its inverse is taken: a site made in the same frame hasn't been placed yet)
   const by = new Map(), from = [], todo = [], inv = new THREE.Matrix4().copy(grp.matrixWorld).invert(), seen = (o) => { for (let p = o; p && p !== grp; p = p.parent) if (!p.visible) return false; return true; };
@@ -1439,12 +1444,12 @@ function offeringFire(grp, x, y, z, seed, tint = 0xd6d1c8) {
     tex: (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');   // (a few soft blobs together: a puff, not a ball)
       for (const [bx, by, br] of [[32, 34, 26], [22, 28, 16], [42, 26, 15], [30, 20, 14]]) { const gr = g.createRadialGradient(bx, by, 0, bx, by, br); gr.addColorStop(0, 'rgba(255,255,255,.6)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); }
       return new THREE.CanvasTexture(c); })(),
-    core: new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }),
+    core: pixelate(new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }), 'flame'),
   };
   const core = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.26, 7, 1, true).translate(0, 0.13, 0), SMOKE.core); core.position.set(x, y, z); grp.add(core);
   const N = 18, RISE = 9, H = 6, drift = seed * 2.4;   // (a puff takes RISE seconds to climb H metres)
   for (let k = 0; k < N; k++) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: SMOKE.tex, color: tint, transparent: true, opacity: 0, depthWrite: false, rotation: k * 2.3 }));
+    const sp = new THREE.Sprite(pixelSprite(new THREE.SpriteMaterial({ map: SMOKE.tex, color: tint, transparent: true, opacity: 0, depthWrite: false, rotation: k * 2.3 })));   // (in texels: render/pixel.js)
     sp.frustumCulled = false; sp.renderOrder = 3; grp.add(sp);
     sp.onBeforeRender = () => {
       const t = performance.now() / 1000, u = (t / RISE + k / N) % 1, lean = u * u * 1.1;

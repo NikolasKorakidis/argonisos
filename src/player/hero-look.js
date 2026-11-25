@@ -12,7 +12,7 @@
 //     (render/pixel.js: pixelSnap and the Pixel texture setting), so the hero's detail is in texels as the world's is (half their size).
 // Every material kind is one program (its key), with the same uniforms (PIXEL_U among them).
 import * as THREE from 'three';
-import { PIXEL, PIXEL_GLSL, PIXEL_U } from '../render/pixel.js';
+import { PIXEL, PIXEL_GLSL, PIXEL_U, ownTexels } from '../render/pixel.js';
 
 // Each fragment's kind, as sort sets hKind: SKIN, CLOTH, LEATHER, METAL, HAIR, PLAIN (a face's feature, left as it is)
 export const KIND = { skin: '0.0', cloth: '1.0', leather: '2.0', metal: '3.0', hair: '4.0', plain: '5.0' };
@@ -103,7 +103,7 @@ export function heroMaterial({ map, color = 0xffffff, key, U = {}, pars = '', so
       .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>\n${SKY}`);
   };
   m.customProgramCacheKey = () => key;
-  m.userData.look = U; return m;
+  m.userData.look = U; return ownTexels(m);
 }
 
 // Where each point of the hero lies in the rest pose (in the hero's frame, metres) and the way it faces there, with how

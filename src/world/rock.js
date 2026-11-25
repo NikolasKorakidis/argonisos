@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { hash21, tileNoise, seeded } from '../util/math.js';
 import { wettable } from './wetness.js';
 import { ATMO } from '../render/atmosphere.js';
-import { PIXEL_GLSL, PIXEL_U } from '../render/pixel.js';
+import { PIXEL_GLSL, PIXEL_U, ownTexels } from '../render/pixel.js';
 
 // ---- One tileable texture, made here at start-up: R the stone's tone (slabs, each its own, and the cracks between
 // them dark), G its relief (the slabs rounded off towards their cracks, and the grain), B where lichen grows (blotches),
@@ -179,7 +179,7 @@ export function stony(mat, { edges = false, wet = { dark: 0.55, gloss: 0.7, shin
     sh.fragmentShader = def + FRAG_PARS + sh.fragmentShader.replace('#include <color_fragment>', FRAG).replace('#include <normal_fragment_maps>', BUMP);
   };
   mat.customProgramCacheKey = () => key;
-  return mat;
+  return ownTexels(mat);
 }
 // The streamed rocks, boulders and pebbles (vegetation.js; their colours baked in the vertices, their faces' edges marked)
 export const ROCK_MAT = stony(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 }), { edges: true });

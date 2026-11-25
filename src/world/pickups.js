@@ -11,6 +11,7 @@ import { seeded } from '../util/math.js';
 import { loadPack, bake } from '../assets.js';
 import { windUniform, LIGHT_U } from './trees.js';
 import { stony, rockEdges } from './rock.js';
+import { pixelate } from '../render/pixel.js';
 export { layoutPickups };
 
 const RANGE = 110, REGROW_DAYS = 3;
@@ -165,7 +166,8 @@ export class Pickups {
     this.patch = new THREE.InstancedMesh(new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: tex, transparent: true, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), 2048);
     this.patch.count = 0; this.patch.receiveShadow = true; this.patch.frustumCulled = false; this.patch.renderOrder = -1; scene.add(this.patch);
   }
-  instanced(geo, mat) { const m = new THREE.InstancedMesh(geo, mat, 1024); m.count = 0; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; m.userData.nearShadow = true; this.scene.add(m); return m; }   // (their shadows are too small to see in the far shadow map)
+  instanced(geo, mat) { for (const mt of [].concat(mat)) pixelate(mt, 'plant');   // (in texels as the trunks are, render/pixel.js; the stones have their own, rock.js)
+    const m = new THREE.InstancedMesh(geo, mat, 1024); m.count = 0; m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; m.userData.nearShadow = true; this.scene.add(m); return m; }   // (their shadows are too small to see in the far shadow map)
   isTaken(id) { const d = this.taken.get(id); return d !== undefined && this.day - d < REGROW_DAYS; }
   update(pos, day) {
     if (day !== this.day) { this.day = day; this.dirty = true; }
