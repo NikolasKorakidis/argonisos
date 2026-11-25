@@ -49,7 +49,9 @@ export default {
         for (let o = 0; o < it.length; o += FL.STRIDE) { const sp = FL.SPECIES[it[o]]; if (!(it[o + 6] > 0) || !(sp.res === 'tree' || sp.res === 'rock')) continue; n++; const x = it[o + 2], z = it[o + 4], q = RM.riverAt(x, z); if (q && q.out < -0.3) bad.push([sp.name, x | 0, z | 0, +q.out.toFixed(1)]); }
         for (const p of PK.layoutPickups(cx, cz)) { n++; const q = RM.riverAt(p.x, p.z); if (q && q.out < 0) bad.push([p.kind, p.x | 0, p.z | 0]); } }
       return (bad.length === 0 && n > 100) || JSON.stringify({ n, bad: bad.slice(0, 6) });`);
-    await t.step('…nor does the grass grow under it', `${RV} const GR = await import('/src/world/grass.js'), U = GR.grassU, i = Math.round((D.i0 + D.i1) / 2); AG.teleport(R.X[i], R.Z[i]); await new Promise((r) => setTimeout(r, 5000));
+    await t.step('…nor does the grass grow under it', `${RV} const GR = await import('/src/world/grass.js'), U = GR.grassU, i = Math.round((D.i0 + D.i1) / 2); AG.teleport(R.X[i], R.Z[i]);
+      // (the grass's map is made again round you by a worker, a moment after you arrive: waited for, however busy the machine)
+      await until(() => { const o = U.uOrigin.value; return R.X[i] - o.x > 30 && o.x + GR.TEX_SIZE - R.X[i] > 30 && R.Z[i] - o.y > 30 && o.y + GR.TEX_SIZE - R.Z[i] > 30; }, 30000); await frames(2);
       const tx = U.uHeight.value, o = U.uOrigin.value, N = tx.image.width, k = (x, z) => (Math.floor((z - o.y) / GR.TEX_SIZE * N) * N + Math.floor((x - o.x) / GR.TEX_SIZE * N)) * 4;
       let grown = 0, n = 0; for (let j = i - 20; j <= i + 20; j += 4) { const q = k(R.X[j], R.Z[j]); if (q < 0 || q >= tx.image.data.length) continue; n++; if (tx.image.data[q + 1] > 0) grown++; }
       return (n > 5 && grown === 0) || JSON.stringify({ n, grown, o: [o.x, o.y], N, at: [R.X[i], R.Z[i]], len: tx.image.data.length });`);

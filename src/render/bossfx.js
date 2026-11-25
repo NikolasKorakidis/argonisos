@@ -80,16 +80,17 @@ const auraMat = new THREE.ShaderMaterial({ uniforms: AURA_U, ...BLEND,
           vec3 b = uCenter + F * z + Sd * (aSeed2.y - 0.5) * uR * 1.3 + vec3(0.0, uH * (0.25 + 0.55 * aSeed2.w), 0.0);
           p = b + vec3(0.0, age * (1.4 + 1.6 * aSeed2.z), 0.0) + W * age * 0.6 + vec3(sin(age * 3.0 + aSeed.w * 30.0), 0.0, cos(age * 2.6 + aSeed.w * 20.0)) * 0.5 - uVel * age * 0.9;
           float fl = 0.6 + 0.4 * sin(uTime * (11.0 + 9.0 * aSeed2.z) + aSeed.w * 50.0);
-          col = mix(vec3(1.0, 0.62, 0.18), vec3(0.9, 0.2, 0.04), u) * 5.5 * fl; alpha = smoothstep(0.0, 0.1, u) * (1.0 - smoothstep(0.5, 1.0, u)); size = 0.14 + 0.16 * aSeed2.x;
+          col = mix(vec3(1.0, 0.62, 0.18), vec3(0.9, 0.2, 0.04), u) * 3.2 * fl; alpha = smoothstep(0.0, 0.1, u) * (1.0 - smoothstep(0.5, 1.0, u)); size = 0.09 + 0.1 * aSeed2.x;
         } else {   // sparks spitting from the lion's jaws, arcing out and falling
           L = mix(0.6, 1.3, aSeed.y); u = fract(uTime / L + aSeed.z); age = u * L;
           vec3 v = F * (2.0 + 4.0 * aSeed2.x) + Sd * (aSeed2.y - 0.5) * 4.0 + vec3(0.0, 1.0 + 3.0 * aSeed2.z, 0.0);
           p = uHead + F * uR * 0.4 + v * age + vec3(0.0, -4.9 * age * age, 0.0) - uVel * age;
-          col = mix(vec3(1.0, 0.85, 0.5), vec3(1.0, 0.35, 0.05), u) * 7.0; alpha = 1.0 - u; size = 0.07 + 0.06 * aSeed2.w;
+          col = mix(vec3(1.0, 0.85, 0.5), vec3(1.0, 0.35, 0.05), u) * 4.5; alpha = 1.0 - u; size = 0.06 + 0.05 * aSeed2.w;
         }
       }
       vec4 mv = viewMatrix * vec4(p, 1.0); float d = -mv.z; if (d < 0.3) return;
-      vC = vec4(col, alpha * fog(d) * smoothstep(0.3, 2.0, d)); vSoft = soft; vCover = cover;
+      // (gone before they reach the lens: the boss camera is close, and a glowing fleck a metre or two away blooms into a disc)
+      vC = vec4(col, alpha * fog(d) * smoothstep(1.2, 4.5, d)); vSoft = soft; vCover = cover;
       gl_PointSize = px(size, d); gl_Position = projectionMatrix * mv;
     }`,
   fragmentShader: FRAG,
