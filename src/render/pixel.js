@@ -106,7 +106,7 @@ export const pxMapChunk = (p) => `#ifdef USE_MAP
     // a texture stretched along a face, or a palette's swatch, is left smooth the way it has nothing to snap)
     vec2 ux = dFdx(vMapUv), uy = dFdy(vMapUv); vec3 qx = dFdx(${p}), qy = dFdy(${p}); float det = ux.x * uy.y - uy.x * ux.y;
     vec2 kk = vec2(0.0);
-    if (det != 0.0 && uTexel > 0.0 && uPxMap > 0.5) {
+    if (abs(det) > 0.05 * length(ux) * length(uy) && uTexel > 0.0 && uPxMap > 0.5) {   // (not where the texture runs along a line on the face, its uv the same one way: nothing to measure)
       vec2 m = vec2(length(qx * uy.y - qy * ux.y), length(qy * ux.x - qx * uy.x)) / abs(det), k = uTexel * exp2(floor(log2(m) + 0.5)), ts = vec2(textureSize(map, 0)) * 0.7;
       kk = vec2(k.x < ts.x ? k.x : 0.0, k.y < ts.y ? k.y : 0.0);
     }
