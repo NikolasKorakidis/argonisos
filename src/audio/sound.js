@@ -405,6 +405,13 @@ const SFX = {
     if (!play('bossRoarLong', { vol: 0.8, at, near: 30, far: 260, wet: 0.5, rate: [0.66, 0.72], fade: true, dur: 6 })) SFX.roar({ at, boss: true });
     sub(3, { f0: 50, f1: 24, k: 0.7, at, near: 30, far: 260, attack: 0.4 });
     setTimeout(() => { if (!ctx) return; SFX.collapse({ at, k: 1.4 }); sub(2.4, { f0: 62, f1: 22, k: 1, at, near: 30, far: 300, attack: 0.005, rumble: 1 }); rattle(14, 2.2, { at, near: 30, far: 220, delay: 0.3 }); }, 2400); },
+  // a boss's end (trial.js presence): Zeus's bolt into its body, the loudest crack of all over the deepest boom, the
+  // thunder rolling on round the island (the bolt's own, lightning.js, comes with it), stones pattering down, and the
+  // ash rushing away on the wind; the music hushed under it
+  bossEnd: ({ at } = {}) => { note('bossEnd'); duck(1, 0, { hold: 4, warn: true }); const s = place(at, 30, 320);
+    play('thunderClap', { vol: 1, at, near: 40, far: 400, rate: [0.7, 0.76], wet: 0.55 }); play('slamHit', { vol: 0.85, at, near: 40, far: 400, rate: [0.45, 0.5], wet: 0.6, gap: 0 });
+    sub(4.5, { f0: 72, f1: 18, k: 1.2, at, near: 40, far: 400, attack: 0.004, rumble: 1 }); SFX.thunder(1.5);
+    noise(3.2, { freq: 700, q: 0.5, vol: 0.2 * s.k, attack: 0.7, slide: -450, wet: 0.6, delay: 0.3, pan: s.pan * 0.5 }); rattle(18, 2.8, { at, near: 30, far: 260, delay: 0.5 }); },
   // the bosses: a ground-shaking slam, the Chimera's fire, a block of stone torn up and hurled, and landing
   // (big: a giant boss's: the recording slowed over a boom and the rubble it shakes loose; Patch 23: some 4 dB under
   // what they were, the sub boom carrying the weight)

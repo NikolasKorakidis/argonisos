@@ -25,7 +25,7 @@ export const TOPICS = {
   ],
   olive: [{ title: 'The Marked Olives', body: 'See the marks cut into this ancient olive? The old ones left them to show the way to the <b>Minotaur\'s Labyrinth</b>.<br><br>Copy the marks with ' + K('E') + '. Each tree points to another; <b>three</b> pieces make the map.' }],
   labyrinth: [{ title: 'The Way Is Clear', body: 'The pieces fit. The <b>Labyrinth</b> is marked on your map and compass.<br><br>Its altar asks for a tribute: <b>5 deer hides and 10 olives</b>. Deer give hides; olive trees give olives once a day. Bring them, and bring a bow or a spear: the Minotaur shrugs off cuts and blows, but not points.' }],
-  labyrinthAltar: [{ title: 'The Altar of the Minotaur', body: 'Lay the tribute here (' + K('E') + ') and he will come. He swings a great axe, charges, and roars hard enough to stun you. The dead of the Labyrinth rise to help him every half minute.<br><br>Eat well before you call him. If you run or fall, the fight is over, but the tribute stays on the altar: you can call him again.' }],
+  labyrinthAltar: [{ title: 'The Altar of the Minotaur', body: 'Lay the tribute here (' + K('E') + ') and he will come. He swings a great axe, charges, and roars hard enough to stun you. The dead of the Labyrinth rise to help him every half minute.<br><br>Eat well before you call him. Run from the arena and he will not follow, but he heals while you are gone, and the fight waits for you. If you fall, the fight is over, but the tribute stays on the altar: you can call him again.' }],
   minotaurDown: [{ title: 'The Minotaur Is Dead', body: 'Well done. Take his <b>head</b> to the Ancient Temple and lay it on its stand. Zeus keeps his promises.' }],
   offered1: [{ title: 'The Next Land', body: `You have the Minotaur's roar now: ${K('F')} stuns everything around you. And you can work <b>lightstone</b>: better axes, spears and daggers, and Cretan armour from deer hides.<br><br>The forest of <b>Yleos</b> is next. Its master is the Chimera.` }],
   yleos: [{ title: 'Yleos', body: '<b>The dark forest.</b> Dryads live here and hunt on sight, and no fire frightens them; only their little dryadlings shy from a campfire. Giants walk among the trees, slow but terrible: one blow can kill you. Eat your best food and wear armour.<br><br>Lightstone lies in these hills. A pickaxe breaks it out of the boulders.' }],
@@ -37,6 +37,9 @@ export const TOPICS = {
   death: [{ title: 'You Fell', body: 'Zeus lifted you up again, as he will. Everything you carried lies in your <b>grave</b> where you fell: go back and take it (' + K('E') + '). A bed under a roof decides where you wake.' }],
 };
 const ORDER = Object.keys(TOPICS);
+// What no longer needs saying (tr: the trial's state): an altar's counsel or a lair's tribute once its beast is dead,
+// held through a fight and dropped from what she has to tell you (want, watch)
+const STALE = { labyrinth: (tr) => tr.down?.minotaur, labyrinthAltar: (tr) => tr.down?.minotaur, chimera: (tr) => tr.down?.chimera, chimeraAltar: (tr) => tr.down?.chimera };
 
 function owlModel() {
   const g = new THREE.Group(), fe = new THREE.MeshStandardMaterial({ color: 0x8a6a48, roughness: 0.9, flatShading: true }), pale = new THREE.MeshStandardMaterial({ color: 0xe0d0b0, roughness: 0.9, flatShading: true });
@@ -86,9 +89,10 @@ export class Owl {
     const bd = g.onDeath; g.onDeath = () => { bd?.(); this.want('death'); };
   }
   // ---- one-time hints (a toast, once ever: st.hints), for small lessons the moment they matter
+  // (not in a boss fight: held, so it comes the next time it's earned)
   hint(key) {
     const H = { parry: `Blocked. Raise your guard (${K('RMB')}) <b>just as</b> a blow lands to <b>parry</b> it and stagger the beast.` };
-    const h = (this.st.hints ||= []); if (h.includes(key) || !H[key]) return; h.push(key); this.g.hud.toast(H[key]);
+    const h = (this.st.hints ||= []); if (h.includes(key) || !H[key] || this.hushed) return; h.push(key); this.g.hud.toast(H[key]);
   }
   // ---- what she has told you, to read again (the pause menu's Owl's counsel): a list of the topics heard, in the order
   // she tells them, and a topic's cards in her box (closing it goes back to the list, nothing else changes)
@@ -108,11 +112,13 @@ export class Owl {
   // (the counsel or one of its topics open: the pause key leaves it be, main.js)
   get reading() { return !!this.rereading || !!document.getElementById('owlCounsel')?.offsetParent; }
   // ---- topics
-  want(topic) { if (this.st.done.includes(topic) || this.st.queue.includes(topic)) return; this.st.queue.push(topic); this.st.queue.sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)); }
+  want(topic) { if (this.st.done.includes(topic) || this.st.queue.includes(topic) || STALE[topic]?.(this.g.trial?.st || {})) return; this.st.queue.push(topic); this.st.queue.sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)); }
   get hasNews() { return this.st.queue.length > 0; }
+  get hushed() { return !!this.g.trial?.fighting; }
   watch() {
     const g = this.g, P = g.player.pos, S = SITES, tr = g.trial?.st || {}, near = (s, r) => s && Math.hypot(s.x - P.x, s.z - P.z) < r;
     if (!this.st.done.includes('intro')) return;                           // nothing else before the first meeting
+    const q = this.st.queue; for (let i = q.length - 1; i >= 0; i--) if (STALE[q[i]]?.(tr)) q.splice(i, 1);   // (what a fight made stale)
     if (g.S.time > 0.62 && g.S.time < 0.74) this.want('night');
     if (near(S.house, 30)) this.want('house');
     if (near(S.temple, 60)) this.want('temple');   // (the precinct: the temple stands on its hill with the altar 40 m out, Patch 19)
@@ -144,7 +150,7 @@ export class Owl {
   draw() { const c = this.cards[this.card]; this.box.querySelector('h3').textContent = c.title; this.box.querySelector('p').innerHTML = c.body; this.box.querySelector('.dots').innerHTML = this.cards.map((_, i) => `<i class="${i === this.card ? 'on' : ''}"></i>`).join(''); this.box.querySelector('#owlNext').textContent = this.card === this.cards.length - 1 ? 'Farewell' : 'Next'; }
   // is she roughly where the hero is facing (then E talks to her before anything else)
   faced() { const P = this.g.player, dx = this.pos.x - P.pos.x, dz = this.pos.z - P.pos.z; return Math.abs(Math.atan2(Math.sin(Math.atan2(dx, dz) - P.yaw), Math.cos(Math.atan2(dx, dz) - P.yaw))) < 1.25; }
-  interactable(pos) { if (this.state !== 'escort' || !this.hasNews || this.pos.distanceTo(pos.clone().setY(pos.y + 1.5)) > 4.5) return null; return { label: 'Talk to the Owl', sub: 'She has something to tell you', use: () => this.talk() }; }
+  interactable(pos) { if (this.state !== 'escort' || this.hushed || !this.hasNews || this.pos.distanceTo(pos.clone().setY(pos.y + 1.5)) > 4.5) return null; return { label: 'Talk to the Owl', sub: 'She has something to tell you', use: () => this.talk() }; }
   // ---- flying
   arrive() { const P = this.g.player.pos; this.state = 'escort'; this.o.g.visible = true; this.pos.copy(P).add(new THREE.Vector3(25, 22, -15)); this.vel.set(0, 0, 0); this.g.sound?.('owl', { at: this.pos }); this.g.hud.toast('The <b>Owl</b> has something to tell you <span class="kbd">E</span>'); }
   leave() { this.state = 'leave'; this.t = 0; this.from = this.pos.clone(); }
@@ -158,8 +164,11 @@ export class Owl {
     if (this.open && (input.pressed.has('Enter') || input.pressed.has('KeyE') || input.pressed.has('Space'))) this.next();
     if (this.open && input.pressed.has('Escape')) this.close();
     this.checkT -= dt; if (this.checkT <= 0) { this.checkT = 0.5; this.watch(); }
-    const busy = !!g.trial?.boss || g.player.dead;
+    // (not in a boss fight, from the summons until its ashes have blown away: trial.js fighting; what she would say waits
+    // for it to end, and if she was by you as it began she flies off until then)
+    const busy = this.hushed || g.player.dead;
     if (this.state === 'away' && this.hasNews && !busy && !this.open) this.arrive();
+    if (this.state === 'escort' && this.hushed && !this.open) this.leave();
     if (this.state === 'escort') {
       // fly alongside, catching up quickly when far behind; flap when moving, glide when keeping pace
       const want = this.escortTarget(new THREE.Vector3()), d = want.clone().sub(this.pos), dist = d.length();

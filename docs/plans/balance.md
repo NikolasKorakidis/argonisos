@@ -26,7 +26,7 @@ The team's balance changelog, as built. Tests: `node tests/run.mjs combat` (the 
   his is ×1.15, so the gore is 48–53 then.
 - **T11, the Minotaur's dead in waves** (`helpAt: 300`, 1500 since Patch 25, `Trial.begin` and `Trial.help`). The first wave of two skeletons
   comes 30 s after he drops into the arena, or as soon as he is down to 300 health, whichever is first; each later wave
-  30 s after the one before; both at once give one wave. Waves stop when he dies or you flee the arena. The skeletons
+  30 s after the one before; both at once give one wave. Waves stop when he dies or you fall, and wait while you're out of the arena's reach (105 m from its middle, where he heals 5% a second: `FLEE` in `trial.js`). The skeletons
   rise at the arena's edge (14 m from its middle), never within 6 m of you. Before, a wave came every 30 s and one came at
   once when he was enraged; his rage no longer calls the dead (the Chimera's still calls the forest at once). 300 health
   is a third of his 900, so a fight that goes fast meets its first wave from the threshold, a slow one from the clock.

@@ -2,8 +2,9 @@
 //   Clues: three of the five marked olive trees in Pedias piece together the way to the Minotaur's Labyrinth; three of
 //   the four Giant caves in Yleos (each guarded) show where the Chimera sleeps.
 //   Tribute: lay it on the boss's altar to call it: 5 deer hides and 10 olives for the Minotaur, 3 dryad hearts and
-//   10 pomegranates for the Chimera. A fight that ends without the kill (you fled, fell, or left the game mid-fight)
-//   leaves the tribute on the altar (st.paid), and E there calls the beast again for nothing more. Mid-fight, the dead (or the forest) come to the boss's aid in waves 30 seconds
+//   10 pomegranates for the Chimera. Run from the fight and it goes on: the beast goes back to its arena and gathers its
+//   strength while you're gone (FLEE), and takes you up again when you come back. A fight that ends without the kill (you
+//   fell, or left the game mid-fight) leaves the tribute on the altar (st.paid), and E there calls the beast again for nothing more. Mid-fight, the dead (or the forest) come to the boss's aid in waves 30 seconds
 //   apart; the Minotaur's first comes sooner if he's brought down to 1500 health first (helpAt).
 //   Offering: bring the head to the Ancient Temple. Zeus grants its power (F) and the next tier of crafting.
 //   Prayer: once a day at the temple altar, Zeus's Blessing. (And once ever at the old altar on the top of Olympos,
@@ -14,6 +15,7 @@ import { SITES } from '../world/sites.js';
 import { ITEMS } from './items.js';
 import { icon } from '../ui/icons.js';
 import { dust, burst, addShake, punch, rumble, pillar, blast, slowMo, spark, ring, mark, cracks } from '../render/fx.js';
+import { bossAura, dissolve, dissolving, updateBossFx } from '../render/bossfx.js';
 import { askLight } from '../render/lights.js';
 import { setWeather, gatherStorm, breakStorm } from '../world/weather.js';
 import { strike } from '../world/lightning.js';
@@ -73,10 +75,19 @@ const MOVE = {
 // glowing warn s first (never while you're stunned and can't get out of the way); a bolt hurts what stands within r m of
 // it (dmg you, boss: the boss, unless its TYPES entry has a bolt of its own; the boss's dead it destroys)
 const STORM = { every: [[2.6, 4.2], [1.5, 2.6]], near: [0.3, 0.45], spread: 4, warn: 1.3, r: 2.8, dmg: [14, 18, 'force'], boss: 35 };
+// Running from a fight (update, bossThink; the reviewer, 24 Nov: "no more fled from combat"): further than r metres from
+// the arena's middle (half again the 70 at which a fight used to end) you're out of it, and back in it once within r - back.
+// While you're out the fight waits: the beast walks back to within home metres of its arena's middle and stands there,
+// healing heal of its health a second; no help rises and no bolt seeks you; and when you come back it takes you up again.
+const FLEE = { r: 105, back: 5, heal: 0.05, home: 10 };   // (home: the altar stands in the middle)
+// A boss's end (presence): its body lies lie seconds after the killing blow (the death clip has it down by then), then
+// Zeus's bolt strikes it; it glows up over glow seconds and is gone into embers and ash on the wind (bossfx.js dissolve)
+const END = { lie: 2.9, glow: 0.35 };
 // the block of stone in the Minotaur's hand as he winds up a throw
 const ROCK_GEO = new THREE.DodecahedronGeometry(1.3, 0), ROCK_MAT = new THREE.MeshStandardMaterial({ color: 0x8a8378, roughness: 0.95, flatShading: true });
 const TRIBUTE = { minotaur: { deerHide: 5, olive: 10 }, chimera: { dryadHeart: 3, pomegranate: 10 } };
-const BOSS_NAME = { minotaur: 'the Minotaur', chimera: 'the Chimera' };
+const BOSS_NAME = { minotaur: 'the Minotaur', chimera: 'the Chimera' }, BOSS_HIS = { minotaur: 'his', chimera: 'its' }, BOSS_HEAD = { minotaur: 'Head', chimera: 'head' };
+const big = (s) => s[0].toUpperCase() + s.slice(1);
 export const POWERS = {
   roar: { name: "Minotaur's Roar", icon: 'zeus', cd: 300, desc: 'Press F: a roar that stuns every creature around you and sends them reeling.' },
   claw: { name: "Chimera's Claws", icon: 'blessing', cd: 600, time: 300, desc: 'Press F: for five minutes your bare hands strike like the Chimera\'s claws.' },
@@ -100,7 +111,7 @@ export class Trial {
     const bar = document.createElement('div'); bar.id = 'bossBar'; bar.className = 'hidden'; bar.innerHTML = '<div class="bn"></div><div class="bb"><i></i></div>'; document.getElementById('hud').appendChild(bar); this.bar = bar;
     const pw = document.createElement('div'); pw.id = 'power'; pw.className = 'hidden'; document.getElementById('hud').appendChild(pw); this.pw = pw;
     g.onKill = (c) => this.onKill(c);
-    { const od = g.onDeath; g.onDeath = () => { od?.(); if (this.boss) this.fell = true; }; }   // (fallen in the fight: said so if it ends that way, update)
+    { const od = g.onDeath; g.onDeath = () => { od?.(); if (this.boss || this.calling) this.fell = true; }; }   // (fallen in the fight: it ends once you're lifted up again, update)
   }
   // ---- what E does at the trial's places
   interactable(pos) {
@@ -200,6 +211,7 @@ export class Trial {
   // knocking you off your feet if you're close; it stands and roars, and the fight is on. The camera turns to watch it
   // (player.focus) and, for the Chimera, draws back to take it in (player.bossCam). Run from update(), and from game.js while a menu is open.
   stage(dt) {
+    this.presence(dt);
     const A = this.arrival; if (!A) return; const g = this.g, P = g.player, u = A.u, at = A.at, once = (k) => !A.did[k] && (A.did[k] = true), t = (A.t += dt);
     if (t < ARRIVE.land) rumble(0.18 + 0.4 * Math.min(1, t / ARRIVE.land) ** 2);
     if (once('quake')) g.sound?.('quake', { dur: ARRIVE.land });
@@ -210,7 +222,7 @@ export class Trial {
     if (t > ARRIVE.light && once('light')) { pillar(at, { rise: ARRIVE.drop - ARRIVE.light, high: 80, r: u.boss === 'chimera' ? 4 : 3 }); g.flashSky(0.7); }
     if (t > ARRIVE.drop && once('drop')) {   // out of the sky, roaring
       this.calling = null; const c = g.creatures.spawn(u.boss, at.x, at.z, { level: 0, boss: true, aware: true }); c.state = 'chase'; c.arena = u.center.clone(); this.begin(c, u.boss);
-      c.yaw = Math.atan2(P.pos.x - at.x, P.pos.z - at.z); c.intro = 99; c.ctl = { want: 0, at, air: ARRIVE.high }; A.c = c;
+      c.yaw = Math.atan2(P.pos.x - at.x, P.pos.z - at.z); c.intro = 99; c.ctl = { want: 0, at, air: ARRIVE.high }; A.c = c; bossAura(c);
       g.sound?.('roar', { boss: true, long: true, at }); this.bar.classList.remove('hidden'); this.bar.querySelector('.bn').textContent = c.T.name; }
     if (A.c && !A.landed) { const k = Math.min(1, (t - ARRIVE.drop) / (ARRIVE.land - ARRIVE.drop)); A.c.fall = ARRIVE.high * (1 - k * k); }
     if (t > ARRIVE.land && once('land')) {   // the blast
@@ -230,7 +242,13 @@ export class Trial {
   // a fight over without the kill: the tribute stays on the altar (and the beast's dead go back into the ground)
   unpaid() { const st = this.st; if (st.fight) { (st.paid ||= {})[st.fight] = true; delete st.fight; } for (const k of [...this.g.creatures.list]) if (k.summoned && !k.dead) this.g.creatures.remove(k); }
   // the fight is on: the first wave of help 30 seconds from now (or sooner: helpAt)
-  begin(c, kind) { this.boss = c; this.bossKind = kind; this.helperT = 30; this.waves = 0; }
+  begin(c, kind) { this.boss = c; this.bossKind = kind; this.helperT = 30; this.waves = 0; this.away = false; }
+  // the fight over without the kill (you fell): the beast gone, its help and its bolts with it, the sky clearing, the
+  // tribute left on the altar
+  end() { const c = this.boss; this.healBar(false); this.unspend(c); this.calm(); this.g.creatures.remove(c); this.boss = null; this.away = false; this.bar.classList.add('hidden'); setWeather(null); this.unpaid(); bossAura(null); }
+  // A fight on, as the owl and the music hear it (owl.js keeps quiet through it): a beast on its way or fighting, unless
+  // you're out of its reach (away), and its end until its ashes have blown away (presence)
+  get fighting() { return !!this.calling || !!this.arrival || (!!this.boss && !this.boss.dead && !this.away) || !!this.dying; }
   // a wave of help: two of the boss's helpers rising at the arena's edge, not right beside you, and the next in 30 seconds
   help(c) {
     const g = this.g, P = g.player.pos; this.helperT = 30; this.waves++;
@@ -243,7 +261,9 @@ export class Trial {
   onKill(c) {
     if (c !== this.boss) return;
     // (and the storm breaks: the clouds part and the sun comes through, weather.js)
-    const g = this.g; this.st.down[this.bossKind] = true; delete this.st.fight; this.unspend(c); this.calm(); this.boss = null; this.bar.classList.add('hidden'); breakStorm();
+    const g = this.g, P = g.player; this.st.down[this.bossKind] = true; delete this.st.fight; this.healBar(false); this.unspend(c); this.calm(); this.boss = null; this.away = false; this.bar.classList.add('hidden'); breakStorm();
+    // (the killing blow: a hard jolt and a moment of slow motion; Zeus takes the body once it has lain a moment: presence)
+    punch(1, { x: P.pos.x - c.pos.x, z: P.pos.z - c.pos.z }); addShake(0.8); slowMo(0.6, 0.35); this.dying = { c, t: 0, did: {} };
     for (const k of g.creatures.list) if (k.summoned && !k.dead) g.creatures.hurt(k, [[9999, 'force']], null);
     g.hud.region(`${BOSS_NAME[this.bossKind][0].toUpperCase()}${BOSS_NAME[this.bossKind].slice(1)} has fallen`, 'Take its head to Zeus at the Ancient Temple');
     g.acts?.later.push({ t: 1.2, fn: () => g.acts.cheer() });   // (arms raised in triumph)
@@ -304,6 +324,10 @@ export class Trial {
     // coming down out of the sky, then standing and roaring before the fight (stage)
     if (c.fall !== undefined) { c.ctl = { want: 0, air: c.fall, face: c.yaw, snap: true }; return 'idle'; }
     if (c.intro > 0) { c.intro -= dt; c.ctl = { want: 0, face: toP }; return 'roar'; }
+    // you're out of the fight's reach (update: away): back to its arena's middle, to stand there gathering its strength
+    if (this.away && c.arena) { this.unspend(c); c.move?.mark?.done(); c.move = null; c.state = 'idle'; const dx = c.arena.x - c.pos.x, dz = c.arena.z - c.pos.z;
+      const dd = Math.hypot(dx, dz), face = dd > FLEE.home ? g.creatures.steer(c, Math.atan2(dx, dz), dd, dt) : c.yaw;   // (round what still stands, as it chases: creatures.js)
+      c.ctl = dd > FLEE.home ? { want: Math.abs(angDiff(face, c.yaw)) > 0.7 ? 0 : T.speed[1] * 0.5, face } : { want: 0 }; return null; }   // (turning round where it stands first)
     // leash: a boss doesn't wander off its arena; if you run, it goes back and heals
     if (c.arena && c.pos.distanceTo(c.arena) > 45) { this.unspend(c); c.move = null; c.state = 'idle'; c.yaw = Math.atan2(c.arena.x - c.pos.x, c.arena.z - c.pos.z); c.hp = Math.min(c.max, c.hp + c.max * 0.05 * dt); return null; }
     if (!c.enraged && c.hp < c.max * 0.5) {
@@ -468,8 +492,30 @@ export class Trial {
     }
     return over(false);
   }
+  // ---- a boss's presence and its end (bossfx.js): its aura while it lives; and once its body has lain a moment
+  // (END.lie), Zeus's bolt strikes its head out of the storm's last cloud, the flash, the crack and the boom at once, the
+  // ground shaking and a shockwave racing out along it; the body glows up from where the bolt struck (END.glow) and
+  // breaks into embers and ash that blow away on the wind, and what it leaves drops where it lay (creatures.js vanish,
+  // once it's ashen). Run from stage, so it goes on behind a menu as a boss's coming does.
+  presence(dt) {
+    updateBossFx(dt); const E = this.dying; if (!E) return; const g = this.g, c = E.c, P = g.player; E.t += dt;
+    if (c.gone && !E.did.bolt) { this.dying = null; return; }   // (its body taken away first: a test clearing the arena)
+    if (!E.did.bolt && E.t > END.lie) { E.did.bolt = true;
+      const head = c.body.point?.(BOSS_HEAD[c.type]) || c.pos.clone().setY(c.pos.y + c.T.h * 0.3); E.at = head; E.ground = c.pos.clone();
+      strike({ at: head.clone().add(new THREE.Vector3(rr(-12, 12), 190, rr(-12, 12))), ground: head, light: 2, big: 2 });   // (not counted in struck: that's the fight's storm)
+      g.sound?.('bossEnd', { at: head }); g.flashSky(1); addShake(1); punch(1, { x: P.pos.x - c.pos.x, z: P.pos.z - c.pos.z }); slowMo(0.35, 0.5);
+      ring(E.ground, { reach: c.type === 'chimera' ? 40 : 32, time: 1.1, k: 1 }); spark(head, 40); cracks(E.ground, { r: c.type === 'chimera' ? 12 : 8, life: 14 });
+      E.bits = dissolve(c.body.obj, head, { n: c.type === 'chimera' ? 18000 : 14000, glowFor: END.glow });
+    }
+    if (E.did.bolt && E.t < END.lie + 0.3) askLight(E.at.clone().setY(E.at.y + 3), 90, 60, 0xc8d8ff, undefined, false);   // (the bolt lighting the ruin)
+    if (E.did.bolt && !E.did.ash) { c.glow = 3 * Math.min(1, (E.t - END.lie) / END.glow);
+      if (E.t > END.lie + END.glow) { E.did.ash = true; c.body.obj.visible = false; c.ashen = true; dust(E.ground.clone().setY(E.ground.y + 1), 30, 0x3a332c, 1.2); burst(E.at, { color: 0xffa040, n: 40, speed: 7, size: 0.12, life: 1.4, grav: 2, up: 5, glow: true }); } }
+    if (E.did.ash && !dissolving()) this.dying = null;
+  }
   // You're stunned (a roar): no moving or striking for secs (player.js daze), the world muffled round you (sound.js)
   stun(secs) { const g = this.g, P = g.player; P.stats.add('stunned', secs); daze(secs); g.hud.toast('The roar <b>stuns</b> you!'); P.hv.multiplyScalar(0.2); }
+  // the boss bar while you're out of the fight's reach: its name says the beast is healing, the bar glowing green round it
+  healBar(on) { if (this.barHeal === on) return; this.barHeal = on; const n = this.bar.querySelector('.bn'), b = this.bar.querySelector('.bb'); if (this.boss) n.textContent = this.boss.T.name + (on ? ' · regaining strength' : ''); b.style.boxShadow = on ? '0 0 10px #7fd060' : ''; }
   // the boss bar golden while the boss is spent
   tiredBar(on) { if (this.barTired === on) return; this.barTired = on; const i = this.bar.querySelector('i'); i.style.background = on ? 'linear-gradient(90deg, #c98a2a, #ffd56a)' : ''; i.style.boxShadow = on ? '0 0 12px #ffc850' : ''; }
   // ---- Zeus's storm over a boss fight (update): from the summons until the beast dies, a bolt comes down about the arena
@@ -481,7 +527,7 @@ export class Trial {
     this.stormT = (this.stormT ?? 2) - dt;
     if (this.stormT <= 0) {
       const en = c.enraged ? 1 : 0; this.stormT = rr(...STORM.every[en]);
-      if (Math.random() < STORM.near[en] && !P.dead && !P.stats.has('stunned')) { const a = Math.random() * 6.283, r = Math.random() * STORM.spread; this.bolt(P.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r))); }
+      if (Math.random() < STORM.near[en] && !P.dead && !this.away && !P.stats.has('stunned')) { const a = Math.random() * 6.283, r = Math.random() * STORM.spread; this.bolt(P.pos.clone().add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r))); }
       else for (let i = 0; i < 6; i++) { const a = Math.random() * 6.283, r = rr(16, 48), p = c.arena.clone().add(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r)); if (p.distanceTo(P.pos) > 10) { this.bolt(p, { warn: 0 }); break; } }
     }
   }
@@ -515,13 +561,17 @@ export class Trial {
     if (g.player.stats.has('poisoned')) g.player.stats.damage(1.5 * dt);
     if (g.player.stats.has('burning')) g.player.stats.damage(2.5 * dt);
     // boss fight: health bar, and help in waves 30 seconds apart; the first sooner if the boss is brought down to helpAt
-    // (one wave, should both come in the same moment)
+    // (one wave, should both come in the same moment). Fallen in it, it's over once you're lifted up again; out of its
+    // reach (FLEE), it waits for you, the beast healing, no help rising meanwhile
     if (this.boss) {
-      const c = this.boss; this.bar.querySelector('i').style.width = (c.hp / c.max) * 100 + '%';
-      this.helperT -= dt;
-      if (!c.dead && (this.helperT <= 0 || (!this.waves && c.hp <= (c.T.helpAt ?? -1)))) this.help(c);
-      if (g.player.pos.distanceTo(c.arena) > 70 && !c.dead) { this.unspend(c); this.calm(); g.creatures.remove(c); this.boss = null; this.bar.classList.add('hidden'); setWeather(null); this.unpaid();
-        g.hud.toast(`${this.fell ? 'You fell' : 'You fled'}. Your tribute still lies on the altar: call ${BOSS_NAME[this.bossKind]} again when you're ready.`); }
+      const c = this.boss, P = g.player; this.bar.querySelector('i').style.width = (c.hp / c.max) * 100 + '%';
+      if (this.fell && !P.dead && !c.dead) { this.end(); g.hud.toast(`You fell. Your tribute still lies on the altar: call ${BOSS_NAME[this.bossKind]} again when you're ready.`); }
+      else if (!c.dead && c.arena) {
+        const d = Math.hypot(P.pos.x - c.arena.x, P.pos.z - c.arena.z), away = !P.dead && (d > FLEE.r || (this.away && d > FLEE.r - FLEE.back));
+        if (away !== this.away) { this.away = away; this.healBar(away); if (away) g.hud.toast(`You have left the arena. ${big(BOSS_NAME[this.bossKind])} goes back to it and gathers ${BOSS_HIS[this.bossKind]} strength while you're away.`); }
+        if (away) c.hp = Math.min(c.max, c.hp + c.max * FLEE.heal * dt);
+        else { this.helperT -= dt; if (this.helperT <= 0 || (!this.waves && c.hp <= (c.T.helpAt ?? -1))) this.help(c); }
+      }
     }
     // a boss's head in the pack: the light over its stand at the temple, and the stand on the compass and map, until it's offered
     this.headT = (this.headT || 0) - dt;

@@ -168,12 +168,13 @@ export class Creatures {
     c.dead = true; c.state = 'dead'; c.deadT = 0; c.hp = 0; this.g.sound?.('kill', { at: c.pos.clone(), type: c.type, boss: !!c.boss }); c.crumble = c.type === 'skeleton';
     this.g.onKill?.(c);
   }
-  // when a body has lain long enough: a small thunderclap, and it's gone, leaving its drops
+  // when a body has lain long enough: a small thunderclap, and it's gone, leaving its drops (a boss's has had Zeus's
+  // bolt already, and its ashes are blowing away: trial.js presence)
   vanish(c) {
     const at = c.pos.clone().setY(c.pos.y + 0.5);
-    dust(at, c.T.thunder === 'big' ? 30 : 14, 0xe8e8ff, c.T.thunder === 'big' ? 0.8 : 0.4); burst(at, { color: 0xbfd0ff, n: 16, speed: 4, size: 0.05, grav: -2 });
-    if (c.pos.distanceTo(this.g.player.pos) < 25) { addShake(c.T.thunder === 'big' ? 0.5 : 0.15); this.g.flashSky?.(c.T.thunder === 'big' ? 0.5 : 0.18); }
-    this.g.sound?.('thunder', c.T.thunder === 'big' ? 1.2 : 0.6, { at });
+    if (!c.ashen) { dust(at, c.T.thunder === 'big' ? 30 : 14, 0xe8e8ff, c.T.thunder === 'big' ? 0.8 : 0.4); burst(at, { color: 0xbfd0ff, n: 16, speed: 4, size: 0.05, grav: -2 });
+      if (c.pos.distanceTo(this.g.player.pos) < 25) { addShake(c.T.thunder === 'big' ? 0.5 : 0.15); this.g.flashSky?.(c.T.thunder === 'big' ? 0.5 : 0.18); }
+      this.g.sound?.('thunder', c.T.thunder === 'big' ? 1.2 : 0.6, { at }); }
     // (what it leaves; the young less of each, but never none)
     if (!c.summoned) for (const [id, a, b, ch] of c.T.drops) if (Math.random() < ch) { const n0 = ri(a, b) * (1 + 0.25 * c.level), n = c.young ? Math.max(1, Math.round(n0 * c.dropK)) : Math.round(n0); if (n > 0) this.g.pickups.drop(id, n, c.pos.x + rr(-0.6, 0.6), c.pos.z + rr(-0.6, 0.6), { auto: true }, c.pos.y); }
     this.remove(c);
@@ -188,7 +189,8 @@ export class Creatures {
       const c = this.list[i], T = c.T;
       if (c.dead && c.crumble) {   // a skeleton falls apart where it stands: its bones clatter down and it's gone (crumble)
         c.deadT += dt; if (!c.fell && c.deadT > 0.1) { c.fell = true; this.crumble(c); } if (c.deadT > 1.3) { if (c.summoned) this.remove(c); else this.vanish(c); } continue; }
-      if (c.dead) { c.deadT += dt; c.body.animate('dead', 0, dt); c.flash = Math.max(0, c.flash - dt * 3); c.body.flash(c.flash); if (c.deadT > (T.heavy ? 3 : 2)) this.vanish(c); continue; }
+      // (a boss lies until Zeus's bolt has turned it to ash, trial.js presence: glow, ashen; or a while, should nothing come)
+      if (c.dead) { c.deadT += dt; c.body.animate('dead', 0, dt); c.flash = Math.max(0, c.flash - dt * 3); c.body.flash(c.flash, c.glow || 0); if (c.boss ? c.ashen || c.deadT > 15 : c.deadT > (T.heavy ? 3 : 2)) this.vanish(c); continue; }
       const d = c.pos.distanceTo(pp);
       if (d > 140 && !c.boss) { this.remove(c); continue; }
       c.t -= dt; c.atkCd -= dt; c.rangedCd -= dt; c.hitT -= dt; if (c.poise) c.poise = Math.max(0, c.poise - dt * c.max * 0.03); c.flash = Math.max(0, c.flash - dt * 4); c.body.flash(c.flash, c.glow);
