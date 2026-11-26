@@ -1,5 +1,5 @@
 // Building: a full house goes up in either order, snapping is exact and steady, overlaps are refused, nothing
-// snaps to furniture.
+// snaps to furniture; the pieces' models are solid, with no hole to see into or through from any side.
 export default {
   name: 'Building',
   async run(t) {
@@ -53,5 +53,19 @@ export default {
       const onTop = (r) => r && !r.why && Math.abs(r.y - 3) < 0.05 && Math.abs(r.z + 3) < 0.05 ? 'ok' : r ? 'at ' + [r.x, r.y, r.z].map((v) => v.toFixed(2)).join(',') + (r.why ? ' (' + r.why + ')' : '') : 'no ghost';`;
     await t.step('from outside, a roof panel aimed at the top of a wall goes on the wall', `${walls} const res = [[-0.4, 2.9], [0.6, 3.0], [1.2, 2.7], [-1.6, 3.1]].map(([tx, ty]) => onTop(aim(tx, -7, tx + 0.5, 3.6, -13, tx, ty, -3))); return res.every((x) => x === 'ok') || res.join(' | ');`);
     await t.step('from inside, a roof panel aimed at the top of a wall goes on the wall', `${walls} const res = [[-0.6, 2.95], [0.8, 3.0], [1.3, 2.8]].map(([tx, ty]) => onTop(aim(0, 1.5, 0.3, 2.4, 2.5, tx, ty, -3))); return res.every((x) => x === 'ok') || res.join(' | ');`);
+    // the user, 26 Nov: walls empty from the inside, almost invisible from some angles (the kit's logs were open tubes, a
+    // floor only its boards' tops: kit.js close, underside). Rays from every side at each one-sided model: the first face
+    // a ray meets must face it, or the picture shows through to what lies behind
+    const solid = await t.eval(`const { PIECES } = await import('/src/build/pieces.js'), T = AG.THREE; if (!(await until(() => PIECES.some((p) => p.meshes), 20000))) return { none: true };   // (no pack: the carved pieces, boxes)
+      const rc = new T.Raycaster(), out = {}, o = new T.Vector3(), d = new T.Vector3(), e1 = new T.Vector3(), e2 = new T.Vector3(), M = new T.MeshBasicMaterial({ side: T.DoubleSide });
+      for (const p of PIECES) if (['Walls', 'Floors', 'Roofs', 'Beams', 'Fences'].includes(p.cat)) (p.meshes || []).forEach((m, j) => { if (m.mat.side === T.DoubleSide) return;
+        const mesh = new T.Mesh(m.geo, M); m.geo.computeBoundingSphere(); const { center: c, radius: R } = m.geo.boundingSphere; let hit = 0, back = 0;
+        for (let k = 0; k < 40; k++) { const y = 1 - (2 * (k + 0.5)) / 40, rr = Math.sqrt(1 - y * y), a = k * 2.39996; d.set(rr * Math.cos(a), y, rr * Math.sin(a)); e1.set(0, 1, 0); if (Math.abs(d.y) > 0.9) e1.set(1, 0, 0); e1.cross(d).normalize(); e2.crossVectors(d, e1);
+          for (let i = 0; i < 14; i++) for (let l = 0; l < 14; l++) { o.copy(c).addScaledVector(e1, (i / 13 - 0.5) * 2 * R).addScaledVector(e2, (l / 13 - 0.5) * 2 * R).addScaledVector(d, -2 * R); rc.set(o, d); const h = rc.intersectObject(mesh, false)[0]; if (h) { hit++; if (h.face.normal.dot(d) > 0) back++; } } }
+        out[p.id + (j ? '+' + j : '')] = +((100 * back) / Math.max(hit, 1)).toFixed(1); });
+      return out;`);
+    t.metric('rays that see into a piece first (%)', solid);
+    const holes = Object.entries(solid).filter(([k, v]) => k !== 'none' && v > 2.5);
+    t.check('every wall, floor, roof end, beam and fence looks solid from every side (rays meet its outside first)', holes.length === 0, holes.map(([k, v]) => k + ' ' + v + '%').join(', '));
   },
 };

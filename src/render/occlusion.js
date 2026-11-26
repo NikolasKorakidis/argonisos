@@ -112,8 +112,8 @@ export class Occlusion {
 //   the collider grid (colliders.js: trunks, rocks and boulders, posts, the sites' walls and columns, logs, rubble), each a
 //     standing cylinder; a tree's only up to where its crown begins (CAST.trunk, the giants' far higher), above which the
 //     camera goes through the leaves
-//   the pieces you built, by their solid boxes and their surfaces (floors, stairs, roof panels: build.js def.solids, tops;
-//     an open door not), so a roof keeps the camera under it
+//   the pieces you built, by their solid boxes (and a gable's whole triangle, veil) and their surfaces (floors, stairs,
+//     roof panels: pieces.js solids, veil, tops; an open door not), so a roof keeps the camera under it
 //   the sites' roofs (from where the rooms' ceilings are to about the ridge) and floors and steps (a metre's depth under
 //     them), and the rock of a cave you're in (structures.js rayBlock)
 //   the ground (groundAt, with the buildings' cuts and banks), the sphere's middle kept o.over metres over it
@@ -146,7 +146,7 @@ export function castCamera(g, a, b, o = {}) {
   for (const p of g.build.near(mx, mz, half + R + 2)) {
     const d = p.def; if (d.door && p.state?.open) continue;
     const cs = Math.cos(-p.rot), sn = Math.sin(-p.rot), lx = a.x - p.pos.x, lz = a.z - p.pos.z, ox = lx * cs + lz * sn, oz = -lx * sn + lz * cs, oy = a.y - p.pos.y, ux = dx * cs + dz * sn, uz = -dx * sn + dz * cs;
-    for (const q of d.solids || []) { T0 = 0; T1 = best; if (within(ox, ux, q[0] - q[3] / 2 - R, q[0] + q[3] / 2 + R) && within(oz, uz, q[2] - q[5] / 2 - R, q[2] + q[5] / 2 + R) && within(oy, dy, q[1] - q[4] / 2 - R, q[1] + q[4] / 2 + R) && entered(best)) best = T0; }
+    for (const list of [d.solids, d.veil]) for (const q of list || []) { T0 = 0; T1 = best; if (within(ox, ux, q[0] - q[3] / 2 - R, q[0] + q[3] / 2 + R) && within(oz, uz, q[2] - q[5] / 2 - R, q[2] + q[5] / 2 + R) && within(oy, dy, q[1] - q[4] / 2 - R, q[1] + q[4] / 2 + R) && entered(best)) best = T0; }   // (veil: a gable's whole triangle, pieces.js)
     for (const q of d.tops || []) {
       // (a surface as a board: 0.25 m deep under it and a little over, the sphere's radius more each way, sloping with a
       // stair or a roof panel: k its rise along z)

@@ -100,6 +100,10 @@ function triangle(base, height, t, mat) {   // a gable end: base along x at y = 
 // { x0,x1,z0,z1, y } (flat) or with y0/y1 for a slope along z (y at z0 → y at z1). roof: tops that count as shelter.
 const W = 3, T = 0.2;
 const corners = (w, h) => [[-w / 2, 0, 0], [w / 2, 0, 0], [-w / 2, h, 0], [w / 2, h, 0], [0, 0, 0], [0, h, 0]];
+// veil: what holds the camera off a piece beyond its solids (occlusion.js castCamera). A triangle's solid is a box in its
+// lower middle, so you walk past its corners, and the camera went in through the rest and saw the logs from inside: so
+// the whole triangle, base x0 to x1 along y 0, apex at (ax, h), as n slabs, each as wide as the triangle at its foot
+const veil = (x0, x1, ax, h, n = 8) => Array.from({ length: n }, (_, i) => { const y = (h * i) / n, a = x0 + ((ax - x0) * y) / h, b = x1 - ((x1 - ax) * y) / h; return [(a + b) / 2, y + h / n / 2, 0, b - a, h / n, T + 0.1]; });
 export const PIECES = [
   { id: 'wall', name: 'Wooden Wall 3×3', cat: 'Walls', icon: 'wall', mats: { wood: 4, rope: 2 }, hp: 800,
     parts: () => [part(box(W, W, T, 0, W / 2, 0), MAT.plank), part(box(0.24, W, 0.26, -W / 2 + 0.12, W / 2, 0), MAT.beam), part(box(0.24, W, 0.26, W / 2 - 0.12, W / 2, 0), MAT.beam), part(box(W, 0.22, 0.26, 0, W - 0.11, 0), MAT.beam)],
@@ -118,7 +122,7 @@ export const PIECES = [
     snaps: corners(1.5, W), solids: [[0, W / 2, 0, 1.5, W, T + 0.1]] },
   { id: 'wallTri', name: 'Wooden Triangle Wall 3×3', cat: 'Walls', icon: 'roofEnd', mats: { wood: 2, rope: 1 }, hp: 400,
     parts: () => [slant(W, W, T, MAT.plank), part(box(W, 0.22, 0.26, 0, 0.11, 0), MAT.beam)],
-    snaps: [[-W / 2, 0, 0], [W / 2, 0, 0], [0, 0, 0], [W / 2, W, 0], [W / 2, W / 2, 0]], solids: [[0.5, 0.9, 0, 2, 1.8, T + 0.1]] },
+    snaps: [[-W / 2, 0, 0], [W / 2, 0, 0], [0, 0, 0], [W / 2, W, 0], [W / 2, W / 2, 0]], solids: [[0.5, 0.9, 0, 2, 1.8, T + 0.1]], veil: veil(-W / 2, W / 2, W / 2, W) },
   { id: 'doorframe', name: 'Wooden Door Frame', cat: 'Walls', icon: 'door', mats: { wood: 2, rope: 1 }, hp: 600,
     parts: () => [part(box(0.8, W, T, -1.1, W / 2, 0), MAT.plank), part(box(0.8, W, T, 1.1, W / 2, 0), MAT.plank), part(box(1.4, 0.7, T, 0, 2.65, 0), MAT.plank),
       part(box(0.18, 2.3, 0.3, -0.79, 1.15, 0), MAT.beam), part(box(0.18, 2.3, 0.3, 0.79, 1.15, 0), MAT.beam), part(box(1.76, 0.2, 0.3, 0, 2.3, 0), MAT.beam)],
@@ -154,7 +158,7 @@ export const PIECES = [
   ...[[6, 3, 'end63', 'Wooden Roof End 6×3', { wood: 4, rope: 2 }, 300], [6, 5, 'end65', 'Wooden Roof End 6×5', { wood: 4, rope: 2 }, 300], [9, 4, 'end94', 'Wooden Roof End 9×4', { wood: 6, rope: 4 }, 400], [6, 1.5, 'end615', 'Wooden Roof End 6×1.5 (low)', { wood: 2, rope: 1 }, 250]].map(([span, rise, id, name, mats, hp]) => ({
     id, name, cat: 'Roofs', icon: 'roofEnd', mats, hp,
     parts: () => [triangle(span, rise, T, MAT.plank), part(box(span, 0.22, 0.26, 0, 0.11, 0), MAT.beam)],
-    snaps: [[-span / 2, 0, 0], [span / 2, 0, 0], [0, 0, 0], [-span / 2 + 3, 0, 0], [span / 2 - 3, 0, 0], [0, rise, 0]], solids: [[0, rise / 3, 0, span * 0.66, rise * 0.66, T + 0.1]] })),
+    snaps: [[-span / 2, 0, 0], [span / 2, 0, 0], [0, 0, 0], [-span / 2 + 3, 0, 0], [span / 2 - 3, 0, 0], [0, rise, 0]], solids: [[0, rise / 3, 0, span * 0.66, rise * 0.66, T + 0.1]], veil: veil(-span / 2, span / 2, 0, rise) })),
   { id: 'stairs', name: 'Wooden Stairs Short', cat: 'Floors', icon: 'stairs', mats: { wood: 2, rope: 1 }, hp: 400,
     parts: () => stairs(1.5, 2), snaps: [[-1, 0, 0], [1, 0, 0], [-1, 1.5, -2], [1, 1.5, -2], [0, 0, 0], [0, 1.5, -2]], aimAt: [[0, 0, 0], [0, 1.5, -2]], solids: [], tops: [{ x0: -1, x1: 1, z0: 0, z1: -2, y0: 0, y1: 1.5 }] },
   { id: 'stairsLong', name: 'Wooden Stairs Long', cat: 'Floors', icon: 'stairs', mats: { wood: 4, rope: 2 }, hp: 600,

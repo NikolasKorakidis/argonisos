@@ -24,11 +24,11 @@ const roof = (run, rise) => ({ box: [-1.5, 1.5, -0.45 * rise / run, rise + 0.3, 
 const end = (file, trim, run, rise) => ({ file, box: [-run, run, 0, rise, -0.15, 0.15], trim: { file: trim, box: [-run - 0.45, run + 0.45, -0.45 * rise / run, rise + 0.3, -0.4, 0.4] } });
 const KIT = {
   wall: { file: 'kWall', box: wall(3) }, wallHalf: { file: 'kWallLow', box: wall(1) }, doorframe: { file: 'kDoorWall', box: wall(3, 1.52) },
-  door: { file: 'kDoor', box: [0, 1.36, 0, 2.28, -0.05, 0.05] },   // (the carved door's box, then made to the frame's opening: hang)
+  door: { file: 'kDoor', box: [0, 1.36, 0, 2.28, -0.05, 0.05], whole: true },   // (the carved door's box, then made to the frame's opening: hang; whole as it comes, close)
   beamV: { file: 'kBeam', box: [-0.13, 0.13, 0, 3, -0.13, 0.13] },
   beamH: { file: 'kBeamH', box: [-1.5, 1.5, -0.13, 0.13, -0.13, 0.13] },   // (a squared beam, lying as it comes)
   beamD: { file: 'kBeamD', lay: 'd', box: [-1.06, 1.06, 0, 2.12, -0.13, 0.13] },   // (the 4 m post: tilted, it keeps a slimmer section than the 3 m one)
-  floor: { file: 'kFloor', box: [-1.5, 1.5, -0.1, 0, -1.5, 1.5] },
+  floor: { file: 'kFloor', box: [-1.5, 1.5, -0.1, 0, -1.5, 1.5], whole: true, under: true },   // (its boards' tops given an underside, not closed: underside)
   roof63: { file: 'kRoof63', ...roof(3, 3) }, roof65: { file: 'kRoof65', ...roof(3, 5) }, roof94: { file: 'kRoof94', ...roof(4.5, 4) },
   end63: end('kEnd63', 'kTrim63', 3, 3), end65: end('kEnd65', 'kTrim65', 3, 5), end94: end('kEnd94', 'kTrim94', 4.5, 4),
   stairs: { file: 'kStairsShort', box: [-1, 1, 0, 1.5, -2, 0], slope: true }, stairsLong: { file: 'kStairs', box: [-1, 1, 0, 3, -4, 0], slope: true },
@@ -91,6 +91,58 @@ function hang(door, frame, hinge) {
   p.needsUpdate = true; door.computeVertexNormals(); door.computeBoundingBox(); door.computeBoundingSphere();
 }
 
+// The kit's models are open shells, made to be drawn from both sides (their materials say so), where ours, as everything
+// in the game, draw only the side facing out: each log of a wall is a tube with no ends, the logs of a gable end are cut
+// off along the slope with nothing over the cut, a floor is its boards' tops and nothing under them. So you looked in
+// through a log's open end (at a corner, where the logs reach the far wall's outer face, or along a row) and out through
+// its far side, and a floor seen from below was not there at all (the user, 26 Nov: walls empty from the inside, almost
+// invisible from some angles). The models are made solid here, once, as they load: each hole in a log or a plank (a
+// loop of edges that only one face meets, lying flat, the faces round it standing across its plane: an end, not a
+// window cut through a face) is filled in its own plane (close), and a floor is given an underside, its boards' tops laid
+// flat under them, facing down (underside). Real faces, so the light on them is right, at no cost per frame.
+// (append: the vertices idx of geo copied onto its end, every attribute, as new triangles)
+function append(geo, idx) {
+  if (!idx.length) return geo; const n = geo.attributes.position.count, out = new THREE.BufferGeometry();
+  for (const [k, a] of Object.entries(geo.attributes)) { const s = a.itemSize, arr = new Float32Array((n + idx.length) * s); arr.set(a.array.subarray(0, n * s)); idx.forEach((i, j) => { for (let c = 0; c < s; c++) arr[(n + j) * s + c] = a.array[i * s + c]; }); out.setAttribute(k, new THREE.BufferAttribute(arr, s)); }
+  return out;
+}
+function close(geo) {
+  const P = geo.attributes.position, n = P.count, id = new Int32Array(n), at = new Map(), pts = [], src = [];
+  for (let i = 0; i < n; i++) { const k = `${Math.round(P.getX(i) * 1e4)},${Math.round(P.getY(i) * 1e4)},${Math.round(P.getZ(i) * 1e4)}`; let j = at.get(k); if (j === undefined) { at.set(k, (j = pts.length)); pts.push(new THREE.Vector3().fromBufferAttribute(P, i)); src.push(i); } id[i] = j; }
+  const N = pts.length, half = new Map(), fn = [], e = new THREE.Vector3(), f = new THREE.Vector3();
+  for (let t = 0; t < n / 3; t++) { const a = pts[id[t * 3]]; fn.push(e.subVectors(pts[id[t * 3 + 1]], a).cross(f.subVectors(pts[id[t * 3 + 2]], a)).clone().normalize()); for (let k = 0; k < 3; k++) { const u = id[t * 3 + k], v = id[t * 3 + ((k + 1) % 3)]; if (u !== v) half.set(u * N + v, t); } }
+  // (the open edges: a face's edge with no face running back along it, from each corner the ones leaving it)
+  const out = new Map(), used = new Set(), add = [];
+  for (const [k, t] of half) { const u = Math.floor(k / N), v = k % N; if (!half.has(v * N + u)) (out.get(u) || out.set(u, []).get(u)).push([v, t]); }
+  for (const [s, list] of out) for (const [v0, t0] of list) {
+    if (used.has(s * N + v0)) continue; used.add(s * N + v0);
+    const loop = [s], tris = [t0]; let u = v0, ok = false;
+    for (let guard = 0; guard < 4000; guard++) { if (u === s) { ok = true; break; } loop.push(u); const nx = (out.get(u) || []).find(([w]) => !used.has(u * N + w)); if (!nx) break; used.add(u * N + nx[0]); tris.push(nx[1]); u = nx[0]; }
+    if (!ok || loop.length < 3) continue;
+    const c = new THREE.Vector3(), nn = new THREE.Vector3(); for (const i of loop) c.add(pts[i]); c.divideScalar(loop.length);
+    for (let k = 0; k < loop.length; k++) { const a = pts[loop[k]], b = pts[loop[(k + 1) % loop.length]]; nn.x += (a.y - b.y) * (a.z + b.z); nn.y += (a.z - b.z) * (a.x + b.x); nn.z += (a.x - b.x) * (a.y + b.y); }
+    if (nn.lengthSq() < 1e-12) continue; nn.normalize();
+    // (flat, within a quarter of its size, and the faces along it standing across its plane: a log's or a plank's end,
+    // not the edge of a sheet or an opening through a face, which stay open)
+    let r = 0, dev = 0, side = 0; for (const i of loop) { r = Math.max(r, pts[i].distanceTo(c)); dev = Math.max(dev, Math.abs(e.subVectors(pts[i], c).dot(nn))); }
+    for (const t of tris) side += Math.abs(fn[t].dot(nn)); if (dev > 0.25 * r || side / tris.length > 0.6) continue;
+    // (filled ear by ear in its own plane, so the wavy outline of several logs' ends is followed exactly, each new face
+    // turned to run back along the open edges, so it faces out as the faces round it do)
+    const e1 = (Math.abs(nn.x) < 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0)).cross(nn).normalize(), e2 = nn.clone().cross(e1);
+    for (const tri of THREE.ShapeUtils.triangulateShape(loop.map((i) => new THREE.Vector2(e.subVectors(pts[i], c).dot(e1), e.dot(e2))), [])) {
+      const [a, b, d] = tri.map((k) => loop[k]), w = e.subVectors(pts[b], pts[a]).cross(f.subVectors(pts[d], pts[a])).dot(nn);
+      add.push(...(w > 0 ? [d, b, a] : [a, b, d]).map((i) => src[i]));
+    }
+  }
+  return append(geo, add);
+}
+function underside(geo) {
+  const P = geo.attributes.position, n = P.count, add = [], e = new THREE.Vector3(), f = new THREE.Vector3(), a = new THREE.Vector3(); geo.computeBoundingBox();
+  for (let t = 0; t < n / 3; t++) { a.fromBufferAttribute(P, t * 3); e.fromBufferAttribute(P, t * 3 + 1).sub(a); f.fromBufferAttribute(P, t * 3 + 2).sub(a); if (e.cross(f).normalize().y > 0.3) add.push(t * 3, t * 3 + 2, t * 3 + 1); }
+  const out = append(geo, add), Q = out.attributes.position; for (let i = n; i < Q.count; i++) Q.setY(i, geo.boundingBox.min.y);
+  return out;
+}
+
 // Load every piece's model and give the piece its look ({ geo, mat } like the carved ones); resolves when all are in.
 // The wooden ones in worked wood (wood.js: grain along each plank, seams, worn edges, each piece its own tone; the thatch,
 // roofs and their end caps, keep the plain paint), their planks found once per model (woodFrame, after the door is hung)
@@ -98,10 +150,10 @@ const THATCH = (K) => /^k(Roof|Trim)/.test(K.file);
 export function loadKit(pieces) {
   const mats = new Map(); let vcMat = null;   // (one material per atlas and kind, made wettable like the carved planks)
   // (the kit's paint is pale in our light: taken down a little)
-  const matFor = (src, wood) => { const key = (src.map?.uuid ?? src.uuid) + wood; if (!mats.has(key)) { const m = new THREE.MeshStandardMaterial({ map: src.map, color: 0xa8a8a8, roughness: 0.9 }); mats.set(key, wood ? woody(m) : pixelate(wettable(m, { dark: 0.62, gloss: 0.32 }), 'wood')); } return mats.get(key); };   // (the thatch in texels, streaked: render/pixel.js)
+  const matFor = (src, wood) => { const key = (src.map?.uuid ?? src.uuid) + wood; if (!mats.has(key)) { const m = new THREE.MeshStandardMaterial({ map: src.map, color: 0xa8a8a8, roughness: 0.9 }); if (!wood) m.side = THREE.DoubleSide; mats.set(key, wood ? woody(m) : pixelate(wettable(m, { dark: 0.62, gloss: 0.32 }), 'wood')); } return mats.get(key); };   // (the thatch in texels, streaked: render/pixel.js; drawn from both sides, as the carved thatch is, since its panels and end caps are single sheets)
   const look = (K) => loadPack(K.file).then((gl) => {
-    if (K.vc) { const geo = fit(bake(gl.scene, true), K), c = geo.attributes.color; for (let k = 0; k < c.array.length; k++) c.array[k] *= 0.82; return { geo, mat: (vcMat ||= woody(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { dark: 0.66, gloss: 0.3 })), wood: true }; }   // (a palette pale in our light, as the logs in harvest.js)
-    let src = null; gl.scene.traverse((m) => { if (m.isMesh && !src) src = m.material; }); const wood = !THATCH(K); return { geo: fit(bake(gl.scene), K), mat: matFor(src, wood), wood };
+    if (K.vc) { const geo = fit(close(bake(gl.scene, true)), K), c = geo.attributes.color; for (let k = 0; k < c.array.length; k++) c.array[k] *= 0.82; return { geo, mat: (vcMat ||= woody(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { dark: 0.66, gloss: 0.3 })), wood: true }; }   // (a palette pale in our light, as the logs in harvest.js)
+    let src = null; gl.scene.traverse((m) => { if (m.isMesh && !src) src = m.material; }); const wood = !THATCH(K), raw = bake(gl.scene), solid = wood && !K.whole ? close(raw) : raw; return { geo: fit(K.under ? underside(solid) : solid, K), mat: matFor(src, wood), wood };   // (made solid: close, underside)
   });
   return Promise.all(pieces.filter((p) => KIT[p.id]).map((p) => Promise.all([KIT[p.id], KIT[p.id].trim].filter(Boolean).map(look)).then((m) => { p.meshes = m; }).catch(() => {})))
     .then(() => { const d = pieces.find((p) => p.id === 'door'), f = pieces.find((p) => p.id === 'doorframe'); if (d?.meshes && f?.meshes) hang(d.meshes[0].geo, f.meshes[0].geo, d.door.hinge);
