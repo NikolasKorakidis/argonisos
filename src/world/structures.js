@@ -1389,9 +1389,10 @@ export class Structures {
   groundY(ctx, x, z) { const p = this.w(ctx, x, z); return heightAt(p.x, p.z) - ctx.s.y; }
   // a stand of one tree or bush, drawn as one batch (a draw a part however many there are): at site-local [x, z, size] on
   // the ground, each turned its own way (r: its trunk's radius at size 1, blocking)
+  // (each part in the species' own material, as the streamed ones: the bark, the stone, the flowers' texels, trees.js propGeo)
   grove(ctx, name, v, list, r = 0) {
     if (!list.length) return; const pg = propGeo(name, v), g = new THREE.Group(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), sc = new THREE.Vector3();
-    for (const [geo, mat] of [[pg.geo, propMat], pg.cards ? [pg.cards, pg.cardMat || leafMat] : null].filter(Boolean)) {
+    for (const [geo, mat] of [[pg.geo, pg.mat || propMat], pg.cards ? [pg.cards, pg.cardMat || leafMat] : null].filter(Boolean)) {
       const m = new THREE.InstancedMesh(geo, mat, list.length);
       list.forEach(([x, z, s], i) => m.setMatrixAt(i, m4.compose(p.set(x, this.groundY(ctx, x, z), z), q.setFromAxisAngle(up, (x * 7.3 + z * 3.1) % 6.28), sc.setScalar(s))));
       m.castShadow = m.receiveShadow = true; m.computeBoundingSphere(); g.add(m);
@@ -1408,7 +1409,7 @@ export class Structures {
   // (in a group of its own, like the cypresses, so the occlusion fade takes one at a time)
   scatter(ctx, name, v, list) {
     if (!list.length) return; const pg = propGeo(name, v), g = new THREE.Group(), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), p = new THREE.Vector3(), sc = new THREE.Vector3();
-    for (const [geo, mat] of [[pg.geo, propMat], pg.cards ? [pg.cards, pg.cardMat || leafMat] : null].filter(Boolean)) {
+    for (const [geo, mat] of [[pg.geo, pg.mat || propMat], pg.cards ? [pg.cards, pg.cardMat || leafMat] : null].filter(Boolean)) {
       const m = new THREE.InstancedMesh(geo, mat, list.length); list.forEach(([x, y, z, s, a], i) => m.setMatrixAt(i, m4.compose(p.set(x, y, z), q.setFromAxisAngle(up, a), sc.setScalar(s))));
       m.castShadow = m.receiveShadow = true; m.computeBoundingSphere(); g.add(m);
     }
@@ -1430,7 +1431,7 @@ export class Structures {
   // a tree or bush from the vegetation set, standing at a site (drawn at any distance, unlike the streamed ones)
   plant(ctx, name, v, x, y, z, sc = 1) {
     const pg = propGeo(name, v), g = new THREE.Group(), I = new THREE.Matrix4();
-    for (const [geo, mat] of [[pg.geo, propMat], pg.cards ? [pg.cards, pg.cardMat || leafMat] : null].filter(Boolean)) { const m = new THREE.InstancedMesh(geo, mat, 1); m.setMatrixAt(0, I); m.castShadow = m.receiveShadow = true; m.frustumCulled = false; g.add(m); }
+    for (const [geo, mat] of [[pg.geo, pg.mat || propMat], pg.cards ? [pg.cards, pg.cardMat || leafMat] : null].filter(Boolean)) { const m = new THREE.InstancedMesh(geo, mat, 1); m.setMatrixAt(0, I); m.castShadow = m.receiveShadow = true; m.frustumCulled = false; g.add(m); }
     g.position.set(x, y, z); g.scale.setScalar(sc); g.rotation.y = (v * 2.1 + x) % 6.28; ctx.grp.add(g); return g;
   }
   local(t, x, z) { const dx = x - t.ctx.s.x, dz = z - t.ctx.s.z, c = Math.cos(-t.ctx.rot), s = Math.sin(-t.ctx.rot); return [dx * c + dz * s, -dx * s + dz * c]; }

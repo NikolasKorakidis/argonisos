@@ -206,6 +206,7 @@ export function rockGround(mat) {
       rtone *= 0.84 + stoneTriP(vRockP / 0.9 + 0.5, rbw, uTexel * 0.9).r * 0.32;   // (the grain of the island's stone, rock.js, so the bare slopes and the boulders on them match)
       vec3 rcol = diffuseColor.rgb * rtone;
       rcol = mix(rcol, rcol * vec3(0.85, 1.0, 0.62), smoothstep(0.72, 0.85, rkc.b) * 0.6);   // lichen
+      rcol *= stoneTexels(vRockP, normalize(cross(dFdx(vRockP), dFdy(vRockP))));   // (each texel its own tone, as the boulders' are: rock.js)
       diffuseColor.rgb = mix(diffuseColor.rgb, rcol, vRock);
       float rockRelief = (rk.g + smoothstep(0.0, 0.12, rbed) * 0.35 * rbk) * vRock * (1.0 - smoothstep(25.0, 70.0, length(vViewPosition))) + floorRelief;`)
       // (the ground's painterly strokes, main.js groundDetail at a third of a metre's scale, in texels too)

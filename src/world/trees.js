@@ -391,6 +391,7 @@ function thinCards(g, n, k) {
 const STONY = new Set(['rock', 'boulder', 'pebbles']);   // (drawn in stone: rock.js)
 const BARKY = new Set([...SPECIES.filter((s) => s.res === 'tree').map((s) => s.name), 'birch', 'aleppo', 'carob', 'arbutus', 'autumn', 'stump', 'log', 'branch', 'roots', 'driftwood']);   // (in bark: wood.js)
 const RUINS = new Set(['colfall', 'colstand', 'herm', 'wallruin']);   // (in stone without the rocks' edges)
+const FLOWERY = new Set(['flowers', 'lavender', 'mushrooms']);   // (small and bright: in texels of their own size, FLOWER_MAT)
 const TREE_TYPES = new Set(['olive', 'oak', 'cypress', 'pomegranate', 'fig', 'plane', 'qtree', 'qpine', 'fir', 'holm', 'qdead', 'dead']);   // (fitted by height; the rest by bulk)
 function propGeo(species, v) {
   const k = species + v;
@@ -419,6 +420,7 @@ function propGeo(species, v) {
   // the trees' trunks and limbs, and the dead wood lying about, in bark (wood.js); the ruins in stone, as the rocks
   else if (BARKY.has(species) && P.mat !== BARK_MAT && (P.packed || !FLORA[species])) P.mat = BARK_MAT;
   else if (RUINS.has(species) && P.mat !== RUIN_MAT && (P.packed || !FLORA[species])) P.mat = RUIN_MAT;
+  else if (FLOWERY.has(species) && !P.mat) P.mat = FLOWER_MAT;
   return P;
 }
 // the see-through parts of the packs' plants (flora-pack.js): one material per pack texture, cut out like the leaves and
@@ -434,6 +436,11 @@ const propMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 
 propMat.onBeforeCompile = (sh) => { patchWet(sh, { dark: 0.66, gloss: 0.75, shine: 0.1 }); };
 propMat.customProgramCacheKey = () => 'prop';
 pixelate(propMat, 'plant');   // (in texels, as the trunks are: render/pixel.js)
+// the flowers' and the like (FLOWERY): the same shader and program, in texels three times as dense (the reviewer, 26 Nov:
+// at the world's six centimetres a petal was one texel or none, so they showed none)
+const FLOWER_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
+FLOWER_MAT.onBeforeCompile = (sh) => { patchWet(sh, { dark: 0.66, gloss: 0.75, shine: 0.1 }); };
+FLOWER_MAT.customProgramCacheKey = () => 'prop'; pixelate(FLOWER_MAT, 'petal');
 // the trees' bark (wood.js) and the ruins' stone (rock.js), each one program
 const BARK_MAT = barky(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { dark: 0.62, gloss: 0.72, shine: 0.1 });
 const RUIN_MAT = stony(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { wet: { dark: 0.6, gloss: 0.7, shine: 0.1 } });

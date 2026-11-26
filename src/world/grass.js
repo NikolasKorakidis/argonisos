@@ -152,9 +152,9 @@ const COVERED = '{ vec2 tc = (wp - uOrigin) / uSize; fade *= step(0.0, min(tc.x,
   const flowerCarpet = (geo, count, colors, size) => {
     const fm = new THREE.MeshStandardMaterial({ roughness: 0.7 }); fm.defines = { SUN_SHADOW_CHEAP: '' };
     fm.onBeforeCompile = (sh) => {
-      Object.assign(sh.uniforms, grassU);
-      sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight; attribute vec3 aPet; varying vec3 vPet;\n` + sh.vertexShader.replace('#include <begin_vertex>', `
-        vPet = aPet;
+      Object.assign(sh.uniforms, grassU, PIXEL_U);
+      sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight; attribute vec3 aPet; varying vec3 vPet, vFlP;\n` + sh.vertexShader.replace('#include <begin_vertex>', `
+        vPet = aPet; vFlP = position + fract(instanceMatrix[3].xyz * 0.1371) * 17.0;   // (the flower's own frame, each its own pattern)
         vec3 ip = instanceMatrix[3].xyz;
         vec2 wp = ip.xz + uTile * floor((uCenter - ip.xz) / uTile + 0.5);
         vec4 hm = texture2D(uHeight, (wp - uOrigin) / uSize);
@@ -170,10 +170,25 @@ const COVERED = '{ vec2 tc = (wp - uOrigin) / uSize; fade *= step(0.0, min(tc.x,
       // a petal (aPet: across it, from its foot to its tip, and whether it is one) deeper and a little warmer at its foot,
       // paler at its tip, with fine veins fanning up it from the foot; the veins only where they are wider than a pixel
       // (the Greek reviewer, 23 Nov: the flowers as worked over as the rocks)
-      sh.fragmentShader = 'varying vec3 vPet;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-        if (vPet.z > 0.5) { float fa = (vPet.x - 0.5) / (0.18 + vPet.y), vw = abs(fract(fa * 3.0 + 0.5) - 0.5), fw = fwidth(fa * 3.0);
-          float vein = (1.0 - smoothstep(0.0, 0.08 + fw, vw)) * (1.0 - smoothstep(0.15, 0.4, fw)) * smoothstep(0.05, 0.25, vPet.y) * (1.0 - smoothstep(0.75, 1.0, vPet.y));
-          diffuseColor.rgb *= mix(vec3(0.66, 0.6, 0.62), vec3(1.06), smoothstep(0.0, 0.85, vPet.y)) * (1.0 - 0.16 * vein); }`);
+      // In texels when the Pixel texture is on (the reviewer, 26 Nov: the flowers still had none; render/pixel.js): a petal
+      // on a grid of its own, two or three texels across and four or five up it, so its colour from foot to tip steps texel by texel
+      // and each texel has its own tone; the stem, the leaves and the eye on a grid three times the world's in the flower's
+      // own frame; the light smooth, and Off as before
+      sh.fragmentShader = `varying vec3 vPet, vFlP;\n${PIXEL_GLSL}\n` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+        vec3 pv = vPet; float flS = 0.0; vec2 flC = vec2(0.0);
+        if (uTexel > 0.0) {
+          if (vPet.z > 0.5) { vec2 k = max(vec2(2.0, 3.0), vec2(uTexel * 0.14, uTexel * 0.26)); flS = pixelK(vPet.xy, k); flC = floor(vPet.xy * k) + floor(vFlP.xz * 3.0) * 7.0; pv.xy = mix(vPet.xy, (floor(vPet.xy * k) + 0.5) / k, flS); }
+          else { vec3 a = abs(cross(dFdx(vFlP), dFdy(vFlP))); vec2 q = a.x > a.y && a.x > a.z ? vFlP.zy : a.y > a.z ? vFlP.xz : vFlP.xy; flS = pixelK(q, vec2(uTexel * 3.0)); flC = floor(q * uTexel * 3.0); }
+        }
+        if (vPet.z > 0.5) { float fa = (pv.x - 0.5) / (0.18 + pv.y), vw = abs(fract(fa * 3.0 + 0.5) - 0.5), fw = fwidth((vPet.x - 0.5) / (0.18 + vPet.y) * 3.0);
+          float vein = (1.0 - smoothstep(0.0, 0.08 + fw, vw)) * (1.0 - smoothstep(0.15, 0.4, fw)) * smoothstep(0.05, 0.25, pv.y) * (1.0 - smoothstep(0.75, 1.0, pv.y));
+          diffuseColor.rgb *= mix(vec3(0.66, 0.6, 0.62), vec3(1.06), smoothstep(0.0, 0.85, pv.y)) * (1.0 - 0.16 * vein); }
+        // (a white or pale petal taken down to under a quarter with the texels on: its colour is the palette's pure white,
+        // several times past the top of the light's range in the sun, a blank white blob where no texel's tone could show;
+        // so taken down it still shows white, as the game's dark palettes do in its light, vertex-coloured models)
+        if (uTexel > 0.0 && vPet.z > 0.5) diffuseColor.rgb *= 1.0 - 0.78 * smoothstep(0.5, 0.95, dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)));
+        if (flS > 0.0) { vec3 h3 = fract(sin(vec3(dot(flC, vec2(12.9898, 78.233)), dot(flC, vec2(39.35, 11.13)), dot(flC, vec2(73.1, 51.7)))) * 43758.5453) - 0.5;
+          diffuseColor.rgb *= mix(vec3(1.0), (1.0 + (vPet.z > 0.5 ? 0.6 : 0.44) * h3.x) * (1.0 + 0.2 * h3.y * vec3(1.0, 0.25, -1.0)), flS); }`);
     };
     const im = new THREE.InstancedMesh(geo, fm, count), mm = new THREE.Matrix4(), cc = new THREE.Color();
     for (let i = 0; i < count; i++) { im.setMatrixAt(i, mm.makeTranslation(rr(0, T), 0, rr(0, T))); im.setColorAt(i, cc.setHex(colors[Math.floor(rand() * colors.length)])); }
