@@ -4322,7 +4322,8 @@
     "pickupItem": {
       "group": "pickup",
       "files": [
-        "GATHERING/pickup-item.mp3"
+        "../../pixabay-cinematic-thud/cinematic-thud-fx-379991.mp3",
+        "../../pixabay-pillow-hit/pillow-hit-154187.mp3"
       ]
     },
     "buildPiece": {
