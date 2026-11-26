@@ -14,12 +14,12 @@ permissions:
 concurrency:
   group: pages
   cancel-in-progress: true
+# Two jobs, as GitHub documents it: build uploads the site, deploy publishes it. deploy-pages looks up the run's
+# artifacts once; straight after an upload in the same job GitHub's listing can still be empty ("No artifacts named
+# github-pages", PR #23's merge, Nov 2026). A separate job that starts after build is done doesn't hit that.
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       # The licensed pack files (models, sounds, interface art) live in the team's private repo, not this public one
@@ -39,7 +39,7 @@ jobs:
           cp index.html _site/
           cp -r src vendor assets legacy _site/
           rsync -a _assets/assets/ _site/assets/
-          test -f _site/assets/models/pack/hero.glb   # (without the packs the game falls back to its carved look: don't publish that by mistake)
+          test -f _site/assets/models/pack/hero.glb # (without the packs the game falls back to its carved look: don't publish that by mistake)
           touch _site/.nojekyll
           # the build stamp: short commit and date, shown on the title screen
           stamp="$(git rev-parse --short HEAD) · $(date -u +'%d %b %Y %H:%M') UTC"
@@ -52,5 +52,12 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
