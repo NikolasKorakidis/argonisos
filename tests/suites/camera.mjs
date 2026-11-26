@@ -3,7 +3,8 @@
 // updateCamera, occlusion.js castCamera). Swept round the hero frame by frame inside a house of your own and under its
 // ceiling, among the trunks of a wood (standing and walking), against a cliff, against a boulder and under the
 // farmhouse's low roof: never inside a collider, a piece, a site's roof or the ground, no pumping in and out; it comes
-// back out once the way is clear; very close, the hero is hidden from it. The casts stay cheap. Frame sequences of each.
+// back out once the way is clear; very close, the hero is hidden from it; a gable holds it off over its whole triangle.
+// The casts stay cheap. Frame sequences of each.
 import { visit } from '../lib/places.mjs';
 import { LIB } from '../lib/building.mjs';
 
@@ -61,6 +62,16 @@ export default {
       B.remove(w, false); await frames(1); const d2 = P.camD; await frames(20); const d3 = P.camD; return { before: +d0.toFixed(2), next: +d1.toFixed(2), cleared: +d2.toFixed(2), later: +d3.toFixed(2) };`);
     t.metric('a wall put up 3 m behind the hero, then taken away (camera distance, m)', wall);
     t.check('…a wall coming between pulls the camera in front of it the same frame, and it eases (not jumps) back out', wall.next < 2.8 && wall.cleared < wall.before - 2 && wall.later > wall.cleared + 1, JSON.stringify(wall));
+
+    // ---- a gable's whole triangle holds the camera off, not only its solid box low in the middle (pieces.js veil): cast
+    // through it at its corners and up near its apex
+    const gable = await t.eval(`const { castCamera } = await import('/src/render/occlusion.js'); AG.S.freeBuild = true; const out = [];
+      for (const [id, pts] of [['wallTri', [[1.2, 2.5], [0.9, 2.0], [-1, 0.4]]], ['end63', [[0, 2.6], [2.5, 0.4], [-2, 0.9]]], ['end94', [[0, 3.6], [3.4, 0.6]]]]) {
+        const x = P.pos.x + 25, z = P.pos.z, p0 = new V(x, AG.heightAt(x, z) + 0.05, z), q = B.place(id, p0, 0); await frames(1);
+        for (const [a, b] of pts) { const d = castCamera(g, new V(p0.x + a, p0.y + b, p0.z + 2), new V(p0.x + a, p0.y + b, p0.z - 2)); if (d > 1.8) out.push(id + ' at ' + a + ',' + b + ': ' + d.toFixed(2) + ' m'); }
+        B.remove(q, false); }
+      return out.length === 0 || 'went in: ' + out.join(', ');`);
+    t.check('the camera is held off a triangle wall or a gable end over the whole triangle', gable === true, gable);
 
     // ---- the farmhouse's low roof (a site's: its walls in the collider grid, its roof from structures.js)
     await t.eval(`const H = g.SITES.house, F = { s: H, rot: 0.4 }, p = g.structures.w(F, 0, -2, 0); P.spawn(p.x, p.z); P.camDist = 8; P.camPitch = -0.4; return true;`);

@@ -5,7 +5,7 @@
 // with the carved ones below standing in while they load or if a pack file is missing.
 import * as THREE from 'three';
 import { loadFBX, loadPack, loadTex, fixMaterials, normalizeHandle } from '../assets.js';
-import { pixelateAuto } from '../render/pixel.js';
+import { pixelate, pixelateAuto, autoLook } from '../render/pixel.js';
 
 const wood = new THREE.MeshStandardMaterial({ color: 0x8a6440, roughness: 0.85 }), darkWood = new THREE.MeshStandardMaterial({ color: 0x5e4128, roughness: 0.9 });
 const stone = new THREE.MeshStandardMaterial({ color: 0x8f887e, roughness: 0.9, flatShading: true }), light = new THREE.MeshStandardMaterial({ color: 0xe6e0cc, roughness: 0.55, flatShading: true });
@@ -94,8 +94,8 @@ function headAlong(h, flat) {
   const g = grp(h); h.rotation.y = a; return g;
 }
 // A fresh model for an item (a promise: the imported ones stream in), in texels as the world is (render/pixel.js: in the
-// tool's own frame, so they stay on it as it swings)
-const texels = (o) => { o?.traverse((m) => { if (m.isMesh) for (const mt of [].concat(m.material)) pixelateAuto(mt); }); return o; };
+// tool's own frame, so they stay on it as it swings; twice as dense, as small things)
+const texels = (o) => { o?.traverse((m) => { if (m.isMesh) for (const mt of [].concat(m.material)) { if (autoLook(mt) === 'flame') pixelateAuto(mt); else pixelate(mt, 'gear'); } }); return o; };   // (the flames their own, the rest as gear: small, so in the hero's denser texels)
 export async function heldModel(id) { return texels(await heldModel0(id)); }
 async function heldModel0(id) {
   const k = LOOK[id]; if (!k) return null;

@@ -30,7 +30,10 @@ const windUniformEarly = { value: 0 };
 // The wind (set by wind.js each frame): its direction across the ground and its strength (0 calm, about 0.25 in a breeze,
 // 1 and more in a storm). It moves only the grass, the flowers and the leaves (the Greek reviewer, 23 Nov: the wind that
 // moved everything, trunks bending and columns swaying, looked wrong): trunks, limbs, rocks and ruins stand still.
-export const WIND_U = { uWindDir: { value: new THREE.Vector2(0.94, 0.34) }, uWindStr: { value: 0.25 } };
+// uFlutT and uGustT are the leaves' flutter and the grass's rolling gusts as phases, added up each frame at a pace set by
+// the strength (wind.js): never the clock times the strength, which jumps them by the whole time played at every change of
+// wind, so after a while each gust set everything thrashing for a moment.
+export const WIND_U = { uWindDir: { value: new THREE.Vector2(0.94, 0.34) }, uWindStr: { value: 0.25 }, uFlutT: { value: 0 }, uGustT: { value: 0 } };
 export const LIGHT_U = { uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(0, 0, 0) } };
 // --- Props: every tree/rock species is one merged geometry, drawn with InstancedMesh per 100 m chunk
 // (frustum culling per chunk keeps thousands of trees cheap). Only their leaves move in the wind (leafMat).
@@ -457,11 +460,11 @@ leafMat.onBeforeCompile = (sh) => {
     #endif`);
   // (the leaves alone move: the trunk and its limbs stand still, so the crown only stirs about where its cards hang, a few
   // centimetres at most, further in a strong wind, never leaving the twigs it grows on; and each card flutters)
-  sh.vertexShader = 'uniform float uWind, uWindStr; uniform vec2 uWindDir;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
+  sh.vertexShader = 'uniform float uWind, uWindStr, uFlutT; uniform vec2 uWindDir;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
     vec4 ipp = instanceMatrix[3];
     float stir = min(max(position.y - 1.5, 0.0) * 0.012, 0.06) * (1.0 + uWindStr), flut = 1.0 + uWindStr * 1.6;   // (leaves flutter harder in a strong wind)
-    transformed.x += sin(uWind * 1.1 + ipp.x * 0.13 + ipp.z * 0.07) * stir + sin(uWind * 4.0 * (1.0 + uWindStr * 0.5) + position.x * 3.0 + position.y) * 0.035 * flut;
-    transformed.z += cos(uWind * 0.9 + ipp.z * 0.11) * stir * 0.7 + cos(uWind * 3.6 * (1.0 + uWindStr * 0.5) + position.z * 3.0) * 0.03 * flut;
+    transformed.x += sin(uWind * 1.1 + ipp.x * 0.13 + ipp.z * 0.07) * stir + sin(uFlutT * 4.0 + position.x * 3.0 + position.y) * 0.035 * flut;
+    transformed.z += cos(uWind * 0.9 + ipp.z * 0.11) * stir * 0.7 + cos(uFlutT * 3.6 + position.z * 3.0) * 0.03 * flut;
     vec3 wl = normalize(transpose(mat3(instanceMatrix)) * vec3(uWindDir.x, 0.0, uWindDir.y));   // (pressed a little downwind)
     transformed.xz += wl.xz * stir * uWindStr * (0.8 + 0.4 * sin(uWind * 0.9 + ipp.x * 0.07 + ipp.z * 0.05));`);
 };

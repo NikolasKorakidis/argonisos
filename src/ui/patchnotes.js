@@ -4,6 +4,19 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-27', name: 'Patch 27', title: 'Solid', date: '26 November 2026',
+    intro: 'Walls you can trust, a wind that never twitches, and your gear painted in texels like the trees.',
+    sections: [
+      { t: 'Building', icon: 'build', items: [
+        '<b>Walls look solid from every side.</b> The wooden walls, gables and floors you build no longer let you see through the ends of their logs at a corner or along a row, a floor overhead is a proper ceiling (and shades the room below), and the camera no longer slips inside the top of a gable.',
+      ] },
+      { t: 'The look', icon: 'sun', items: [
+        '<b>Your gear in texels.</b> Armour, shields, weapons and tools now have the same chunky, hand-painted texels as the tree trunks: hammered bronze, worn leather and wool, and painted wood and metal on everything you hold.',
+        '<b>A smooth wind.</b> The grass, flowers and leaves no longer thrash for a moment now and then when the wind changes (it got worse the longer you played); a gust from a lightning strike eases in instead of snapping the grass over.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-26', name: 'Patch 26', title: 'Drawn', date: '25 November 2026',
     intro: 'The bow drawn and held, bosses that wait for you to come back and die like gods\' enemies, the island back in full colour and painted in texels from leaf to hoof, and a quicker hero.',
     sections: [

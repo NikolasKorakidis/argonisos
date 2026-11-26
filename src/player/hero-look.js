@@ -28,6 +28,14 @@ const FRAG_PARS = `${PIXEL_GLSL}
   float hLuma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
   vec3 hMute(vec3 c, float k) { return mix(vec3(hLuma(c)), c, k); }   // (the atlas's colours less saturated, Valheim's muted ones)
   float hHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float hNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(hHash(i), hHash(i + vec2(1.0, 0.0)), f.x), mix(hHash(i + vec2(0.0, 1.0)), hHash(i + vec2(1.0, 1.0)), f.x), f.y); }
+  // The texels' own tones, as the world's gear and the trunks have them (render/pixel.js pxSurface): each texel its own,
+  // over patches of three tones blot texels across with darker texels along their edges; j, b and e how strong each is
+  // (as strong as the bark's furrows: the user, 26 Nov, "on the armours ... it is not really there"), the mean kept
+  float hTexels(vec2 cell, float j, float b, float e) {
+    float L = floor(hNoise((cell + 0.5) / 3.0) * 3.0), E = L != floor(hNoise((cell + vec2(1.5, 0.5)) / 3.0) * 3.0) || L != floor(hNoise((cell + vec2(0.5, 1.5)) / 3.0) * 3.0) ? 1.0 : 0.0;
+    return (1.0 + j * (hHash(cell + 3.1) - 0.5) + b * (L - 1.0) * 0.5) * (1.0 - e * E) / (1.0 - e * 0.25);
+  }
   // Gold told by its colour (yellow to orange, little blue: not leather, cloth or skin, which has more blue), and bronze
   // (the Corinthian set's: redder than the gold, its darkest shade still lighter than the leather's)
   float hGold(vec3 c) { float r = max(c.r, 1e-3); return smoothstep(0.06, 0.12, c.r) * smoothstep(0.42, 0.55, c.g / r) * (1.0 - smoothstep(0.18, 0.3, c.b / r)); }
@@ -44,6 +52,7 @@ const FRAG_PARS = `${PIXEL_GLSL}
     // (no detail where a texel would come under a pixel or so: it would only shimmer)
     float fine = 1.0 - smoothstep(0.4, 0.9, max(length(dFdx(p)), length(dFdy(p))) * D), n = hHash(cell);
     float fold = smoothstep(0.02, 0.3, cav), ridge = smoothstep(0.03, 0.25, -cav);
+    float tx = uTexel > 0.0 ? fine : 0.0;   // (those tones only with the Pixel texture on: Off as it was)
     // (lit from above in the paint itself, as hand-painted models are: the sky's light, which lights the hero more than
     // the sun does, then still shapes the form; skin's darker side warmer, as a painter shades it; the face's features
     // left as they are)
@@ -53,14 +62,16 @@ const FRAG_PARS = `${PIXEL_GLSL}
     } else if (hKind < 1.5) {   // cloth: over and under threads, a little uneven, the folds dark, the ridges caught
       float over = mod(cell.x + cell.y, 2.0), th = over > 0.5 ? f.y : f.x, w = mix(0.95, 1.04, over) * (1.0 - 0.12 * pow(2.0 * th - 1.0, 2.0)) * (0.93 + 0.14 * n);   // (just seen from the play camera: a painted cloth, not a gingham)
       c *= mix(1.0, w, fine) * (1.0 - 0.6 * fold) * (1.0 + 0.14 * ridge) * (1.0 - 0.2 * smoothstep(0.4, 0.9, hLuma(c)));   // (white undyed wool, never paper white)
+      c *= mix(1.0, hTexels(cell, 0.3, 0.26, 0.18), tx);
     } else if (hKind < 2.5) {   // leather: darker, in blotches two texels across, worn paler on its edges
-      c *= 0.8 * mix(1.0, 0.9 + 0.18 * hHash(floor(g * 0.5)), fine) * (1.0 - 0.55 * fold) * (1.0 + 0.25 * ridge);
+      c *= 0.8 * mix(1.0, 0.9 + 0.18 * hHash(floor(g * 0.5)), fine) * (1.0 - 0.55 * fold) * (1.0 + 0.25 * ridge) * mix(1.0, hTexels(cell, 0.46, 0.4, 0.38), tx);
     } else if (hKind < 3.5) {   // metal: a dark body lit from above, pale paint on its bevels, its creases dark
       // (bronze an olive brown from the texel's lightness, never a skin's peach: the Corinthian set read as bare skin;
       // gold richer than the rest, so it still reads as gold)
       c = hBronze > 0.5 ? vec3(0.7, 0.52, 0.2) * min(hLuma(c), 0.3) : hMute(c, 1.2);
       c *= (0.5 + 0.38 * top) * mix(1.0, 0.94 + 0.1 * n, fine);
       c = mix(c, min(c * 2.1 + vec3(0.02, 0.016, 0.008), vec3(1.0)), 0.8 * smoothstep(0.1, 0.32, -cav)) * (1.0 - 0.6 * fold);   // (the bevels pale, in the metal's own hue)
+      c *= mix(1.0, hTexels(cell, 0.44, 0.4, 0.36), tx);   // (hammered: dents and planished patches, in texels)
     } else if (hKind < 4.5) {   // hair: streaks down it (each texel column its own, in runs of six), its clumps' crevices dark
       c *= mix(1.0, 0.72 + 0.45 * hHash(vec2(cell.x, floor(cell.y / 6.0))), fine) * (1.0 - 0.65 * fold) * (1.0 + 0.2 * ridge);
     }

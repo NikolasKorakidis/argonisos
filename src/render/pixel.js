@@ -52,7 +52,8 @@ export const nearestUp = (t) => { if (t) { t.magFilter = THREE.NearestFilter; t.
 // (look: j how far each texel's tone strays from its neighbours'; b how far the patches' do (three tones, a patch blot
 // texels across, longer up the face where it streaks); edge how much darker the texels along a patch's edge are, a
 // line a texel wide like a crack or a painted stroke's edge; hue how far a texel leans warm or cool; streak texels run
-// together up the face in streaks that long; map 0 leaves the material's own texture smooth, 2 snaps a cut-out's outline too)
+// together up the face in streaks that long; map 0 leaves the material's own texture smooth, 2 snaps a cut-out's outline too;
+// dense: texels to the world's, 2 for small things)
 export const PX_LOOK = {
   grain: { j: 0.34, b: 0.4, blot: 4, edge: 0.3, hue: 0.1 },                  // (painted things: pots, plaster, cloth, sacks, the packs' props)
   stone: { j: 0.28, b: 0.4, blot: 5, edge: 0.42, hue: 0.06 },                // (worked stone and the sites' marble: slabs and cracks)
@@ -63,6 +64,10 @@ export const PX_LOOK = {
   fur: { j: 0.5, b: 0.2, blot: 3, edge: 0.16, hue: 0.08, streak: 3 },        // (the animals' coats: short streaks of hair)
   hide: { j: 0.34, b: 0.4, blot: 4, edge: 0.4, hue: 0.08 },                  // (the giants and the bosses: a cracked, leathery hide)
   flame: { j: 0.5, b: 0.3, blot: 2, edge: 0, hue: 0.16 },                    // (a fire's flames and embers: flickering squares)
+  // (gear: weapons, tools and shields, in the hand or on the ground. Small things, a blade a few centimetres across, so
+  // at the hero's density, twice the world's, as his armour is (hero-look.js), and as strong as the bark's furrows: the
+  // user, 26 Nov, on the world's own six-centimetre texels, "on the armours, shields and weapons it is not really there")
+  gear: { j: 0.46, b: 0.4, blot: 3, edge: 0.36, hue: 0.08, dense: 2 },
 };
 const PX_VERT = `#include <project_vertex>
   {
@@ -75,7 +80,8 @@ const PX_VERT = `#include <project_vertex>
     vPxP = position * vec3(length(pxM[0].xyz), length(pxM[1].xyz), length(pxM[2].xyz)) + pxO;
   }`;
 export const PX_SURF_GLSL = `${PIXEL_GLSL}
-  varying vec3 vPxP; uniform vec4 uPxK; uniform vec2 uPxS; uniform float uPxMap;
+  varying vec3 vPxP; uniform vec4 uPxK; uniform vec3 uPxS; uniform float uPxMap;
+  #define PX_DENSE uPxS.z
   vec2 pxMapK = vec2(0.0); float pxMapS = 0.0;   // (the texture's texels: how many to a unit of its u and v, and how far they show; 0 none)
   float pxH(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
   float pxV(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(pxH(i), pxH(i + vec2(1.0, 0.0)), f.x), mix(pxH(i + vec2(0.0, 1.0)), pxH(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -83,7 +89,7 @@ export const PX_SURF_GLSL = `${PIXEL_GLSL}
     if (uTexel <= 0.0) return c;
     vec3 a = abs(cross(dFdx(vPxP), dFdy(vPxP)));   // (the face's own facing, flat)
     vec2 q = a.x > a.y && a.x > a.z ? vPxP.zy : a.y > a.z ? vPxP.xz + 0.37 : vPxP.xy + 0.71;
-    float s = pixelK(q, vec2(uTexel)); vec2 cell = floor(q * uTexel);
+    float s = pixelK(q, vec2(uTexel * PX_DENSE)); vec2 cell = floor(q * uTexel * PX_DENSE);
     #ifdef USE_MAP
       if (pxMapK.x > 0.0) { s = pxMapS; cell = floor(vMapUv * pxMapK); }
     #endif
@@ -109,7 +115,7 @@ export const pxMapChunk = (p) => `#ifdef USE_MAP
     vec2 ux = dFdx(vMapUv), uy = dFdy(vMapUv); vec3 qx = dFdx(${p}), qy = dFdy(${p}); float det = ux.x * uy.y - uy.x * ux.y;
     vec2 kk = vec2(0.0);
     if (abs(det) > 0.05 * length(ux) * length(uy) && uTexel > 0.0 && uPxMap > 0.5) {   // (not where the texture runs along a line on the face, its uv the same one way: nothing to measure)
-      vec2 m = vec2(length(qx * uy.y - qy * ux.y), length(qy * ux.x - qx * uy.x)) / abs(det), k = uTexel * exp2(floor(log2(m) + 0.5)), ts = vec2(textureSize(map, 0)) * 0.7;
+      vec2 m = vec2(length(qx * uy.y - qy * ux.y), length(qy * ux.x - qx * uy.x)) / abs(det), k = uTexel * PX_DENSE * exp2(floor(log2(m) + 0.5)), ts = vec2(textureSize(map, 0)) * 0.7;
       kk = vec2(k.x < ts.x ? k.x : 0.0, k.y < ts.y ? k.y : 0.0);
     }
     float s = kk.x + kk.y > 0.0 ? 1.0 - smoothstep(0.3, 0.65, max(length(ux * kk), length(uy * kk))) : 0.0;
@@ -138,8 +144,8 @@ const PX = new WeakMap(), OWN = new WeakSet();
 export const ownTexels = (mat) => { OWN.add(mat); return mat; };
 export function pixelate(mat, look = 'grain', over = {}) {
   if (PX.has(mat) || OWN.has(mat)) return mat;
-  const L = { map: 1, streak: 0, edge: 0, ...PX_LOOK[look], ...over }, base = mat.onBeforeCompile, key = mat.customProgramCacheKey() + '|px';
-  const U = { uPxK: { value: new THREE.Vector4(L.j, L.b, L.blot, L.hue) }, uPxS: { value: new THREE.Vector2(L.streak, L.edge) }, uPxMap: { value: L.map } };
+  const L = { map: 1, streak: 0, edge: 0, dense: 1, ...PX_LOOK[look], ...over }, base = mat.onBeforeCompile, key = mat.customProgramCacheKey() + '|px';
+  const U = { uPxK: { value: new THREE.Vector4(L.j, L.b, L.blot, L.hue) }, uPxS: { value: new THREE.Vector3(L.streak, L.edge, L.dense) }, uPxMap: { value: L.map } };
   mat.onBeforeCompile = (sh, r) => {
     base?.call(mat, sh, r); Object.assign(sh.uniforms, PIXEL_U, U);
     sh.vertexShader = 'varying vec3 vPxP;\n' + sh.vertexShader.replace('#include <project_vertex>', PX_VERT);

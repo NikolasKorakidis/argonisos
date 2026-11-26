@@ -139,7 +139,7 @@ export default {
       return (window._land.d < -2.3 && window._land.d > -4) || JSON.stringify(window._land);`);
     const land = await t.eval('return window._land;');
     t.metric('Pedias\'s track, seconds 3.5 to 8.5 (music LUFS): at full → as a land\'s', `${land.full} → ${land.land} (${land.d} dB)`);
-    await t.step('the music follows its slider', `${A} const St = await import('/src/ui/settings.js'), v0 = St.SETTINGS.music; St.setMusic(0); await wait(400); const off = A.meters().music.lufs;
+    await t.step('the music follows its slider', `${A} const St = await import('/src/ui/settings.js'), v0 = St.SETTINGS.music; St.setMusic(0); let off = 0; for (let i = 0; i < 30 && !(off < -90); i++) { await wait(100); off = A.meters().music.lufs; }   // (waited for: the meter hears the last third of a second, and a busy machine's audio runs behind)
       St.setMusic(0.5); let on = -200; for (let i = 0; i < 20; i++) { await wait(100); on = Math.max(on, A.meters().music.lufs); } St.setMusic(v0);
       return (off < -90 && on > -60) || JSON.stringify({ off, on });`);
     await t.step('sitting by your fire a little while plays the home track (over the land\'s music)', `${A} Mu.stopMusic(0.2); await wait(800); M.ended = {}; M.log = []; AG.S.freeBuild = true;
@@ -172,7 +172,7 @@ export default {
       return (falls.length === 2 && falls[1] < falls[0] * 0.5 && bone === 1) || JSON.stringify({ falls, log: A.log.map((e) => e.k) });`);
     // (each alone, the beds silenced: their loudest moment on the effects bus, LUFS)
     await t.step('the warnings are heard: the Minotaur\'s snort at 15 m, a skeleton\'s bones at 4 m, a dryad\'s thorn; the guide\'s chime with the music off', `${A} A.solo = 'none'; Mu.stopMusic(0.1); const St = await import('/src/ui/settings.js'), v0 = St.SETTINGS.music; await wait(1500);
-      const top = async (fn) => { fn(); let m = -200; for (let i = 0; i < 25; i++) { m = Math.max(m, A.meters().sfx.lufs); await wait(60); } await wait(600); return +m.toFixed(1); };
+      const top = async (fn) => { let m = -200; for (let r = 0; r < 3; r++) { fn(); for (let i = 0; i < 25; i++) { m = Math.max(m, A.meters().sfx.lufs); await wait(60); } await wait(600); } return +m.toFixed(1); };   // (the loudest of three: each play takes a variant at a varied volume)
       const snort = await top(() => g.sound('snort', { at: P.pos.clone().add(new V(15, 8, 0)) })), bones = await top(() => g.sound('boneRattle', { at: P.pos.clone().add(new V(4, 1, 0)) })), thorn = await top(() => g.sound('thornThrow', 1));
       St.setMusic(0); const chime = await top(() => g.sound('chime')); St.setMusic(v0); A.solo = null;
       return (snort > -26 && bones > -36 && thorn > -30 && chime > -45) || JSON.stringify({ snort, bones, thorn, chime });`);

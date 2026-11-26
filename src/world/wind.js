@@ -90,7 +90,12 @@ const lines = new THREE.Mesh(geo, mat); lines.frustumCulled = false; lines.rende
 export function updateWindLines(dt, { light = 1, rain = 0, still = false } = {}) {
   // what everything bends with (grass, flowers, trees, clouds): the direction, and a strength from a breeze to a storm
   if (still) { WIND_U.uWindDir.value.set(0.94, 0.34); WIND_U.uWindStr.value = 0.1; }
-  else { WIND_U.uWindDir.value.copy(WIND.dir); WIND_U.uWindStr.value = Math.min(1.3, Math.max(0, (WIND.speed - 2.3) / 8) + WIND.gust * 0.25); }   // (fair weather ~0.1, rain ~0.6, a storm over 1)
+  else { WIND_U.uWindDir.value.copy(WIND.dir); const want = Math.min(1.3, Math.max(0, (WIND.speed - 2.3) / 8) + WIND.gust * 0.25); WIND_U.uWindStr.value += (want - WIND_U.uWindStr.value) * Math.min(1, dt * 2.5); }   // (fair weather ~0.1, rain ~0.6, a storm over 1; eased over half a second or so, so a gust kicked up by a lightning strike or the wall's storm never snaps the grass over in a frame)
+  // the flutter's and the gusts' phases, at the pace the strength sets (trees.js WIND_U); held still, the same as the clock
+  // held at 100 s and a strength of 0.1 gave before, so the screenshot tests' pictures stay as they were
+  const k = WIND_U.uWindStr.value;
+  if (still) { WIND_U.uFlutT.value = 100 * (1 + 0.1 * 0.5); WIND_U.uGustT.value = 100 * (1 + 0.1 * 1.2); }
+  else { WIND_U.uFlutT.value = (WIND_U.uFlutT.value + dt * (1 + k * 0.5)) % 6283.1853; WIND_U.uGustT.value = (WIND_U.uGustT.value + dt * (1 + k * 1.2)) % 6283.1853; }   // (wrapped at a thousand turns, so the phase keeps its precision on the card)
   const amount = still ? 0.3 : Math.min(0.75, 0.22 + Math.max(0, WIND.speed - 2.5) * 0.08);
   lines.visible = amount > 0.02 && light > 0.05; if (!lines.visible) return;
   WINDLINE_U.uTime.value = still ? 7.3 : WINDLINE_U.uTime.value + dt;   // (screenshot tests: held at one moment)
