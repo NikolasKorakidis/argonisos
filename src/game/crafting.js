@@ -34,6 +34,9 @@ export class Crafting {
     g.hud.salvage = (i) => this.salvage(i); g.hud.onBreak = (i) => this.breakDown(i); g.hud.breakable = (id) => BREAKS.has(id);   // (the pack's Shift + right-click: hud.js confirmBreak)
     this.discover(true);
   }
+  // Known to you: learned, or anything at all while the dev tools' Free build is on (every piece and every recipe, boss
+  // tiers too, free: the learned list itself is left alone, so turning it off hides again what you haven't learned)
+  isKnown(key) { return !!this.g.S.freeBuild || this.known.has(key); }
   // Find recipes newly revealed by what you've held
   // each tab remembers what was selected and how far down the list you were, so the menu reopens where you left it
   get sel() { return this.selBy[this.tab]; }
@@ -130,7 +133,7 @@ export class Crafting {
     if (!this.g.hud.open) return;
     this.panel.querySelectorAll('#craftTabs button').forEach((b) => b.classList.toggle('on', b.dataset.t === this.tab));
     this.panel.querySelector('h2').textContent = this.tab === 'craft' ? 'Craft' : 'Build';
-    const list = this.list().filter((r) => (this.tab === 'craft' ? r.kind === 'item' : r.kind === 'piece') && this.known.has(r.key));
+    const list = this.list().filter((r) => (this.tab === 'craft' ? r.kind === 'item' : r.kind === 'piece') && this.isKnown(r.key));
     if (this.tab === 'craft' && this.nearBench()) list.unshift({ key: 'repair', kind: 'repair', name: `Repair Items${this.damaged().length ? ` (${this.damaged().length})` : ''}`, icon: 'repair', mats: {}, tier: 0 });
     if (!list.length) { $('craftList').innerHTML = `<p class="empty">${this.tab === 'craft' ? 'Pick things up to learn what you can make from them.' : 'Gather wood to learn what you can build.'}</p>`; $('craftDetail').innerHTML = ''; return; }
     if (!this.sel || !list.find((r) => r.key === this.sel)) this.sel = list.find((r) => r.kind !== 'repair')?.key || list[0].key;

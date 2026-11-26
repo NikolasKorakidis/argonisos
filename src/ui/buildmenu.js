@@ -22,7 +22,7 @@ export class BuildMenu {
     grid.addEventListener('click', (e) => { const t = e.target.closest('.bmtile'); if (t) this.pick(t.dataset.id); });
     el.addEventListener('contextmenu', (e) => { e.preventDefault(); this.toggle(false); });
   }
-  pieces() { const C = this.g.crafting; return this.g.build.pieces.filter((p) => C.known.has('b:' + p.id)); }
+  pieces() { const C = this.g.crafting; return this.g.build.pieces.filter((p) => C.isKnown('b:' + p.id)); }   // (all of them with Free build on)
   toggle(on = !this.open) {
     if (on !== this.open) this.g.sound?.('ui', { open: on, kind: 'build' }); this.open = on; this.el.classList.toggle('hidden', !on); input.uiOpen = on;
     if (on) { unlock(); this.g.crafting.discover(true); const known = this.pieces(); if (!known.some((p) => (p.cat || 'Tools') === this.cat)) this.cat = CATS.find((c) => known.some((p) => (p.cat || 'Tools') === c)) || 'Crafting'; this.hover = this.g.build.sel; this.draw(); }
