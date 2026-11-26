@@ -16,6 +16,9 @@ export const PATCHES = [
       { t: 'The look', icon: 'stone', items: [
         '<b>Stone and flowers in texels.</b> Rocks, boulders, cliffs, pebbles and flowers now have the same chunky, hand-painted texels as the tree trunks: chipped and cracked stone with its moss and lichen, and petals that step from base to tip.',
       ] },
+      { t: 'The Minotaur', icon: 'bull', items: [
+        'The Minotaur no longer stalls round the Labyrinth\'s braziers and columns: he charges only when he faces you with room for his bulk, a charge that has no clear way is given up instead of crashing at once, and he no longer squeezes into gaps too narrow for him.',
+      ] },
       { t: 'Sound', icon: 'lyre', items: [
         'Picking things up now lands with a soft thud, one of two sounds at random.',
       ] },
