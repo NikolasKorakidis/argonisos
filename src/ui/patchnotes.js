@@ -4,6 +4,27 @@ import { glyph } from './icons.js';
 
 export const PATCHES = [
   {
+    id: 'patch-28', name: 'Patch 28', title: 'Lightstone', date: '26 November 2026',
+    intro: 'New lightstone gear (a crescent shield, a sword and arrows), arrows you choose, a softer pickup, and stone and flowers in texels.',
+    sections: [
+      { t: 'Gear', icon: 'sword', items: [
+        '<b>The Pelta Shield.</b> A light crescent shield of deer hide on a lightstone rim: it blocks less than a round shield but makes you 10% quicker. Make it at the workbench once you can work lightstone.',
+        '<b>The Lightstone Sword.</b> A leaf-bladed sword with a lightstone blade, striking in a quick combo of two cuts and a thrust that can catch two foes at once. Make it once the Chimera\'s head is offered.',
+        '<b>Lightstone Arrows</b> hit harder than crude ones; ten at a time at the workbench.',
+        '<b>Choose your arrows.</b> Right-click the arrows you want in your pack (or press their number) and the bow uses those; when they run out it takes the next arrows you carry.',
+      ] },
+      { t: 'The look', icon: 'stone', items: [
+        '<b>Stone and flowers in texels.</b> Rocks, boulders, cliffs, pebbles and flowers now have the same chunky, hand-painted texels as the tree trunks: chipped and cracked stone with its moss and lichen, and petals that step from base to tip.',
+      ] },
+      { t: 'Sound', icon: 'lyre', items: [
+        'Picking things up now lands with a soft thud, one of two sounds at random.',
+      ] },
+      { t: 'For testers', icon: 'build', items: [
+        'With the dev tools\' Free crafting and building on, the hammer\'s menu offers every building piece of the RPGPP, Vikings and Ancient Empire packs, in tabs of their own, to try out before we choose which stay.',
+      ] },
+    ],
+  },
+  {
     id: 'patch-27', name: 'Patch 27', title: 'Solid', date: '26 November 2026',
     intro: 'Walls you can trust, a wind that never twitches, and your gear painted in texels like the trees.',
     sections: [

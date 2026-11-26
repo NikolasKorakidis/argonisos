@@ -49,7 +49,8 @@ export default {
     await t.step('18 …(in front of the wall, the wall still solid)', `const w = window._wall, c = AG.camera.position; return (c.z < w.pos.z - 0.1 && P.camD < 3.4 && w.mats.every((m) => m.opacity === 1)) || JSON.stringify({ camZ: c.z - w.pos.z, camD: P.camD, op: w.mats.map((m) => m.opacity) });`);
     await t.step('18 …and back out when the view is clear', `P.camYaw = Math.PI; return true;`);
     // (it eases back out over a second or so of frames: waited for, however slow the frames come)
-    await t.step('18 …(the full distance again)', `await until(() => P.camD > 6.5, 6000); return P.camD > 6.5 || 'camera at ' + P.camD.toFixed(2) + ' m';`);
+    await t.step('18 …(the full distance again)', `await until(() => P.camD > 6.5, 6000); if (P.camD > 6.5) return true; const O = await import('/src/render/occlusion.js'), M = await import('/src/world/gen.js'), t0 = P.pos.clone().add(new V(0, 1.6, 0)), far = t0.clone().add(new V(Math.sin(P.camYaw) * 7, 0.7, Math.cos(P.camYaw) * 7));
+      const d = (o) => +O.castCamera(g, t0, far, o).toFixed(2); return 'camera at ' + P.camD.toFixed(2) + ' m ' + JSON.stringify({ all: d({}), noGround: d({ ground: false }), noFlora: d({ flora: false }), hero: [P.pos.x | 0, P.pos.y.toFixed(1), P.pos.z | 0], placed: B.placed.map((q) => q.def.id), near: g.colliders.near(P.pos.x, P.pos.z, 8).map((c) => [c.ref?.sp ?? c.ref?.kind ?? '?', +Math.hypot(c.x - P.pos.x, c.z - P.pos.z).toFixed(1)]).slice(0, 8) });`);
     await t.shot('hud');
 
     // ---- Patch 23, fights and survival: each fix of the gameplay review with its own check
