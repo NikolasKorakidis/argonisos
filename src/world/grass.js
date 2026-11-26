@@ -78,7 +78,7 @@ const COVERED = '{ vec2 tc = (wp - uOrigin) / uSize; fade *= step(0.0, min(tc.x,
     const mat = new THREE.MeshStandardMaterial({ side: THREE.DoubleSide, roughness: 0.9 }); mat.defines = { SUN_SHADOW_CHEAP: '' };   // (one bilinear look into the sun's shadow: the blades are most of the pixels on screen)
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, U, PIXEL_U);
-      sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr, uClumps; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight, uMeadow; attribute vec2 aOff; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld; varying vec2 vPxB;\n` + sh.vertexShader
+      sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr, uGustT, uClumps; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight, uMeadow; attribute vec2 aOff; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld; varying vec2 vPxB;\n` + sh.vertexShader
         .replace('#include <beginnormal_vertex>', `
           vec3 ip = vec3(aOff.x, 0.0, aOff.y);
           vec2 wp = ip.xz + uTile * floor((uCenter - ip.xz) / uTile + 0.5);
@@ -112,7 +112,7 @@ const COVERED = '{ vec2 tc = (wp - uOrigin) / uSize; fade *= step(0.0, min(tc.x,
           float gh = position.y / ${H.toFixed(2)};
           float gust = sin(uWind * 0.6 + wp.x * 0.05) * 0.5 + 0.5;
           // gusts sweeping across the meadow: bands that bend the grass further and catch the light as they pass
-          float wave = smoothstep(0.6, 1.0, sin(dot(wp, uWindDir) * 0.055 - uWind * (1.0 + uWindStr * 1.2)) * 0.5 + 0.5 + (fract(sin(dot(floor(wp / 11.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.25);   // (rolling downwind)
+          float wave = smoothstep(0.6, 1.0, sin(dot(wp, uWindDir) * 0.055 - uGustT) * 0.5 + 0.5 + (fract(sin(dot(floor(wp / 11.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.25);   // (rolling downwind)
           float bend = gh * gh * min(sc, 1.6) * (0.07 + gust * 0.1) * (1.0 + wave * 1.3) * (1.0 + tl * 0.8);   // (tall grass sways further, but not wildly)
           p.x += sin(uWind * 1.9 + wp.x * 0.35 + wp.y * 0.22) * bend;
           p.z += cos(uWind * 1.5 + wp.y * 0.3) * bend * 0.7;
@@ -226,7 +226,7 @@ const clumpCarpet = (geo, map, tall) => {
   const mat = new THREE.MeshStandardMaterial({ map, side: THREE.DoubleSide, roughness: 0.9, alphaTest: 0.5 }); mat.defines = { SUN_SHADOW_CHEAP: '' };
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, U, PIXEL_U, { uPxMap: { value: 1 } });
-    sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr, uCount; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight, uMeadow; attribute vec2 aOff; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld; varying vec2 vPxB;\n` + sh.vertexShader
+    sh.vertexShader = `uniform float uWind, uTile, uSize, uWindStr, uGustT, uCount; uniform vec2 uCenter, uOrigin, uWindDir; uniform sampler2D uHeight, uMeadow; attribute vec2 aOff; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld; varying vec2 vPxB;\n` + sh.vertexShader
       .replace('#include <beginnormal_vertex>', `
         vec3 ip = vec3(aOff.x, 0.0, aOff.y);
         vec2 wp = ip.xz + uTile * floor((uCenter - ip.xz) / uTile + 0.5);
@@ -252,7 +252,7 @@ const clumpCarpet = (geo, map, tall) => {
         float gv = max(hv.g, 0.0), gh = clamp(position.y / ${f(HM)}, 0.0, 1.0), se = min(sc * ${f(HM / 0.5)}, 1.6);   // (se: its height against a blade's)
         p.y *= smoothstep(0.02, 0.25, gv - floor(gv * 0.5) * 2.0);   // (folded down where the grass stops)
         float gust = sin(uWind * 0.6 + vp.x * 0.05) * 0.5 + 0.5;
-        float wave = smoothstep(0.6, 1.0, sin(dot(vp, uWindDir) * 0.055 - uWind * (1.0 + uWindStr * 1.2)) * 0.5 + 0.5 + (fract(sin(dot(floor(vp / 11.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.25);
+        float wave = smoothstep(0.6, 1.0, sin(dot(vp, uWindDir) * 0.055 - uGustT) * 0.5 + 0.5 + (fract(sin(dot(floor(vp / 11.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.25);
         float bend = gh * gh * se * (0.07 + gust * 0.1) * (1.0 + wave * 1.3) * (1.0 + tl * 0.8);
         p.x += sin(uWind * 1.9 + vp.x * 0.35 + vp.y * 0.22) * bend;
         p.z += cos(uWind * 1.5 + vp.y * 0.3) * bend * 0.7;
