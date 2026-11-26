@@ -178,6 +178,20 @@
       "static": true,
       "join": true
     },
+    "pelta": {
+      "src": "GreekWarfare/Meshes/Shield_Pelte_JevelinThrower.fbx",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureRed.png",
+      "palette": true,
+      "static": true,
+      "join": true
+    },
+    "xiphos": {
+      "src": "GreekWarfare/Meshes/Sword_Xiphos C.fbx",
+      "texture": "GreekWarfare/Textures/GreekWarfareTextureRed.png",
+      "palette": true,
+      "static": true,
+      "join": true
+    },
     "owl": {
       "src": "Low Poly Bird Barn Owl/Character/Low Poly Barn Owl.fbx",
       "texture": "Low Poly Bird Barn Owl/Character/Materials/BarnOwl_Tex.png",
@@ -4322,7 +4336,8 @@
     "pickupItem": {
       "group": "pickup",
       "files": [
-        "GATHERING/pickup-item.mp3"
+        "../../pixabay-cinematic-thud/cinematic-thud-fx-379991.mp3",
+        "../../pixabay-pillow-hit/pillow-hit-154187.mp3"
       ]
     },
     "buildPiece": {

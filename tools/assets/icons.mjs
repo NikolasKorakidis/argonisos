@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { serve, ROOT } from '../../tests/lib/server.mjs';
 import { launch } from '../../tests/lib/harness.mjs';
+import { PACK_PIECES } from '../../src/build/pack-pieces.js';
 
 const OUT = path.join(ROOT, 'assets/ui/pack'), SIZE = 128;
 
@@ -53,6 +54,7 @@ const ICONS = {
   club: T({ held: 'crudeClub' }), bow: T({ held: 'crudeBow' }), cretanBow: T({ held: 'cretanBow' }),
   spear: T({ held: 'crudeSpear' }), spearLight: T({ held: 'lightstoneSpear' }), arrow: T({ pack: 'arrow' }),
   shield: { held: 'crudeShield', yaw: 200, pitch: 15 }, towerShield: { held: 'crudeTowerShield', yaw: 200, pitch: 15 },
+  swordLight: T({ held: 'lightstoneSword' }), pelta: { held: 'peltaShield', yaw: 200, pitch: 15 }, arrowLight: T({ held: 'lightstoneArrow' }),
   // armour: the parts the hero wears (heroArmour, wear_<item>), standing as worn; the cape from the Ancient Empire pack
   throwerHelmet: { pack: 'heroArmour', only: ['wear_throwerHelmet'] }, throwerArmor: { pack: 'heroArmour', only: ['wear_throwerArmor'], arms: 12, yaw: 25, pitch: 15 },
   throwerLegs: { pack: 'heroArmour', only: ['wear_throwerLegs'], yaw: 25, pitch: 15 },
@@ -69,6 +71,9 @@ const ICONS = {
   roofEnd: { kit: 'end63', pitch: 24 }, stairs: { kit: 'stairs', pitch: 24 }, fence: { kit: 'fence', pitch: 24 }, stockade: { kit: 'stockade', pitch: 24 },
   gate: { kit: 'gateL', pitch: 24 }, chest: { kit: 'chest', pitch: 24 }, roof: { kit: 'roof63', pitch: 30 }, anvil: { kit: 'workbench', pitch: 24 },
   fire: { kit: 'campfire', pitch: 30 }, rested: { kit: 'bed', pitch: 30 },
+  // the building packs' pieces on trial (Free build: build/pieces.js packDef), each as its pack has it; also the pictures in
+  // the reviewer's list (docs/plans/pack-pieces.md)
+  ...Object.fromEntries(PACK_PIECES.map(([id, file]) => ['p_' + id, { pack: file, pitch: 24 }])),
 };
 // The SharpUI sprites the interface uses (ui.css, under html.packui), made smaller (scale) so their nine-slice borders
 // stay whole numbers or halves

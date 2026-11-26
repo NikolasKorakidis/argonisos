@@ -272,14 +272,15 @@ const want = (name) => { const C = move(name); if (!C.ready) loadMoves('moves').
 // The strikes. Each weapon kind goes through its moves in turn while the blows follow each other (a combo); each move is
 // a stretch of its clip (from, to: seconds), the moment in it the weapon meets what's in front (hit: the clip's own
 // second, found from where the striking hand stops dead), and how long the swing takes in the game (time). The hit is
-// when the damage is dealt (player.update → onStrike); tools and fists keep the old clips, stretched as they always were
+// when the damage is dealt (player.update → onStrike); tools and fists keep the old clips, stretched as they always were.
+// A sword's combo is Valheim's: two quick cuts, forehand and back, and a thrust
 const STRIKE = {
   punch: { clip: 'punch', from: 0, to: 1.03, hit: 0.46, time: 0.45 }, tool: { clip: 'attack', from: 0, to: 2.27, hit: 1.02, time: 0.74 },
   chop: { clip: 'chop', from: 0.15, to: 1.6, hit: 0.88, time: 0.75 }, sweep: { clip: 'sweep', from: 0.3, to: 1.75, hit: 0.93, time: 0.75 },
   slash: { clip: 'slash', from: 0.4, to: 1.5, hit: 0.84, time: 0.72 }, slash2: { clip: 'slash2', from: 0.12, to: 1.3, hit: 0.62, time: 0.72 },
   stab: { clip: 'stab', from: 0.12, to: 1.35, hit: 0.38, time: 0.7 },
 };
-const STRIKES = { punch: ['punch'], tool: ['tool'], axe: ['chop', 'sweep'], mace: ['chop', 'sweep'], sword: ['slash', 'slash2'], dagger: ['stab', 'sweep'], spear: ['stab'] };
+const STRIKES = { punch: ['punch'], tool: ['tool'], axe: ['chop', 'sweep'], mace: ['chop', 'sweep'], sword: ['slash', 'slash2', 'stab'], dagger: ['stab', 'sweep'], spear: ['stab'] };
 // the kind of strike an item makes (its weapon skill, or a tool's, or a fist's)
 export const strikeKind = (item) => (!item ? 'punch' : STRIKES[item.skill] ? item.skill : 'tool');
 // A clip's pose at a time (seconds), straight from its tracks: { bones: { name: [x, y, z, w] }, hips: [x, y, z] (its hips'

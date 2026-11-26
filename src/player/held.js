@@ -1,6 +1,6 @@
 // Models for things held in the hand or slung on the back. Each comes out handle-down along +y with the grip at y=0,
 // so the hero's grip pose fits them all. The crude bow is an imported model; the rest come from the team's packs
-// (tools/assets: Greek warfare for the Cretan bow, shields and lightstone spear; the rustic kit and Synty for the tools;
+// (tools/assets: Greek warfare for the Cretan bow, shields, the lightstone spear and sword; the rustic kit and Synty for the tools;
 // the team's own delivery for the stone spear and the hoe),
 // with the carved ones below standing in while they load or if a pack file is missing.
 import * as THREE from 'three';
@@ -10,6 +10,35 @@ import { pixelate, pixelateAuto, autoLook } from '../render/pixel.js';
 const wood = new THREE.MeshStandardMaterial({ color: 0x8a6440, roughness: 0.85 }), darkWood = new THREE.MeshStandardMaterial({ color: 0x5e4128, roughness: 0.9 });
 const stone = new THREE.MeshStandardMaterial({ color: 0x8f887e, roughness: 0.9, flatShading: true }), light = new THREE.MeshStandardMaterial({ color: 0xe6e0cc, roughness: 0.55, flatShading: true });
 const leather = new THREE.MeshStandardMaterial({ color: 0x6e4a2e, roughness: 0.8 }), cord = new THREE.MeshStandardMaterial({ color: 0xc9b48a, roughness: 0.9 });
+// Lightstone as worked into gear: the pale stone of the pickups (world/pickups.js), its faint glint kept
+export const LIGHTSTONE = new THREE.MeshStandardMaterial({ color: 0xc8c2ae, roughness: 0.5, metalness: 0.1, emissive: 0x5a5a48, emissiveIntensity: 0.15, flatShading: true });
+// Part of a pack model made of lightstone: each triangle whose painted colour (its texel in the model's palette, 0-255)
+// and middle (in the model's frame as it is now) pass test takes LIGHTSTONE, the rest keep their own material. A sword's
+// steel blade, an arrow's head, a shield's metal rim: the same model, worked in the island's stone
+const PAINT = new WeakMap();
+function texels0(map) {
+  let d = PAINT.get(map); if (d) return d; const im = map?.image; if (!im?.width) return null;
+  const c = document.createElement('canvas'); c.width = im.width; c.height = im.height; const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(im, 0, 0);
+  d = { W: im.width, H: im.height, px: x.getImageData(0, 0, im.width, im.height).data }; PAINT.set(map, d); return d;
+}
+export function inStone(o, test) {
+  o.updateMatrixWorld(true); const v = new THREE.Vector3(), c = new THREE.Vector3();
+  o.traverse((m) => {
+    if (!m.isMesh || Array.isArray(m.material)) return; const T = texels0(m.material.map), g0 = m.geometry, pos = g0.attributes.position, uv = g0.attributes.uv;
+    const idx = g0.index ? g0.index.array : [...Array(pos.count).keys()], keep = [], stone = [], rgb = [0, 0, 0];
+    for (let i = 0; i < idx.length; i += 3) {
+      c.set(0, 0, 0); let u = 0, w = 0; for (let k = 0; k < 3; k++) { c.add(v.fromBufferAttribute(pos, idx[i + k]).applyMatrix4(m.matrixWorld)); if (uv) { u += uv.getX(idx[i + k]) / 3; w += uv.getY(idx[i + k]) / 3; } }
+      if (T) { const q = (Math.min(T.H - 1, Math.floor((((w % 1) + 1) % 1) * T.H)) * T.W + Math.min(T.W - 1, Math.floor((((u % 1) + 1) % 1) * T.W))) * 4; rgb[0] = T.px[q]; rgb[1] = T.px[q + 1]; rgb[2] = T.px[q + 2]; }
+      (test(rgb, c.divideScalar(3)) ? stone : keep).push(idx[i], idx[i + 1], idx[i + 2]);
+    }
+    if (!stone.length) return; const g = g0.clone(); g.setIndex([...keep, ...stone]); g.clearGroups(); g.addGroup(0, keep.length, 0); g.addGroup(keep.length, stone.length, 1);
+    m.geometry = g; m.material = [m.material, LIGHTSTONE];
+  });
+  return o;
+}
+// (a palette's greys: steel; its bright golds: bronze)
+export const steel = ([r, g, b]) => Math.max(r, g, b) - Math.min(r, g, b) < 40 && r + g + b > 240;
+const bronze = ([r, g, b]) => r > 180 && r - b > 110;
 const M = (g, m, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.castShadow = true; return o; };
 const grp = (...a) => { const g = new THREE.Group(); a.forEach((o) => g.add(o)); return g; };
 const lash = (y, r) => M(new THREE.TorusGeometry(r, 0.012, 4, 10).rotateX(Math.PI / 2), cord, 0, y, 0);
@@ -39,6 +68,11 @@ const CARVED = {
   spear: (mat = stone) => grp(M(new THREE.CylinderGeometry(0.02, 0.024, 1.7, 6).translate(0, 0.55, 0), wood), M(new THREE.ConeGeometry(0.045, 0.24, 4).scale(1, 1, 0.4).translate(0, 1.5, 0), mat), lash(1.37, 0.026)),
   torch: () => { const g = grp(M(new THREE.CylinderGeometry(0.025, 0.03, 0.55, 6).translate(0, 0.27, 0), wood), M(new THREE.CylinderGeometry(0.05, 0.035, 0.12, 7).translate(0, 0.57, 0), leather));
     g.add(flame(0.62)); const L = new THREE.Object3D(); L.position.y = 0.8; g.add(L); g.userData.light = L; return g; },
+  // (a leaf-bladed sword, its blade of lightstone; a crescent-cut shield, hide on a pale rim)
+  sword: () => grp(M(new THREE.CylinderGeometry(0.02, 0.022, 0.12, 6).translate(0, 0.02, 0), leather), M(new THREE.BoxGeometry(0.16, 0.025, 0.04).translate(0, 0.09, 0), darkWood),
+    M(new THREE.CylinderGeometry(0.02, 0.035, 0.52, 4).scale(1, 1, 0.3).translate(0, 0.36, 0), LIGHTSTONE), M(new THREE.ConeGeometry(0.02, 0.1, 4).scale(1, 1, 0.3).translate(0, 0.67, 0), LIGHTSTONE)),
+  pelta: () => { const g = new THREE.Group(), r = 0.32, s = new THREE.Shape(); s.absarc(0, 0, r, 0.75, Math.PI * 2 - 0.75, false); s.absarc(r * 1.05, 0, r * 0.5, Math.PI + 1.1, Math.PI - 1.1, true);
+    g.add(M(new THREE.ExtrudeGeometry(s, { depth: 0.04, bevelEnabled: false }).rotateZ(Math.PI / 2).translate(0, 0, -0.02), leather)); g.add(M(new THREE.TorusGeometry(r, 0.014, 4, 20, Math.PI * 2 - 1.5).rotateZ(Math.PI / 2 + 0.75), LIGHTSTONE)); return outward(g); },
   shield: (big) => { const g = new THREE.Group(); if (big) g.add(M(new THREE.BoxGeometry(0.6, 1.1, 0.05), wood)); else g.add(M(new THREE.CylinderGeometry(0.34, 0.34, 0.05, 14).rotateX(Math.PI / 2), wood));
     g.add(M(new THREE.CylinderGeometry(0.08, 0.08, 0.06, 10).rotateX(Math.PI / 2).translate(0, 0, 0.03), stone)); g.add(M(new THREE.TorusGeometry(big ? 0.45 : 0.33, 0.012, 4, 20), leather)); return outward(g); },
 };
@@ -46,6 +80,7 @@ const CARVED = {
 const LOOK = {
   crudeAxe: 'axe', lightstoneAxe: 'axeLight', crudeClub: 'club', crudeDagger: 'dagger', lightstoneDagger: 'daggerLight', hammer: 'hammer', pickaxe: 'pickaxe', hoe: 'hoe',
   crudeSpear: 'spear', lightstoneSpear: 'spearDoru', torch: 'torch', crudeBow: 'bow', cretanBow: 'cretanBow', crudeShield: 'shieldCretan', crudeTowerShield: 'shieldHoplon',
+  peltaShield: 'pelta', lightstoneSword: 'swordLight', lightstoneArrow: 'arrowLight',   // (an arrow is never held: its model is for its icon, tools/assets/icons.mjs)
 };
 let axeP = null, bowP = null; const props = {};
 const axeModel = () => (axeP ||= loadFBX('axe').then((o) => { const h = headAlong(normalizeHandle(fixMaterials(o), 0.85)); h.position.y = -0.09; return h; }));
@@ -69,6 +104,12 @@ const PACKED = {
   shieldCretan: () => prop('shieldCretan', (o) => outward(centred(o, 0.7))),
   shieldHoplon: () => prop('shieldHoplon', (o) => outward(centred(o, 0.9))),
   spearDoru: () => prop('doru', (o) => { const h = normalizeHandle(o, 1.75); h.position.y = -0.35; return h; }),
+  // the Greek warfare pack's peltast shield, the crescent cut away at the top as carried, its bronze rim and bands lightstone
+  pelta: () => prop('pelta', (o) => { o.rotation.z = -Math.PI / 2; return outward(inStone(centred(o, 0.75), bronze)); }),
+  // a xiphos, its leaf blade lightstone (the steel above the hilt; the bronze guard and the grip stay); slim at the head,
+  // as the guard is wider than the blade
+  arrowLight: () => prop('arrow', (o) => { const g = centred(o, 0.9), top = new THREE.Box3().setFromObject(g).max.y; return inStone(g, (c, p) => steel(c) && p.y > top - 0.2); }),
+  swordLight: () => prop('xiphos', (o) => { const h = tool(o, 0.78, 0.05, false, true), b = new THREE.Box3().setFromObject(h); return inStone(h, (c, p) => steel(c) && p.y > b.min.y + (b.max.y - b.min.y) * 0.2); }),
   // tools: length, and how far below the grip the handle's end sits
   axe: () => prop('axeCrude', (o) => tool(o, 0.75, 0.09)), axeLight: () => prop('axeGood', (o) => tool(o, 0.85, 0.09)),
   club: () => prop('club', (o) => tool(o, 0.85, 0.08)), dagger: () => prop('knifeCrude', (o) => tool(o, 0.42, 0.02)), daggerLight: () => prop('knifeGood', (o) => tool(o, 0.38, 0.02, false, true)),   // (its guarded grip is wider than its blade: point the slim end out)
@@ -105,6 +146,7 @@ async function heldModel0(id) {
   if (k === 'daggerLight') return CARVED.dagger(light);
   if (k === 'towerShield' || k === 'shieldHoplon') return CARVED.shield(true); if (k === 'shieldCretan') return CARVED.shield();
   if (k === 'spearDoru') return CARVED.spear(light);
+  if (k === 'swordLight') return CARVED.sword(); if (k === 'pelta') return CARVED.pelta();
   return CARVED[k]?.() ?? null;
 }
-export const isLeftHanded = (id) => id === 'crudeBow' || id === 'cretanBow' || id === 'crudeShield' || id === 'crudeTowerShield';
+export const isLeftHanded = (id) => id === 'crudeBow' || id === 'cretanBow' || id === 'crudeShield' || id === 'crudeTowerShield' || id === 'peltaShield';

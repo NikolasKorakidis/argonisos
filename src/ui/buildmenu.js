@@ -5,7 +5,8 @@ import { icon } from './icons.js';
 import { ITEMS } from '../game/items.js';
 import { input, lock, unlock } from '../input.js';
 
-// Crafting pieces first, then the structure, then the rest
+// Crafting pieces first, then the structure, then the rest; after them, with the dev tools' Free build on, the building
+// packs' pieces on trial (build/pieces.js packDef), a tab for each pack and kind ("Vikings · Walls"), shown only then
 const CATS = ['Crafting', 'Walls', 'Floors', 'Roofs', 'Beams', 'Fences', 'Furniture', 'Tools'];
 
 export class BuildMenu {
@@ -23,17 +24,18 @@ export class BuildMenu {
     el.addEventListener('contextmenu', (e) => { e.preventDefault(); this.toggle(false); });
   }
   pieces() { const C = this.g.crafting; return this.g.build.pieces.filter((p) => C.isKnown('b:' + p.id)); }   // (all of them with Free build on)
+  cats(known = this.pieces()) { return [...CATS, ...new Set(known.filter((p) => p.free).map((p) => p.cat))]; }
   toggle(on = !this.open) {
     if (on !== this.open) this.g.sound?.('ui', { open: on, kind: 'build' }); this.open = on; this.el.classList.toggle('hidden', !on); input.uiOpen = on;
-    if (on) { unlock(); this.g.crafting.discover(true); const known = this.pieces(); if (!known.some((p) => (p.cat || 'Tools') === this.cat)) this.cat = CATS.find((c) => known.some((p) => (p.cat || 'Tools') === c)) || 'Crafting'; this.hover = this.g.build.sel; this.draw(); }
+    if (on) { unlock(); this.g.crafting.discover(true); const known = this.pieces(); if (!known.some((p) => (p.cat || 'Tools') === this.cat)) this.cat = this.cats(known).find((c) => known.some((p) => (p.cat || 'Tools') === c)) || 'Crafting'; this.hover = this.g.build.sel; this.draw(); }
     else lock();
   }
-  step(d) { const known = this.pieces(), cats = CATS.filter((c) => known.some((p) => (p.cat || 'Tools') === c)); if (!cats.length) return; this.cat = cats[(cats.indexOf(this.cat) + d + cats.length) % cats.length]; this.draw(); }
+  step(d) { const known = this.pieces(), cats = this.cats(known).filter((c) => known.some((p) => (p.cat || 'Tools') === c)); if (!cats.length) return; this.cat = cats[(cats.indexOf(this.cat) + d + cats.length) % cats.length]; this.draw(); }
   pick(id) { this.toggle(false); this.g.build.select(id); }
   missing(p) { return !this.g.S.freeBuild && !this.g.inv.has(p.mats); }
   draw() {
     const known = this.pieces();
-    this.el.querySelector('nav').innerHTML = CATS.map((c) => { const n = known.filter((p) => (p.cat || 'Tools') === c).length; return `<button data-c="${c}" class="${c === this.cat ? 'on' : ''}" ${n ? '' : 'disabled'}>${c} <b>[${n}]</b></button>`; }).join('');
+    this.el.querySelector('nav').innerHTML = this.cats(known).map((c) => { const n = known.filter((p) => (p.cat || 'Tools') === c).length; return `<button data-c="${c}" class="${c === this.cat ? 'on' : ''}${CATS.includes(c) ? '' : ' pk'}" ${n ? '' : 'disabled'}>${c} <b>[${n}]</b></button>`; }).join('');
     const list = known.filter((p) => (p.cat || 'Tools') === this.cat), sel = this.g.build.sel;
     const cells = list.map((p) => `<button class="bmtile${p.id === sel ? ' on' : ''}${this.missing(p) ? ' no' : ''}" data-id="${p.id}" title="${p.name}">${icon(p.icon, '', 'p_' + p.id)}<i>${p.name.replace(/^Wooden /, '')}</i></button>`);
     while (cells.length < 18) cells.push('<div class="bmtile empty"></div>');

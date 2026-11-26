@@ -92,12 +92,12 @@ function respawn() {
   const bed = S.bed || SPAWN; player.revive(bed.x, bed.z); snapWeather();
   hud.toast('Zeus lifts you up again. <b>Zeus\'s Favour</b> carries you for a while.');
 }
-// hotbar: 1-9 and 0 use the item in that slot (equip a tool or weapon, eat food)
+// hotbar: 1-9 and 0 use the item in that slot (equip a tool or weapon, choose arrows, eat food)
 hud.onUse = (i) => useSlot(i);
 function useSlot(i) {
   const s = inv.slots[i]; if (!s) return; const d = ITEMS[s.id];
   if (d.type === 'food') { game.acts.eat(i); return; }   // (it takes a moment: game/acts.js)
-  if (['tool', 'weapon', 'shield', 'armor'].includes(d.type)) game.equip?.(i);
+  if (['tool', 'weapon', 'shield', 'armor', 'ammo'].includes(d.type)) game.equip?.(i);   // (arrows: the ones the bow looses)
 }
 
 // ---- Debug free camera (F9): flies without the player, for looking around the world

@@ -52,7 +52,7 @@ export function load(g) {
 // in graves, eaten) whose ids are gone, and skills are merged onto this version's, so one added since starts
 // at level 1 rather than missing
 const known = (s) => !!(s && ITEMS[s.id]);
-const wearable = (s) => { const d = ITEMS[s.id]; return d.type === 'armor' ? d.slot === s.worn : (d.type === 'shield' || d.bow ? 'left' : 'hand') === s.worn && ['tool', 'weapon', 'shield'].includes(d.type); };
+const wearable = (s) => { const d = ITEMS[s.id]; if (d.type === 'ammo') return s.worn === 'ammo'; return d.type === 'armor' ? d.slot === s.worn : (d.type === 'shield' || d.bow ? 'left' : 'hand') === s.worn && ['tool', 'weapon', 'shield'].includes(d.type); };
 function loadSave(g, d) {
   const P = g.player, S = g.S;
   Object.assign(S, { time: d.S.time, day: d.S.day, tier: d.S.tier, bed: d.S.bed });

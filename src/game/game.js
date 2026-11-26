@@ -87,6 +87,12 @@ export function installGame(g) {
   g.held = () => { const i = worn('hand'); return i >= 0 ? ITEMS[inv.slots[i].id] : null; };
   g.bow = () => { const i = worn('left'); return i >= 0 && ITEMS[inv.slots[i].id].bow ? ITEMS[inv.slots[i].id] : null; };
   g.heldSlot = () => { const i = worn('hand'); return i >= 0 ? inv.slots[i] : null; };
+  // The arrows the bow looses (Valheim's way): the pile chosen in the pack (right-click or its number, worn: 'ammo'), or,
+  // none chosen or that pile spent, the first arrows in the pack, which are then chosen. Their id, or null with none left
+  g.ammo = () => {
+    let i = worn('ammo'); if (i < 0) { i = inv.slots.findIndex((s) => s && ITEMS[s.id].type === 'ammo'); if (i < 0) return null; inv.slots[i].worn = 'ammo'; hud.dirtyInv = true; }
+    return inv.slots[i].id;
+  };
   g.equippedTool = (tool) => g.held()?.tool === tool;
   g.torchLit = () => g.equippedTool('light') && !player.swimming && !player.dead;   // (a torch in your hand burns, out of the water: a fire the creatures that fear fire keep clear of, creatures.js)
   g.warmArmor = () => inv.slots.some((s) => s?.worn && ITEMS[s.id].warm);
@@ -109,6 +115,8 @@ export function installGame(g) {
   g.equip = (i) => {
     const s = inv.slots[i]; if (!s) return; const d = ITEMS[s.id];
     if (!s.worn && d.dur && s.dur <= 0 && d.type !== 'armor') { hud.toast(`Your ${d.name.toLowerCase()} is broken: mend it at a workbench`); return; }   // (broken tools stay in the pack)
+    // (arrows: chosen for the bow, or no longer; nothing is drawn or put away, so no clip and no sound but the pack's)
+    if (d.type === 'ammo') { const o = worn('ammo'); if (o >= 0) delete inv.slots[o].worn; if (o !== i) { s.worn = 'ammo'; hud.toast(`Arrows: ${d.name.toLowerCase()}`); } hud.dirtyInv = true; return; }
     if (s.worn) { player.equip = { kind: 'disarm', t: 0 }; unequip(i); if (d.type !== 'armor') g.sound('sheathe'); return; }
     if (d.type === 'armor') { const o = inv.slots.findIndex((x) => x?.worn === d.slot); if (o >= 0) delete inv.slots[o].worn; s.worn = d.slot; refreshLook(); hud.toast(`Wearing ${d.name.toLowerCase()}`); return; }
     const slot = d.type === 'shield' || d.bow ? 'left' : 'hand';
@@ -123,9 +131,9 @@ export function installGame(g) {
   };
   inv.onChange = ((base) => () => { base?.(); for (const s of inv.slots) if (s?.worn && !s.n) delete s.worn; refreshLook(); })(inv.onChange);
 
-  // ---- strikes. A swing's stamina goes by the weapon's heft (SWING): a dagger or a fist is quick and cheap, an axe or a
-  // club dearer, a spear's two-handed thrust the dearest; a tool's swing costs what it always has
-  const SWING = { unarmed: 4, dagger: 4, axe: 6, mace: 6, spear: 7 }, swingCost = (d) => (d?.type === 'weapon' || !d ? SWING[d?.skill ?? 'unarmed'] : null) ?? 5;
+  // ---- strikes. A swing's stamina goes by the weapon's heft (SWING): a dagger or a fist is quick and cheap, a sword a
+  // little more, an axe or a club dearer, a spear's two-handed thrust the dearest; a tool's swing costs what it always has
+  const SWING = { unarmed: 4, dagger: 4, sword: 5, axe: 6, mace: 6, spear: 7 }, swingCost = (d) => (d?.type === 'weapon' || !d ? SWING[d?.skill ?? 'unarmed'] : null) ?? 5;
   player.onStrike = () => {
     const slot = g.heldSlot(), item = slot ? ITEMS[slot.id] : null;
     const hitSomething = g.combat.strike(item) || g.harvest.strike(item) || false;

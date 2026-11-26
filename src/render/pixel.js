@@ -68,6 +68,9 @@ export const PX_LOOK = {
   // at the hero's density, twice the world's, as his armour is (hero-look.js), and as strong as the bark's furrows: the
   // user, 26 Nov, on the world's own six-centimetre texels, "on the armours, shields and weapons it is not really there")
   gear: { j: 0.46, b: 0.4, blot: 3, edge: 0.36, hue: 0.08, dense: 2 },
+  // (petals: the flowers, lavender and mushrooms of the ground cover, a head a few centimetres across: three times the
+  // world's density, so a petal is a few texels; brighter and darker texels and some warmer or cooler, as painted petals)
+  petal: { j: 0.44, b: 0.3, blot: 2, edge: 0.28, hue: 0.16, dense: 3 },
 };
 const PX_VERT = `#include <project_vertex>
   {

@@ -2,6 +2,10 @@
 // Over the limit you can still walk, but not run. Equipment (hands, armour) stays in its slot and is flagged as worn.
 import { ITEMS } from './items.js';
 
+// Worn, and so kept out of stacking, taking and merging: gear in a hand or on the body. The arrows chosen for the bow are
+// marked worn too (worn: 'ammo', game.js) but stay an ordinary pile: new arrows join it, and the bow looses from it
+const kept = (s) => !!s.worn && s.worn !== 'ammo';
+
 export const COLS = 10, ROWS = 4, MAX_WEIGHT = 300;
 // The number key of each hotbar slot: 1 to 9, then 0 for the tenth, as on the keyboard's top row
 export const hotKey = (i) => String((i + 1) % 10);
@@ -29,12 +33,12 @@ export class Inventory {
   // what's short of mats, said plainly: "Need 1 more wood, 2 more rope" (review: "Missing materials" never said what)
   need(mats) { const short = Object.entries(mats).map(([id, n]) => [id, n - this.count(id)]).filter(([, k]) => k > 0); return short.length ? 'Need ' + short.map(([id, k]) => `${k} more ${ITEMS[id].name.toLowerCase()}`).join(', ') : null; }
   // Room for n more of an item (stacking into existing piles first)
-  room(id) { const st = ITEMS[id].stack; let r = 0; for (const s of this.slots) r += !s ? st : s.id === id && !s.worn ? st - s.n : 0; return r; }
+  room(id) { const st = ITEMS[id].stack; let r = 0; for (const s of this.slots) r += !s ? st : s.id === id && !kept(s) ? st - s.n : 0; return r; }
   // Add n of an item; returns how many didn't fit
   add(id, n = 1, extra = {}) {
     const def = ITEMS[id]; if (!def) { console.warn('unknown item', id); return n; }
     const first = !this.seen.has(id); this.seen.add(id);
-    for (const s of this.slots) { if (n <= 0) break; if (s?.id === id && s.n < def.stack && !s.worn) { const k = Math.min(n, def.stack - s.n); s.n += k; n -= k; } }
+    for (const s of this.slots) { if (n <= 0) break; if (s?.id === id && s.n < def.stack && !kept(s)) { const k = Math.min(n, def.stack - s.n); s.n += k; n -= k; } }
     // new piles: the hotbar row first for tools and weapons, the pack (rows 2-4) first for everything else
     const order = [...this.slots.keys()]; if (!['tool', 'weapon', 'shield', 'food'].includes(def.type)) order.push(...order.splice(0, COLS));
     for (const i of order) { if (n <= 0) break; if (!this.slots[i]) { const k = Math.min(n, def.stack); this.slots[i] = { id, n: k, ...(def.dur ? { dur: def.dur } : {}), ...extra }; n -= k; } }
@@ -44,7 +48,7 @@ export class Inventory {
   // Take n of an item out (from the fullest piles last so stacks stay tidy); returns how many were taken
   take(id, n = 1) {
     let left = n;
-    for (let i = this.slots.length - 1; i >= 0 && left > 0; i--) { const s = this.slots[i]; if (s?.id === id && !s.worn) { const k = Math.min(left, s.n); s.n -= k; left -= k; if (s.n <= 0) this.slots[i] = null; } }
+    for (let i = this.slots.length - 1; i >= 0 && left > 0; i--) { const s = this.slots[i]; if (s?.id === id && !kept(s)) { const k = Math.min(left, s.n); s.n -= k; left -= k; if (s.n <= 0) this.slots[i] = null; } }
     if (left < n) this.onChange?.();
     return n - left;
   }
@@ -52,7 +56,7 @@ export class Inventory {
   // drag a → b: onto a pile of the same thing it tops that pile up; if nothing fits (a full pile, two axes) they swap
   move(a, b) {
     if (a === b) return; const A = this.slots[a], B = this.slots[b]; if (!A) return;
-    const k = B && B.id === A.id && !A.worn && !B.worn ? Math.min(A.n, ITEMS[A.id].stack - B.n) : 0;
+    const k = B && B.id === A.id && !kept(A) && !kept(B) ? Math.min(A.n, ITEMS[A.id].stack - B.n) : 0;
     if (k > 0) { B.n += k; A.n -= k; if (A.n <= 0) this.slots[a] = null; }
     else { this.slots[a] = B; this.slots[b] = A; }
     this.onChange?.();

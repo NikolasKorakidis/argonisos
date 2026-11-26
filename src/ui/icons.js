@@ -39,6 +39,9 @@ Object.assign(ICONS, {
   spear: ln('M8 58 L48 18', K, 4) + fill('M44 14 L58 4 L54 22 L48 20z') + inc('M50 14 L55 8', 1.2) + `<rect x="38" y="24" width="7" height="5" fill="${R}" transform="rotate(-45 41 26)"/>`,
   shield: circ(32, 32, 24) + ln('M32 8 m-24 24 a24 24 0 1 0 48 0 a24 24 0 1 0 -48 0', G, 2.4) + circ(32, 32, 7, R) + inc('M32 14 v8 M32 42 v8 M14 32 h8 M42 32 h8', 1.4),
   towerShield: fill('M14 6 h36 v40 q-6 12 -18 14 q-12 -2 -18 -14z') + inc('M20 12 h24 v32 q-4 9 -12 11 q-8 -2 -12 -11z', 1.4) + circ(32, 28, 5, R),
+  // (the pelta: a crescent cut from a round hide shield, its rim pale lightstone; a leaf-bladed sword, the blade pale)
+  pelta: fill('M12 14 q-8 18 2 36 q10 12 26 10 q14 -4 18 -18 q2 -14 -6 -24 q-8 8 -20 8 q-12 0 -20 -12z') + ln('M12 14 q-8 18 2 36 q10 12 26 10 q14 -4 18 -18 q2 -14 -6 -24 q-8 8 -20 8 q-12 0 -20 -12z', C, 2.4) + circ(32, 38, 5, R),
+  swordLight: fill('M50 8 L56 14 L28 44 L22 40z', C) + ln('M50 8 L56 14 L28 44 L22 40z', K, 1.8) + ln('M16 34 L32 50', K, 4.5) + ln('M22 44 L12 54', K, 5) + circ(10, 56, 3.4, G),
   arrow: ln('M8 56 L50 14', K, 3) + fill('M46 10 L58 6 L54 18z') + fill('M8 56 l-2 -10 l8 6z M8 56 l10 2 l-6 -8z', R),
   helmet: fill('M10 40 q0 -28 22 -30 q22 2 22 30 v8 h-10 v-12 q-4 -4 -12 -4 q-8 0 -12 4 v12 h-10z') + fill('M26 10 q6 -8 14 -4 q-4 2 -6 8z', R) + inc('M16 34 q16 -8 32 0', 1.4),
   armor: fill('M14 10 l10 -2 q8 6 16 0 l10 2 l6 14 l-8 4 v26 h-32 v-26 l-8 -4z') + inc('M24 26 h16 M22 34 h20 M22 42 h20', 1.3) + fill('M26 8 q6 6 12 0 l-2 6 q-4 2 -8 0z', R),
@@ -70,7 +73,7 @@ Object.assign(ICONS, {
   repair: ln('M16 54 L40 30', K, 6) + fill('M36 14 a12 12 0 1 0 14 14 l-8 -2 l-4 -4 z') + inc('M20 50 L38 32', 1),
 });
 // items with a model of their own share their kind's drawing
-for (const [k, of] of Object.entries({ axeLight: 'axe', daggerLight: 'dagger', spearLight: 'spear', cretanBow: 'bow', dandelion: 'flower', moonflower: 'flower', oliveScrap: 'scroll', caveCarving: 'scroll',
+for (const [k, of] of Object.entries({ arrowLight: 'arrow', axeLight: 'axe', daggerLight: 'dagger', spearLight: 'spear', cretanBow: 'bow', dandelion: 'flower', moonflower: 'flower', oliveScrap: 'scroll', caveCarving: 'scroll',
   spoiledMeat: 'spoiled', spoiledFish: 'spoiled', throwerHelmet: 'helmet', cretanHelmet: 'helmet', corinthianHelmet: 'helmet', throwerArmor: 'armor', cretanArmor: 'armor', corinthianArmor: 'armor', throwerLegs: 'legs', cretanLegs: 'legs', corinthianLegs: 'legs',
   ...Object.fromEntries(['fox', 'deer', 'rabbit', 'boar', 'giant', 'minotaur', 'chimera'].map((a) => [a + 'Hide', 'hide'])) })) ICONS[k] = ICONS[of];
 

@@ -115,6 +115,22 @@ export const STONE_GLSL = `uniform sampler2D uStoneTex, uWoods; uniform float uW
   // unit of p (render/pixel.js), for the colour
   vec4 stoneTri(vec3 p, vec3 w) { return texture2D(uStoneTex, p.zy) * w.x + texture2D(uStoneTex, p.xz + 0.31) * w.y + texture2D(uStoneTex, p.xy + 0.67) * w.z; }
   vec4 stoneTriP(vec3 p, vec3 w, float k) { return pixelTex(uStoneTex, p.zy, k) * w.x + pixelTex(uStoneTex, p.xz + 0.31, k) * w.y + pixelTex(uStoneTex, p.xy + 0.67, k) * w.z; }
+  // The texels' own tones on stone (the reviewer, 26 Nov: no texels seen on the boulders): the stone's own texture is
+  // smooth over a texel, its slabs a metre and more across, its grain faint, so snapped to texels it barely stepped; each
+  // texel is given a tone of its own as the bark's and the gear's are (render/pixel.js pxSurface), over patches of three
+  // tones with darker texels along their edges, like chips and cracks, on the face of the box the facet turns to most
+  // (fN, the facet's own normal), the mean kept. 1 with the Pixel texture off, and where a texel would come under a pixel
+  // or two.
+  float stH(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+  float stV(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(stH(i), stH(i + vec2(1.0, 0.0)), f.x), mix(stH(i + vec2(0.0, 1.0)), stH(i + vec2(1.0, 1.0)), f.x), f.y); }
+  float stoneTexels(vec3 p, vec3 fN) {
+    if (uTexel <= 0.0) return 1.0;
+    vec3 a = abs(fN); vec2 q = a.x > a.y && a.x > a.z ? p.zy : a.y > a.z ? p.xz + 0.37 : p.xy + 0.71;
+    float s = pixelK(q, vec2(uTexel)); if (s <= 0.0) return 1.0;
+    vec2 cell = mod(floor(q * uTexel), 4096.0);
+    float L = floor(stV((cell + 0.5) / 4.0) * 3.0), e = L != floor(stV((cell + vec2(1.5, 0.5)) / 4.0) * 3.0) || L != floor(stV((cell + vec2(0.5, 1.5)) / 4.0) * 3.0) ? 1.0 : 0.0;
+    return mix(1.0, (1.0 + 0.5 * (stH(cell + 7.7) - 0.5) + 0.44 * (L - 1.0) * 0.5) * (1.0 - 0.4 * e) / (1.0 - 0.4 * 0.25), s);
+  }
 `;
 const FRAG_PARS = `varying vec3 vStoneP, vStoneN; varying float vStoneS, vStoneH;
   #ifdef STONE_EDGES
@@ -155,6 +171,7 @@ const FRAG = `#include <color_fragment>
     float m = smoothstep(1.0 - cover, 1.16 - cover, sc.b * 0.6 + fc.b * 0.25 + broad * 0.15 + (up - 0.5) * 0.4 + (clamp(vStoneH, 0.0, 1.5) - 0.6) * 0.3) * smoothstep(0.0, 0.55, up + (fc.b - 0.5) * 0.5);
     vec3 lich = vec3(l0 * (0.82 + 0.3 * fc.g)) * mix(vec3(1.2, 1.17, 0.96), vec3(0.52, 0.86, 0.28), wood);   // (over the cracks: it grows across them)
     c = mix(c, lich, m * mix(0.75, 1.0, wood));
+    c *= stoneTexels(p, fN);   // (the moss and lichen in texels with the rest)
     float mr = smoothstep(1.0 - cover, 1.16 - cover, s.b * 0.6 + f.b * 0.25 + texture2D(uStoneTex, vStoneP.xz / 17.0 + sd).a * 0.15 + (up - 0.5) * 0.4 + (clamp(vStoneH, 0.0, 1.5) - 0.6) * 0.3) * smoothstep(0.0, 0.55, up + (f.b - 0.5) * 0.5);   // (the lichen from the smooth look, for the relief: from the texels it would step, and the light with it)
     diffuseColor.rgb = c;
     stoneRelief = (s.g * 0.6 + f.g * 0.5 + seam * 0.4) * near * (1.0 - mr * 0.5);

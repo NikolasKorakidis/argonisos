@@ -11,7 +11,7 @@ const TIER_HINT = ['', 'Offer the Minotaur\'s head to learn this', 'Offer the Ch
 const TIER_KEY = ['', 'minotaurHead', 'chimeraHead'];   // (holding the head shows what offering it will teach)
 const BATCH = 5;   // (Shift-click, or the ×5 button: that many at once, or as many as you can)
 // what each thing is used in (recipes and pieces), for the pack's info and the crafting panel
-const USED = {}; for (const r of [...RECIPES, ...PIECES]) for (const m of Object.keys(r.mats)) (USED[m] ||= new Set()).add(ITEMS[r.id]?.name ?? r.name);
+const USED = {}; for (const r of [...RECIPES, ...PIECES.filter((q) => !q.free)]) for (const m of Object.keys(r.mats)) (USED[m] ||= new Set()).add(ITEMS[r.id]?.name ?? r.name);
 export const usedIn = (id) => [...(USED[id] || [])];
 // What a crafted thing breaks down into (Shift + right-click in the pack, crafting's undoing): its first recipe, made for gear only.
 // Materials are left out, since several are made from each other (wood from a branch, rope from leather) and breaking
@@ -67,7 +67,8 @@ export class Crafting {
   }
   list() {
     const out = RECIPES.map((r) => ({ key: r.id + (r.n ? 'x' + r.n : ''), id: r.id, name: ITEMS[r.id].name + (r.n > 1 ? ` ×${r.n}` : ''), icon: ITEMS[r.id].icon, mats: r.mats, at: r.at || null, tier: r.tier || 0, n: r.n || 1, kind: 'item' }));
-    for (const p of this.g.build?.pieces || []) out.push({ key: 'b:' + p.id, id: p.id, name: p.name, icon: p.icon, mats: p.mats, at: null, tier: p.tier || 0, n: 1, kind: 'piece', cat: p.cat });
+    for (const p of this.g.build?.pieces || []) if (!p.free) out.push({   // (the packs' pieces on trial are the hammer menu's alone, with Free build on: pieces.js packDef)
+      key: 'b:' + p.id, id: p.id, name: p.name, icon: p.icon, mats: p.mats, at: null, tier: p.tier || 0, n: 1, kind: 'piece', cat: p.cat });
     return out;
   }
   // Why a recipe can't be made right now (null if it can)
@@ -99,7 +100,7 @@ export class Crafting {
   // at a time (a batch for what is made several at once: ten arrows). What it gives, or why it can't be broken down
   salvage(i) {
     const s = this.g.inv.slots[i], r = s && BREAKS.get(s.id); if (!r) return 'Only crafted gear can be broken down';
-    if (s.worn) return 'Take it off before you break it down';
+    if (s.worn && s.worn !== 'ammo') return 'Take it off before you break it down';   // (the arrows chosen for the bow are only a pile)
     const n = r.n || 1; if (s.n < n) return `Needs ${n} to break down`;
     return { id: s.id, n, mats: Object.fromEntries(Object.entries(r.mats).map(([m, k]) => [m, Math.max(1, Math.floor(k / 2))])) };
   }
