@@ -269,7 +269,7 @@ const clumpCarpet = (geo, map, tall) => {
     // and shade of its blades; and its cut-out kept as solid in the distance as near (the picture's smaller copies blur
     // the edges into half-seen, which a cut-out drops: the clumps would thin away with distance)
     // (the picture looked up in texels on the card, and the colour up it in steps as the blades' are: render/pixel.js)
-    sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; uniform float uPxMap; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n${PIXEL_GLSL}\nvec2 pxMapK = vec2(0.0); float pxMapS = 0.0;\n${BLADE_PX}\n` + sh.fragmentShader
+    sh.fragmentShader = `uniform vec3 uBaseA, uBaseB, uTipA, uTipB, uSunDir, uSunCol; uniform float uPxMap; varying float vGH, vVar, vShade, vGust, vTall; varying vec3 vWorld;\n${PIXEL_GLSL}\nvec2 pxMapK = vec2(0.0); float pxMapS = 0.0;\n#define PX_DENSE 1.0\n${BLADE_PX}\n` + sh.fragmentShader
       .replace(UNFLIP.from, UNFLIP.to)
       .replace('#include <map_fragment>', pxMapChunk('vWorld'))
       .replace('#include <alphatest_fragment>', `{ vec2 ts = vec2(textureSize(map, 0)), du = dFdx(vMapUv) * ts, dv = dFdy(vMapUv) * ts; diffuseColor.a *= 1.0 + max(0.0, 0.5 * log2(max(dot(du, du), dot(dv, dv)))) * 0.25; }
