@@ -10,7 +10,7 @@
 const N = 128, CELL = 1, HALF = (N * CELL) / 2;
 // what a step costs: through a blocked cell (taken only to get out of one: a hunter pressed against a rock, or you, hiding
 // right up against it, where its body can't be) and beside something (within the margin)
-const SOFT = 30, NEAR = 1.6, DIAG = Math.SQRT2;
+const SOFT = 30, NEAR = 1.6, DIAG = Math.SQRT2, ESCAPE = 1.5;
 const DI = [1, -1, 0, 0, 1, 1, -1, -1], DJ = [0, 0, 1, -1, 1, -1, 1, -1];
 
 export class NavGrid {
@@ -77,10 +77,13 @@ export class NavGrid {
     const w = best >= 0 ? best : first; if (w < 0) return 0;
     out.x = this.cx(w); out.z = this.cz(w); return 1;
   }
-  // a straight line from (x, z) to cell c's middle over free cells (the blocked cells it starts in, if it does, don't count)
+  // a straight line from (x, z) to cell c's middle over free cells (the blocked cells it starts in, if it does, don't count,
+  // for its first ESCAPE metres: a giant brushing a brazier stands in its blocked ring, and that ring ran on unbroken into
+  // a column's beside it, so a line through the gap between them, too narrow for him, passed as open and he pressed into
+  // it until he had to be shouldered free, again and again: the chase test, 26 Nov)
   sees(x, z, c) {
-    const B = this.block, ex = this.cx(c), ez = this.cz(c), dx = ex - x, dz = ez - z, steps = Math.ceil(Math.max(Math.abs(dx), Math.abs(dz)) / (CELL * 0.5)); let start = true;
-    for (let s = 1; s <= steps; s++) { const k = this.cell(x + (dx * s) / steps, z + (dz * s) / steps); if (k < 0) return false; if (B[k] === 2) { if (!start) return false; } else start = false; }
+    const B = this.block, ex = this.cx(c), ez = this.cz(c), dx = ex - x, dz = ez - z, steps = Math.ceil(Math.max(Math.abs(dx), Math.abs(dz)) / (CELL * 0.5)), far = ESCAPE / (CELL * 0.5); let start = true;
+    for (let s = 1; s <= steps; s++) { const k = this.cell(x + (dx * s) / steps, z + (dz * s) / steps); if (k < 0) return false; if (B[k] === 2) { if (!start || s > far) return false; } else start = false; }
     return true;
   }
   // (an indexed binary heap of cells by their cost so far)

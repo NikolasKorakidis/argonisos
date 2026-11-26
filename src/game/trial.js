@@ -351,7 +351,7 @@ export class Trial {
     if (c.rest > 0) return null;
     if (c.type === 'minotaur') {
       const M = MOVE, can = { roar: cd.roar <= 0 && d < M.roar.r - 2, slam: cd.slam <= 0 && d < 10 && front && clear, sweep: cd.sweep <= 0 && d < M.sweep.reach + 0.5 && front && clear,
-        charge: cd.charge <= 0 && d > 13 && d < 46 && clear, throw: cd.throw <= 0 && d > 17 && clear };   // (behind a boulder or a wall you are out of reach of all but his roar: nav.js brings him round to you)
+        charge: cd.charge <= 0 && d > 13 && d < 46 && clear && g.creatures.clearTo(c, toP, T.r + 6) >= T.r + 5.5, throw: cd.throw <= 0 && d > 17 && clear };   // (behind a boulder or a wall you are out of reach of all but his roar: nav.js brings him round to you; a charge needs room for his breadth too)
       const next = c.next; c.next = null;
       for (const k of next && can[next] ? [next] : ['roar', 'slam', 'sweep', 'charge', 'throw']) if (can[k]) { cd[k] = rr(...M[k].cd); return start(k, k === 'charge' ? M.charge.paw[c.enraged ? 1 : 0] : M[k].t, k === 'charge' ? { dir: toP } : {}); }
     } else if (c.type === 'chimera') {
@@ -370,8 +370,9 @@ export class Trial {
   // a move's timing: from its clip, if it has one (t: the wind-up, hit: when it lands, dur: when it's over), or t for all
   timed(c, k, t) { const q = c.body.cue?.(k); return q ? { t: q.hit, hit: q.hit, dur: q.dur } : { t, hit: t, dur: t }; }
   // nothing solid between the boss and you (a wall, a column, a tree)
-  // (not the rubble of a ruin, which a giant strides over, nor the trees it tramples)
-  clearLine(c, d) { const P = this.g.player.pos, dx = (P.x - c.pos.x) / Math.max(d, 0.01), dz = (P.z - c.pos.z) / Math.max(d, 0.01); return !this.g.colliders.pick(c.pos.x + dx * c.T.r, c.pos.z + dz * c.T.r, dx, dz, Math.max(0.1, d - c.T.r - 0.8), SOLID); }
+  // (not the rubble of a ruin, which a giant strides over, nor the trees it tramples). From his middle, as the charge's
+  // crash is found: a brazier or a column right against his chest stood inside a line begun at his front
+  clearLine(c, d) { const P = this.g.player.pos, dx = (P.x - c.pos.x) / Math.max(d, 0.01), dz = (P.z - c.pos.z) / Math.max(d, 0.01); return !this.g.colliders.pick(c.pos.x, c.pos.z, dx, dz, Math.max(0.1, d - 0.8), SOLID); }
   // One step of a move: wind-up (ph 0), then the move itself (ph 1), sometimes more (a charge's crash or skid). over(big):
   // the move is done; a big one tires the boss, and it stands a moment before the next (c.rest), or goes straight into
   // the move it was leading up to (c.next: a roar into a charge or a slam; enraged, a slam into a sweep)
@@ -436,7 +437,12 @@ export class Trial {
           c.ctl = { want: 0, face: toP, turn: 1 }; m.dir = c.yaw;
           if (Math.floor(m.e * 3.5) !== m.dust) { m.dust = Math.floor(m.e * 3.5); const p = at(0.2).addScaledVector(fwd(), -T.r * 0.6); dust(p, 7, 0x9a8a70, 0.7); burst(p, { color: 0x6e604e, n: 5, speed: 3, size: 0.15, up: 3 }); g.sound?.('giantStep', { at: p, k: 0.5 }); }
           if (!m.snd) { m.snd = true; g.sound?.('snort', { at: c.pos }); setTimeout(() => this.boss === c && g.sound?.('snort', { at: c.pos }), 650); }
-          if (m.t <= 0) { m.ph = 1; m.v = 2; m.run = 0; m.from = c.pos.clone(); g.sound?.('charge', { at: c.pos, dur: C.top[en] / C.acc + 1 }); } return 'paw';
+          // (he runs only once he faces you with nothing right before him: turned slowly round from a brazier or a column
+          // he stood against, he charged straight into it, crashed at once and was spent, again and again, never reaching
+          // you. Still turning, he paws a moment longer; facing you with no clear run, he gives it up, unspent)
+          if (m.t <= 0) { const facing = Math.abs(angDiff(toP, c.yaw)) < 0.35, open = g.creatures.clearTo(c, c.yaw, T.r + 6) >= T.r + 5.5;   // (his whole breadth: creatures.js)
+            if (!(facing && open)) return facing || m.t < -1.2 ? over(false) : 'paw';
+            m.ph = 1; m.v = 2; m.run = 0; m.from = c.pos.clone(); g.sound?.('charge', { at: c.pos, dur: C.top[en] / C.acc + 1 }); } return 'paw';
         }
         if (m.ph === 1) {   // the charge: gathering speed over a few strides to its top, turning less and less as it goes (and not at all once you're past his shoulder)
           m.run += dt; const top = C.top[en]; m.v = Math.min(top, m.v + C.acc * dt);
@@ -445,7 +451,10 @@ export class Trial {
           const dx = P.pos.x - c.pos.x, dz = P.pos.z - c.pos.z, ahead = dx * Math.sin(m.dir) + dz * Math.cos(m.dir), side = Math.abs(dx * Math.cos(m.dir) - dz * Math.sin(m.dir));
           if (!m.gored && !P.dead && m.v > 4 && ahead > -1 && ahead < T.r + C.horns && side < T.r * 0.5 + C.wide) { const r = g.combat.hitPlayer(c, C.dmg); if (r !== 'dodged') m.gored = true; }   // (the ram's gore: docs/plans/balance.md)
           const wall = g.colliders.pick(c.pos.x, c.pos.z, Math.sin(m.dir), Math.cos(m.dir), T.r + 1.2, SOLID);
-          if (m.run > 0.25 && (wall || c.stuck > 0.2)) {   // straight into a wall: a crash you feel, stones flying, and he reels, dazed
+          // (held up: going under a third of the pace he runs at. creatures.js's stuck counts anything under 3 m/s, and a
+          // charge sets off at 2: setting off with a shoulder brushing a brazier, he read as crashed and was spent at once)
+          const moved = m.lx === undefined ? Infinity : Math.hypot(c.pos.x - m.lx, c.pos.z - m.lz); m.lx = c.pos.x; m.lz = c.pos.z; m.jam = moved < m.v * dt * 0.3 ? (m.jam || 0) + dt : 0;
+          if (m.run > 0.25 && (wall || m.jam > 0.2)) {   // straight into a wall: a crash you feel, stones flying, and he reels, dazed
             const p = at(3).addScaledVector(fwd(), T.r + 0.5), k0 = near(c.pos);
             m.ph = 2; m.t = 1.1; FX.crashFx(p, at(0.1).addScaledVector(fwd(), T.r)); addShake(0.6 + 0.4 * k0); punch(0.9 * k0 + 0.2, { x: P.pos.x - p.x, z: P.pos.z - p.z }); g.sound?.('slam', { at: p, big: true }); g.sound?.('collapse', { at: p, k: 1.2 }); dust(p, 20, 0x7a6c5c, 1.1); burst(p, { color: 0x8f8678, n: 36, speed: 9, size: 0.35, grav: 14, up: 6 }); spark(p, 10);
             return 'dazed';

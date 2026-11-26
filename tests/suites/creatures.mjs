@@ -50,21 +50,26 @@ export default {
       if (R.falls.length || !R.fallenG.visible || !R.debrisG.visible) return 'the collapse never settled: ' + R.falls.length + ' falling';
       const L = g.structures.lab, a = new V(L.c.x + 20, 0, L.c.z), b2 = new V(L.c.x + 3, 0, L.c.z); return g.structures.navTarget(a, b2) === null || 'still routing through the gaps';`);
     // the chase: the player held at points about the arena, each in turn; how long he takes to reach each (within the
-    // reach of his slam: he walks at a giant's 4.5 m/s and stops for his moves and when he's spent, so up to 25 s), and the
-    // longest he stood stuck while chasing (wanting to come on, no move under way, but not moving)
+    // reach of his slam), and the longest he stood stuck while chasing (wanting to come on, no move under way, but not
+    // moving). He walks at a giant's 4.5 m/s, but his moves are the fight's own pace: held somewhere new, you find him
+    // mid-charge, then spent for 4-5 s and bellowing 2 s, maybe a war cry or a throw on the way (over 15 s of a point's
+    // time, measured, 26 Nov), so a point may take up to 35 s; the time he was free to come (no move under way: free)
+    // is what the way he finds decides, and that must stay under 15 s. (A charge set off against a brazier crashed at once
+    // and spent him, over and over: that's what kept a point past 25 s. trial.js runMove)
     const chase = await t.eval(`const c = g.trial.boss, u = window._u, L = g.structures.lab, out = [], wait = (ms) => new Promise((r) => setTimeout(r, ms)); if (!c) return 'boss gone';
       let worst = 0, stuck = 0, last = c.pos.clone(); const iv = setInterval(() => { const d = c.pos.distanceTo(P.pos), moved = Math.hypot(c.pos.x - last.x, c.pos.z - last.z); last.copy(c.pos);
         if (c.state === 'chase' && !c.move && !(c.intro > 0) && c.fall === undefined && d > c.T.reach + c.T.r + 1 && moved < 0.05) stuck += 0.1; else stuck = 0; worst = Math.max(worst, stuck); }, 100);
       for (const [r, a] of [[19, 0.4], [12, 2.2], [17, 3.6], [6, 5.0], [20, 1.3]]) {
         const x = L.c.x + Math.cos(a) * r, z = L.c.z + Math.sin(a) * r, pin = setInterval(() => { P.pos.set(x, P.pos.y, z); P.hv.set(0, 0, 0); P.stats.health = 99; }, 50); P.spawn(x, z);
-        const t0 = performance.now(); let got = false; while (performance.now() - t0 < 25000) { if (c.pos.distanceTo(P.pos) < c.T.reach + c.T.r + 3.5) { got = true; break; } await wait(100); }
-        clearInterval(pin); out.push({ r, a, s: +((performance.now() - t0) / 1000).toFixed(1), got });
+        const t0 = performance.now(); let got = false, free = 0, crashes = 0, was = null; while (performance.now() - t0 < 35000) { if (c.pos.distanceTo(P.pos) < c.T.reach + c.T.r + 3.5) { got = true; break; } if (!c.move && c.state === 'chase') free += 0.1;
+          if (c.move?.k === 'charge' && c.move.ph === 2 && was !== c.move) { was = c.move; crashes++; } await wait(100); }
+        clearInterval(pin); out.push({ r, a, s: +((performance.now() - t0) / 1000).toFixed(1), free: +free.toFixed(1), crashes, got });
       }
       clearInterval(iv); return { out, worst: +worst.toFixed(1) };`);
     if (typeof chase === 'string') t.check('the chase', false, chase);
     else {
       t.metric('the chase across the broken Labyrinth (each point: seconds to reach it)', chase);
-      t.check('after the collapse he reaches you anywhere in the arena, within 25 s each time', chase.out.every((q) => q.got), JSON.stringify(chase.out));
+      t.check('after the collapse he reaches you anywhere in the arena, within 35 s each time and under 15 s of it free to come', chase.out.every((q) => q.got && q.free <= 15), JSON.stringify(chase.out));
       t.check('…and is never stuck for more than 2 s', chase.worst <= 2, `${chase.worst} s stuck`);
     }
     // The arena he leaves (the user, 25 Nov: half fallen, the maze pinned him and his dead in its corridors and the fight
