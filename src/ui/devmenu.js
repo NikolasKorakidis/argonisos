@@ -39,7 +39,7 @@ export function devMenu(g) {
         <div class="row"><button class="btn small ghost" id="dvHeal">Full heal</button></div>`)}
     </div>
     <div class="pane" data-pane="items">
-      ${sect('Crafting', `<div class="set"><span>Free crafting and building <small>every piece and recipe unlocked: no costs, stations, roofs or tiers</small></span><button class="btn small" data-t="free"></button></div>`)}
+      ${sect('Crafting', `<div class="set"><span>Free crafting and building <small>every piece and recipe unlocked: no costs, stations, roofs or tiers; and every building piece of the RPGPP, Vikings and Ancient Empire packs, on trial, in tabs of their own in the hammer's menu</small></span><button class="btn small" data-t="free"></button></div>`)}
       ${sect('Kits', `<div class="row">${Object.keys(KITS).map((k) => `<button class="btn small ghost" data-kit="${k}">${{ tools: 'Tool kit', best: 'Best gear', mats: 'Materials ×50', food: 'Food', tribute: 'Both tributes' }[k]}</button>`).join('')}</div>`)}
       ${sect('Any item', `<div class="row"><select id="dvItem">${items.map((d) => `<option value="${d.id}">${d.name} (${d.type})</option>`).join('')}</select><button class="btn small" data-give="1">+1</button><button class="btn small" data-give="10">+10</button><button class="btn small" data-give="stack">Stack</button></div>
         <div class="row"><button class="btn small ghost" id="dvClear">Empty pack</button></div>`)}

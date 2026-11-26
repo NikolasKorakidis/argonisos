@@ -9,6 +9,7 @@ import { wettable } from '../world/wetness.js';
 import { stony } from '../world/rock.js';
 import { wetKept } from '../world/wood.js';
 import { pixelate } from '../render/pixel.js';
+import { PACK_PIECES } from './pack-pieces.js';
 
 // ---- materials: painted planks, rough beams, golden thatch
 function canvasTex(w, h, draw, repeat = [1, 1]) {
@@ -225,6 +226,64 @@ function stairs(rise, run) {
   for (let i = 0; i < n; i++) P.push(part(box(1.8, 0.08, run / n + 0.06, 0, (i + 1) * (rise / n) - 0.04, -(i + 0.5) * (run / n)), MAT.plank));
   return P;
 }
+// ---- The three building packs' pieces (RPGPP_AG, Synty Vikings, Synty Ancient Empire), every one of them, for the
+// reviewer to try and choose from (26 Nov): shown and learned only with the dev tools' Free build on (free: crafting.js
+// leaves them out of what can be learned, buildmenu.js of the menu without it), each pack in tabs of its own. Measured
+// and fitted to our grid by tools/assets/pack-pieces.mjs (pack-pieces.js); here each gets what our own pieces of its
+// kind have, by its template: snap points, solids, surfaces to stand on, shelter. Their models load when first wanted
+// (kit.js loadPackLook); until then, and for aiming always, the carved shape: their solids and surfaces as boxes.
+// kind: which of our pieces it builds like (build.js: walls stand on the ground and raise it, floors are laid on it,
+// fences follow it); free: goes on any face where you aim (trims, windows, ornaments); frame: a doorway {ox, ow, oh}
+const PK = { wall: 'Walls', tri: 'Walls', door: 'Walls', gable: 'Roofs', trim: 'Roofs', roof: 'Roofs', ridge: 'Roofs', rafter: 'Roofs', floor: 'Floors', deck: 'Floors', stairs: 'Floors', fence: 'Fences' };
+const PICON = { wall: 'wall', tri: 'roofEnd', gable: 'roofEnd', trim: 'roofEnd', roof: 'roof', ridge: 'roof', rafter: 'roof', floor: 'floor', deck: 'floor', stairs: 'stairs', ladder: 'stairs', fence: 'fence', door: 'door', block: 'wall', canopy: 'roof' };
+const PHP = { wall: 800, tri: 400, gable: 400, trim: 200, roof: 400, ridge: 600, rafter: 300, floor: 800, deck: 600, stairs: 600, post: 300, ladder: 150, beam: 300, fence: 300, door: 800, block: 1500, canopy: 400 };
+// a wall's solids round a doorway: the posts either side and the lintel over it (x0..x1 the wall, h its height)
+const around = (x0, x1, h, [ox, ow, oh]) => [[(x0 + ox - ow / 2) / 2, h / 2, 0, ox - ow / 2 - x0, h, T + 0.1], [(ox + ow / 2 + x1) / 2, h / 2, 0, x1 - ox - ow / 2, h, T + 0.1], [ox, (oh + h) / 2, 0, ow, h - oh, T + 0.1]].filter((b) => b[3] > 0.05 && b[4] > 0.05);
+const flat = (w, d, y) => ({ x0: -w / 2, x1: w / 2, z0: -d / 2, z1: d / 2, y });
+const grid9 = (w, d, y) => [-1, 0, 1].flatMap((i) => [-1, 0, 1].map((k) => [(i * w) / 2, y, (k * d) / 2]));
+function packDef([id, file, cat, name, tpl, turn, fit, p, m, x]) {
+  x ||= {};
+  const d = { id, name, cat, kind: PK[tpl] || 'Beams', icon: PICON[tpl] || 'beam', mats: m === 's' ? { stone: 2 } : { wood: 2 }, hp: PHP[tpl] || 100, free: true, pack: { file, tpl, turn, box: fit, m, half: !!x.half }, solids: [] };
+  const [w, h] = p, by1 = fit[3];
+  switch (tpl) {
+    case 'wall': d.w = w; d.snaps = corners(w, h); d.solids = x.open ? around(-w / 2, w / 2, h, x.open) : [[0, h / 2, 0, w, h, T + 0.1]]; if (x.open) { d.frame = { ox: x.open[0], ow: x.open[1], oh: x.open[2] }; d.snaps.push([x.open[0] - x.open[1] / 2, 0, 0], [x.open[0] + x.open[1] / 2, 0, 0]); } break;
+    case 'tri': d.w = w; d.snaps = [[-w / 2, 0, 0], [w / 2, 0, 0], [0, 0, 0], [w / 2, h, 0], [w / 2, h / 2, 0]]; d.solids = [[w / 6, h * 0.3, 0, (w * 2) / 3, h * 0.6, T + 0.1]]; d.veil = veil(-w / 2, w / 2, w / 2, h); break;
+    case 'gable': case 'trim': {
+      const half = x.half, s = w, r = h;
+      d.snaps = half ? [[-s / 2, 0, 0], [s / 2, 0, 0], [0, 0, 0], [s / 2, r, 0]] : [[-s / 2, 0, 0], [s / 2, 0, 0], [0, 0, 0], [0, r, 0], ...(s > 3.5 ? [[-s / 2 + 3, 0, 0], [s / 2 - 3, 0, 0]] : [])];
+      if (tpl === 'gable' && !x.frame) { d.solids = x.open ? around(-s * 0.33, s * 0.33, r * 0.66, x.open) : [[0, r / 3, 0, s * 0.66, r * 0.66, T + 0.1]]; d.veil = veil(-s / 2, s / 2, 0, r); if (x.open) d.frame = { ox: x.open[0], ow: x.open[1], oh: x.open[2] }; }
+      break;
+    }
+    case 'roof': case 'rafter': { const [, run, rise] = p, off = Math.min(0.25, (by1 - rise) * 0.8 + 0.02); d.snaps = [[-w / 2, 0, 0], [w / 2, 0, 0], [0, 0, 0], [-w / 2, rise, -run], [w / 2, rise, -run], [0, rise, -run]]; d.roofPitch = Math.atan2(rise, run);
+      if (tpl === 'roof') { d.tops = [{ x0: -w / 2, x1: w / 2, z0: 0, z1: -run, y0: off, y1: rise + off }]; d.roof = true; } break; }
+    case 'ridge': { const [, span, rise] = p, off = x.frame ? 0 : Math.min(0.25, (by1 - rise) * 0.8 + 0.02); d.snaps = [-w / 2, w / 2, 0].flatMap((sx) => [[sx, 0, 0], [sx, 0, -span], [sx, rise, -span / 2]]);
+      if (!x.frame) { d.tops = [{ x0: -w / 2, x1: w / 2, z0: 0, z1: -span / 2, y0: off, y1: rise + off }, { x0: -w / 2, x1: w / 2, z0: -span / 2, z1: -span, y0: rise + off, y1: off }]; d.roof = true; } break; }
+    case 'floor': d.snaps = grid9(w, h, 0); d.tops = [flat(w, h, 0)]; d.roof = true; break;
+    case 'deck': d.snaps = [...grid9(w, h, 0), [0, p[2], 0], ...[-1, 1].flatMap((i) => [-1, 1].map((k) => [(i * w) / 2, p[2], (k * h) / 2]))]; d.tops = [flat(w, h, 0)]; break;
+    case 'stairs': { const [sw, run, rise] = p; d.snaps = [[-sw / 2, 0, 0], [sw / 2, 0, 0], [-sw / 2, rise, -run], [sw / 2, rise, -run], [0, 0, 0], [0, rise, -run]]; d.aimAt = [[0, 0, 0], [0, rise, -run]]; d.tops = [{ x0: -sw / 2, x1: sw / 2, z0: 0, z1: -run, y0: 0, y1: rise }]; break; }
+    case 'post': case 'ladder': d.snaps = [[0, 0, 0], [0, w, 0], [0, w / 2, 0]]; d.solids = [[0, w / 2, 0, Math.max(0.2, p[1]), w, Math.max(0.2, p[2])]]; break;
+    case 'beam': d.snaps = [[-w / 2, 0, 0], [w / 2, 0, 0], [0, 0, 0]]; d.tops = [{ x0: -w / 2, x1: w / 2, z0: -p[2] / 2, z1: p[2] / 2, y: p[1] / 2 }]; break;
+    case 'fence': d.snaps = [[-w / 2, 0, 0], [w / 2, 0, 0], [-w / 2, h, 0], [w / 2, h, 0]]; d.solids = [[0, h / 2, 0, w, h, 0.2]]; break;
+    case 'door': d.door = { w, h }; d.snaps = [[0, 0, 0], [w, 0, 0]]; d.solids = [[w / 2, h / 2, 0, w, h, 0.12]]; break;
+    case 'block': case 'canopy': {
+      const [bw, bh, bd] = p; d.snaps = [0, bh].flatMap((y) => [[0, y, 0], ...grid9(bw, bd, y).filter((q) => q[0] || q[2])]);
+      if (tpl === 'block') { d.solids = [[0, bh / 2, 0, bw, bh, bd]]; d.tops = [flat(bw, bd, bh)]; }
+      else { d.solids = [-1, 1].flatMap((i) => [-1, 1].map((k) => [i * (bw / 2 - 0.15), bh / 2, k * (bd / 2 - 0.15), 0.3, bh, 0.3])); if (x.walk || x.roof) d.tops = [flat(bw, bd, bh)]; d.roof = !!x.roof; }
+      break;
+    }
+    default: {   // trims: centred on where you aim, their back against the face (build.js placeGhost)
+      const [sx, sy, sz] = p; d.snaps = [[0, 0, 0], [0, -sy / 2, 0]]; d.solids = [[0, 0, 0, Math.max(sx, 0.1), Math.max(sy, 0.1), Math.max(sz, 0.06)]];
+      d.pack.box = [-sx / 2, sx / 2, -sy / 2, sy / 2, -sz / 2, sz / 2];
+    }
+  }
+  // (the carved stand-in: its solids and surfaces as boxes; a frame without either, its box)
+  d.parts = () => { const P = d.solids.map((b) => part(box(b[3], b[4], b[5], b[0], b[1], b[2]), MAT.plank));
+    for (const t of d.tops || []) { const y0 = t.y ?? t.y0, y1 = t.y ?? t.y1, len = Math.hypot(t.z1 - t.z0, y1 - y0); P.push(part(box(Math.abs(t.x1 - t.x0), 0.08, len, (t.x0 + t.x1) / 2, 0, 0).rotateX(Math.atan2(y1 - y0, t.z0 - t.z1)).translate(0, (y0 + y1) / 2 - 0.04, (t.z0 + t.z1) / 2), MAT.plank)); }
+    if (!P.length) { const [a, b2, c, e, f, g2] = d.pack.box; P.push(part(box(Math.max(b2 - a, 0.05), Math.max(e - c, 0.05), Math.max(g2 - f, 0.05), (a + b2) / 2, (c + e) / 2, (f + g2) / 2), MAT.beam)); }
+    return P; };
+  return d;
+}
+PIECES.push(...PACK_PIECES.map(packDef));
 // Trim (every part after the main panel) is grown by a couple of millimetres, a different amount per part, so that no two
 // parts of a piece ever share a face exactly: where they did (a wall's posts and top beam on its planks, a floor's edge
 // beams) the two surfaces flickered against each other

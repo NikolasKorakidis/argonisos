@@ -6,7 +6,7 @@
 // collapse. Pieces have hit points: creatures and storms wear them down, the Repair tool mends them.
 import * as THREE from 'three';
 import { PIECES, PIECE } from './pieces.js';
-import { loadKit } from './kit.js';
+import { loadKit, loadPackLook } from './kit.js';
 import { heightAt } from '../world/gen.js';
 import { clearGrass } from '../world/grass.js';
 import { setCut, SHAPE, groundAt } from '../world/groundcut.js';
@@ -37,13 +37,22 @@ const supportColor = (s, grounded) => (grounded ? 0x3a6cff : s > 0.7 ? 0x3fd060 
 // half as far again as Valheim's; now about 20 m, and a tower of walls some 33 m); a door frame passes all of its own
 // to its door
 const STEP = 2;
-const carry = (p, q) => (p.def.id === 'door' ? 1 : (1 - (p.pos.y - q.pos.y > 0.3 ? p.def.loss?.[0] ?? V_LOSS : p.def.loss?.[1] ?? H_LOSS)) ** (Math.max(1, p.mid.distanceTo(q.mid)) / STEP));
+const carry = (p, q) => (p.def.door ? 1 : (1 - (p.pos.y - q.pos.y > 0.3 ? p.def.loss?.[0] ?? V_LOSS : p.def.loss?.[1] ?? H_LOSS)) ** (Math.max(1, p.mid.distanceTo(q.mid)) / STEP));
 const midOf = (def, pos, rot) => toWorld(pos, rot, (def.centre ||= centreOf(def)));
+// Which of our pieces a piece builds like (its kind: the packs' pieces are in menu categories of their own, pieces.js packDef)
+const kindOf = (def) => def.kind || def.cat;
+// A doorway: where a door hangs in a piece ({ ox: its middle along the wall, ow: its width, oh: its height }): our door
+// frame's, or a pack's wall with a doorway in it, measured (pieces.js packDef). A door fits one about its own width, or
+// half that as one of a pair (the packs' double doors), and is stretched to fill it (dress): fill, the width it takes
+const FRAME = { ox: 0, ow: 1.4, oh: 2.3 };
+const frameOf = (def) => def.frame || (def.id === 'doorframe' ? FRAME : null);
+const fill = (door, fr) => { if (!fr) return 0; const k = door.door.w / fr.ow; return k > 0.55 && k < 1.2 ? fr.ow : k > 0.4 && k <= 0.55 ? fr.ow / 2 : 0; };
 // the meat on a cooking stand, and the ring over each piece showing how far it has cooked (a ring's arc in 24 steps)
 const MEAT_GEO = new THREE.DodecahedronGeometry(0.11, 0).scale(1, 0.8, 1.3), BURN = 2, _cookC = new THREE.Color(), _cookQ = new THREE.Quaternion();
 const RING = Array.from({ length: 25 }, (_, i) => new THREE.RingGeometry(0.055, 0.075, 24, 1, Math.PI / 2, -Math.max(0.001, (i / 24) * Math.PI * 2)));
 const ringMat = new THREE.MeshBasicMaterial({ color: 0xf0c860, transparent: true, depthWrite: false, side: THREE.DoubleSide }), ringHot = new THREE.MeshBasicMaterial({ color: 0xff5a2a, transparent: true, depthWrite: false, side: THREE.DoubleSide }), ringBack = new THREE.MeshBasicMaterial({ color: 0x1a120c, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide });
-const STEEP = 0.45;   // (the most the ground may rise across a bed's, a bench's or a chest's footprint)
+const STEEP = 0.45;
+const _n = new THREE.Vector3();   // (the most the ground may rise across a bed's, a bench's or a chest's footprint)
 const toLocal = (p, wx, wz) => { const dx = wx - p.pos.x, dz = wz - p.pos.z, c = Math.cos(-p.rot), s = Math.sin(-p.rot); return [dx * c + dz * s, -dx * s + dz * c]; };   // inverse of a yaw rotation
 // How far along a ray it first meets a piece placed at pos, rot (its surfaces and solid parts), or null
 const _lr = new THREE.Ray(), _p0 = new THREE.Vector3(), _p1 = new THREE.Vector3(), _p2 = new THREE.Vector3(), _p3 = new THREE.Vector3(), _hb = new THREE.Box3(), _hv = new THREE.Vector3();
@@ -120,7 +129,12 @@ export class Build {
   }
   piece(id) { return id === 'repair' ? this.pieces[0] : PIECE[id]; }
   get active() { return !!this.sel && this.g.equippedTool('build'); }
-  select(id) { this.sel = id; if (this.ghost) { this.g.scene.remove(this.ghost); this.ghost = null; } this.preview(null); if (id !== 'repair') this.makeGhost(PIECE[id]); this.g.hud.toast(`${this.piece(id).name}: <span class="kbd">LMB</span> place · <span class="kbd">R</span> turn · <span class="kbd">MMB</span> remove · <span class="kbd">RMB</span> menu`); }
+  select(id) { this.sel = id; if (this.ghost) { this.g.scene.remove(this.ghost); this.ghost = null; } this.preview(null); if (id !== 'repair') { this.makeGhost(PIECE[id]); this.look(PIECE[id]); } this.g.hud.toast(`${this.piece(id).name}: <span class="kbd">LMB</span> place · <span class="kbd">R</span> turn · <span class="kbd">MMB</span> remove · <span class="kbd">RMB</span> menu`); }
+  // a pack's piece's model, loaded the first time it's wanted: then whatever stands of it and the ghost take it on
+  look(def) {
+    if (!def?.pack || def.meshes || def.looked) return; def.looked = true;
+    loadPackLook(def).then(() => { if (!def.meshes) return; for (const p of this.placed) if (p.def === def) this.dress(p); if (this.ghost && this.ghostDef === def) { const keep = this.ghost.visible; this.g.scene.remove(this.ghost); this.makeGhost(def); this.ghost.visible = keep; } });
+  }
   makeGhost(def) {
     const grp = new THREE.Group(); for (const { geo } of def.build()) { const m = new THREE.Mesh(geo, ghostOk); m.renderOrder = 5; grp.add(m); }
     this.ghost = grp; this.ghostDef = def; this.g.scene.add(grp);
@@ -189,12 +203,22 @@ export class Build {
     // a door goes only into a door frame: aim at the frame (or through its opening) and it settles in, hinged on the side
     // your turn chooses; anywhere else it's refused, so it can never hang in the air off a corner
     if (def.door) {
-      let frame = a.piece?.id === 'doorframe' ? a.piece : null, bd = 1.1;
-      if (!frame) for (const p of this.near(this.g.player.pos.x, this.g.player.pos.z, REACH + 4)) if (p.id === 'doorframe') { const off = onLine(toWorld(p.pos, p.rot, [0, 1.15, 0])).off; if (off < bd) { bd = off; frame = p; } }
+      let frame = a.piece && fill(def, frameOf(a.piece.def)) ? a.piece : null, bd = 1.1;
+      if (!frame) for (const p of this.near(this.g.player.pos.x, this.g.player.pos.z, REACH + 4)) { const fr = frameOf(p.def); if (fill(def, fr)) { const off = onLine(toWorld(p.pos, p.rot, [fr.ox, 1.15, 0])).off; if (off < bd) { bd = off; frame = p; } } }
       let dpos = pos, drot = this.rot, why = 'Doors go in a door frame';
-      if (frame) { const flip = Math.abs(Math.atan2(Math.sin(this.rot - frame.rot), Math.cos(this.rot - frame.rot))) > Math.PI / 2; drot = frame.rot + (flip ? Math.PI : 0); dpos = toWorld(frame.pos, frame.rot, [flip ? 0.7 : -0.7, 0, 0]); why = this.invalid(def, dpos, drot, true, a); }
+      if (frame) { const fr = frameOf(frame.def), flip = Math.abs(Math.atan2(Math.sin(this.rot - frame.rot), Math.cos(this.rot - frame.rot))) > Math.PI / 2; drot = frame.rot + (flip ? Math.PI : 0); dpos = toWorld(frame.pos, frame.rot, [fr.ox + (flip ? 1 : -1) * (fr.ow / 2), 0, 0]); why = this.invalid(def, dpos, drot, true, a); }
       this.ghost.position.copy(dpos); this.ghost.rotation.y = drot; this.lastSnap = null; this.paint(why);
       return { pos: dpos.clone(), rot: drot, why, snapped: !!frame };
+    }
+    // a trim (a pack's window, shutter, ornament, handrail: def.free) goes where you aim on what's built, its back against
+    // the face you aim at, or standing on a top; on the ground too. It doesn't snap
+    if (def.free && def.pack?.tpl === 'deco') {
+      const s = def.solids[0], up = !a.n || Math.abs(a.n.y) > 0.5, back = !up && a.piece;
+      let frot = this.rot; if (back) { _n.copy(a.n).setY(0).normalize(); frot = Math.atan2(_n.x, _n.z); } else if (a.piece) frot = a.piece.rot + Math.round((this.rot - a.piece.rot) / (Math.PI / 8)) * (Math.PI / 8);
+      const fpos = back ? a.p.clone().addScaledVector(_n, s[5] / 2 + 0.01) : a.p.clone().setY(a.p.y + s[4] / 2);
+      this.aligned = !!a.piece; this.ghost.position.copy(fpos); this.ghost.rotation.y = frot; this.lastSnap = null;
+      const why = a.air ? 'Aim at your building' : this.invalid(def, fpos, frot, true, a); this.paint(why); this.preview(null);
+      return { pos: fpos, rot: frot, why, snapped: true };
     }
     // Only structural pieces are snap anchors: never the workbench, campfire, bed, chest or other furniture. Equipment
     // itself doesn't snap at all; it goes where you aim.
@@ -221,7 +245,7 @@ export class Build {
     const sloped = !def.aimAt && (def.tops || []).some((t) => t.y === undefined && t.y0 !== t.y1);   // (roof panels: see the gap rule below)
     // fences and stockades aimed at the ground follow the ground: they join the last one end to end across the ground,
     // whatever its height, and each stands on the ground where it is (so a fence line runs up a hill, not into it)
-    const onGround = def.cat === 'Fences' && a.terrain;
+    const onGround = kindOf(def) === 'Fences' && a.terrain;
     const cands = [];
     // (against a structure a quarter turn is tried too, but it only wins if it's clearly where you aim)
     for (const [r2, pen] of anchor ? [[rot, 0], [rot + Math.PI / 2, 2.5], [rot - Math.PI / 2, 2.5]] : [[rot, 0]]) {
@@ -241,7 +265,7 @@ export class Build {
         // (stairs aimed by their top end come down toward you from there; aimed by their foot, they climb away from you)
         if (def.aimAt) { const mid = toWorld(cand, r2, centre), away = (mid.x - pos.x) * dir.x + (mid.z - pos.z) * dir.z > 0, top = toWorld(cand, r2, def.aimAt[1]).distanceTo(pos) < cand.distanceTo(pos); if (top === away) d += 0.5; if (!top && cand.y - this.g.player.pos.y > 1.5) d += 0.8; }   // (and from below, stairs that bring you up to what you aim at, not ones starting up there)
         // (a wall sunk deep in the land, as a row going downhill snapped a storey lower, loses to one standing on it)
-        if (def.cat === 'Walls' && !def.door) d += Math.max(0, heightAt(cand.x, cand.z) - cand.y - 0.6) * 1.5;
+        if (kindOf(def) === 'Walls' && !def.door) d += Math.max(0, heightAt(cand.x, cand.z) - cand.y - 0.6) * 1.5;
         if (!gap && d > 1.7) continue;
         cands.push({ pos: cand, rot: r2, score: (gap ? -100 + x : d) - 0.3 * (match - 1) + pen });
       }
@@ -256,7 +280,7 @@ export class Build {
     this.lastSnap = best;
     if (best) { pos = best.pos.clone(); rot = best.rot; if (onGround) pos.y = Math.min(...def.snaps.map((l) => { const w = toWorld(pos, rot, l); return heightAt(w.x, w.z); })); }
     // a floor laid on the ground sits on its highest corner, so the ground doesn't poke up through it
-    else if (a.terrain && def.cat === 'Floors' && def.tops) { const t = def.tops[0]; let top = -1e9; for (const [lx, lz] of [[t.x0, t.z0], [t.x1, t.z0], [t.x0, t.z1], [t.x1, t.z1], [0, 0]]) { const w = toWorld(pos, rot, [lx, 0, lz]); top = Math.max(top, heightAt(w.x, w.z)); } pos.y = top + 0.03; }
+    else if (a.terrain && kindOf(def) === 'Floors' && def.tops) { const t = def.tops[0]; let top = -1e9; for (const [lx, lz] of [[t.x0, t.z0], [t.x1, t.z0], [t.x0, t.z1], [t.x1, t.z1], [0, 0]]) { const w = toWorld(pos, rot, [lx, 0, lz]); top = Math.max(top, heightAt(w.x, w.z)); } pos.y = top + 0.03; }
     this.ghost.position.copy(pos); this.ghost.rotation.y = rot;
     const why = this.invalid(def, pos, rot, !!best, a); this.paint(why);
     this.preview(def, pos, rot);
@@ -267,13 +291,14 @@ export class Build {
     const P = this.g.player; this.lastSup = null;
     if (pos.distanceTo(P.pos) > REACH) return 'Too far away';
     if (!this.g.inv.has(def.mats) && !this.g.S.freeBuild) return this.g.inv.need(def.mats);   // (what's short, and by how much)
-    if (def.door && !this.doorFrameAt(pos, rot)) return 'Doors go in a door frame';
+    if (def.door && !this.doorFrameAt(pos, rot, def)) return 'Doors go in a door frame';
     if (def.equip && !snapped && !(a.terrain || (a.piece && a.piece.def.tops))) return 'Place it on the ground or a floor';
     // (the ground across the whole footprint, not just under the aim: a bed on a steep slope stood half in the air)
     if (def.equip && a.terrain && this.footRange(def, pos, rot) > STEEP) return 'Too steep here';
     // building pieces stand on the ground or snap onto what's built (sharing a point with it): never just leaning on the
     // side of something in mid-air
-    if (!def.equip && !def.door && !this.grounded(def, pos, rot) && !this.snapsOf(def, pos, rot).some((m) => [...this.near(pos.x, pos.z, 8)].some((p) => p.snaps.some((q) => q.distanceTo(m) < 0.05)))) return 'Attach it to your building';
+    if (def.free && def.pack?.tpl === 'deco' && !a.piece && !a.terrain) return 'Aim at your building';
+    if (!def.equip && !def.door && !(def.free && def.pack?.tpl === 'deco') && !this.grounded(def, pos, rot) && !this.snapsOf(def, pos, rot).some((m) => [...this.near(pos.x, pos.z, 8)].some((p) => p.snaps.some((q) => q.distanceTo(m) < 0.05)))) return 'Attach it to your building';
     const f = this.foot(def, pos, rot); if (f?.wall && this.gapUnder(f, rot).hi > FILL_MAX && !this.restsOn(def, pos, rot)) return 'Too high above the ground: build a wall under it first';
     const sup = this.lastSup = this.supportFor(def, pos, rot); if (sup.s < MIN_SUPPORT) return 'Nothing holds it up: build it nearer the ground or a wall';
     const tree = this.inTheWay(def, pos, rot); if (tree) return tree;
@@ -308,9 +333,10 @@ export class Build {
   }
   // the top of the tallest piece you've built within r of pos (for the mist's ceiling), or -Infinity
   tallestNear(pos, r) { let top = -Infinity; for (const p of this.near(pos.x, pos.z, r)) for (const b of p.boxes) top = Math.max(top, b.max.y); return top; }
-  // the door frame whose opening a door at pos, rot fills (hinged at either side), if any
-  doorFrameAt(pos, rot) {
-    for (const p of this.near(pos.x, pos.z, 3)) { if (p.id !== 'doorframe') continue; for (const [side, turn] of [[-0.7, 0], [0.7, Math.PI]]) { const w = toWorld(p.pos, p.rot, [side, 0, 0]), dr = Math.atan2(Math.sin(rot - p.rot - turn), Math.cos(rot - p.rot - turn)); if (w.distanceTo(pos) < 0.05 && Math.abs(dr) < 0.05) return p; } }
+  // the door frame whose opening a door at pos, rot fills (hinged at either side), if any (def: the door, which must fit
+  // it; else any doorway)
+  doorFrameAt(pos, rot, def) {
+    for (const p of this.near(pos.x, pos.z, 4)) { const fr = frameOf(p.def); if (!fr || (def && !fill(def, fr))) continue; for (const [side, turn] of [[fr.ox - fr.ow / 2, 0], [fr.ox + fr.ow / 2, Math.PI]]) { const w = toWorld(p.pos, p.rot, [side, 0, 0]), dr = Math.atan2(Math.sin(rot - p.rot - turn), Math.cos(rot - p.rot - turn)); if (w.distanceTo(pos) < 0.05 && Math.abs(dr) < 0.05) return p; } }
     return null;
   }
   // While you aim a floor, the ground under the green tile already looks as it will once it's built (pressed down,
@@ -355,8 +381,8 @@ export class Build {
   // it, a wall can't go: build a wall under it first (a floor can still reach out, held up by what it's built onto).
   // footprint: the rectangle a piece stands on (centre, half sizes, level), for walls and flat floors only
   foot(def, pos, rot) {
-    if (def.cat === 'Walls' && !def.door) return { c: pos, hw: (def.w ?? WALL_W) / 2, hd: 0.18, y: pos.y - 0.04, wall: true };
-    const ft = def.cat === 'Floors' && def.tops?.length === 1 && def.tops[0].y !== undefined ? def.tops[0] : null;
+    if (kindOf(def) === 'Walls' && !def.door) return { c: pos, hw: (def.w ?? WALL_W) / 2, hd: 0.18, y: pos.y - 0.04, wall: true };
+    const ft = kindOf(def) === 'Floors' && def.tops?.length === 1 && def.tops[0].y !== undefined ? def.tops[0] : null;
     if (!ft) return null;
     return { c: toWorld(pos, rot, [(ft.x0 + ft.x1) / 2, 0, (ft.z0 + ft.z1) / 2]), hw: Math.abs(ft.x1 - ft.x0) / 2, hd: Math.abs(ft.z1 - ft.z0) / 2, y: pos.y + ft.y - 0.3, wall: false };
   }
@@ -380,12 +406,12 @@ export class Build {
   onGround(def, pos, rot, self) { const f = this.foot(def, pos, rot); if (!f) return false; return this.fills(f, this.gapUnder(f, rot)) && !this.restsOn(def, pos, rot, self); }
   // (a door hangs in its frame and is held by nothing else: grounded never, so it comes down with its frame)
   lowSnap(def, pos, rot) { for (const s of def.snaps) { const w = toWorld(pos, rot, s, _v); if (w.y - heightAt(w.x, w.z) < 0.35) return true; } return false; }
-  grounded(def, pos, rot, self) { if (def.id === 'door') return false; return this.lowSnap(def, pos, rot) || this.onSite(def, pos, rot) || this.onGround(def, pos, rot, self); }
+  grounded(def, pos, rot, self) { if (def.door) return false; return this.lowSnap(def, pos, rot) || this.onSite(def, pos, rot) || this.onGround(def, pos, rot, self); }
   // The same for a piece that stands, from what was worked out once as it was placed (the land and the old houses don't
   // move: a snap point on the ground, a hole in an old roof it fills, land close enough under it to be raised to it); only
   // whether it rests on another piece is asked again
   baseOf(p) {
-    if (!p.base) { const { def, pos, rot } = p, f = this.foot(def, pos, rot); p.base = def.id === 'door' ? { solid: false, fill: false } : { solid: this.lowSnap(def, pos, rot) || this.onSite(def, pos, rot), fill: !!f && this.fills(f, this.gapUnder(f, rot)) }; }
+    if (!p.base) { const { def, pos, rot } = p, f = this.foot(def, pos, rot); p.base = def.door ? { solid: false, fill: false } : { solid: this.lowSnap(def, pos, rot) || this.onSite(def, pos, rot), fill: !!f && this.fills(f, this.gapUnder(f, rot)) }; }
     return p.base;
   }
   standsUp(p) { const b = this.baseOf(p); return b.solid || (b.fill && !this.restsOn(p.def, p.pos, p.rot, p)); }
@@ -397,11 +423,11 @@ export class Build {
   // neighbours: pieces sharing a snap point, or touching (the same both ways: recompute keeps each piece's list, and adds a
   // new piece to its neighbours' lists). A door's only neighbour is its frame
   neighbours(def, pos, rot, self) {
-    if (def.id === 'door') { const fr = this.doorFrameAt(pos, rot); return fr && fr !== self ? [fr] : []; }
+    if (def.door) { const fr = this.doorFrameAt(pos, rot, def); return fr && fr !== self ? [fr] : []; }
     const mine = this.snapsOf(def, pos, rot), out = [];
     for (const p of this.near(pos.x, pos.z, 8)) {
       if (p === self) continue;
-      if (p.def.id === 'door') { if (self && this.doorFrameAt(p.pos, p.rot) === self) out.push(p); continue; }
+      if (p.def.door) { if (self && this.doorFrameAt(p.pos, p.rot, p.def) === self) out.push(p); continue; }
       if (p.snaps.some((s) => mine.some((m) => m.distanceTo(s) < 0.2))) { out.push(p); continue; }
       if (this.touch(def, pos, rot, p)) out.push(p);
     }
@@ -426,12 +452,15 @@ export class Build {
     // at any angle leaves room for the next one beside it)
     const mine = this.snapsOf(def, pos, rot), A = rects(def.tops, pos, rot, 0.2, 'top');
     for (const p of this.near(pos.x, pos.z, 6)) {
-      if (p.id !== def.id) continue;
+      if (p.id !== def.id && !this.alike(def, p.def)) continue;
       if (mine.every((m) => p.snaps.some((q) => q.distanceTo(m) < 0.15))) return true;
       const B = rects(p.def.tops, p.pos, p.rot, 0.2, 'top'); for (const a of A) for (const b of B) if (rectsMeet(a, b)) return true;
     }
     return false;
   }
+  // (a pack's piece and another, ours or a pack's, that build alike: two floors, two roofs, not stairs. Our own pieces
+  // are only ever compared with their own kind, as they always were)
+  alike(a, b) { return (a.free || b.free) && !!a.tops && !!b.tops && !a.aimAt && !b.aimAt && kindOf(a) === kindOf(b) && kindOf(a) !== 'Beams'; }
   blocked(def, pos, rot) { return this.overlaps(def, pos, rot) || this.duplicate(def, pos, rot) || this.throughFloor(def, pos, rot); }
   // stairs mustn't pass through a floor (ending in the middle of one, coming up from beneath it): a floor or other
   // surface crossing the stairs anywhere between their two ends, which may rest on floors
@@ -461,9 +490,9 @@ export class Build {
   // gable ends over walls over beams over floors over furniture, and pieces of one kind at right angles (walls meeting at
   // a corner) alternate.
   depthRank(def, rot) {
-    const rank = { Floors: 1, Beams: 2, Fences: 2, Walls: 3 }[def.cat] ?? (def.cat === 'Roofs' ? (def.roof ? 5 : 4) : 0);
-    const alt = ((Math.round(rot / (Math.PI / 2)) % 2) + 2) % 2, k = rank * 2 + alt;
-    return { polygonOffset: k > 0, polygonOffsetFactor: -0.12 * k, polygonOffsetUnits: -k };
+    const k = kindOf(def), rank = { Floors: 1, Beams: 2, Fences: 2, Walls: 3 }[k] ?? (k === 'Roofs' ? (def.roof ? 5 : 4) : 0);
+    const alt = ((Math.round(rot / (Math.PI / 2)) % 2) + 2) % 2, n = rank * 2 + alt;
+    return { polygonOffset: n > 0, polygonOffsetFactor: -0.12 * n, polygonOffsetUnits: -n };
   }
   // a piece's meshes, from its look (the kit's model once loaded, the carved one until then); again when the look changes.
   // Aiming always meets the carved shape, so building works the same whatever the look: with the kit's model shown, the
@@ -474,6 +503,9 @@ export class Build {
     p.mats.length = 0; const kit = p.def.build() !== p.def.carved();
     for (const { geo, mat } of p.def.build()) { const m2 = pixelLike(wetLike(mat.clone(), mat), mat); Object.assign(m2, depth); p.mats.push(m2); const m = new THREE.Mesh(geo, m2); m.castShadow = m.receiveShadow = true; m.userData.piece = p; p.inner.add(m); if (!kit) this.meshes.push(m); }
     if (kit) for (const { geo } of p.def.carved()) { const m = new THREE.Mesh(geo, proxyMat); m.visible = false; m.userData.piece = p; p.inner.add(m); this.meshes.push(m); }
+    // (a pack's door stretched across the doorway it hangs in, and to its height if it's near it: our own door, made to
+    // our frame, is left as it is)
+    if (p.def.door && p.def.pack) { const fr = this.doorFrameAt(p.pos, p.rot, p.def), f = fr && frameOf(fr.def), w = fill(p.def, f); if (w) { p.inner.scale.x = w / p.def.door.w; const ky = f.oh / p.def.door.h; if (ky > 0.75 && ky < 1.35) p.inner.scale.y = ky; } }
   }
   place(id, pos, rot, opts = {}) {
     const def = PIECE[id]; if (!def) { console.warn('unknown piece', id); return null; }   // (a kind no longer built, in an old save)
@@ -481,7 +513,7 @@ export class Build {
     const obj = new THREE.Group(); obj.position.copy(pos); obj.rotation.y = rot;
     const inner = new THREE.Group(); obj.add(inner);
     const p = { uid: opts.uid ?? 'pc' + this.seq++, id, def, obj, inner, pos: pos.clone(), rot, hp: opts.hp ?? def.hp, state: opts.state || {}, support: 1, grounded: false, mats: [], nb: [] };
-    this.dress(p);
+    this.dress(p); this.look(def);
     this.g.scene.add(obj);
     p.snaps = this.snapsOf(def, pos, rot); p.boxes = this.boxes(def, pos, rot); p.mid = midOf(def, pos, rot);
     this.index(p, true); this.placed.push(p);

@@ -7,9 +7,10 @@
 // the model is turned a quarter if it lies the other way, half round if a slope rises the wrong way, and stretched to
 // the box (uniform: kept in proportion, set on the floor at the middle of the box instead).
 import * as THREE from 'three';
-import { loadPack, bake } from '../assets.js';
+import { loadPack, bake, loadTex } from '../assets.js';
 import { wettable } from '../world/wetness.js';
-import { woody, woodFrame } from '../world/wood.js';
+import { woody, woodFrame, wetKept } from '../world/wood.js';
+import { stony } from '../world/rock.js';
 import { pixelate } from '../render/pixel.js';
 import { clamp } from '../util/math.js';
 
@@ -158,4 +159,72 @@ export function loadKit(pieces) {
   return Promise.all(pieces.filter((p) => KIT[p.id]).map((p) => Promise.all([KIT[p.id], KIT[p.id].trim].filter(Boolean).map(look)).then((m) => { p.meshes = m; }).catch(() => {})))
     .then(() => { const d = pieces.find((p) => p.id === 'door'), f = pieces.find((p) => p.id === 'doorframe'); if (d?.meshes && f?.meshes) hang(d.meshes[0].geo, f.meshes[0].geo, d.door.hinge);
       for (const p of pieces) for (const m of p.meshes || []) if (m.wood) woodFrame(m.geo); });
+}
+
+// ---- The three building packs' pieces (pieces.js packDef), each model loaded the first time it's wanted (picked in the
+// hammer's menu, or placed: a save with some in it), so a game without Free build never fetches one. Each material of
+// the model keeps its texture (Ancient Empire's have several: plaster, marble, roof tiles, the atlas), each in the look of
+// what it's made of: worked wood (wood.js woody, the planks found per model), stone (rock.js stony) or roofing, thatch and
+// cloth as the kit's thatch (texels, from both sides), plaster and marble painted. Turned the quarters the measuring found and stretched into the
+// piece's box (tools/assets/pack-pieces.mjs). Logs and planks are made solid as the kit's are (close), floors given an
+// underside; drawn from both sides all the same, as many of these models are open shells.
+// (Ancient Empire's plain walls, steps and roof sides show its whole atlas across each face: their own material, the
+// plaster, given in its place to every face whose texture spans more than a fifth of the atlas)
+const PLASTER = 'polygonancientempire-stucco-white-01', packMats = new Map();
+let plaster = null;
+const CLOSE = new Set(['wall', 'tri', 'gable', 'fence', 'post', 'beam', 'block', 'ladder']);
+function packMat(map, cls) {
+  const key = (map?.uuid ?? 'none') + cls;
+  if (!packMats.has(key)) {
+    const m = new THREE.MeshStandardMaterial({ map, color: 0xa8a8a8, roughness: 0.9, side: THREE.DoubleSide });
+    packMats.set(key, cls === 'w' ? woody(m) : cls === 's' ? wetKept(stony(m, { wet: false }), { dark: 0.55, gloss: 0.7, shine: 0.1 }) : cls === 'p' ? pixelate(wettable(m, { dark: 0.68, gloss: 0.3 }), 'grain') : pixelate(wettable(m, { dark: 0.62, gloss: 0.32 }), 'wood'));
+  }
+  return packMats.get(key);
+}
+// what a texture is made of, by its name (else the piece's own: w wood, s stone, t roofing): Ancient Empire's plaster,
+// marble and painted atlas as the town's houses of it are (site-pack.js: painted, in texels), its rough stone and brick
+// as stone
+const clsOf = (name, own) => (/wood|trellis/.test(name) ? 'w' : /stucco|marble|polygonancientempire-0\d-[a-c]/.test(name) ? 'p' : /stone|brick/.test(name) ? 's' : /roof-tile/.test(name) ? 't' : own);
+export function loadPackLook(def) {
+  const P = def.pack;
+  return (def.looking ||= loadPack(P.file).then((gl) => {
+    gl.scene.updateMatrixWorld(true); const parts = [];
+    gl.scene.traverse((m) => {
+      if (!m.isMesh) return; const g0 = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()).applyMatrix4(m.matrixWorld), mats = [].concat(m.material);
+      for (const k of Object.keys(g0.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g0.deleteAttribute(k);
+      if (!g0.attributes.uv) g0.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g0.attributes.position.count * 2), 2));
+      const groups = Array.isArray(m.material) && g0.groups.length ? g0.groups : [{ start: 0, count: g0.attributes.position.count, materialIndex: 0 }];
+      for (const gr of groups) { const src = mats[gr.materialIndex] || mats[0], tri = [], wide = [];
+        const uv = g0.attributes.uv, atlasAE = /polygonancientempire-01-a/.test(src.name);
+        for (let i = gr.start; i < gr.start + gr.count; i += 3) { let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity; for (let k = 0; k < 3; k++) { u0 = Math.min(u0, uv.getX(i + k)); u1 = Math.max(u1, uv.getX(i + k)); v0 = Math.min(v0, uv.getY(i + k)); v1 = Math.max(v1, uv.getY(i + k)); } ((atlasAE && Math.max(u1 - u0, v1 - v0) > 0.2) ? wide : tri).push(i); }
+        for (const [list, plain] of [[tri, false], [wide, true]]) if (list.length) parts.push({ geo: pick(g0, list), src, plain });
+      }
+    });
+    const turn = (P.turn * Math.PI) / 2, all = new THREE.Box3();
+    for (const q of parts) { q.geo.rotateY(turn); q.geo.computeBoundingBox(); all.union(q.geo.boundingBox); }
+    const [x0, x1, y0, y1, z0, z1] = P.box, s = all.getSize(new THREE.Vector3()), k = [s.x > 1e-3 ? (x1 - x0) / s.x : 1, s.y > 1e-3 ? (y1 - y0) / s.y : 1, s.z > 1e-3 ? (z1 - z0) / s.z : 1];
+    const by = new Map();
+    for (const q of parts) {
+      q.geo.translate(-all.min.x, -all.min.y, -all.min.z).scale(...k).translate(x0, y0, z0);
+      const name = q.plain ? PLASTER : q.src.name || '', cls = clsOf(name, P.m), map = q.plain ? (plaster ||= plasterTex()) : q.src.map || null, mat = packMat(map, cls);
+      (by.get(mat) || by.set(mat, { cls, geos: [] }).get(mat)).geos.push(q.geo);
+    }
+    def.meshes = [...by].map(([mat, { cls, geos }]) => {
+      let geo = mergeAll(geos); if (cls !== 't' && CLOSE.has(P.tpl)) geo = close(geo); if (P.tpl === 'floor') geo = underside(geo);
+      geo.computeVertexNormals(); geo.computeBoundingSphere(); if (cls === 'w') woodFrame(geo); return { geo, mat, wood: cls === 'w' };
+    });
+    return def;
+  }).catch(() => { def.meshes = null; return def; }));
+}
+function plasterTex() { const t = loadTex(`pack/tex/${PLASTER}.webp`); t.flipY = false; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }
+// the triangles (by their first vertex) of a geometry, as a geometry of their own
+function pick(geo, list) {
+  const out = new THREE.BufferGeometry();
+  for (const [k, a] of Object.entries(geo.attributes)) { const n = a.itemSize, arr = new Float32Array(list.length * 3 * n); list.forEach((i, j) => arr.set(a.array.subarray(i * n, (i + 3) * n), j * 3 * n)); out.setAttribute(k, new THREE.BufferAttribute(arr, n)); }
+  return out;
+}
+function mergeAll(geos) {
+  if (geos.length === 1) return geos[0]; const out = new THREE.BufferGeometry(), n = geos.reduce((s, g) => s + g.attributes.position.count, 0);
+  for (const [k, size] of [['position', 3], ['normal', 3], ['uv', 2]]) { const a = new Float32Array(n * size); let o = 0; for (const g of geos) { a.set(g.attributes[k].array, o); o += g.attributes[k].array.length; } out.setAttribute(k, new THREE.BufferAttribute(a, size)); }
+  return out;
 }
