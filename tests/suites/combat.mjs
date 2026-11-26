@@ -346,5 +346,37 @@ export default {
       return (used > 4 && used < 12 && out && n() === n0) || JSON.stringify({ used, out, st: P.bow?.st, n: n(), n0 });`);
     await t.step('with no arrows nothing is drawn', `${BOWT} await frames(20); inv.take('crudeArrow', n()); input.lmb = true; await frames(20); const ok = P.bow?.st === 'ready' && !P.aiming && !cross.classList.contains('drawing'); input.lmb = false; await frames(3); g.give('crudeArrow', 10); kit(); P.stats.god = false;
       return ok || JSON.stringify({ st: P.bow?.st });`);
+
+    // ---- The reviewer's batch 7 (26 Nov): the lightstone sword, the pelta and lightstone arrows, at the data table's values.
+    // The sword strikes Valheim's way: a quick combo of three (two cuts and a thrust), each blow its slash and pierce
+    // together, through two that stand side by side; the pelta holds its block value, parries at its bonus and makes you
+    // quicker; the arrows chosen in the pack are the ones the bow looses, their damage added to the bow's, and once
+    // they're spent it goes on to the next arrows in the pack
+    const GEAR = `${BOWT} const { TYPES } = await import('/src/creatures/creatures.js');
+      const due = (c, item) => item.dmg.reduce((a, [v, kd]) => a + v * (c.T.weak?.includes(kd) ? 1.5 : 1) * (c.T.resist?.includes?.(kd) ? 0.5 : 1), 0) * P.stats.damageK(item.skill) * g.combat.blessK();
+      const beside = (side, d = 1.3) => { const f = new V(Math.sin(P.yaw), 0, Math.cos(P.yaw)), r = new V(f.z, 0, -f.x), c = g.creatures.spawn('hog', P.pos.x + f.x * d + r.x * side, P.pos.z + f.z * d + r.z * side, { level: 1, aware: true, young: false }); c.yaw = P.yaw + Math.PI; c.atkCd = 99; return c; };`;
+    await t.step('the lightstone sword strikes for its 34 slash and 35 pierce (Swordsman\'s and the hog\'s own share of them), through two hogs side by side', `${GEAR} AG.S.peaceful = true; P.stats.god = true; for (const c of [...g.creatures.list]) g.creatures.remove(c); await home(); kit('lightstoneSword', 'peltaShield'); await frames(20);
+      const a = beside(-0.35), b = beside(0.35); for (const c of [a, b]) c.hp = c.max = 500; const h0 = [a.hp, b.hp], hit = g.combat.strike(ITEMS.lightstoneSword), got = [h0[0] - a.hp, h0[1] - b.hp], want = due(a, ITEMS.lightstoneSword);
+      for (const c of [a, b]) g.creatures.remove(c);
+      return (hit && got.every((x) => Math.abs(x - want) < 0.5) && ITEMS.lightstoneSword.dmg.length === 2) || JSON.stringify({ hit, got, want });`);
+    await t.step('…its blows following each other go through Valheim\'s combo of three, two cuts and a thrust, and round again', `${GEAR} await home(); const seq = [];
+      for (let i = 0; i < 4; i++) { await until(() => P.swing <= 0, 3000); P.strike('sword', 0); seq.push(P.strikeMove?.clip); }
+      await until(() => P.swing <= 0, 3000); return seq.join() === 'slash,slash2,stab,slash' || JSON.stringify(seq);`);
+    const pelta = await t.eval(`${GEAR} await home(); kit('lightstoneSword', 'peltaShield'); await frames(10); const o = { block: g.combat.blockValue(), parry: g.combat.parryBonus(), speed: +P.speedMod.toFixed(2), guard: P.guard };
+      const c1 = foe(), c2 = foe(), c3 = foe(); input.rmb = true; input.clicks.push(2); await frames(2); o.up = P.blocking; o.r1 = g.combat.hitPlayer(c1, [14, 14, 'slash']); o.stagger = c1.hitT > 0;
+      await sleep(400); o.r2 = g.combat.hitPlayer(c2, [14, 14, 'slash']); o.held = c2.hitT === 0; input.rmb = false; await frames(10); o.r3 = g.combat.hitPlayer(c3, [14, 14, 'slash']);
+      o.want = +(14 - 10 * P.stats.damageK('blocking') * g.combat.blessK()).toFixed(2); return o;`);
+    t.metric('the pelta (block, parry bonus, speed with the sword; a 14 blow parried, blocked, taken)', pelta);
+    t.check('the pelta holds 10 of a blow, and a parry 1.5 times that: a 14 blow parried whole (the beast staggered), blocked down to 4, taken whole with the guard down', pelta.block === 10 && pelta.parry === 1.5 && pelta.up && pelta.r1 === 'blocked' && pelta.stagger && typeof pelta.r2 === 'number' && Math.abs(pelta.r2 - pelta.want) < 0.6 && pelta.held && pelta.r3 > 13, JSON.stringify(pelta));
+    t.check('…and with the sword makes you 5% quicker (the pelta\'s +10%, the sword\'s -5%), on guard', pelta.speed === 0.05 && pelta.guard, JSON.stringify(pelta));
+    await t.shot('sword-pelta-guard');
+    await t.step('lightstone arrows chosen in the pack are the ones nocked and loosed, for the bow\'s 18 and their 27 at a full draw; spent, the bow goes on to the crude arrows', `${GEAR} kit('crudeBow'); inv.take('crudeArrow', n()); g.give('crudeArrow', 5); g.give('lightstoneArrow', 2); await home();
+      const li = inv.slots.findIndex((s) => s?.id === 'lightstoneArrow'); g.equip(li); const chosen = inv.slots[li]?.worn === 'ammo';
+      const o = { chosen, ids: [], dmg: [], nocked: [] }; const fullL = (ITEMS.crudeBow.dmg[0][0] + ITEMS.lightstoneArrow.dmg[0][0]) * P.stats.damageK('bow') * g.combat.blessK();
+      for (let i = 0; i < 3; i++) { input.lmb = true; await until(() => P.bow?.st === 'aim', 4000); await frames(2); o.nocked.push(g.combat.nock.userData.kind); input.lmb = false; await frames(2); const a = arrow(); o.ids.push(a.id); o.dmg.push(+(a.dmg[0][0] * a.k).toFixed(1)); await frames(30); }
+      o.full = +fullL.toFixed(1); o.left = { light: inv.count('lightstoneArrow'), crude: n() }; o.next = inv.slots.find((s) => s?.worn === 'ammo')?.id;
+      return (chosen && o.ids.join() === 'lightstoneArrow,lightstoneArrow,crudeArrow' && o.nocked.join() === o.ids.join() && Math.abs(o.dmg[0] - o.full) < 0.2 && o.dmg[2] < o.dmg[0] && o.left.light === 0 && o.left.crude === 4 && o.next === 'crudeArrow') || JSON.stringify(o);`);
+    await t.eval(`${GEAR} g.give('lightstoneArrow', 5); g.equip(inv.slots.findIndex((s) => s?.id === 'lightstoneArrow')); P.camYaw = P.yaw + Math.PI * 0.55; P.camDist = 2.2; input.lmb = true; await until(() => P.bow?.st === 'aim', 4000); await frames(15); return true;`); await t.shot('lightstone-arrow-drawn');
+    await t.eval(`${GEAR} input.lmb = false; await frames(30); kit(); P.stats.god = false; return true;`);
   },
 };

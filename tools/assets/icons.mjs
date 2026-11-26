@@ -53,6 +53,7 @@ const ICONS = {
   club: T({ held: 'crudeClub' }), bow: T({ held: 'crudeBow' }), cretanBow: T({ held: 'cretanBow' }),
   spear: T({ held: 'crudeSpear' }), spearLight: T({ held: 'lightstoneSpear' }), arrow: T({ pack: 'arrow' }),
   shield: { held: 'crudeShield', yaw: 200, pitch: 15 }, towerShield: { held: 'crudeTowerShield', yaw: 200, pitch: 15 },
+  swordLight: T({ held: 'lightstoneSword' }), pelta: { held: 'peltaShield', yaw: 200, pitch: 15 }, arrowLight: T({ held: 'lightstoneArrow' }),
   // armour: the parts the hero wears (heroArmour, wear_<item>), standing as worn; the cape from the Ancient Empire pack
   throwerHelmet: { pack: 'heroArmour', only: ['wear_throwerHelmet'] }, throwerArmor: { pack: 'heroArmour', only: ['wear_throwerArmor'], arms: 12, yaw: 25, pitch: 15 },
   throwerLegs: { pack: 'heroArmour', only: ['wear_throwerLegs'], yaw: 25, pitch: 15 },

@@ -24,8 +24,8 @@ const GROUPS = [
 ];
 // What can be held: [item id, name, weapon skill (hero.js strikeKind), one-handed weapon]
 const RIGHT = [['', 'Nothing'], ['crudeAxe', 'Crude axe', 'axe', 1], ['lightstoneAxe', 'Lightstone axe', 'axe', 1], ['crudeClub', 'Club', 'mace', 1], ['crudeDagger', 'Crude dagger', 'dagger', 1],
-  ['lightstoneDagger', 'Lightstone dagger', 'dagger', 1], ['crudeSpear', 'Crude spear', 'spear'], ['lightstoneSpear', 'Lightstone spear', 'spear'], ['torch', 'Torch'], ['hammer', 'Hammer'], ['pickaxe', 'Pickaxe'], ['hoe', 'Hoe']];
-const LEFT = [['', 'Nothing'], ['crudeShield', 'Shield'], ['crudeTowerShield', 'Tower shield'], ['crudeBow', 'Crude bow'], ['cretanBow', 'Cretan bow']];
+  ['lightstoneDagger', 'Lightstone dagger', 'dagger', 1], ['lightstoneSword', 'Lightstone sword', 'sword', 1], ['crudeSpear', 'Crude spear', 'spear'], ['lightstoneSpear', 'Lightstone spear', 'spear'], ['torch', 'Torch'], ['hammer', 'Hammer'], ['pickaxe', 'Pickaxe'], ['hoe', 'Hoe']];
+const LEFT = [['', 'Nothing'], ['crudeShield', 'Shield'], ['crudeTowerShield', 'Tower shield'], ['peltaShield', 'Pelta'], ['crudeBow', 'Crude bow'], ['cretanBow', 'Cretan bow']];
 const ARMOUR = [['', 'None'], ['thrower', 'Thrower set'], ['cretan', 'Cretan set']];
 const isBow = (id) => /Bow$/.test(id), isShield = (id) => /Shield$/.test(id);
 const clamp = THREE.MathUtils.clamp, lerp = THREE.MathUtils.lerp;

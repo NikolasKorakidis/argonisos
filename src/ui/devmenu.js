@@ -16,7 +16,7 @@ const store = () => { try { localStorage.setItem(KEY, JSON.stringify(DEV)); } ca
 
 const KITS = {
   tools: [['hammer', 1], ['crudeAxe', 1], ['pickaxe', 1], ['crudeClub', 1], ['crudeBow', 1], ['crudeArrow', 100], ['crudeShield', 1], ['torch', 1], ['hoe', 1]],
-  best: [['lightstoneAxe', 1], ['lightstoneSpear', 1], ['lightstoneDagger', 1], ['cretanBow', 1], ['crudeArrow', 100], ['crudeTowerShield', 1], ['cretanHelmet', 1], ['cretanArmor', 1], ['cretanLegs', 1], ['cretanCape', 1]],
+  best: [['lightstoneAxe', 1], ['lightstoneSpear', 1], ['lightstoneDagger', 1], ['lightstoneSword', 1], ['peltaShield', 1], ['cretanBow', 1], ['crudeArrow', 100], ['lightstoneArrow', 100], ['crudeTowerShield', 1], ['cretanHelmet', 1], ['cretanArmor', 1], ['cretanLegs', 1], ['cretanCape', 1]],
   mats: [['wood', 50], ['stone', 50], ['rope', 50], ['leather', 50], ['resin', 50], ['feather', 50], ['lightstone', 50], ['deerHide', 50], ['foxHide', 50]],
   food: [['cookedMeat', 20], ['cookedFish', 20], ['olive', 30], ['pomegranate', 30], ['acorn', 30]],
   tribute: [['deerHide', 5], ['olive', 10], ['dryadHeart', 3], ['pomegranate', 10]],

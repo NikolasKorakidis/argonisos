@@ -14,10 +14,12 @@ import { burst, dust, addShake, punch, impact, spark } from '../render/fx.js';
 import { BOW_DUR, CLIPS } from '../player/hero.js';
 import { loadFBX, loadGLB, loadTex } from '../assets.js';
 import { mergeGeometries } from '../../vendor/three/jsm/utils/BufferGeometryUtils.js';
+import { inStone, steel } from '../player/held.js';
+import { pixelate } from '../render/pixel.js';
 import { clamp, rr } from '../util/math.js';
 
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
-const REACH = { dagger: 1.8, spear: 2.8, axe: 2.3, mace: 2.3 };
+const REACH = { dagger: 1.8, spear: 2.8, sword: 2.3, axe: 2.3, mace: 2.3 };
 const ARROW_V = [24, 70], ARROW_FLAT = [0.05, 0.6];
 // The bow is drawn, not fired on a click (Patch 26, the reviewer's: Valheim's way). Holding LMB draws it, letting go looses
 // the arrow, with all of the bow's damage only at a full draw: less the less it was drawn (minK of it from a bare tap),
@@ -31,19 +33,27 @@ const BOW = { minK: 0.25, skill: 1 / 3, stam: 4, raise: 0.5, share: 0.4, loose: 
 // How hard a blow you land feels (render/fx.js punch, the same scale as the gathering's: harvest.js): by the weapon's heft
 // and the damage done, more for a killing blow. The heavy weapons' hits and every killing blow hold the swing a moment
 // (player.hitStop). A swing that meets nothing is not felt at all.
-const HEFT = { dagger: 0.1, spear: 0.15, axe: 0.22, mace: 0.26, unarmed: 0.1 }, HEAVY = new Set(['axe', 'mace']);
+const HEFT = { dagger: 0.1, spear: 0.15, sword: 0.18, axe: 0.22, mace: 0.26, unarmed: 0.1 }, HEAVY = new Set(['axe', 'mace']);
+// The swings that meet more than one: an axe's, a club's and a sword's (Valheim's sword cuts through what stands together)
+const WIDE = new Set(['axe', 'mace', 'sword']);
 // How much of a heavy beast's blow a parry must hold for the beast to stagger (the guard's block over the blow)
 const PARRY_FORCE = 0.6;
 export const armorReduce = (dmg, armor) => (armor <= 0 ? dmg : armor < dmg / 2 ? dmg - armor : (dmg * dmg) / (armor * 4));
 
-let arrowProto = null;
-// the Cretan arrow from the team's pack (tools/assets; head up its +y like the old one), or the old model when the pack isn't there
+const arrowProtos = {};
+// the Cretan arrow from the team's pack (tools/assets; head up its +y like the old one), or the old model when the pack isn't there;
+// the lightstone arrow the same, its head of lightstone (held.js inStone: the steel of its top fifth). Both in the gear's
+// texels, as what's in the hand is (held.js)
 loadGLB('pack/arrow').then((gl) => { const w = new THREE.Group(); w.add(gl.scene); return w; }).catch(() => loadFBX('arrow').then((o) => { const mat = new THREE.MeshStandardMaterial({ map: loadTex('arrow.jpg'), roughness: 0.8 }); o.traverse((m) => { if (m.isMesh) m.material = mat; }); return o; })).then((o) => {
   o.traverse((m) => { if (m.isMesh) m.castShadow = true; });
   const box = new THREE.Box3().setFromObject(o), s = 0.9 / box.getSize(new THREE.Vector3()).y; o.scale.multiplyScalar(s);
   const b2 = new THREE.Box3().setFromObject(o); o.position.y -= (b2.min.y + b2.max.y) / 2;
-  const g = new THREE.Group(); g.add(o); g.rotation.x = Math.PI / 2; const w = new THREE.Group(); w.add(g); arrowProto = w;   // w's head points along +z (lookAt aims it)
+  const g = new THREE.Group(); g.add(o); g.rotation.x = Math.PI / 2; const w = new THREE.Group(); w.add(g);   // w's head points along +z (lookAt aims it)
+  const gear = (a) => { a.traverse((m) => { if (m.isMesh) for (const mt of [].concat(m.material)) pixelate(mt, 'gear'); }); return a; };
+  arrowProtos.crudeArrow = gear(w); const light = w.clone(true); light.updateMatrixWorld(true); const top = new THREE.Box3().setFromObject(light).max.z;
+  arrowProtos.lightstoneArrow = gear(inStone(light, (c, p) => steel(c) && p.z > top - 0.2));
 }).catch(() => {});
+const arrowOf = (id) => arrowProtos[id] || arrowProtos.crudeArrow;
 // ---- thrown things. A dryad's thorn: a bramble bolt as long as a forearm with spines along it, glowing green, trailing
 // light and shedding leaves, slow enough to see coming and step aside from, block or roll under (v: m/s, a little drop,
 // grav), from her hand as her throw lets go (creatures.js); her hand glows as she winds up (charge). The Minotaur's
@@ -85,7 +95,7 @@ export class Combat {
   strike(item) {
     const g = this.g, P = g.player, kind = item?.skill || 'unarmed', reach = REACH[kind] ?? (item ? 2.1 : 1.7);
     // (the nearest in the arc first: a swing meets the beast in front of you before the one behind it)
-    const targets = g.creatures.inArc(P.pos, P.yaw, reach).sort((a, b) => a.pos.distanceTo(P.pos) - b.pos.distanceTo(P.pos)).slice(0, kind === 'axe' || kind === 'mace' ? 2 : 1);
+    const targets = g.creatures.inArc(P.pos, P.yaw, reach).sort((a, b) => a.pos.distanceTo(P.pos) - b.pos.distanceTo(P.pos)).slice(0, WIDE.has(kind) ? 2 : 1);
     g.sound?.('swing', { kind: item && !item.skill ? 'tool' : kind });   // (the whoosh of every swing, a miss too: sound.js, by the weapon's weight)
     if (!targets.length) return false;
     const dmg = item?.dmg || (P.stats.has('claws') ? [[30, 'slash'], [10, 'poison']] : [[2, 'blunt']]), k = P.stats.damageK(kind) * this.blessK();
@@ -95,7 +105,7 @@ export class Combat {
     punch((HEFT[kind] ?? 0.15) + clamp(felt / 80, 0, 0.2) + (kill ? 0.12 : 0), { x: Math.sin(P.yaw), z: Math.cos(P.yaw) });
     if (kill || HEAVY.has(kind)) P.hitStop(kill ? 0.08 : 0.045);
     // (its sound: an axe's, a blade's (a dagger, a spear, the Chimera's claws), or a blunt one's (a club, a fist))
-    P.stats.train(kind, 12.5); g.sound?.('hit', { at: targets[0].pos.clone().setY(targets[0].pos.y + targets[0].T.h * 0.6), kind: kind === 'axe' ? 'axe' : kind === 'dagger' || kind === 'spear' || (!item && P.stats.has('claws')) ? 'blade' : 'blunt', type: targets[0].type });
+    P.stats.train(kind, 12.5); g.sound?.('hit', { at: targets[0].pos.clone().setY(targets[0].pos.y + targets[0].T.h * 0.6), kind: kind === 'axe' ? 'axe' : kind === 'dagger' || kind === 'spear' || kind === 'sword' || (!item && P.stats.has('claws')) ? 'blade' : 'blunt', type: targets[0].type });
     return true;
   }
   // ---- a creature's blow lands on the player (from: where it came from, if not the creature: a thorn). Returns what
@@ -165,7 +175,8 @@ export class Combat {
   // ---- the bow
   get bow() { return this.g.player.bow; }
   setBow(st, extra) { this.g.player.bow = { st, t: 0, ph: 0, ...extra }; if (st === 'draw') this.g.sound?.('bowDraw'); }   // (the string creaks as it's drawn)
-  arrowsLeft() { return this.g.inv.count('crudeArrow'); }
+  // arrows of every kind in the pack (the bow looses the kind chosen, game.js ammo, and goes on to the next when they're spent)
+  arrowsLeft() { let n = 0; for (const s of this.g.inv.slots) if (s && ITEMS[s.id].type === 'ammo') n += s.n; return n; }
   // seconds to a full draw with this bow, at the Bowman skill's level now
   drawTime(bow) { return (bow.draw ?? 1.5) * (1 - BOW.skill * (this.g.player.stats.skills.bow.level - 1) / 99); }
   // where the draw clip stands, f of the way to a full draw taking F seconds: the bow raised and nocked, then the string pulled
@@ -192,12 +203,12 @@ export class Combat {
       else if (!input.lmb) {   // loosed: as strong as it was drawn
         const f = b.f, from = this.bowFrom(b); this.shoot(f); this.setBow('loose', { ...from, f, bow });
       } else if (!S.use(BOW.stam * dt, 'bow')) { this.letDown('Too tired to hold the draw'); this.spent = true; }
-      else { b.f = Math.min(1, b.f + dt / b.F); b.ph = this.drawPhase(b.f, b.F); if (b.st === 'draw' && b.f >= 1) { this.setBow('aim', { f: 1, ph: 1, F: b.F, bow }); } }
+      else { b.f = Math.min(1, b.f + dt / b.F); b.ph = this.drawPhase(b.f, b.F); if (b.st === 'draw' && b.f >= 1) { this.setBow('aim', { f: 1, ph: 1, F: b.F, bow, ammo: b.ammo }); } }
     } else if (want) {
       if (this.arrowsLeft() <= 0) { this.say('No arrows. Craft some at a workbench.'); this.spent = true; }
       else if (!S.god && S.stamina < 1) { this.say('Too tired to draw the bow'); this.spent = true; }
       // (straight after a loose the bow is up already: drawn again from there, the string the only thing to pull)
-      else this.setBow('draw', { ...this.bowFrom(b), from: b.st === 'loose' ? 0.24 : 0, f: 0, F: this.drawTime(bow), bow });
+      else this.setBow('draw', { ...this.bowFrom(b), from: b.st === 'loose' ? 0.24 : 0, f: 0, F: this.drawTime(bow), bow, ammo: g.ammo() });   // (the kind nocked: chosen, or the first in the pack)
     } else if (b.st === 'loose' && b.t >= BOW.loose) this.setBow('lower', { fromC: b.fromC, fromT: b.fromT, shot: true });
     else if (b.st === 'lower' && b.t >= BOW_DUR.lower) this.setBow('ready');
     b = P.bow;
@@ -205,7 +216,8 @@ export class Combat {
     if (P.aiming) P.aimPt = this.aimPoint(P.aimPt || new THREE.Vector3());
     // the arrow on the string
     const on = (b.st === 'draw' && Math.max(b.ph, b.from || 0) > 0.45) || b.st === 'aim', H = P.hero;
-    if (on && arrowProto && !this.nock.children.length) this.nock.add(arrowProto.clone());
+    const kind = b.ammo || 'crudeArrow'; if (this.nock.userData.kind !== kind) { this.nock.clear(); this.nock.userData.kind = kind; }   // (the arrow on the string is the kind that will fly)
+    if (on && arrowOf(kind) && !this.nock.children.length) this.nock.add(arrowOf(kind).clone());
     this.nock.visible = on && !!H.bones.mixamorigRightHand;
     if (this.nock.visible) { const r = H.bones.mixamorigRightHand.getWorldPosition(new THREE.Vector3()), d = H.bones.mixamorigLeftHand.getWorldPosition(new THREE.Vector3()).sub(r).normalize(); this.nock.position.copy(r).addScaledVector(d, 0.4); this.nock.lookAt(this.nock.position.clone().add(d)); }
   }
@@ -215,19 +227,21 @@ export class Combat {
     return out.copy(o).addScaledVector(d, 120);
   }
   shoot(power) {
-    const g = this.g, P = g.player; if (!g.inv.take('crudeArrow', 1)) return;
+    const g = this.g, P = g.player, id = g.ammo(); if (!id || !g.inv.take(id, 1)) return;
     const bow = g.bow(), dir = new THREE.Vector3(); camera.getWorldDirection(dir);
     const H = P.hero, start = H.bones.mixamorigLeftHand ? H.bones.mixamorigLeftHand.getWorldPosition(new THREE.Vector3()) : P.pos.clone().setY(P.pos.y + 1.5);
     const target = this.aimPoint(new THREE.Vector3()), v = target.sub(start).normalize().multiplyScalar(ARROW_V[0] + (ARROW_V[1] - ARROW_V[0]) * power);
     // accuracy: an untrained archer's arrows wander a little
     const spread = 0.02 * (1 - (P.stats.skills.bow.level - 1) * 0.003) * (1.2 - power); v.x += rr(-1, 1) * spread * v.length(); v.y += rr(-1, 1) * spread * v.length();
-    const m = arrowProto ? arrowProto.clone() : fallbackArrow(); m.position.copy(start); scene.add(m);
-    const dmg = [[(bow.dmg[0][0] + ITEMS.crudeArrow.dmg[0][0]) * (BOW.minK + (1 - BOW.minK) * power), 'pierce']];
+    const m = arrowOf(id) ? arrowOf(id).clone() : fallbackArrow(); m.position.copy(start); scene.add(m);
+    // (the bow's pierce and the arrow's added up, Valheim's way, any other kind the arrow carries (fire, poison) as it is;
+    // all of it as strong as the draw)
+    const A = ITEMS[id].dmg, drawK = BOW.minK + (1 - BOW.minK) * power, dmg = [[(bow.dmg[0][0] + A[0][0]) * drawK, 'pierce'], ...A.slice(1).map(([n, kd]) => [n * drawK, kd])];
     // (an arrow grows with the Bowman skill as a blade does with its own, with Zeus's Blessing and with what the helmet
     // adds to bows (bowDmg); it takes the bow's own sneak-attack multiplier)
     let helm = 0; for (const s of g.inv.slots) if (s?.worn && ITEMS[s.id]?.bowDmg) helm += ITEMS[s.id].bowDmg;
     const k = P.stats.damageK('bow') * this.blessK() * (1 + helm);
-    this.arrows.push({ m, v, life: 0, flat: ARROW_FLAT[0] + (ARROW_FLAT[1] - ARROW_FLAT[0]) * power, dmg, k, backstab: bow.backstab || 3, knock: bow.knock ?? 0.1, stuck: false });
+    this.arrows.push({ id, m, v, life: 0, flat: ARROW_FLAT[0] + (ARROW_FLAT[1] - ARROW_FLAT[0]) * power, dmg, k, backstab: bow.backstab || 3, knock: Math.max(bow.knock ?? 0.1, ITEMS[id].knock ?? 0), stuck: false });
     g.sound?.('bow'); P.stats.train('bow', 2);
   }
   update(dt) {

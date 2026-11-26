@@ -1,5 +1,5 @@
 // Every item in milestone 1.0: materials, food, tools, weapons, armour and ammunition, with their stats.
-// type: material | food | tool | weapon | shield | armor | ammo
+// type: material | food | tool | weapon | shield | armor | ammo (arrows: the bow looses the kind chosen, game.js ammo)
 // Weapons: dmg [[amount, kind]], block, parry, backstab, knock (knockback chance), hands (1|2), skill.
 // Tools/weapons/armour have durability; speed is the movement-speed change while equipped (-0.05 = 5% slower).
 const M = (name, o = {}) => ({ name, type: 'material', stack: 50, weight: 1, ...o });
@@ -82,6 +82,12 @@ export const ITEMS = {
   corinthianHelmet: { name: 'Corinthian Helmet', type: 'armor', slot: 'head', set: 'corinthian', armor: 8, stack: 1, weight: 4, dur: 300, resist: ['fire'], regen: 0.05, icon: 'corinthianHelmet' },
   corinthianArmor: { name: 'Corinthian Body Armour', type: 'armor', slot: 'body', set: 'corinthian', armor: 32, stack: 1, weight: 16, dur: 1000, resist: ['fire'], warm: true, speed: -0.05, icon: 'corinthianArmor' },
   corinthianLegs: { name: 'Corinthian Leg Armour', type: 'armor', slot: 'legs', set: 'corinthian', armor: 24, stack: 1, weight: 12, dur: 800, resist: ['fire'], speed: -0.05, icon: 'corinthianLegs' },
+  // (added after the rest, so nothing before them moves: the pelta, a light crescent of deer hide on a lightstone rim that
+  // makes you quicker, not slower; arrows tipped with lightstone; and a sword whose blade is of lightstone, struck as hard
+  // as bronze would be, lightstone standing in for the bronze plate there is no way to make yet, as for the Corinthian set)
+  peltaShield: { name: 'Pelta Shield', type: 'shield', skill: 'blocking', hands: 1, stack: 1, weight: 1.5, dur: 150, block: 10, parry: 1.5, speed: 0.1, icon: 'pelta' },
+  lightstoneArrow: { name: 'Lightstone Arrow', type: 'ammo', stack: 100, weight: 0.05, dmg: [[27, 'pierce']], knock: 0.1, icon: 'arrowLight' },
+  lightstoneSword: { name: 'Lightstone Sword', type: 'weapon', skill: 'sword', hands: 1, stack: 1, weight: 1, dur: 250, dmg: [[34, 'slash'], [35, 'pierce']], block: 10, parry: 2, backstab: 3, knock: 0.4, speed: -0.05, icon: 'swordLight' },
 };
 for (const [id, it] of Object.entries(ITEMS)) it.id = id;
 export const SET_BONUS = 1.05;    // full set: armour ×1.05
@@ -130,5 +136,9 @@ export const RECIPES = [
   { id: 'corinthianHelmet', mats: { lightstone: 4, deerHide: 2, rope: 1 }, at: 'workbench', tier: 2 },
   { id: 'corinthianArmor', mats: { lightstone: 10, deerHide: 10, rope: 2 }, at: 'workbench', tier: 2 },
   { id: 'corinthianLegs', mats: { lightstone: 8, deerHide: 6, rope: 1 }, at: 'workbench', tier: 2 },
+  { id: 'peltaShield', mats: { wood: 4, deerHide: 10, lightstone: 2 }, at: 'workbench', tier: 1 },
+  { id: 'lightstoneArrow', n: 10, mats: { wood: 5, lightstone: 2, feather: 1 }, at: 'workbench', tier: 1 },
+  // (the sword is bronze's grade: it comes with the Corinthian armour, once the Chimera's head is offered)
+  { id: 'lightstoneSword', mats: { wood: 4, lightstone: 8, deerHide: 2 }, at: 'workbench', tier: 2 },
 ];
 // Placeable things made from the crafting menu go into the build menu (hammer) instead: see build/pieces.js

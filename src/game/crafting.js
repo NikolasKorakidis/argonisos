@@ -99,7 +99,7 @@ export class Crafting {
   // at a time (a batch for what is made several at once: ten arrows). What it gives, or why it can't be broken down
   salvage(i) {
     const s = this.g.inv.slots[i], r = s && BREAKS.get(s.id); if (!r) return 'Only crafted gear can be broken down';
-    if (s.worn) return 'Take it off before you break it down';
+    if (s.worn && s.worn !== 'ammo') return 'Take it off before you break it down';   // (the arrows chosen for the bow are only a pile)
     const n = r.n || 1; if (s.n < n) return `Needs ${n} to break down`;
     return { id: s.id, n, mats: Object.fromEntries(Object.entries(r.mats).map(([m, k]) => [m, Math.max(1, Math.floor(k / 2))])) };
   }
